@@ -41,6 +41,7 @@ Do not produce layered writings (e.g., instead of X we chose to do Y) that docum
 
 ## Code Rules
 
+- Prioritize simplification and streamlining more than complicating things or adding unnecessary guardrails.
 - ESM everywhere: all TS modules use `"type": "module"` with `.js` import extensions.
 - npm workspaces: always run `npm install <pkg>` from the repo root, never from a workspace, and keep sub-package `package.json` files minimal. Use `npm install`, `npm run build:all`, and `npm run test:all` from root.
 - Vitest for all TypeScript testing.
