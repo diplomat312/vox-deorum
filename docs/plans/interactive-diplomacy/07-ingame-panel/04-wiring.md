@@ -42,7 +42,7 @@ This stage may extend those interfaces, but it must not create a game-only chat 
 
 1. **`runChatTurn` reports the durable rows it creates.** Streaming deltas are temporary presentation. The shared transcript writers expose each successful write to a turn-scoped collector, and `runChatTurn` forwards those exact rows through its sink in append order. This covers the caller row, final diplomat reply, deal-tool rows, and a possible `close` row without a second transcript read. The transcript remains authoritative, and the panel still deduplicates by transcript ID.
 
-2. **Proposal state belongs to the backend.** The panel and Lua driver do not decide whether a rejection is redundant or stale. The authoritative transcript write handles it atomically: repeating the same rejection returns the existing result without appending another row, while rejecting an accepted, countered, or superseded proposal is a conflict.
+2. **Proposal state is checked in the shared action, not the driver.** The panel and Lua driver do not decide whether a rejection is redundant or stale. `rejectDealAction` checks the active proposal under the thread lock: repeating the same rejection returns the existing row without appending another, while rejecting an accepted, countered, or superseded proposal is a conflict. The check is a plain read before the write — the in-process thread lock is the only serialization, and a rare duplicate rejection row that slips past it is cosmetic, per the parent spec's no-new-idempotency-machinery rule. No store transaction and no new store-level protocol are added.
 
 3. **VP's observer deal presentation remains available.** VP can bind an observer slot as `g_iUs` and show the native trade screen. Vox Deorum removes its stricter presentation-only major-civilization checks. This does not make observer deal items legal: `CvDeal::IsPossibleToTradeItem`, `inspect-deal`, proposal validation, and enactment retain their existing participant limits.
 
@@ -58,7 +58,7 @@ Refactor `vox-agents/src/web/chat/deal.ts` so Express routes contain only HTTP l
 
 First, make the error vocabulary consistent:
 
-- Change `requireCurrentOpenProposal` to throw `ProposalConflictError` for a missing, closed, superseded, malformed, or self-authored proposal instead of throwing bare `Error`.
+- Change `requireCurrentOpenProposal` to throw `ProposalConflictError` for a missing, closed, superseded, malformed, or self-authored proposal instead of throwing bare `Error`. The self-authored case guards accept only: the reject path deliberately permits the proposal author to reject their own offer — that is a retraction, matching the store's existing rule that either endpoint may speak `deal-reject`.
 - Add a shared live-turn and closed-this-turn guard used by `runChatTurn`, accept, and reject. It must preserve the stricter `runChatTurn` behavior: a live thread without a current turn is unavailable, not turn zero or the thread's cached metadata turn.
 - Give the missing-live-turn and closed-this-turn cases distinct typed errors so both transports can map them without inspecting message text.
 - Keep the shared thread-busy message in one constant.
@@ -80,14 +80,14 @@ Each action:
 
 Keep thread lookup transport-specific. Express continues to resolve `chatId`; the in-game bridge passes an already opened `EnvoyThread`.
 
-Move redundant-rejection handling into the mcp-server transcript write used by `appendDealReject`. The check and write must run in one store transaction:
+Handle redundant and stale rejections inside `rejectDealAction`, under the thread lock, with a plain read of the active proposal — no store transaction and no new `append-message` protocol:
 
 - if the referenced proposal is the active open offer, append `deal-reject`;
-- if that proposal already has a rejection by the same speaker, return the existing row with `AlreadyRejected: true` and do not write;
-- if a different proposal is active or the proposal is accepted, enacted, or superseded, return a conflict;
-- never append two terminal rejection rows for the same proposal.
+- if that proposal already has a rejection by the same speaker, return the existing row and do not write;
+- if a different proposal is active or the proposal is accepted, enacted, or superseded, throw `ProposalConflictError`;
+- a duplicate rejection row that slips past this best-effort check is cosmetic and tolerated.
 
-Translate that backend conflict to `ProposalConflictError` at the vox-agents boundary. The Web mapper preserves its public status classes:
+The Web mapper preserves its public status classes:
 
 | Error | HTTP |
 |---|---:|
@@ -96,9 +96,9 @@ Translate that backend conflict to `ProposalConflictError` at the vox-agents bou
 | live turn unavailable | 503 |
 | store, bridge, inspection, or enactment failure | 502 |
 
-Delete accept's catch-time second call to `requireCurrentOpenProposal`. Typed failures and the backend transaction now distinguish conflict from infrastructure failure without a race-prone re-probe. Replace `mirrorDealRowsBestEffort` with a small direct hydrator for returned rows, and remove the full deal-transcript reread if it has no remaining caller.
+Delete accept's catch-time second call to `requireCurrentOpenProposal`. Typed failures and enactment's existing transactional idempotence now distinguish conflict from infrastructure failure without a race-prone re-probe. Replace `mirrorDealRowsBestEffort` with a small direct hydrator for returned rows, and remove the full deal-transcript reread if it has no remaining caller.
 
-Update the existing Web route tests, shared action tests, and transcript-write tests to cover typed errors, idempotent rejection, and stale rejection. The Web UI behavior remains unchanged except that a repeated reject no longer creates a redundant row.
+Update the existing Web route tests and shared action tests to cover typed errors, idempotent rejection, stale rejection, and self-authored retraction. The Web UI behavior remains unchanged except that a repeated reject no longer creates a redundant row.
 
 ### 2. Make `runChatTurn` report every durable row
 
@@ -127,7 +127,7 @@ Widen the transport-neutral sink events:
 - `done.rows` contains rows committed after `connected`, including terminal tool rows and the final archived reply;
 - `error.rows` contains any rows committed after `connected` but before a post-commit failure.
 
-Keep the existing `connected.deal` and `done.deals` fields as Web compatibility projections during this stage, but derive them from the same captured rows. Do not reread deal messages at the end of the turn.
+Remove the `connected.deal` and `done.deals` fields instead of carrying compatibility projections: migrate the Web client in this stage to consume `connected.rows` and `done.rows`, updating the SSE consumer and its shared event types. Do not reread deal messages at the end of the turn.
 
 Every committed turn emits exactly one terminal sink event. Each terminal path snapshots the collector once, then sends either `done` or `error`.
 
@@ -143,7 +143,7 @@ Add focused tests for:
 - ID ordering and duplicate suppression;
 - rows committed before a post-commit failure appearing in `error.rows`;
 - final reply archival failure producing `error`, not `done`;
-- unchanged Web event payloads derived from the new row lists.
+- the migrated Web client payloads: `rows` present, `deal` and `deals` removed.
 
 ### 3. Make thread reopening safe during a live turn
 
@@ -241,7 +241,7 @@ The game-side pending resolver uses durable rows:
 
 - proposal and counter resolve from the exact caller row in `connected.rows`;
 - accept resolves when the matching `deal-accept` and `deal-enacted` result rows arrive;
-- reject and retract resolve from the matching `deal-reject`, including an existing row returned by the backend's idempotent path;
+- reject and retract resolve from the matching `deal-reject`, including an existing row returned by the action's idempotent path;
 - an error raises `LuaEvents.VoxDeorumDealActionResolved({ success = false, reason = ... })`.
 
 The panel keeps the proposal card pending, and the deal screen keeps its mounted editor, until this resolution. On error, the existing screen resolver restores the same terms, promises, and public message.
@@ -328,10 +328,10 @@ The focused coverage must include:
 
 - unchanged Web status classes for chat, accept, reject, and close;
 - typed proposal, closed-turn, missing-turn, and busy failures;
-- atomic idempotent rejection and stale rejection conflict;
+- idempotent rejection and stale rejection conflict from the lock-level check;
 - no accept catch-time re-probe;
 - turn-scoped row capture across nested transcript writers;
-- `connected.rows`, `done.rows`, and `error.rows` ordering and compatibility projections;
+- `connected.rows`, `done.rows`, and `error.rows` ordering, and the migrated Web payload shape;
 - final reply archival failure producing an error without a false completion;
 - exact accept and idempotent-reject rows returned without a transcript reread;
 - reopening a busy thread without mutation or compaction;
@@ -352,7 +352,7 @@ With Civ V, bridge-service, mcp-server, and an interactive vox-agents session ru
 5. Reopen during generation. Confirm `Begin.busy`, ordered increments, and no cache resynchronization under the active turn.
 6. Propose and counter from the native editor. Confirm the exact committed card arrives in `connected.rows`, the edited counter carries `expectedProposalID`, and Reset remains local.
 7. Accept a proposal. Confirm `deal-accept` and `deal-enacted` arrive, game state changes, and a second accept is refused.
-8. Reject and retract. Retry the same action once and confirm the backend returns the existing outcome without appending a duplicate row. Attempt a stale rejection after a counter and confirm a clean conflict with the draft preserved.
+8. Reject and retract. Retry the same action once and confirm the action returns the existing outcome without appending a duplicate row. Attempt a stale rejection after a counter and confirm a clean conflict with the draft preserved.
 9. Submit an already-made standing promise, an ineligible Coop War, and a malformed promise direction through both Web and game paths. Confirm each is rejected before a proposal row is stored.
 10. Repeat as a human strategist. Confirm the pinned civilization's thread, diplomat, deal endpoints, enactment, notification redirect, and Web history all match normal play.
 11. Repeat as a pure observer. Confirm VP's native deal presentation opens with the real observer slot as `g_iUs`. Unsupported item or enactment actions must fail cleanly with no partial transcript or game-state write.
