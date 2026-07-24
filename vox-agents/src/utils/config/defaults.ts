@@ -102,9 +102,9 @@ export const defaultConfig: VoxAgentsConfig = {
       provider: 'anthropic',
       name: 'claude-sonnet-5'
     },
-    'anthropic/claude-opus-4-8': {
+    'anthropic/claude-opus-5': {
       provider: 'anthropic',
-      name: 'claude-opus-4-8'
+      name: 'claude-opus-5'
     },
     'claude-code/sonnet': {
       provider: 'claude-code',
