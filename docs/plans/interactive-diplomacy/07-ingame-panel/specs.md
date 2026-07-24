@@ -1,6 +1,6 @@
 # Stage 7: In-game diplomacy panel: specification and pinned contracts
 
-> Part of the interactive-diplomacy plan ([../README.md](../README.md), requirements in [../specs.md](../specs.md)). This folder is the staged sub-plan for the in-game panel; [../07-ingame-panel.md](../07-ingame-panel.md) is its index. Stage docs: [01-ui-groundwork.md](01-ui-groundwork.md) → [05-hardening.md](05-hardening.md).
+> Part of the interactive-diplomacy plan ([../README.md](../README.md), requirements in [../specs.md](../specs.md)). This folder is the staged sub-plan for the in-game panel; [../07-ingame-panel.md](../07-ingame-panel.md) is its index.
 
 ## What this is
 
