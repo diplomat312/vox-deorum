@@ -40,15 +40,15 @@ This stage may extend those interfaces, but it must not create a game-only chat 
 
 ## Technical decisions
 
-1. **`runChatTurn` reports the durable rows it creates.** Streaming deltas are temporary presentation. The shared transcript writers expose each successful write to a turn-scoped collector, and `runChatTurn` forwards those exact rows through its sink in append order. This covers the caller row, final diplomat reply, deal-tool rows, and a possible `close` row without a second transcript read. The transcript remains authoritative, and the panel still deduplicates by transcript ID.
+1. **`runChatTurn` reports the durable rows it creates.** Streaming deltas are temporary presentation. `beginChatTurn` returns the committed caller row. Once it owns the thread lock, `runChatTurn` observes later confirmed writes for that thread until terminal cleanup. This covers the caller row, final diplomat reply, deal-tool rows, and a possible `close` row without a second transcript read. The transcript remains authoritative, and the panel still deduplicates by transcript ID.
 
-2. **Proposal state is checked in the shared action, not the driver.** The panel and Lua driver do not decide whether a rejection is redundant or stale. `rejectDealAction` checks the active proposal under the thread lock: repeating the same rejection returns the existing row without appending another, while rejecting an accepted, countered, or superseded proposal is a conflict. The check is a plain read before the write — the in-process thread lock is the only serialization, and a rare duplicate rejection row that slips past it is cosmetic, per the parent spec's no-new-idempotency-machinery rule. No store transaction and no new store-level protocol are added.
+2. **Proposal state belongs to the durable backend.** The panel, Lua driver, bridge, and Express route do not decide whether a rejection is redundant or stale. A transactional mcp-server action checks the stored proposal and writes the rejection atomically. Repeating the same rejection returns the existing row without appending another, while rejecting an accepted, countered, or superseded proposal is a conflict.
 
 3. **VP's observer deal presentation remains available.** VP can bind an observer slot as `g_iUs` and show the native trade screen. Vox Deorum removes its stricter presentation-only major-civilization checks. This does not make observer deal items legal: `CvDeal::IsPossibleToTradeItem`, `inspect-deal`, proposal validation, and enactment retain their existing participant limits.
 
 4. **One game action may be pending per pair.** No request token is added. The bridge pushes the committed row associated with the action, and the transport driver resolves the mounted deal editor only when that row matches the pending action. Re-pushing an existing row for an idempotent rejection is valid: the panel deduplicates it, while the deal-screen resolver still receives the acknowledgement.
 
-5. **Notifications report newly committed successful outcomes only.** A completed chat or deal turn and a state-changing accept, reject, or retract post a notification. An idempotent acknowledgement, validation conflict, transport failure, or pre-commit rejection does not post another one.
+5. **Notifications report newly committed successful outcomes only.** Reaching `done` is necessary but not sufficient. A turn posts only when its terminal rows contain a new counterpart reply, close, or state-changing deal outcome. A state-changing accept, reject, or retract also posts. An idempotent acknowledgement, validation conflict, transport failure, or pre-commit rejection does not post another one.
 
 ## Work items
 
@@ -58,7 +58,7 @@ Refactor `vox-agents/src/web/chat/deal.ts` so Express routes contain only HTTP l
 
 First, make the error vocabulary consistent:
 
-- Change `requireCurrentOpenProposal` to throw `ProposalConflictError` for a missing, closed, superseded, malformed, or self-authored proposal instead of throwing bare `Error`. The self-authored case guards accept only: the reject path deliberately permits the proposal author to reject their own offer — that is a retraction, matching the store's existing rule that either endpoint may speak `deal-reject`.
+- Change `requireCurrentOpenProposal` to throw `ProposalConflictError` for a missing, closed, superseded, malformed, or self-authored proposal instead of throwing bare `Error`. The self-authored case guards accept only. The reject path permits the proposal author to reject their own offer, which is a retraction under the store's existing rule that either endpoint may speak `deal-reject`.
 - Add a shared live-turn and closed-this-turn guard used by `runChatTurn`, accept, and reject. It must preserve the stricter `runChatTurn` behavior: a live thread without a current turn is unavailable, not turn zero or the thread's cached metadata turn.
 - Give the missing-live-turn and closed-this-turn cases distinct typed errors so both transports can map them without inspecting message text.
 - Keep the shared thread-busy message in one constant.
@@ -76,16 +76,24 @@ Each action:
 4. runs under `withThreadLock`;
 5. calls the authoritative deal helper;
 6. hydrates the returned durable rows directly into the live cache;
-7. returns the durable outcome row or rows needed by non-Web transports.
+7. returns `{ rows, changed }`, where `rows` carries the durable result and `changed` distinguishes a new state transition from an idempotent acknowledgement.
 
 Keep thread lookup transport-specific. Express continues to resolve `chatId`; the in-game bridge passes an already opened `EnvoyThread`.
 
-Handle redundant and stale rejections inside `rejectDealAction`, under the thread lock, with a plain read of the active proposal — no store transaction and no new `append-message` protocol:
+Add a transactional `reject-agent-deal` action in mcp-server and make `appendDealReject` call it. This keeps proposal-state authority beside `enact-agent-deal`. Its input includes the expected pair, proposal ID, speaker, and content. The transaction verifies that the proposal belongs to that pair and that the speaker is one endpoint, then uses the proposal's stored roles for the result row.
+
+Within the same transaction:
 
 - if the referenced proposal is the active open offer, append `deal-reject`;
-- if that proposal already has a rejection by the same speaker, return the existing row and do not write;
-- if a different proposal is active or the proposal is accepted, enacted, or superseded, throw `ProposalConflictError`;
-- a duplicate rejection row that slips past this best-effort check is cosmetic and tolerated.
+- if that proposal already has a rejection by the same speaker, return the existing row with `AlreadyRejected: true` and do not write;
+- if a different proposal is active, another speaker already rejected it, or the proposal is accepted, enacted, or superseded, return a structured conflict;
+- never append more than one terminal rejection row for a proposal.
+
+Return a discriminated result for `rejected`, `already-rejected`, or `conflict`, including the exact rejection row for either successful outcome. Infrastructure failures still use the MCP error channel. `appendDealReject` translates the structured conflict to `ProposalConflictError` without parsing error text.
+
+Register the new tool in `mcp-server/src/tools/index.ts` and document it in `mcp-server/docs/tools.md`. Make `append-message` refuse `deal-reject`, just as it already refuses `deal-accept` and `deal-enacted`, so no caller can bypass the transactional action.
+
+Give `enact-agent-deal` the same machine-readable conflict boundary. A proposal that becomes stale, closes, is answered, or has the wrong recipient after the vox-agents precheck returns a structured conflict; `enactAgentDeal` maps it to `ProposalConflictError`. Validation or infrastructure failures remain MCP errors. Retain the tool's current success and idempotency fields so existing callers do not lose enactment details.
 
 The Web mapper preserves its public status classes:
 
@@ -96,21 +104,15 @@ The Web mapper preserves its public status classes:
 | live turn unavailable | 503 |
 | store, bridge, inspection, or enactment failure | 502 |
 
-Delete accept's catch-time second call to `requireCurrentOpenProposal`. Typed failures and enactment's existing transactional idempotence now distinguish conflict from infrastructure failure without a race-prone re-probe. Replace `mirrorDealRowsBestEffort` with a small direct hydrator for returned rows, and remove the full deal-transcript reread if it has no remaining caller.
+Delete accept's catch-time second call to `requireCurrentOpenProposal`. Typed results from the two backend transactions now distinguish proposal conflicts from infrastructure failures without a race-prone re-probe. Replace `mirrorDealRowsBestEffort` with a small direct hydrator for returned rows, and remove the full deal-transcript reread if it has no remaining caller.
 
-Update the existing Web route tests and shared action tests to cover typed errors, idempotent rejection, stale rejection, and self-authored retraction. The Web UI behavior remains unchanged except that a repeated reject no longer creates a redundant row.
+Update the existing Web route tests, shared action tests, and mcp-server action tests to cover typed errors, transactional idempotent rejection, stale rejection, the accept race after precheck, and self-authored retraction. The Web UI behavior remains unchanged except that a repeated reject no longer creates a redundant row.
 
 ### 2. Make `runChatTurn` report every durable row
 
-Add a turn-scoped transcript-write collector in vox-agents. Use `AsyncLocalStorage`, following the existing `VoxContext` pattern, so writes made by nested diplomat and negotiator tools remain associated with the active `runChatTurn` without adding transport parameters to every tool call.
+Add a small per-thread transcript-row observer in vox-agents. After `beginChatTurn` returns with the lock held, `runChatTurn` registers the observer, runs the model and completion path, then unregisters it before `turn.finish` releases the lock. Every relevant writer receives the active `EnvoyThread`, so it can report a row after the backing store confirms that the current operation created it. Reporting is a no-op when no turn observes that thread.
 
-The collector:
-
-- is installed before `beginChatTurn` and remains active through completion or terminal failure;
-- accepts rows only for the active thread;
-- records a row only after the backing store confirms that the current operation wrote it;
-- deduplicates by transcript ID and exposes rows in ID order;
-- is a no-op for writes outside a captured turn.
+The observer accepts rows only for its thread, deduplicates by transcript ID, and returns them in ID order. It needs no `AsyncLocalStorage`, transcript cursor, follow-up query, or transport argument threaded through negotiator tools.
 
 Make every relevant write-through helper return and record an exact `TranscriptPushMessage` projection:
 
@@ -121,17 +123,19 @@ Make every relevant write-through helper return and record an exact `TranscriptP
 - `appendCloseMessage` returns its close row as well as the stamped turn. `closeConversation` returns the ordered rejection and close rows it created.
 - `enact-agent-deal` adds full `deal-accept` and `deal-enacted` row projections while retaining its current ID and status fields. Its idempotent path returns the existing enacted row. Pass the active thread into `enactAgentDeal` from the shared action and negotiator so it can record only rows created by the current call for the captured thread.
 
-Widen the transport-neutral sink events:
+Add one transport-neutral row contract to the sink:
 
 - `connected.rows` contains the durable caller row committed before the model run;
 - `done.rows` contains rows committed after `connected`, including terminal tool rows and the final archived reply;
 - `error.rows` contains any rows committed after `connected` but before a post-commit failure.
 
-Remove the `connected.deal` and `done.deals` fields instead of carrying compatibility projections: migrate the Web client in this stage to consume `connected.rows` and `done.rows`, updating the SSE consumer and its shared event types. Do not reread deal messages at the end of the turn.
+Keep `connected.deal` and `done.deals` as compatibility views for the Web client, derived from the same captured full deal rows. The Web SSE adapter sends its existing public payload and omits the new internal `rows` fields. The in-game sink consumes `rows` directly. No Web client migration or public event change is required. Do not reread deal messages at the end of the turn.
 
-Every committed turn emits exactly one terminal sink event. Each terminal path snapshots the collector once, then sends either `done` or `error`.
+The phase boundary is explicit. `connected.rows` comes only from `turn.callerRow`; the later observer never records that ID. Before either terminal event, `runChatTurn` freezes and unregisters the observer, snapshots its rows once, and uses that terminal-only set for `done.rows`, `error.rows`, `done.deals`, and cache repair. No ID may appear in both phases, and detached work cannot add rows after the terminal snapshot.
 
-`runChatTurn` uses the captured deal rows to update `thread.messages` at the existing reply boundary before emitting `done`. This preserves the current cache ordering without the `knownDealIDs` scan and `readDealMessages` reconciliation.
+Every committed turn emits exactly one terminal sink event: either `done` or `error`.
+
+`runChatTurn` updates `thread.messages` from the observed rows before either terminal event. On success, it inserts deal rows at the existing reply boundary before the normalized reply. On failure, `ChatTurn.finish` first removes transient model output, then the turn restores every observed row that belongs in the live cache, including deal rows and any successfully archived reply. This preserves cache ordering without the `knownDealIDs` scan or a `readDealMessages` reread.
 
 Stop treating final reply archival as best-effort. If the store refuses that append, `ChatTurn.complete` throws, `runChatTurn` emits `error` with any rows already committed after `connected`, and no `done` event is sent. A streamed draft therefore cannot be mistaken for a durable completed reply.
 
@@ -141,9 +145,11 @@ Add focused tests for:
 - final reply, proposal, rejection, enactment, and close rows in `done.rows`;
 - nested negotiator writes remaining inside the correct turn capture;
 - ID ordering and duplicate suppression;
+- no transcript ID appearing in both `connected.rows` and a terminal row list;
 - rows committed before a post-commit failure appearing in `error.rows`;
+- durable rows surviving failed-turn cache cleanup;
 - final reply archival failure producing `error`, not `done`;
-- the migrated Web client payloads: `rows` present, `deal` and `deals` removed.
+- the unchanged public Web SSE payload derived from the new internal row contract.
 
 ### 3. Make thread reopening safe during a live turn
 
@@ -201,7 +207,7 @@ On the action FIFO:
 3. Call `runChatTurn({ kind: "text", chatId: thread.id, message: event.Text }, gameSink)`.
 4. Let the game sink push `connected.rows`, streaming deltas, and the terminal `done.rows` or `error.rows`.
 5. Await the push work queued by the sink.
-6. Post the successful-outcome notification from item 7 only when the sink reached `done`.
+6. Post the successful-outcome notification from item 7 only when the sink reached `done` and its terminal rows contain an eligible newly committed outcome.
 
 Delete `appendProbe`. `runChatTurn` commits the caller row itself, so a pre-append would duplicate the message.
 
@@ -228,6 +234,8 @@ Push every row from `connected.rows`, `done.rows`, and `error.rows` through the 
 
 #### Deal actions
 
+Before dispatching any `DiplomacyDealAction`, resolve the caller and call `openDiplomacyChat` with the same caller, observer, context, and counterpart fields as the chat path. `DiplomacyPanelOpened` is read-only and deliberately does not populate the thread cache, so a deal action must not assume that an `EnvoyThread` already exists.
+
 Handle `DiplomacyDealAction` on the action FIFO:
 
 - **Propose:** call `runChatTurn({ kind: "deal", chatId, deal }, gameSink)`.
@@ -235,7 +243,7 @@ Handle `DiplomacyDealAction` on the action FIFO:
 - **Accept:** call `acceptDealAction(thread, ProposalMessageID)`.
 - **Reject or retract:** call `rejectDealAction(thread, ProposalMessageID, Text)`. The game event uses canonical `reject`; retract remains a local driver intent.
 
-Propose and Counter receive their rows from the `runChatTurn` sink. Accept queues the exact rows returned by `acceptDealAction`; Reject and Retract queue the exact row returned by `rejectDealAction`. There is no post-action transcript query. Typed failures use one bridge mapper and become `Status{error}`.
+Propose and Counter receive their rows from the `runChatTurn` sink. Accept queues the exact rows returned by `acceptDealAction`; Reject and Retract queue the exact row returned by `rejectDealAction`. Direct actions use `changed` for notification eligibility, while an idempotent rejection still re-pushes its existing row to acknowledge the pending editor. There is no post-action transcript query. Typed failures use one bridge mapper and become `Status{error}`.
 
 The game-side pending resolver uses durable rows:
 
@@ -251,6 +259,7 @@ The panel keeps the proposal card pending, and the deal screen keeps its mounted
 Add one notification helper in vox-agents that:
 
 - accepts the caller, counterpart, and durable outcome rows;
+- returns without posting unless those rows contain a newly created counterpart `text` or `close` row, or a state-changing deal row;
 - uses the counterpart leader name as `Summary`;
 - selects the first non-empty line of the final counterpart reply or deal outcome as `Message`;
 - converts both fields through `markdownToPlain`;
@@ -263,7 +272,7 @@ Call it after:
 - a successful accept;
 - a newly written reject or retract.
 
-Do not call it for an idempotent rejection acknowledgement, validation error, conflict, unavailable turn, or transport failure.
+Do not call it for an idempotent rejection acknowledgement, validation error, conflict, unavailable turn, or transport failure. Treat notification delivery as best-effort after the conversation action succeeds: log a posting failure, but do not turn an already committed action into `Status{error}`.
 
 Observer notification delivery requires two mcp-server changes:
 
@@ -287,7 +296,7 @@ Grow `civ5-mod/UI/VoxDeorumDiploTransport.lua` from the stage-03 probe into the 
 
 Keep the existing `VoxDeorumDiploTransport` include and remove the following `VoxDeorumDiploPanelMock` include.
 
-Create `civ5-mod/UI/VoxDeorumDealTransport.lua` as the real `VoxDeorumDealUI.driver`, then include it from `VoxDeorumDealScreen.lua` in place of `VoxDeorumDealScreenMock`. The deal screen is a separate Lua context, so this driver registers its own functions and listens to the global diplomacy `Messages` and `Status` events instead of depending on the panel context's globals.
+Create `civ5-mod/UI/VoxDeorumDealTransport.lua` as the real `VoxDeorumDealUI.driver`, then include it from `VoxDeorumDealScreen.lua` in place of `VoxDeorumDealScreenMock`. The deal screen is a separate Lua context, so it cannot depend on the panel context's globals. It registers no DLL-callable functions. It subscribes to `LuaEvents.VoxDeorumDiploMessages` and `LuaEvents.VoxDeorumDiploStatus`, which the panel-owned transport emits.
 
 The deal driver:
 
@@ -300,7 +309,7 @@ The deal driver:
 - each item's and promise's human-side endpoint is that same effective seat;
 - the mounted screen stays pending until `VoxDeorumDealActionResolved`.
 
-Track the pending pair, action, and proposal ID in the deal context. Match incoming durable rows to that state before raising `VoxDeorumDealActionResolved`. Update `VoxDeorum.modinfo` to import the new transport file, refresh changed file hashes, and remove the unused mock-driver entries when the mock files are deleted.
+Track the pending pair, action, and proposal ID in the deal context. Match incoming durable rows to that state before raising `VoxDeorumDealActionResolved`. Once both real drivers are active, delete the two mock-driver files. Update `VoxDeorum.modinfo` to import the new transport file, remove the mock entries, and let `deploy.bat` refresh changed file hashes.
 
 #### Preserve VP observer presentation
 
@@ -315,6 +324,16 @@ Keep native legality checks where they belong. Promise choice checks, ordinary i
 
 Remove the final `VoxDeorumDealScreenMock` include once the real driver is active.
 
+### 9. Align the parent stage documents
+
+Update `specs.md` with the implementation contracts settled here:
+
+- `runChatTurn` reports all rows created during a turn and no longer performs a deal-only terminal reread;
+- VP permits observer-slot deal presentation, while Vox Deorum currently adds the stricter presentation gate that this stage removes;
+- `reject-agent-deal` owns rejection rows and is the explicit backend-managed idempotency exception to the earlier no-new-idempotency note.
+
+Update the writer-split description so `append-message` no longer owns `deal-reject`. Keep the public Web event contract and capability matrix unchanged. The stage index already describes the intended player-facing outcome.
+
 ## Verification
 
 ### Automated checks
@@ -324,14 +343,18 @@ Run the repository build and test commands from the root:
 - `npm run build:all`;
 - `npm run test:all`.
 
+After those pass, run `deploy.bat` from `civ5-mod/`. It owns the modinfo MD5 refresh and deploys the completed mod for the live checks.
+
 The focused coverage must include:
 
 - unchanged Web status classes for chat, accept, reject, and close;
 - typed proposal, closed-turn, missing-turn, and busy failures;
-- idempotent rejection and stale rejection conflict from the lock-level check;
+- transactional idempotent rejection and stale rejection conflict in mcp-server;
+- an accept proposal-state race remaining a typed conflict rather than becoming a 502;
 - no accept catch-time re-probe;
 - turn-scoped row capture across nested transcript writers;
-- `connected.rows`, `done.rows`, and `error.rows` ordering, and the migrated Web payload shape;
+- `connected.rows`, `done.rows`, and `error.rows` ordering, with no ID crossing phases;
+- the unchanged public Web SSE payload;
 - final reply archival failure producing an error without a false completion;
 - exact accept and idempotent-reject rows returned without a transcript reread;
 - reopening a busy thread without mutation or compaction;
@@ -339,7 +362,9 @@ The focused coverage must include:
 - push-tail ordering for captured durable rows;
 - every promise legality rule and no-write failures;
 - notification targeting and pinned-observer redirect;
-- full parsing of `DiplomacyDealAction`.
+- notification-post failure remaining separate from action success;
+- full parsing of `DiplomacyDealAction`;
+- parent specification wording matching the row, observer-presentation, and rejection contracts.
 
 ### Live game checks
 
