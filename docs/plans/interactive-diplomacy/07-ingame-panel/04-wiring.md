@@ -281,7 +281,7 @@ Observer notification delivery requires two mcp-server changes:
 
 The bridge always posts after a successful outcome. In `VoxDeorumDiploPanel.lua`, if a notification for the currently open pair is added, remove it immediately. Opening or clicking a conversation continues to dismiss all previously tracked notifications for that pair.
 
-### 8. Replace the Lua mocks with transport drivers
+### 8. Add the transport drivers beside the retained mocks
 
 Grow `civ5-mod/UI/VoxDeorumDiploTransport.lua` from the stage-03 probe into the real panel driver:
 
@@ -294,9 +294,7 @@ Grow `civ5-mod/UI/VoxDeorumDiploTransport.lua` from the stage-03 probe into the 
 - translate `Begin`, `Messages`, `Status`, and `Delta` into the existing `VoxDeorumDiploUI` methods;
 - retain the panel's transport acknowledgement and reply-silence timeout tiers.
 
-Keep the existing `VoxDeorumDiploTransport` include and remove the following `VoxDeorumDiploPanelMock` include.
-
-Create `civ5-mod/UI/VoxDeorumDealTransport.lua` as the real `VoxDeorumDealUI.driver`, then include it from `VoxDeorumDealScreen.lua` in place of `VoxDeorumDealScreenMock`. The deal screen is a separate Lua context, so it cannot depend on the panel context's globals. It registers no DLL-callable functions. It subscribes to `LuaEvents.VoxDeorumDiploMessages` and `LuaEvents.VoxDeorumDiploStatus`, which the panel-owned transport emits.
+Create `civ5-mod/UI/VoxDeorumDealTransport.lua` as the real `VoxDeorumDealUI.driver`, included from `VoxDeorumDealScreen.lua` alongside `VoxDeorumDealScreenMock`. The deal screen is a separate Lua context, so it cannot depend on the panel context's globals. It registers no DLL-callable functions. It subscribes to `LuaEvents.VoxDeorumDiploMessages` and `LuaEvents.VoxDeorumDiploStatus`, which the panel-owned transport emits.
 
 The deal driver:
 
@@ -309,7 +307,29 @@ The deal driver:
 - each item's and promise's human-side endpoint is that same effective seat;
 - the mounted screen stays pending until `VoxDeorumDealActionResolved`.
 
-Track the pending pair, action, and proposal ID in the deal context. Match incoming durable rows to that state before raising `VoxDeorumDealActionResolved`. Once both real drivers are active, delete the two mock-driver files. Update `VoxDeorum.modinfo` to import the new transport file, remove the mock entries, and let `deploy.bat` refresh changed file hashes.
+Track the pending pair, action, and proposal ID in the deal context. Match incoming durable rows to that state before raising `VoxDeorumDealActionResolved`. Update `VoxDeorum.modinfo` to import the new transport file, keep both mock entries, and let `deploy.bat` refresh changed file hashes.
+
+#### Keep the mocks behind a runtime debug switch
+
+Both stage-01/02 mock drivers stay in the mod as an offline UI sandbox. What changes is that they no longer win by include order: each context now selects one of two installed drivers at runtime.
+
+The real driver is the shipped default. Neither mock file may assign `VoxDeorumDiploUI.driver` or `VoxDeorumDealUI.driver` at include time; each registers its driver table with its own context, which owns the selection:
+
+- `VoxDeorumDiploPanel.lua` and `VoxDeorumDealScreen.lua` each gain a context-local `setMockDrivers(useMock)` that swaps the active driver between the registered real and mock tables;
+- both contexts subscribe to one shared `LuaEvents.VoxDeorumUseMockDrivers(useMock)`, so a single toggle moves the panel and the deal screen together;
+- a context whose mock table never registered stays on its real driver and logs the miss once.
+
+The toggle is raised from the leader screen. `LeaderHeadRoot.xml` gains a `ConverseMockButton` beside `ConverseButton` in `VoxDeorumDiploStack`, wired in `VoxDeorumConverse.lua` under the same `canConverse` visibility rule. Clicking it raises `VoxDeorumUseMockDrivers(true)` and then the existing `VoxDeorumDiploOpen`, so one click enters mock mode and opens the sandbox. Leaving the panel does not exit mock mode; the ordinary Converse button raises `VoxDeorumUseMockDrivers(false)` before opening, so the plain entry point is always the live conversation.
+
+Mock mode is fully offline. While it is active:
+
+- `VoxDeorumDiploTransport` performs no `Game.RegisterFunction` registration and emits no `DiplomacyPanelOpened`, `DiplomacyChatMessage`, or `DiplomacyTranscriptRequest`;
+- `VoxDeorumDealTransport` emits no `DiplomacyDealAction`;
+- both transports ignore any push or resolution event that still arrives, so a late reply from a previous live conversation cannot write into the sandbox.
+
+Registration stays lazy and idempotent: switching back to real mode registers the push functions on the next panel presentation, exactly as a first live open does. Every switch, in either direction, resets the panel transcript and closes any mounted deal editor, so mock rows can never be mistaken for durable ones and a live pending action cannot be resolved by the mock.
+
+The mock-only seams the mocks depend on stay: `VoxDeorumDiploUI.setMockPureObserver`, `VoxDeorumDealUI.openMock`, `LuaEvents.VoxDeorumOpenDealScreenMock`, and the `Mock*` deal buttons in `VoxDeorumDiploPanel.xml`. Those buttons are revealed only while mock mode is active and hidden again on the switch back.
 
 #### Preserve VP observer presentation
 
@@ -321,8 +341,6 @@ Remove Vox Deorum's presentation-only major-civilization admission checks:
 - bind the observer slot directly as `g_iUs`; do not substitute a major seat and do not override `Game.GetActivePlayer()`.
 
 Keep native legality checks where they belong. Promise choice checks, ordinary item construction, `inspect-deal`, proposal archival, and enactment may report that an observer participant is unsupported. Those failures must restore the mounted editor and must not produce a partial transcript or game write.
-
-Remove the final `VoxDeorumDealScreenMock` include once the real driver is active.
 
 ### 9. Align the parent stage documents
 
