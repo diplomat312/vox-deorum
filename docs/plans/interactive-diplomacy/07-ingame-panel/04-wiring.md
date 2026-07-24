@@ -348,9 +348,10 @@ Update `specs.md` with the implementation contracts settled here:
 
 - `runChatTurn` reports all rows created during a turn and no longer performs a deal-only terminal reread;
 - VP permits observer-slot deal presentation, while Vox Deorum currently adds the stricter presentation gate that this stage removes;
-- `reject-agent-deal` owns rejection rows and is the explicit backend-managed idempotency exception to the earlier no-new-idempotency note.
+- `reject-agent-deal` owns rejection rows and is the explicit backend-managed idempotency exception to the earlier no-new-idempotency note;
+- the stage-01/02 mocks are retained rather than replaced: each context installs the real driver by default and swaps to the registered mock through `VoxDeorumUseMockDrivers`, an offline debug mode entered from the leader screen's mock Converse button.
 
-Update the writer-split description so `append-message` no longer owns `deal-reject`. Keep the public Web event contract and capability matrix unchanged. The stage index already describes the intended player-facing outcome.
+Update the writer-split description so `append-message` no longer owns `deal-reject`, and add `VoxDeorumUseMockDrivers` to the mod-internal LuaEvents vocabulary. Keep the public Web event contract and capability matrix unchanged. The stage index already describes the intended player-facing outcome.
 
 ## Verification
 
@@ -382,7 +383,9 @@ The focused coverage must include:
 - notification targeting and pinned-observer redirect;
 - notification-post failure remaining separate from action success;
 - full parsing of `DiplomacyDealAction`;
-- parent specification wording matching the row, observer-presentation, and rejection contracts.
+- parent specification wording matching the row, observer-presentation, rejection, and mock-switch contracts.
+
+Lua has no unit-test harness here, so the driver switch is verified by inspection and in the live checks: both mock files register rather than assign their driver, neither transport emits an event or registers a push function while mock mode is active, and every switch resets the panel and closes a mounted editor.
 
 ### Live game checks
 
@@ -399,6 +402,7 @@ With Civ V, bridge-service, mcp-server, and an interactive vox-agents session ru
 9. Submit an already-made standing promise, an ineligible Coop War, and a malformed promise direction through both Web and game paths. Confirm each is rejected before a proposal row is stored.
 10. Repeat as a human strategist. Confirm the pinned civilization's thread, diplomat, deal endpoints, enactment, notification redirect, and Web history all match normal play.
 11. Repeat as a pure observer. Confirm VP's native deal presentation opens with the real observer slot as `g_iUs`. Unsupported item or enactment actions must fail cleanly with no partial transcript or game-state write.
+12. Open the mock Converse button. Confirm the scripted sandbox runs, the `Mock*` deal buttons appear, and no diplomacy event reaches the bridge. Return through the ordinary Converse button and confirm the panel resets to the live transcript, push functions register, and no mock row survives.
 
 ## Out of scope
 
