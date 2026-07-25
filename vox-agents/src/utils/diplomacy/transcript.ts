@@ -14,10 +14,11 @@ import type { EnvoyThread } from "../../types/index.js";
 import { mcpClient } from "../models/mcp-client.js";
 import { unwrapMcpResponse } from "../models/mcp-response.js";
 import { hydrateMessages, deriveCloseTurn, carryOverTrace, boundaryIndex } from "./transcript-utils.js";
+import { reportThreadRow } from "./row-observer.js";
 import { countTokens } from "../models/token-counter.js";
-import type { TranscriptMessage } from "./transcript-utils.js";
+import type { TranscriptMessage, TranscriptPushMessage } from "./transcript-utils.js";
 
-export type { TranscriptMessage } from "./transcript-utils.js";
+export type { TranscriptMessage, TranscriptPushMessage } from "./transcript-utils.js";
 export {
   diplomacyThreadId,
   orderPair,
@@ -30,6 +31,8 @@ export {
   hydrateMessages,
   deriveCloseTurn,
   isClosedThisTurn,
+  isDealRow,
+  insertDurableRows,
   joinAssistantText,
   collectSpokenReply,
   retryMessage,
@@ -48,11 +51,6 @@ export interface TranscriptPage {
   hasMore: boolean;
   nextBeforeID?: number;
 }
-
-/** Durable row fields needed by the in-game transcript transport. */
-export type TranscriptPushMessage =
-  Pick<TranscriptMessage, "ID" | "SpeakerID" | "MessageType" | "Content" | "Turn">
-  & Partial<Pick<TranscriptMessage, "Payload">>;
 
 /** Read one durable transcript page without touching an in-memory chat thread. */
 export async function readTranscriptPage(
@@ -125,25 +123,6 @@ export async function maybeAutoCompact(thread: EnvoyThread, limit: number = AUTO
   if (estimate > limit) await autoCompact(thread);
 }
 
-/**
- * Append one archival message for `thread`'s endpoint pair via the mcp-server
- * `append-message` tool. We never send `Turn`, so the store stamps the authoritative
- * current server turn (`knowledgeManager.getTurn()`); a live agent's `parameters.turn` is a
- * decision-point snapshot that can be stale once a conversation outlives its pause (specs §8).
- *
- * @returns the server-stamped turn the row was recorded at (the value `read-transcript` will
- *          later report for it), or `undefined` if the response didn't include it.
- */
-export async function appendTranscriptMessage(
-  thread: EnvoyThread,
-  speakerID: number,
-  messageType: "text" | "close",
-  content: string
-): Promise<number | undefined> {
-  const row = await callAppendMessage(thread, speakerID, messageType, content);
-  return typeof row.Turn === "number" ? row.Turn : undefined;
-}
-
 /** Append one text row and return the store's committed transcript projection for game transport. */
 export async function appendTranscriptMessageRow(
   thread: EnvoyThread,
@@ -151,7 +130,37 @@ export async function appendTranscriptMessageRow(
   content: string,
   expectedGameID?: string,
 ): Promise<TranscriptPushMessage> {
-  const row = await callAppendMessage(thread, speakerID, "text", content, expectedGameID);
+  return appendCommittedRow(thread, speakerID, "text", content, expectedGameID);
+}
+
+/**
+ * Append one archival row for `thread`'s endpoint pair via the mcp-server `append-message` tool and
+ * return the store's committed projection of it. We never send `Turn`, so the store stamps the
+ * authoritative current server turn (`knowledgeManager.getTurn()`); a live agent's `parameters.turn`
+ * is a decision-point snapshot that can be stale once a conversation outlives its pause (specs §8).
+ *
+ * The echoed row is required, not best-effort: every caller now reports the exact committed row to
+ * its turn's capture and mirrors that row's ID and turn into the live cache, so an append that does
+ * not echo a usable row is a store-contract violation rather than a value to paper over.
+ */
+async function appendCommittedRow(
+  thread: EnvoyThread,
+  speakerID: number,
+  messageType: "text" | "close",
+  content: string,
+  expectedGameID?: string,
+): Promise<TranscriptPushMessage> {
+  const result = await mcpClient.callTool("append-message", {
+    PlayerAID: thread.player1ID,
+    PlayerBID: thread.player2ID,
+    PlayerARole: thread.player1Role,
+    PlayerBRole: thread.player2Role,
+    SpeakerID: speakerID,
+    MessageType: messageType,
+    Content: content,
+    ...(expectedGameID !== undefined ? { ExpectedGameID: expectedGameID } : {}),
+  });
+  const row = unwrapMcpResponse(result, "append-message") as Partial<TranscriptPushMessage>;
   if (
     typeof row.ID !== "number"
     || typeof row.SpeakerID !== "number"
@@ -164,27 +173,6 @@ export async function appendTranscriptMessageRow(
   return row as TranscriptPushMessage;
 }
 
-/** The single `append-message` call shared by every transcript append variant. */
-async function callAppendMessage(
-  thread: EnvoyThread,
-  speakerID: number,
-  messageType: "text" | "close",
-  content: string,
-  expectedGameID?: string,
-): Promise<Partial<TranscriptPushMessage>> {
-  const result = await mcpClient.callTool("append-message", {
-    PlayerAID: thread.player1ID,
-    PlayerBID: thread.player2ID,
-    PlayerARole: thread.player1Role,
-    PlayerBRole: thread.player2Role,
-    SpeakerID: speakerID,
-    MessageType: messageType,
-    Content: content,
-    ...(expectedGameID !== undefined ? { ExpectedGameID: expectedGameID } : {}),
-  });
-  return unwrapMcpResponse(result, "append-message") as Partial<TranscriptPushMessage>;
-}
-
 /**
  * Append a `close` special message and record the close turn on the thread so it is
  * immediately locked for the rest of the current turn. Shared by the diplomat's
@@ -192,18 +180,21 @@ async function callAppendMessage(
  *
  * The recorded turn is the **server-stamped** turn returned by `append-message` — the same
  * value `deriveCloseTurn` will read back on reopen — so the in-memory lock and the persisted
- * close turn can never diverge. `fallbackTurn` is used only if the response omits the turn.
+ * close turn can never diverge.
  *
- * @returns the turn the close was recorded at
+ * The committed row is also reported to any turn observing this thread, so a diplomat that closes the
+ * conversation mid-run carries the close row in its terminal rows (a no-op for the blocking Web close
+ * control, which owns the lock outright and takes the returned row directly).
+ *
+ * @returns the stamped turn and the exact committed `close` row
  */
 export async function appendCloseMessage(
   thread: EnvoyThread,
   speakerID: number,
-  content: string,
-  fallbackTurn: number
-): Promise<number> {
-  const stampedTurn = await appendTranscriptMessage(thread, speakerID, "close", content);
-  const turn = stampedTurn ?? fallbackTurn;
-  thread.closeTurn = turn;
-  return turn;
+  content: string
+): Promise<{ turn: number; row: TranscriptPushMessage }> {
+  const row = await appendCommittedRow(thread, speakerID, "close", content);
+  thread.closeTurn = row.Turn;
+  reportThreadRow(thread, row);
+  return { turn: row.Turn, row };
 }

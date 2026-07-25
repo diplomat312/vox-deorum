@@ -97,13 +97,24 @@ const InspectedTradeItemSchema = z.object({
   valueIfIReceive: z.number().describe("AI value to the receiver of gaining it (advisory; may be INT_MAX)"),
 });
 
-/** Per-promise-term result. */
+/**
+ * Per-promise-term result.
+ *
+ * `legality` / `reasons` use the same vocabulary as the inspected trade items above and are
+ * BINDING: they report whether the commitment is already impossible under current game state
+ * (wrong principals, a duplicate commitment, an ineligible cooperative-war target, a standing
+ * promise already in effect), so the shared proposal chokepoint can refuse it before it becomes a
+ * durable offer. `agreeabilityFactors` stays what it always was — advisory raw decision inputs that
+ * gate nothing.
+ */
 const InspectedPromiseSchema = z.object({
   promiserID: z.number(),
   recipientID: z.number(),
   promiseType: z.enum(PROMISE_TYPES),
   targetPlayerID: z.number().optional(),
   duration: z.number().optional(),
+  legality: z.boolean().describe("Whether this commitment is possible under current game state"),
+  reasons: z.array(z.string()).describe("Reasons it is impossible (empty when legal)"),
   agreeabilityFactors: z.object({
     promiserOpinionOfRecipient: z.array(z.string()).optional(),
     recipientOpinionOfPromiser: z.array(z.string()).optional(),
@@ -401,8 +412,10 @@ class InspectDealTool extends ToolBase {
     const promises = proposedDeal?.promises ?? [];
     validateDealParticipants(PlayerAID, PlayerBID, proposedItems, promises);
 
-    // 1) Trade items + tradable range, via the in-game scratch deal.
-    const inspection = await inspectDeal(PlayerAID, PlayerBID, proposedItems);
+    // 1) Trade items + tradable range, via the in-game scratch deal. The symmetrized promises ride
+    //    along so the same call also returns their legality (the game-state checks live in Lua,
+    //    beside the ones enactment runs).
+    const inspection = await inspectDeal(PlayerAID, PlayerBID, proposedItems, promises);
     if (!inspection) {
       throw new Error("inspect-deal: the game could not inspect the deal (no scratch deal or bridge failure)");
     }
@@ -434,8 +447,11 @@ class InspectDealTool extends ToolBase {
       tradableRange[pid] = normalizeSide(raw as Partial<SideRange>);
     }
 
-    // 2) Promise agreeability factors, assembled from existing diplomacy getters.
-    const inspectedPromises = await this.inspectPromises(promises);
+    // 2) Promise legality (from the Lua validator) + advisory agreeability factors.
+    const inspectedPromises = await this.inspectPromises(
+      promises,
+      asArray<{ legal?: boolean; reason?: string }>(inspection.promises)
+    );
 
     return {
       items,
@@ -455,13 +471,19 @@ class InspectDealTool extends ToolBase {
   }
 
   /**
-   * Assemble advisory agreeability factors for each promise term from existing
-   * diplomacy getters. Opinions/events are per-perspective, so we fetch once per
-   * unique promiser and slice out the recipient-specific signal. No DLL verdict is
-   * computed (specs.md §6 out-of-scope) — these are the raw inputs the negotiator
-   * reasons over.
+   * Merge each promise term's Lua legality verdict with advisory agreeability factors assembled
+   * from existing diplomacy getters. Opinions/events are per-perspective, so we fetch once per
+   * unique promiser and slice out the recipient-specific signal. No DLL *agreeability* verdict is
+   * computed (specs.md §6 out-of-scope) — those factors are the raw inputs the negotiator reasons
+   * over. Legality, by contrast, is a real game-state verdict and is binding.
+   *
+   * @param promises - The symmetrized promise terms, in the order they were sent to Lua
+   * @param legality - The Lua validator's verdicts, aligned by index with `promises`
    */
-  private async inspectPromises(promises: PromiseTerm[]): Promise<z.infer<typeof InspectedPromiseSchema>[]> {
+  private async inspectPromises(
+    promises: PromiseTerm[],
+    legality: { legal?: boolean; reason?: string }[]
+  ): Promise<z.infer<typeof InspectedPromiseSchema>[]> {
     if (promises.length === 0) return [];
 
     const getOpinions = getTool("getOpinions");
@@ -490,7 +512,7 @@ class InspectDealTool extends ToolBase {
     };
 
     const results: z.infer<typeof InspectedPromiseSchema>[] = [];
-    for (const p of promises) {
+    for (const [index, p] of promises.entries()) {
       const opinions = await opinionsFor(p.promiserID);
       const recipientEntry = opinions[String(p.recipientID)] as
         | { OurOpinionOfThem?: string[]; TheirOpinionOfUs?: string[] }
@@ -505,12 +527,22 @@ class InspectDealTool extends ToolBase {
         note: "Advisory raw decision inputs (approach, opinion, trust, broken/ignored-promise history, victory competition). No in-game promise valuation exists; the negotiator reasons over these. This gates nothing.",
       };
 
+      // Degrade OPEN when the Lua returned no verdict for this index (an older script, a short
+      // list, or a bridge that answered without the field): a degraded inspection must not block
+      // an otherwise fine proposal. Enactment re-checks every promise regardless.
+      const verdict = legality[index];
+      const legal = verdict === undefined ? true : !!verdict.legal;
+
       results.push({
         promiserID: p.promiserID,
         recipientID: p.recipientID,
         promiseType: p.promiseType,
         targetPlayerID: p.targetPlayerID,
         duration: p.duration,
+        legality: legal,
+        // Same reason normalization the trade items use, so both halves of a deal speak one
+        // vocabulary (empty when legal; a fallback line when illegal but the reason was silent).
+        reasons: candidateReasons(legal, verdict?.reason),
         agreeabilityFactors: factors,
       });
     }

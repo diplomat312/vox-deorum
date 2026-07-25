@@ -10,16 +10,21 @@
 
 import type { EnvoyThread, ChatMessageRequest } from "../../types/index.js";
 import type { DealTranscriptMessage } from "../../../../mcp-server/dist/utils/deal-schema.js";
-import { ModelMessage } from "ai";
-import { appendTranscriptMessage, audienceID, collectSpokenReply, retryMessage, needsRetryReply, maybeAutoCompact } from "./transcript.js";
-import { collectTrace, hydrateDealRow } from "./transcript-utils.js";
+import { appendTranscriptMessageRow, audienceID, collectSpokenReply, retryMessage, needsRetryReply, maybeAutoCompact } from "./transcript.js";
+import { collectTrace, hydrateDealRow, type TranscriptPushMessage } from "./transcript-utils.js";
+import { reportThreadRow } from "./row-observer.js";
 import { appendDealProposal, classifyDealSubmission } from "./deal.js";
-import { createLogger } from "../logger.js";
-
-const logger = createLogger("diplomacy:chat-turn-commit");
 
 /** Triple-brace special tokens (e.g. {{{Greeting}}}) are agent triggers, not archival text. */
 const SPECIAL_MESSAGE = /^\{\{\{.+\}\}\}$/;
+
+/**
+ * The one public wording for "this thread already has a turn in flight". Shared by every transport
+ * mapper (the Web pre-stream rejection, the Web deal/close routes, the in-game bridge) so the same
+ * {@link ThreadBusyError} never reaches two clients phrased two different ways.
+ */
+export const threadBusyMessage =
+  "A reply is already being generated for this conversation. Please wait for it to finish.";
 
 /**
  * What a chat turn commits before the diplomat streams its reply: the wire request itself
@@ -53,17 +58,30 @@ export class ThreadBusyError extends Error {
 /** A committed, in-progress chat turn. Call `complete()` on success, then `finish()` in a `finally`. */
 export interface ChatTurn {
   /**
-   * For a deal turn, the authoritative committed row (real ID + value snapshots) — the route emits it
-   * over the `connected` SSE event so the UI inserts it without a reread/refresh. Undefined for text.
+   * The durable caller row this turn committed before the model ran — the turn's whole pre-run phase,
+   * reported to the client on `connected`. Undefined when the move was never archived: a
+   * `{{{Greeting}}}` trigger (an agent trigger, not an utterance) or a non-diplomacy chat (no store).
+   */
+  callerRow?: TranscriptPushMessage;
+  /**
+   * For a deal turn, the authoritative committed row (real ID + value snapshots) — the same row as
+   * {@link callerRow}, kept separately typed so the Web `connected` event can carry its deal payload
+   * and the UI inserts the card without a reread/refresh. Undefined for text.
    */
   dealRow?: DealTranscriptMessage;
   /**
-   * Archive the streamed reply (diplomacy only, best-effort), normalize the cached reply slice to that
-   * same archived content, and mark the turn complete. `sendMessageOnly` (set for a live envoy) archives
+   * Archive the streamed reply (diplomacy only), normalize the cached reply slice to that same
+   * archived content, and mark the turn complete. `sendMessageOnly` (set for a live envoy) archives
    * only the explicit `send-message` reply, dropping raw free text (the same text the route swallows from
    * the live stream), so live and reload agree.
+   *
+   * Archival is NOT best-effort: if the store refuses the append this throws, so the caller can report
+   * a failure instead of letting a streamed draft masquerade as a durable completed reply.
+   *
+   * @returns the exact committed reply row, or undefined when the turn archived no reply (it took a
+   *          deliberate terminal action, or it is not a diplomacy thread).
    */
-  complete(opts?: { sendMessageOnly?: boolean }): Promise<void>;
+  complete(opts?: { sendMessageOnly?: boolean }): Promise<TranscriptPushMessage | undefined>;
   /**
    * Release the per-thread lock and reconcile the cache with the store: a completed turn keeps both
    * rows; an incomplete one trims the unwritten reply (and a {{{Greeting}}} trigger's own cache row,
@@ -96,6 +114,7 @@ export async function beginChatTurn(thread: EnvoyThread, commit: TurnCommit, tur
   // {{{Greeting}}} trigger that must not be durably appended (and whose cache row `finish` trims).
   const isSpecial = commit.kind === "text" && SPECIAL_MESSAGE.test(commit.message);
   let dealRow: DealTranscriptMessage | undefined;
+  let callerRow: TranscriptPushMessage | undefined;
   try {
     // Bound the replayed prompt UNDER the lock, before committing this move or capturing the reply
     // boundary: if the ongoing exchange (retained native traces included) has outgrown the soft token
@@ -120,8 +139,9 @@ export async function beginChatTurn(thread: EnvoyThread, commit: TurnCommit, tur
       // durations, and append the deal-proposal/deal-counter. It returns the authoritative row.
       const result = await appendDealProposal(thread, audienceID(thread), messageType, commit.deal);
       dealRow = result.row;
+      callerRow = result.row;
     } else if (thread.diplomacy && !isSpecial) {
-      await appendTranscriptMessage(thread, audienceID(thread), "text", commit.message);
+      callerRow = await appendTranscriptMessageRow(thread, audienceID(thread), commit.message);
     }
   } catch (error) {
     inFlight.delete(thread.id); // nothing committed — free the lock for a clean retry/rollback
@@ -130,13 +150,21 @@ export async function beginChatTurn(thread: EnvoyThread, commit: TurnCommit, tur
 
   // Mirror the committed caller into the cache; the assistant reply begins just past it. A deal turn
   // pushes the authoritative committed row straight from the append (real ID + value snapshots — no
-  // reread); a text turn pushes the user utterance (a {{{Greeting}}} trigger included, trimmed by
-  // `finish` if the turn doesn't complete).
+  // reread); a text turn pushes the user utterance carrying that row's durable ID and server-stamped
+  // turn, so the cached row is identical to what a reload would hydrate and a later repair can
+  // recognize it by ID. A {{{Greeting}}} trigger has no durable row, so its cache row carries neither
+  // (and `finish` trims it if the turn doesn't complete).
   if (commit.kind === "deal") {
     thread.messages.push(hydrateDealRow(dealRow!, thread.agent));
   } else {
-    const userMessage: ModelMessage = { role: "user", content: commit.message };
-    thread.messages.push({ message: userMessage, metadata: { datetime: new Date(), turn } });
+    thread.messages.push({
+      message: { role: "user", content: commit.message },
+      metadata: {
+        datetime: new Date(),
+        turn: callerRow?.Turn ?? turn,
+        ...(callerRow ? { id: callerRow.ID } : {}),
+      },
+    });
   }
   thread.metadata!.updatedAt = new Date();
   const replyStart = thread.messages.length;
@@ -144,8 +172,10 @@ export async function beginChatTurn(thread: EnvoyThread, commit: TurnCommit, tur
   let completed = false;
   let finished = false;
   return {
+    callerRow,
     dealRow,
     async complete(opts?: { sendMessageOnly?: boolean }) {
+      let replyRow: TranscriptPushMessage | undefined;
       if (thread.diplomacy) {
         // Archive exactly what was displayed: the spoken reply is the interleaved text plus send-message
         // arguments (collectSpokenReply). For a live envoy (`sendMessageOnly`) only the explicit
@@ -160,11 +190,15 @@ export async function beginChatTurn(thread: EnvoyThread, commit: TurnCommit, tur
         const spoken = collectSpokenReply(slice, opts);
         const reply = spoken || (needsRetryReply(slice, opts) ? retryMessage : "");
         if (reply) {
-          try {
-            await appendTranscriptMessage(thread, thread.agent, "text", reply);
-          } catch (error) {
-            logger.error("Failed to append diplomat reply to transcript store", { error });
-          }
+          // Deliberately NOT best-effort. Swallowing this append let a turn report `done` with a
+          // streamed draft the store never accepted — the client then showed a "completed" reply that
+          // vanished on the next reload. Letting it throw makes the turn end in `error` (carrying
+          // whatever it did commit) instead of a false completion.
+          replyRow = await appendTranscriptMessageRow(thread, thread.agent, reply);
+          // Reported only after the store confirms it, so the turn's terminal rows are exactly the
+          // durable ones. The caller row is deliberately excluded from this capture (it belongs to the
+          // pre-run phase), so no ID can appear in both phases.
+          reportThreadRow(thread, replyRow);
         }
         // Normalize the cache to exactly what was archived. The run left the raw assistant messages in
         // the slice (free text, the send-message tool call, the negotiator/close handoff); for a live
@@ -184,13 +218,22 @@ export async function beginChatTurn(thread: EnvoyThread, commit: TurnCommit, tur
         const trace = spoken ? collectTrace(slice, opts) : [];
         thread.messages.splice(replyStart);
         if (reply) {
+          // Normalize to the EXACT archived row: its durable ID (so the turn's own cache repair and a
+          // later re-hydrate both recognize this row) and its server-stamped turn (which can differ
+          // from the live snapshot this turn opened with).
           thread.messages.push({
             message: { role: "assistant", content: reply },
-            metadata: { datetime: new Date(), turn, ...(trace.length ? { trace } : {}) },
+            metadata: {
+              datetime: new Date(),
+              turn: replyRow?.Turn ?? turn,
+              ...(replyRow ? { id: replyRow.ID } : {}),
+              ...(trace.length ? { trace } : {}),
+            },
           });
         }
       }
       completed = true;
+      return replyRow;
     },
     finish() {
       if (finished) return;

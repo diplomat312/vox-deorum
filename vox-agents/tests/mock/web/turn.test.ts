@@ -92,7 +92,11 @@ describe('chat turn runner', () => {
 
     try {
       await expect(runChatTurn({ kind: 'text', chatId: thread.id, message: 'Hello' }, sink)).resolves.toBeUndefined();
-      expect(streamError).toHaveBeenCalledWith({ message: 'Failed to execute agent: socket setup failed' });
+      // A non-diplomacy thread commits nothing durable, so the terminal event carries no rows.
+      expect(streamError).toHaveBeenCalledWith({
+        message: 'Failed to execute agent: socket setup failed',
+        rows: [],
+      });
 
       const nextTurn = await beginChatTurn(
         thread,

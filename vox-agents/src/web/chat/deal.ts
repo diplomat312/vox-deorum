@@ -1,11 +1,27 @@
 /**
  * @module web/chat/deal
  *
- * Registers blocking diplomacy close and deal-status operations.
+ * The Express face of the blocking diplomacy operations: conversation close, deal inspection, and the
+ * accept / reject deal actions.
+ *
+ * Everything here is HTTP: resolve the `chatId`, parse the request body, call a transport-neutral
+ * action, map its typed errors onto the public status classes. The domain logic — the diplomacy-thread
+ * guard, the live-turn and closed-this-turn gate, the per-thread lock, the authoritative backend call,
+ * and the live-cache hydration — lives in `utils/diplomacy/deal-actions.ts` so the in-game panel can
+ * take exactly the same path (stage 7.04 work item 1).
+ *
+ * The public status classes, unchanged:
+ *
+ * | Error                                        | HTTP |
+ * |----------------------------------------------|-----:|
+ * | invalid request, or `IllegalDealError`        |  400 |
+ * | thread not found                              |  404 |
+ * | busy, closed this turn, or proposal conflict  |  409 |
+ * | live turn unavailable                         |  503 |
+ * | store, bridge, inspection, enactment failure   |  502 |
  */
 
 import { Router, type Request, type Response } from 'express';
-import type { StrategistParameters } from '../../strategist/strategy-parameters.js';
 import type {
   DealAcceptRequest,
   DealMessagesResponse,
@@ -16,27 +32,41 @@ import type {
   InspectDealResponse,
   EnvoyThread,
 } from '../../types/index.js';
-import { contextRegistry } from '../../infra/context-registry.js';
 import {
-  appendDealReject,
+  IllegalDealError,
+  ProposalConflictError,
   closeConversation,
-  enactAgentDeal,
   inspectDeal,
   readDealMessages,
-  requireCurrentOpenProposal,
 } from '../../utils/diplomacy/deal.js';
-import { ThreadBusyError, withThreadLock } from '../../utils/diplomacy/chat-turn-commit.js';
-import { audienceID, isClosedThisTurn } from '../../utils/diplomacy/transcript.js';
+import {
+  NotDiplomacyThreadError,
+  acceptDealAction,
+  rejectDealAction,
+} from '../../utils/diplomacy/deal-actions.js';
+import {
+  ThreadBusyError,
+  threadBusyMessage,
+  withThreadLock,
+} from '../../utils/diplomacy/chat-turn-commit.js';
+import {
+  ConversationClosedThisTurnError,
+  LiveTurnUnavailableError,
+  requireOpenConversationTurn,
+} from '../../utils/diplomacy/live-turn.js';
+import { audienceID, insertDurableRows } from '../../utils/diplomacy/transcript.js';
 import { createLogger } from '../../utils/logger.js';
 import { DealPayloadSchema } from '../../../../mcp-server/dist/utils/deal-schema.js';
-import {
-  currentTurnOf,
-  enrichChat,
-  mirrorDealRowsBestEffort,
-} from './enrichment.js';
+import { enrichChat } from './enrichment.js';
 import { chatThreadStore } from './store.js';
 
 const logger = createLogger('webui:chat-deal');
+
+/** One mapped HTTP failure: the status class and the body the client receives. */
+interface MappedFailure {
+  status: number;
+  error: string;
+}
 
 /** Resolve a diplomacy thread or send the public lookup or mode error. */
 function resolveDealThread(chatId: string, res: Response): EnvoyThread | undefined {
@@ -52,16 +82,30 @@ function resolveDealThread(chatId: string, res: Response): EnvoyThread | undefin
   return thread;
 }
 
-/** Return true and send a conflict when the current turn keeps the conversation closed. */
-function isDealLocked(thread: EnvoyThread, res: Response): boolean {
-  const context = contextRegistry.get<StrategistParameters>(thread.contextId);
-  const currentTurn = currentTurnOf(context) ?? thread.metadata?.turn ?? 0;
-  if (!isClosedThisTurn(thread.closeTurn, currentTurn)) return false;
-
-  res.status(409).json({
-    error: 'This conversation was closed this turn and cannot accept deal actions until a later turn.',
-  });
-  return true;
+/**
+ * The single mapper from the shared actions' typed errors to the public status classes. Every branch
+ * keys off the error TYPE — never its message text — so the same failure reaches the Web and the
+ * in-game panel classified identically.
+ *
+ * @param error    The thrown failure.
+ * @param fallback Wording for an unrecognized failure — the store, the bridge, the inspector, or the
+ *                 enactment refused.
+ * @param fallbackStatus Status class for that unrecognized failure. The deal actions report an
+ *                 upstream refusal (502); the close control has always reported its own (500), and
+ *                 that public class is preserved.
+ */
+function mapDealActionError(error: unknown, fallback: string, fallbackStatus = 502): MappedFailure {
+  if (error instanceof ThreadBusyError) return { status: 409, error: threadBusyMessage };
+  if (error instanceof ConversationClosedThisTurnError) return { status: 409, error: error.message };
+  if (error instanceof ProposalConflictError) return { status: 409, error: error.message };
+  if (error instanceof LiveTurnUnavailableError) return { status: 503, error: error.message };
+  if (error instanceof IllegalDealError) return { status: 400, error: error.message };
+  if (error instanceof NotDiplomacyThreadError) return { status: 400, error: error.message };
+  logger.error(fallback, { error });
+  return {
+    status: fallbackStatus,
+    error: fallbackStatus === 500 ? fallback : (error instanceof Error ? error.message : fallback),
+  };
 }
 
 /** Register conversation close and blocking deal-status routes. */
@@ -74,39 +118,29 @@ export function createAgentDealStatusRoutes(): Router {
       req: Request<{ chatId: string }, {}, { message?: string }>,
       res: Response<GetChatResponse | ErrorResponse>,
     ): Promise<Response> => {
+      const thread = chatThreadStore.get(req.params.chatId);
+      if (!thread) return res.status(404).json({ error: 'Chat thread not found' });
+      if (!thread.diplomacy) {
+        return res.status(400).json({ error: 'Only diplomacy conversations can be closed.' });
+      }
+
+      const content = req.body?.message?.trim() || 'The conversation has been closed.';
       try {
-        const thread = chatThreadStore.get(req.params.chatId);
-        if (!thread) return res.status(404).json({ error: 'Chat thread not found' });
-        if (!thread.diplomacy) {
-          return res.status(400).json({ error: 'Only diplomacy conversations can be closed.' });
-        }
-
-        const context = contextRegistry.get<StrategistParameters>(thread.contextId);
-        const currentTurn = currentTurnOf(context) ?? thread.metadata?.turn ?? 0;
-        if (isClosedThisTurn(thread.closeTurn, currentTurn)) {
-          return res.status(409).json({ error: 'This conversation is already closed this turn.' });
-        }
-
-        const content = req.body?.message?.trim() || 'The conversation has been closed.';
+        // The same live-turn/closed guard the deal actions use; a conversation already closed on this
+        // turn cannot be closed again. `closeConversation` retracts any open offer first, then writes
+        // the close, and hands back both durable rows so the cache is repaired from what it committed.
+        requireOpenConversationTurn(thread, {
+          closedMessage: 'This conversation is already closed this turn.',
+        });
         await withThreadLock(thread, async () => {
-          const closedAt = await closeConversation(thread, audienceID(thread), content, currentTurn);
-          await mirrorDealRowsBestEffort(thread);
-          thread.messages.push({
-            message: { role: 'user', content },
-            metadata: { datetime: new Date(), turn: closedAt },
-          });
+          const { rows } = await closeConversation(thread, audienceID(thread), content);
+          insertDurableRows(thread, rows);
           thread.metadata!.updatedAt = new Date();
         });
-
         return res.json({ ...thread, ...enrichChat(thread) });
       } catch (error) {
-        if (error instanceof ThreadBusyError) {
-          return res.status(409).json({
-            error: 'A reply is already being generated for this conversation. Please wait for it to finish.',
-          });
-        }
-        logger.error('Failed to close conversation', { error });
-        return res.status(500).json({ error: 'Failed to close conversation' });
+        const mapped = mapDealActionError(error, 'Failed to close conversation', 500);
+        return res.status(mapped.status).json({ error: mapped.error });
       }
     },
   );
@@ -149,30 +183,21 @@ export function createAgentDealStatusRoutes(): Router {
     ): Promise<Response> => {
       const thread = resolveDealThread(req.params.chatId, res);
       if (!thread) return res;
-      if (isDealLocked(thread, res)) return res;
 
       const proposalMessageID = req.body?.proposalMessageID;
       if (typeof proposalMessageID !== 'number') {
         return res.status(400).json({ error: 'proposalMessageID (number) is required' });
       }
-      const content = req.body?.content?.trim() || 'The deal was rejected.';
 
       try {
-        await withThreadLock(thread, async () => {
-          await appendDealReject(thread, audienceID(thread), content, proposalMessageID);
-          await mirrorDealRowsBestEffort(thread);
-        });
+        // A repeat of a rejection this endpoint already made returns the existing row and writes
+        // nothing (`changed: false`); the Web response is identical either way, since the client
+        // renders the conversation, not the transition.
+        await rejectDealAction(thread, proposalMessageID, req.body?.content);
         return res.json({ ...thread, ...enrichChat(thread) });
       } catch (error) {
-        if (error instanceof ThreadBusyError) {
-          return res.status(409).json({
-            error: 'A reply is already being generated for this conversation. Please wait for it to finish.',
-          });
-        }
-        logger.error('Failed to append deal-reject', { error });
-        return res.status(502).json({
-          error: error instanceof Error ? error.message : 'Failed to append deal-reject',
-        });
+        const mapped = mapDealActionError(error, 'Failed to append deal-reject');
+        return res.status(mapped.status).json({ error: mapped.error });
       }
     },
   );
@@ -185,38 +210,20 @@ export function createAgentDealStatusRoutes(): Router {
     ): Promise<Response> => {
       const thread = resolveDealThread(req.params.chatId, res);
       if (!thread) return res;
-      if (isDealLocked(thread, res)) return res;
       if (typeof req.body?.proposalMessageID !== 'number') {
         return res.status(400).json({ error: 'proposalMessageID (number) is required' });
       }
 
-      const accepterID = audienceID(thread);
       try {
-        await withThreadLock(thread, async () => {
-          await requireCurrentOpenProposal(thread, req.body.proposalMessageID, accepterID);
-          await enactAgentDeal(req.body.proposalMessageID, { accepterID });
-          await mirrorDealRowsBestEffort(thread);
-        });
+        // No catch-time re-probe of the proposal. Both backend transactions now report a lost race as
+        // a typed ProposalConflictError, so the mapper separates a conflict (409) from an
+        // infrastructure failure (502) without a second, race-prone read that could report a verdict
+        // already stale by the time it lands.
+        await acceptDealAction(thread, req.body.proposalMessageID);
         return res.json({ ...thread, ...enrichChat(thread) });
       } catch (error) {
-        if (error instanceof ThreadBusyError) {
-          return res.status(409).json({
-            error: 'A reply is already being generated for this conversation. Please wait for it to finish.',
-          });
-        }
-        try {
-          await requireCurrentOpenProposal(thread, req.body.proposalMessageID, accepterID);
-        } catch (conflict) {
-          return res.status(409).json({
-            error: conflict instanceof Error
-              ? conflict.message
-              : 'Proposal is no longer open for acceptance',
-          });
-        }
-        logger.error('Failed to enact deal', { error });
-        return res.status(502).json({
-          error: error instanceof Error ? error.message : 'Failed to enact deal',
-        });
+        const mapped = mapDealActionError(error, 'Failed to enact deal');
+        return res.status(mapped.status).json({ error: mapped.error });
       }
     },
   );

@@ -342,6 +342,13 @@ Remove Vox Deorum's presentation-only major-civilization admission checks:
 
 Keep native legality checks where they belong. Promise choice checks, ordinary item construction, `inspect-deal`, proposal archival, and enactment may report that an observer participant is unsupported. Those failures must restore the mounted editor and must not produce a partial transcript or game write.
 
+Two seat guards inside the deal screen deliberately survive this removal. Admission is what widens; these are not admission.
+
+- `evaluatePromises` keeps its `livingMajor(actorID)` precondition because it is **memory safety, not presentation**. `GetNumTurnsMilitaryPromise` and its expansion and border siblings index `MAX_MAJOR_CIVS`-sized `CvDiplomacyAI` arrays behind a `PRECONDITION` that compiles to nothing under `FINAL_RELEASE`, so an out-of-range seat is a raw out-of-bounds read in the shipped DLL. Lua cannot `pcall` its way out of that.
+- `projectProposal` keeps its equivalent precondition because it is the native test hoisted, not an extra restriction: `CvDeal::IsPossibleToTradeItem` refuses any participant at or above `MAX_MAJOR_CIVS` before dereferencing anything, and every `Add*` constructor is gated on it. Evaluating the same condition once instead of once per term changes no outcome — an unsupported seat adds nothing to the scratch deal either way, so the native trade table renders empty regardless — and it yields one honest "actor unavailable" line instead of a per-term list that would misleadingly read as terms having been removed.
+
+Nothing is lost to the debugger by keeping them: the panel's own transcript card already renders every proposal's full give and receive columns from the durable row, bucketed against the effective seat, with no native involvement. Only the native editor's rendering of those terms is unavailable to an unsupported seat, and it would be unavailable with the guards removed too.
+
 ### 9. Align the parent stage documents
 
 Update `specs.md` with the implementation contracts settled here:
@@ -404,6 +411,23 @@ With Civ V, bridge-service, mcp-server, and an interactive vox-agents session ru
 11. Repeat as a pure observer. Confirm VP's native deal presentation opens with the real observer slot as `g_iUs`. Unsupported item or enactment actions must fail cleanly with no partial transcript or game-state write.
 12. Open the mock Converse button. Confirm the scripted sandbox runs, the `Mock*` deal buttons appear, and no diplomacy event reaches the bridge. Return through the ordinary Converse button and confirm the panel resets to the live transcript, push functions register, and no mock row survives.
 
+### Open blocker: the game-bound Lua queue stalls
+
+The first live run of this stage could not complete any of the checks above. Both halves of the round trip were exercised and only the return leg failed.
+
+Game to server works. A pure-observer Converse broadcast `DiplomacyPanelOpened{PlayerID: 8, CounterpartID: 0, AsObserver: true}`, mcp-server stored it and notified vox-agents, and the bridge received it.
+
+Server to game did not. The bridge queued its reply, and the `call-lua-function` request was accepted at `13:51:47.680` but did not return until `13:52:43.456` — the moment the DLL disconnected at shutdown. The bridge-service log shows the same shape one level down: `Executing batch of 3 Lua calls` at `13:51:45.125`, `Executed` only at `13:52:43.449`. The stall began roughly 200 ms after the native leaderhead screen opened, and `Lua.log`'s final line is the push registration — nothing printed afterwards. Across every retained log, `VoxDeorumDiplo*` pushes stand at one attempted and zero completed.
+
+The working hypothesis is that the DLL drains this queue only while the bridge holds a pause: the surrounding log alternates `PauseManager` add, batch, remove, and the batch that hung began immediately after the last player left the paused list. If that holds, no push can reach the game while an observer sits in the leaderhead — which is exactly when the panel needs them, since it overlays that scene. This is not a wiring defect in this stage and predates it; log rotation means an earlier session cannot be ruled out as having worked.
+
+Two diagnostics were added so the next run names the failure instead of presenting a bare timeout:
+
+- the bridge warns while a game-bound Lua call is still outstanding past ten seconds, and again if it eventually returns late, so a stall is reported as a stall rather than as silence;
+- a counterpart with no live agent context is now logged and reported as a pair with no envoy, instead of sharing the malformed-caller message. That refusal is correct — only civilizations with an assigned agent can converse — but it previously dropped with no log entry at all, which is why the bridge appeared dead.
+
+Until the queue behaviour is resolved, every live check above remains unverified.
+
 ## Out of scope
 
 - live mirroring into an already open Web chat;
@@ -417,3 +441,4 @@ With Civ V, bridge-service, mcp-server, and an interactive vox-agents session ru
 ## Done when
 
 The in-game panel and Web are two clients of the same conversation system. They share the diplomat, thread, transcript, proposal validation, deal actions, and enactment path. Streaming remains responsive, final UI state comes from durable rows, notifications carry successful outcomes across turns, and every supported seat can open the same presentation without bypassing native authority.
+                           ````````

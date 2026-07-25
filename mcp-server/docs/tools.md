@@ -1,13 +1,13 @@
 # MCP Server Tool Reference
 
-Concise reference for all 42 tools exposed by the MCP Server. Tools are organized by category and registered in `src/tools/index.ts`.
+Concise reference for all 43 tools exposed by the MCP Server. Tools are organized by category and registered in `src/tools/index.ts`.
 
 ## Architecture
 
 - All tools extend abstract base classes (`DatabaseQueryTool`, `LuaFunctionTool`, `DynamicEventTool`) or `ToolBase` directly
 - Factory pattern with lazy loading -- tools instantiated on first server init, cached afterward
 - Zod schemas for input/output validation with `.describe()` on each field
-- PlayerID range for major civs: 0-21 (`MaxMajorCivs - 1`)
+- PlayerID range for major civs: 0-21 (`MaxMajorCivs - 1`). `post-notification` is the one exception: its recipient spans the full addressable player range 0-63 (`MaxPlayers - 1`) so a human watching from an observer slot can be notified.
 
 ## General Tools (4)
 
@@ -40,7 +40,7 @@ All extend `DatabaseQueryTool`. Common input: `Search?`: string (fuzzy match), `
 | `get-events` | Recent game events, consolidated by turn with smart grouping | `Turn?`, `Type?`, `After?`, `Before?`, `PlayerID?`, `Original?` |
 | `get-diplomatic-events` | Diplomatic events (wars, peace, deals, city-state, espionage, world congress) grouped by turn | `PlayerID`, `OtherPlayerID?`, `FromTurn?`, `ToTurn?`, `Formatted?` |
 | `read-transcript` | Read the durable, append-ID-ordered conversation between two endpoints, optionally filtered by message type or speaker role, with optional older-page cursors | `PlayerAID`, `PlayerBID`, `MessageType?`, `Role?`, `BeforeID?`, `Limit?` |
-| `inspect-deal` | Inspect a draft deal against live game state, including legality, advisory values, promise factors, and each side's tradable range | `PlayerAID`, `PlayerBID`, `ProposedDeal?` |
+| `inspect-deal` | Inspect a draft deal against live game state: per-item and per-promise legality with reasons, advisory values, advisory promise agreeability factors, and each side's tradable range | `PlayerAID`, `PlayerBID`, `ProposedDeal?` |
 | `get-players` | Player summary with scores, era, resources, military, and diplomatic opinions | `PlayerID?` (0-21) |
 | `get-opinions` | Diplomatic opinions to/from a player with all alive major civilizations | `PlayerID` (0-21), `RevealAll?` |
 | `get-cities` | City info from a player's perspective with visibility filtering | `PlayerID?` (0-21), `Owner?` |
@@ -53,7 +53,7 @@ All extend `DatabaseQueryTool`. Common input: `Search?`: string (fuzzy match), `
 
 For paged `read-transcript` calls, `hasMore` and `NextBeforeID` describe the raw ID scan before the optional `Role` filter. A filtered page can therefore contain no messages while `hasMore` is `true`.
 
-## Action Tools (14)
+## Action Tools (15)
 
 | Tool | Description | Key Input |
 |------|-------------|-----------|
@@ -67,9 +67,10 @@ For paged `read-transcript` calls, `hasMore` and `NextBeforeID` describe the raw
 | `set-policy` | Set next policy or branch selection by name | `PlayerID`, `Policy`, `Rationale` |
 | `keep-status-quo` | Maintain current strategy/flavors with documented rationale | `PlayerID`, `Mode?`: "Flavor" or "Strategy", `Rationale` |
 | `relay-message` | Relay diplomatic or intelligence message as a game event; `Importance` 7+ interrupts important-event pacing | `PlayerID`, `FromPlayerID`, `Message`: "Diplomatic"/"Intelligence", `Content`, `Confidence` (0-9), `Importance` (0-9), `Categories`, `Memo`, `VisibleTo?` |
-| `append-message` | Append an archival message to a durable diplomatic transcript; returns the stored message's canonical fields | `PlayerAID`, `PlayerBID`, `PlayerARole?`, `PlayerBRole?`, `SpeakerID`, `MessageType`, `Content`, `Payload?`, `Turn?`, `ExpectedGameID?` |
-| `enact-agent-deal` | Enact the deal stored on a proposal, then record acceptance and enactment; returns record IDs plus `AlreadyEnacted` and `Enacted` status | `ProposalMessageID`, `Deal?`, `AccepterID?`, `Content?` |
-| `post-notification` | Post a native notification to a human player; returns `true` only when Civ V creates it and `false` when Civ V rejects it | `PlayerID`, `CounterpartID?` (different from `PlayerID`), nonblank `Summary` (1-200 characters), nonblank `Message` (1-2000 characters) |
+| `append-message` | Append an archival message to a durable diplomatic transcript; returns the stored message's canonical fields. Refuses the three terminal deal answers (`deal-accept`, `deal-enacted`, `deal-reject`), which belong to the transactional routes below | `PlayerAID`, `PlayerBID`, `PlayerARole?`, `PlayerBRole?`, `SpeakerID`, `MessageType`, `Content`, `Payload?`, `Turn?`, `ExpectedGameID?` |
+| `enact-agent-deal` | Enact the deal stored on a proposal, then record acceptance and enactment; returns record IDs, the full `AcceptRow`/`EnactedRow` projections, and `AlreadyEnacted`/`Enacted` status — or a structured `Conflict` (`superseded`, `answered`, `wrong-recipient`) when proposal state moved on | `ProposalMessageID`, `Deal?`, `AccepterID?`, `Content?` |
+| `reject-agent-deal` | Reject or retract an open proposal transactionally and record the `deal-reject`; returns `rejected` / `already-rejected` (with the exact durable `Row` either way, never a second row) or a structured `conflict` (`not-found`, `not-a-proposal`, `superseded`, `rejected-by-other`, `answered`) | `PlayerAID`, `PlayerBID`, `ProposalMessageID`, `SpeakerID`, `Content?`, `ExpectedGameID?` |
+| `post-notification` | Post a native notification to a human player; returns `true` only when Civ V creates it and `false` when Civ V rejects it. A notification addressed to a seat that a pinned observer is currently playing is redirected to that observer, since Civ V only displays notifications for the active player | `PlayerID` (0-63, observer slots included), `CounterpartID?` (a major civ, different from `PlayerID`), nonblank `Summary` (1-200 characters), nonblank `Message` (1-2000 characters) |
 | `present-decision` | Present current Flavor-mode strategic options to the in-game human-control panel; returns whether delivery succeeded | `PlayerID`, `Turn?` (default: current turn) |
 
 ## Game Control Tools (3)

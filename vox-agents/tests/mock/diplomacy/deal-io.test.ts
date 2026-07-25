@@ -19,13 +19,13 @@ import {
   appendDealProposal,
   appendDealReject,
   readDealMessages,
-  reconcileDealRows,
   classifyDealSubmission,
+  requireCurrentOpenProposal,
   IllegalDealError,
   ProposalConflictError,
   type InspectDealResult,
 } from '../../../src/utils/diplomacy/deal.js';
-import type { MessageWithMetadata } from '../../../src/types/index.js';
+import { observeThreadRows } from '../../../src/utils/diplomacy/row-observer.js';
 
 let mcp: ReturnType<typeof installMockMcpClient>;
 beforeEach(() => {
@@ -280,9 +280,10 @@ describe('appendDealProposal', () => {
     // no identities set) — never the raw enum. It reaches the UI toast verbatim.
     expect(err.message).toContain('Resource #9 ×1 (Player 1 → Player 3): Bonus resources cannot be traded.');
     expect(err.message).not.toContain('RESOURCES');
-    // Structured details let the negotiator reframe Give/Receive without parsing the message.
+    // Structured details let the negotiator reframe Give/Receive without parsing the message. The
+    // `kind` discriminant tells an untradeable item from an impossible promise.
     expect(err.details).toEqual([
-      { itemType: 'RESOURCES', fromPlayerID: 1, toPlayerID: 3, reasons: ['Bonus resources cannot be traded.'] },
+      { kind: 'item', itemType: 'RESOURCES', fromPlayerID: 1, toPlayerID: 3, reasons: ['Bonus resources cannot be traded.'] },
     ]);
     expect(mcp.calls('append-message')).toHaveLength(0);
   });
@@ -347,20 +348,234 @@ describe('appendDealProposal', () => {
   // `DealPayloadSchema` rejects them at the parse boundary both writer paths share — there is no
   // separate "offered" guard in appendDealProposal to test. (Schema rejection is covered in
   // mcp-server's deal-schema.test.ts.)
+
+  it('reports the committed proposal row to the turn observing the thread', async () => {
+    mcp.respondWith('inspect-deal', structuredResult({ items: [], promises: [], tradableRange: {} }));
+    mcp.respondWith('append-message', appendEcho({ ID: 41, Turn: 6 }));
+    const t = thread();
+    const observer = observeThreadRows(t);
+
+    const out = await appendDealProposal(t, 1, 'deal-proposal', emptyDeal);
+
+    // The negotiator's mid-run proposal reaches the client through the running turn's rows — no
+    // transcript reread. The captured object is the exact authoritative row the append returned.
+    expect(observer.close()).toEqual([out.row]);
+  });
+});
+
+describe('appendDealProposal promise legality (stage 7.04)', () => {
+  /** An inspected promise verdict for the `COOP_WAR` term the tests author. */
+  const inspectedPromise = (over: Record<string, unknown> = {}) => ({
+    promiserID: 1, recipientID: 3, promiseType: 'COOP_WAR', targetPlayerID: 9,
+    legality: true, reasons: [],
+    agreeabilityFactors: { recentDiplomaticEvents: {}, note: '' },
+    ...over,
+  });
+  const coopWarDeal = {
+    version: 1 as const,
+    items: [],
+    promises: [{ promiserID: 1, recipientID: 3, promiseType: 'COOP_WAR' as const, targetPlayerID: 9 }],
+  };
+
+  it('archives a promise the inspector reports as legal', async () => {
+    mcp.respondWith('inspect-deal', structuredResult({
+      items: [], promises: [inspectedPromise()], tradableRange: {},
+    }));
+    mcp.respondWith('append-message', appendEcho({ ID: 51, Turn: 7 }));
+
+    await expect(appendDealProposal(thread(), 1, 'deal-proposal', coopWarDeal))
+      .resolves.toMatchObject({ id: 51 });
+    expect(mcp.calls('append-message')).toHaveLength(1);
+  });
+
+  it.each([
+    ['a duplicate logical commitment', ['This commitment is already part of the deal.']],
+    ['an ineligible Coop War target', ['A cooperative war against this civilization is not possible.']],
+    ['an already-preparing Coop War', ['A cooperative war against this civilization is already being prepared.']],
+    ['a standing promise still in effect', ['This promise is already in effect.']],
+    ['a promise with no stated reason', []],
+  ])('refuses %s before any archival write', async (_label, reasons) => {
+    // Promise legality is BINDING now, exactly like item legality: a schema-valid but already
+    // impossible commitment must never become the durable active offer.
+    mcp.respondWith('inspect-deal', structuredResult({
+      items: [], promises: [inspectedPromise({ legality: false, reasons })], tradableRange: {},
+    }));
+    mcp.respondWith('append-message', appendEcho({ ID: 52, Turn: 7 }));
+
+    const err = await appendDealProposal(thread(), 1, 'deal-proposal', coopWarDeal).catch((e) => e);
+
+    expect(err).toBeInstanceOf(IllegalDealError);
+    expect(err.message).toContain(reasons[0] ?? 'not possible');
+    expect(err.details).toEqual([{
+      kind: 'promise',
+      promiseType: 'COOP_WAR',
+      promiserID: 1,
+      recipientID: 3,
+      targetPlayerID: 9,
+      reasons,
+    }]);
+    // The whole point: an illegal promise writes NO proposal row.
+    expect(mcp.calls('append-message')).toHaveLength(0);
+  });
+
+  it('names the promise and the civs with friendly labels in the display line', async () => {
+    mcp.respondWith('inspect-deal', structuredResult({
+      items: [],
+      promises: [inspectedPromise({ legality: false, reasons: ['Already at war with that civilization.'] })],
+      tradableRange: {},
+    }));
+    const named = thread({
+      player1Identity: { name: 'Rome', leader: 'Augustus' },
+      player2Identity: { name: 'Egypt', leader: 'Cleopatra' },
+    });
+
+    const err = await appendDealProposal(named, 1, 'deal-proposal', coopWarDeal).catch((e) => e);
+
+    expect(err.message).toContain('(Rome → Egypt)');
+    expect(err.message).not.toContain('COOP_WAR');
+  });
+
+  it('reports every illegal term at once — items first, then promises', async () => {
+    mcp.respondWith('inspect-deal', structuredResult({
+      items: [{ fromPlayerID: 1, toPlayerID: 3, itemType: 'GOLD', legality: false, reasons: ['No gold to give'], valueIfIGive: 0, valueIfIReceive: 0 }],
+      promises: [inspectedPromise({ legality: false, reasons: ['Already preparing that war.'] })],
+      tradableRange: {},
+    }));
+
+    const err = await appendDealProposal(thread(), 1, 'deal-proposal', {
+      ...coopWarDeal,
+      items: [{ fromPlayerID: 1, toPlayerID: 3, itemType: 'GOLD' as const, amount: 50 }],
+    }).catch((e) => e);
+
+    expect(err.reasons).toHaveLength(2);
+    expect(err.details.map((d: { kind: string }) => d.kind)).toEqual(['item', 'promise']);
+    expect(mcp.calls('append-message')).toHaveLength(0);
+  });
 });
 
 describe('appendDealReject', () => {
-  it('appends deal-reject referencing the proposal message ID', async () => {
-    mcp.respondWith('append-message', structuredResult({ ID: 9, Turn: 6 }));
-    await appendDealReject(thread(), 1, 'No thanks', 7);
-    const args = mcp.calls('append-message')[0]!.args;
-    expect(args.MessageType).toBe('deal-reject');
-    expect((args.Payload as Record<string, unknown>).ProposalMessageID).toBe(7);
+  /** The durable deal-reject row `reject-agent-deal` returns for either successful outcome. */
+  const rejectRow = (over: Record<string, unknown> = {}) => ({
+    ID: 9, Player1ID: 1, Player2ID: 3, Player1Role: 'the leader', Player2Role: 'diplomat',
+    SpeakerID: 1, MessageType: 'deal-reject', Content: 'No thanks',
+    Payload: { ProposalMessageID: 7 }, Turn: 6, CreatedAt: 0, ...over,
   });
 
-  it('throws when append-message returns no numeric ID (store-contract violation)', async () => {
-    mcp.respondWith('append-message', structuredResult({ Turn: 6 }));
-    await expect(appendDealReject(thread(), 1, 'No thanks', 7)).rejects.toThrow('numeric ID');
+  it('rejects through the transactional action, never through append-message', async () => {
+    // `append-message` refuses deal-reject now (a pinned writer-split), so the rejection must go
+    // through the transactional route that owns proposal state.
+    mcp.respondWith('reject-agent-deal', structuredResult({
+      Result: 'rejected', ProposalMessageID: 7, AlreadyRejected: false, Row: rejectRow(),
+    }));
+
+    const out = await appendDealReject(thread(), 1, 'No thanks', 7);
+
+    expect(out).toEqual({ id: 9, turn: 6, row: rejectRow(), created: true });
+    expect(mcp.calls('append-message')).toHaveLength(0);
+    expect(mcp.calls('reject-agent-deal')[0]!.args).toEqual({
+      PlayerAID: 1, PlayerBID: 3, ProposalMessageID: 7, SpeakerID: 1, Content: 'No thanks',
+    });
+  });
+
+  it('returns the existing row without a second write when the same speaker repeats it', async () => {
+    mcp.respondWith('reject-agent-deal', structuredResult({
+      Result: 'already-rejected', ProposalMessageID: 7, AlreadyRejected: true, Row: rejectRow(),
+    }));
+
+    const out = await appendDealReject(thread(), 1, 'No thanks', 7);
+
+    // The row still comes back (the client's pending action must resolve), but `created` marks it as
+    // an acknowledgement rather than a state transition.
+    expect(out.row).toEqual(rejectRow());
+    expect(out.created).toBe(false);
+  });
+
+  it('records the row only when THIS call created it', async () => {
+    const t = thread();
+    const fresh = observeThreadRows(t);
+    mcp.respondWith('reject-agent-deal', structuredResult({
+      Result: 'rejected', ProposalMessageID: 7, AlreadyRejected: false, Row: rejectRow(),
+    }));
+    await appendDealReject(t, 1, 'No thanks', 7);
+    expect(fresh.close().map((r) => r.ID)).toEqual([9]);
+
+    const repeat = observeThreadRows(t);
+    mcp.respondWith('reject-agent-deal', structuredResult({
+      Result: 'already-rejected', ProposalMessageID: 7, AlreadyRejected: true, Row: rejectRow(),
+    }));
+    await appendDealReject(t, 1, 'No thanks', 7);
+    expect(repeat.close()).toEqual([]);
+  });
+
+  it.each([
+    ['not-found', 'Proposal message 7 does not exist'],
+    ['not-a-proposal', 'Message 7 is not a deal-proposal or deal-counter'],
+    ['superseded', 'Proposal message 7 is not the current active proposal'],
+    ['rejected-by-other', 'Proposal message 7 was already rejected by endpoint 3'],
+    ['answered', 'Proposal message 7 is not open; it was answered by deal-accept'],
+  ])('translates the structured %s conflict into ProposalConflictError', async (reason, message) => {
+    // Mapped from the machine-readable ConflictReason — never by parsing error text.
+    mcp.respondWith('reject-agent-deal', structuredResult({
+      Result: 'conflict', ProposalMessageID: 7, AlreadyRejected: false,
+      ConflictReason: reason, ConflictMessage: message,
+    }));
+
+    const err = await appendDealReject(thread(), 1, 'No thanks', 7).catch((e) => e);
+    expect(err).toBeInstanceOf(ProposalConflictError);
+    expect(err.message).toBe(message);
+  });
+
+  it('throws when the action reports success without the committed row', async () => {
+    mcp.respondWith('reject-agent-deal', structuredResult({
+      Result: 'rejected', ProposalMessageID: 7, AlreadyRejected: false,
+    }));
+    await expect(appendDealReject(thread(), 1, 'No thanks', 7))
+      .rejects.toThrow('did not return the committed deal-reject row');
+  });
+});
+
+describe('requireCurrentOpenProposal', () => {
+  /** A stored open proposal authored by `speaker` for the ordered pair 1↔3. */
+  const openProposal = (speaker: number) => structuredResult({
+    messages: [{
+      ID: 7, Player1ID: 1, Player2ID: 3, Player1Role: 'the leader', Player2Role: 'diplomat',
+      SpeakerID: speaker, MessageType: 'deal-proposal', Content: 'Offer',
+      Payload: { Deal: emptyDeal }, Turn: 4, CreatedAt: 0,
+    }],
+  });
+
+  it('resolves the open proposal authored by the counterpart', async () => {
+    mcp.respondWith('read-transcript', openProposal(3));
+    await expect(requireCurrentOpenProposal(thread(), 7, 1)).resolves.toMatchObject({ deal: emptyDeal });
+  });
+
+  it.each([
+    ['a proposal that is no longer active', 9, 1, /no longer the active proposal/i],
+    ['a self-authored proposal (accept)', 7, 3, /cannot respond to its own proposal/i],
+  ])('throws ProposalConflictError for %s', async (_label, id, responder, pattern) => {
+    mcp.respondWith('read-transcript', openProposal(3));
+    const err = await requireCurrentOpenProposal(thread(), id, responder).catch((e) => e);
+    expect(err).toBeInstanceOf(ProposalConflictError);
+    expect(err.message).toMatch(pattern);
+  });
+
+  it('permits the proposal author to act on it when self-authoring is allowed (retraction)', async () => {
+    // Rejecting your own open offer IS retracting it, and the store's rule is that either endpoint
+    // may speak deal-reject. Only accept refuses a self-authored proposal.
+    mcp.respondWith('read-transcript', openProposal(3));
+    await expect(requireCurrentOpenProposal(thread(), 7, 3, { allowSelfAuthored: true }))
+      .resolves.toMatchObject({ deal: emptyDeal });
+  });
+
+  it('throws ProposalConflictError (not a bare Error) for malformed stored terms', async () => {
+    mcp.respondWith('read-transcript', structuredResult({
+      messages: [{
+        ID: 7, Player1ID: 1, Player2ID: 3, Player1Role: 'the leader', Player2Role: 'diplomat',
+        SpeakerID: 3, MessageType: 'deal-proposal', Content: 'Offer',
+        Payload: { Deal: { nonsense: true } }, Turn: 4, CreatedAt: 0,
+      }],
+    }));
+    await expect(requireCurrentOpenProposal(thread(), 7, 1)).rejects.toBeInstanceOf(ProposalConflictError);
   });
 });
 
@@ -417,58 +632,5 @@ describe('readDealMessages', () => {
     ] }));
     const out = await readDealMessages(1, 3);
     expect(out.map((m) => m.ID)).toEqual([2, 4]);
-  });
-});
-
-describe('reconcileDealRows', () => {
-  /** A stored deal row with sensible defaults for the ordered pair 1↔3. */
-  const dealRow = (over: Record<string, unknown>) => ({
-    ID: 0, Player1ID: 1, Player2ID: 3, Player1Role: 'the leader', Player2Role: 'diplomat',
-    SpeakerID: 1, MessageType: 'deal-proposal', Content: '', Payload: {}, Turn: 5, CreatedAt: 0, ...over,
-  });
-
-  it('appends only the deal rows not already in the cache, leaving existing rows untouched', async () => {
-    // The store now also holds a deal-enacted answering the proposal already on the thread.
-    mcp.respondWith('read-transcript', structuredResult({ messages: [
-      dealRow({ ID: 7, MessageType: 'deal-proposal', Payload: { Deal: emptyDeal } }),
-      dealRow({ ID: 10, MessageType: 'deal-enacted', SpeakerID: 3, Payload: { ProposalMessageID: 7 } }),
-    ] }));
-
-    // Live cache: a plain user line, the existing proposal (deal ID 7), and a reasoning/trace row —
-    // the kinds of in-memory content a full re-hydrate would discard.
-    const userRow: MessageWithMetadata = { message: { role: 'user', content: 'hi' }, metadata: { datetime: new Date(), turn: 5 } };
-    const proposalRow: MessageWithMetadata = {
-      message: { role: 'assistant', content: 'offer' }, metadata: { datetime: new Date(), turn: 5 },
-      deal: dealRow({ ID: 7, MessageType: 'deal-proposal', SpeakerID: 3, Payload: { Deal: emptyDeal } }) as MessageWithMetadata['deal'],
-    };
-    const traceRow: MessageWithMetadata = { message: { role: 'assistant', content: 'thinking…' }, metadata: { datetime: new Date(), turn: 5 } };
-    const t = thread({ messages: [userRow, proposalRow, traceRow] });
-
-    await reconcileDealRows(t);
-
-    // The enacted row is appended; the proposal (already present by ID) is not duplicated.
-    expect(t.messages).toHaveLength(4);
-    expect(t.messages[3]!.deal?.ID).toBe(10);
-    expect(t.messages[3]!.deal?.MessageType).toBe('deal-enacted');
-    // Existing rows are the exact same objects — live traces preserved, nothing re-hydrated.
-    expect(t.messages[0]).toBe(userRow);
-    expect(t.messages[1]).toBe(proposalRow);
-    expect(t.messages[2]).toBe(traceRow);
-  });
-
-  it('is a no-op when every stored deal row is already mirrored', async () => {
-    mcp.respondWith('read-transcript', structuredResult({ messages: [
-      dealRow({ ID: 7, MessageType: 'deal-proposal', Payload: { Deal: emptyDeal } }),
-    ] }));
-    const proposalRow: MessageWithMetadata = {
-      message: { role: 'assistant', content: 'offer' }, metadata: { datetime: new Date(), turn: 5 },
-      deal: dealRow({ ID: 7, MessageType: 'deal-proposal', Payload: { Deal: emptyDeal } }) as MessageWithMetadata['deal'],
-    };
-    const t = thread({ messages: [proposalRow] });
-
-    await reconcileDealRows(t);
-
-    expect(t.messages).toHaveLength(1);
-    expect(t.messages[0]).toBe(proposalRow);
   });
 });

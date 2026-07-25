@@ -28,7 +28,7 @@
   <Blocks />
   <Files>
     <File md5="F8F6AABA8C4278EBCD58E50B69A2519B" import="0">SQL/VoxDeorum_Options.sql</File>
-    <File md5="00FD299064C17369253D0E0C00643B17" import="0">Text/VoxDeorum_Text.xml</File>
+    <File md5="1F678147CD91F22EF7443B3918D426C5" import="0">Text/VoxDeorum_Text.xml</File>
     <File md5="33CA4604421E8178D0D7591CC340CB11" import="0">Text/VoxDeorum_Text.sql</File>
     <File md5="3A42737A457702DFE8A466F6C000BC18" import="1">Mapscripts/Vox_Deorum.lua</File>
     <File md5="3FA079BC0DAF46A51730AF10F05A8892" import="0">Lua/VoxDeorumTest.lua</File>
@@ -37,16 +37,17 @@
     <File md5="ACFDDB368B9EA8F33794CED7A289F211" import="1">UI/VoxDeorumHumanTrigger.lua</File>
     <File md5="2DD227A7584D25F8FB5E2A2744F498A3" import="0">UI/VoxDeorumHumanTrigger.xml</File>
     <File md5="51019DAD724C64015E52F76203AEF3F6" import="1">UI/VoxDeorumSeat.lua</File>
-    <File md5="1C2EC246EE80D6D8848D73CDD50F9515" import="1">UI/VoxDeorumConverse.lua</File>
+    <File md5="D9F1BB1DDE0F0A34A8C2A7F67D359167" import="1">UI/VoxDeorumConverse.lua</File>
     <File md5="AD7D071B1AAF6A72D8BC740509107C45" import="1">UI/LeaderHeadRoot.lua</File>
-    <File md5="F72A8A907AF7A24517A900793216B7F9" import="1">UI/LeaderHeadRoot.xml</File>
-    <File md5="A7D6D6DC304D8638BA91ECFEB45970FC" import="1">UI/VoxDeorumDiploPanel.lua</File>
-    <File md5="9FD8EC8AF8784BE3C5BA8553650761B4" import="1">UI/VoxDeorumDiploTransport.lua</File>
-    <File md5="AAC1C7054D705051A0CF6664AB3C8C6F" import="1">UI/VoxDeorumDiploPanelMock.lua</File>
+    <File md5="7652FAC9B88599A6D91376F93A79755F" import="1">UI/LeaderHeadRoot.xml</File>
+    <File md5="7111D5A75C6A5B299DB66B0D7DA456D5" import="1">UI/VoxDeorumDiploPanel.lua</File>
+    <File md5="D5332ADD6B48B017C2592586A58B5309" import="1">UI/VoxDeorumDiploTransport.lua</File>
+    <File md5="BF571FECA7F47FB03AEBE533712B755B" import="1">UI/VoxDeorumDiploPanelMock.lua</File>
     <File md5="3EED259216C7612860EF452ECFD45576" import="0">UI/VoxDeorumDiploPanel.xml</File>
     <File md5="9F312CB3684D11E5CA3AB1149AD85C0D" import="1">UI/VoxDeorumDealUtils.lua</File>
-    <File md5="AB33482EB2486EDB5F46EB90E09005C5" import="1">UI/VoxDeorumDealScreen.lua</File>
-    <File md5="5FF6A2241F724233DD7830272E2464F0" import="1">UI/VoxDeorumDealScreenMock.lua</File>
+    <File md5="D1348B48C04F4BEB99F01F4FA2C623B4" import="1">UI/VoxDeorumDealScreen.lua</File>
+    <File md5="3376A9AF649765877A28265322B5BA40" import="1">UI/VoxDeorumDealTransport.lua</File>
+    <File md5="995979724D9E901B0674C10123FA5C48" import="1">UI/VoxDeorumDealScreenMock.lua</File>
     <File md5="57E0DAD0CBB055C4ACA016D2E88C681B" import="0">UI/VoxDeorumDealScreen.xml</File>
     <File md5="5642E76127B08EAB4AE9BD246B61C6DB" import="0">XML/VoxDeorum_Notifications.xml</File>
   </Files>

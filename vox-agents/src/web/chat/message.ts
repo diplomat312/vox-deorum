@@ -23,8 +23,13 @@ export function createAgentMessageRoutes(): Router {
         res.write(`data: ${JSON.stringify(data)}\n\n`);
       };
 
+      // The transport-neutral sink carries an internal `rows` field on every terminal event (the exact
+      // durable transcript rows the turn committed). That is for the in-game panel, which renders
+      // authoritative rows; the Web client reduces its board from `deal` / `deals` and its transcript
+      // from the stream plus a refresh. Stripping `rows` here keeps the public Web event contract
+      // byte-for-byte unchanged as the internal contract grows.
       const sink: ChatStreamSink = {
-        connected(data) {
+        connected({ rows: _rows, ...data }) {
           res.writeHead(200, {
             'Content-Type': 'text/event-stream',
             'Cache-Control': 'no-cache',
@@ -37,10 +42,10 @@ export function createAgentMessageRoutes(): Router {
         message(data) {
           sendEvent('message', data);
         },
-        error(data) {
+        error({ rows: _rows, ...data }) {
           sendEvent('error', data);
         },
-        done(data) {
+        done({ rows: _rows, ...data }) {
           sendEvent('done', data);
         },
         onDisconnect(callback) {

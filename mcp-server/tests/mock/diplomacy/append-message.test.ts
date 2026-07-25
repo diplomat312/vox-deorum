@@ -54,6 +54,30 @@ describe('append-message guards', () => {
     await expect(tool.execute(args({ MessageType: 'deal-enacted' }) as any)).rejects.toThrow(/enactment route/);
   });
 
+  it('rejects deal-reject and points the caller at the transactional rejection route', async () => {
+    // Stage 7.04 moved rejection authority to reject-agent-deal so proposal state is decided
+    // inside one write transaction. No caller may bypass it through the archival tool.
+    await expect(tool.execute(args({ MessageType: 'deal-reject' }) as any)).rejects.toThrow(
+      /reject-agent-deal/
+    );
+  });
+
+  it('refuses deal-reject before any other validation and writes nothing', async () => {
+    // The refusal is the FIRST guard, so a well-formed rejection of a real proposal is refused
+    // just the same — the archival path can never produce a deal-reject row.
+    const proposal = await tool.execute(
+      args({ MessageType: 'deal-proposal', Payload: { Deal: { items: [] } } }) as any
+    );
+
+    await expect(
+      tool.execute(
+        args({ MessageType: 'deal-reject', SpeakerID: 1, Payload: { ProposalMessageID: proposal.ID } }) as any
+      )
+    ).rejects.toThrow(/reject-agent-deal/);
+
+    expect((await getDiplomaticMessages(1, 3, { messageType: 'deal-reject' })).messages).toHaveLength(0);
+  });
+
   it('rejects equal endpoints', async () => {
     await expect(tool.execute(args({ PlayerAID: 3, PlayerBID: 3 }) as any)).rejects.toThrow(/must be distinct/);
   });
@@ -161,65 +185,10 @@ describe('append-message major-civ validation', () => {
   });
 });
 
-describe('append-message deal-reject referencing', () => {
-  beforeEach(async () => {
-    await seedPlayer(store, 1);
-    await seedPlayer(store, 3);
-  });
-
-  /** Append a deal-proposal in the 1↔3 pair and return its append ID. */
-  async function seedProposal(): Promise<number> {
-    const row = await tool.execute(args({ MessageType: 'deal-proposal', Payload: { Deal: { items: [] } } }) as any);
-    return row.ID;
-  }
-
-  it('requires a numeric Payload.ProposalMessageID', async () => {
-    await expect(tool.execute(args({ MessageType: 'deal-reject' }) as any)).rejects.toThrow(/ProposalMessageID/);
-  });
-
-  it('rejects a reference to a non-existent message', async () => {
-    await expect(
-      tool.execute(args({ MessageType: 'deal-reject', Payload: { ProposalMessageID: 9999 } }) as any)
-    ).rejects.toThrow(/does not exist/);
-  });
-
-  it('rejects a reference to a message in a different conversation', async () => {
-    await seedPlayer(store, 2);
-    // Proposal lives in the 1↔3 pair...
-    const proposalId = await seedProposal();
-    // ...but the reject is filed in the 2↔3 pair.
-    await expect(
-      tool.execute(
-        args({ PlayerAID: 2, PlayerBID: 3, PlayerARole: 'the leader', SpeakerID: 3, MessageType: 'deal-reject', Payload: { ProposalMessageID: proposalId } }) as any
-      )
-    ).rejects.toThrow(/not part of this conversation/);
-  });
-
-  it('rejects a reference to a non-proposal message', async () => {
-    const textRow = await tool.execute(args() as any); // a plain text message
-    await expect(
-      tool.execute(args({ MessageType: 'deal-reject', Payload: { ProposalMessageID: textRow.ID } }) as any)
-    ).rejects.toThrow(/not a deal-proposal or deal-counter/);
-  });
-
-  it('accepts a reject that references a real in-pair proposal', async () => {
-    const proposalId = await seedProposal();
-    const row = await tool.execute(
-      args({ MessageType: 'deal-reject', SpeakerID: 1, Payload: { ProposalMessageID: proposalId } }) as any
-    );
-    expect(row.MessageType).toBe('deal-reject');
-  });
-
-  it('accepts a reject spoken by the original proposer (a retraction, not just a counterparty decline)', async () => {
-    // seedProposal authors the proposal as SpeakerID 3; the proposer retracts it themselves.
-    const proposalId = await seedProposal();
-    const row = await tool.execute(
-      args({ MessageType: 'deal-reject', SpeakerID: 3, Payload: { ProposalMessageID: proposalId } }) as any
-    );
-    expect(row.MessageType).toBe('deal-reject');
-    expect(row.SpeakerID).toBe(3);
-  });
-});
+// The former 'append-message deal-reject referencing' suite moved to reject-agent-deal.test.ts:
+// this tool no longer resolves or validates Payload.ProposalMessageID because it no longer writes
+// deal-reject at all. The equivalent proposal-reference checks now run inside that tool's write
+// transaction, where they cannot go stale between the lookup and the append.
 
 describe('append-message visibility flags', () => {
   it('sets full visibility for BOTH civ endpoints on a civ↔civ row, and none for an uninvolved player', async () => {

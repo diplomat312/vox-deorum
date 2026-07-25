@@ -30,12 +30,12 @@ import {
   type InspectDealResult,
   type EnactDealResult,
 } from "../../utils/diplomacy/deal.js";
-import { itemTypeLabel } from "../../../../mcp-server/dist/utils/deal-format.js";
+import { formatPromiseLabel, itemTypeLabel } from "../../../../mcp-server/dist/utils/deal-format.js";
 import {
   resolveLedger,
   formatResolutionErrors,
 } from "./ledger-resolver.js";
-import type { DealPayload } from "../../../../mcp-server/dist/utils/deal-schema.js";
+import type { DealPayload, PromiseTerm } from "../../../../mcp-server/dist/utils/deal-schema.js";
 import {
   endpoints,
   formatDealLedger,
@@ -136,16 +136,34 @@ export function formatActiveProposalLedger(
 }
 
 /**
- * Reframe an {@link IllegalDealError} into first-person Give/Receive feedback the model can act on. Each
- * structured detail whose giver is the negotiator's own seat is a Give; otherwise it is a Receive. A
- * structural error carries no per-item details (the endpoint/targeting guards), so its human-readable
- * reasons are relayed verbatim. No deal was written, so the model can adjust and retry.
+ * Reframe an {@link IllegalDealError} into first-person Give/Receive feedback the model can act on.
+ *
+ * The structured details are a discriminated union of deal TERMS, not just trade items: since stage
+ * 7.04 a promise that is already impossible (a duplicate commitment, an ineligible or already-preparing
+ * Coop War, a standing promise still in effect) is refused at the same chokepoint. Each term whose
+ * giver — the item's `fromPlayerID` or the promise's `promiserID` — is the negotiator's own seat is a
+ * Give; otherwise it is a Receive. Reading the discriminant is what keeps this off the display strings
+ * assembled for the UI toast.
+ *
+ * A structural error carries no inspected term (the endpoint/targeting guards run before inspection),
+ * so its human-readable reasons are relayed verbatim. No deal was written either way, so the model can
+ * adjust and retry.
  */
 function formatIllegalDealError(error: IllegalDealError, agentID: number): string {
   const lines = error.details.length
-    ? error.details.map((d) => {
-        const side = d.fromPlayerID === agentID ? "Give" : "Receive";
-        return `- [${side}] ${itemTypeLabel(d.itemType)}: ${d.reasons.join("; ") || "not tradeable"}`;
+    ? error.details.map((detail) => {
+        if (detail.kind === "promise") {
+          const side = detail.promiserID === agentID ? "Give" : "Receive";
+          const label = formatPromiseLabel({
+            promiserID: detail.promiserID,
+            recipientID: detail.recipientID,
+            promiseType: detail.promiseType as PromiseTerm["promiseType"],
+            ...(detail.targetPlayerID !== undefined ? { targetPlayerID: detail.targetPlayerID } : {}),
+          });
+          return `- [${side}] ${label}: ${detail.reasons.join("; ") || "not possible"}`;
+        }
+        const side = detail.fromPlayerID === agentID ? "Give" : "Receive";
+        return `- [${side}] ${itemTypeLabel(detail.itemType)}: ${detail.reasons.join("; ") || "not tradeable"}`;
       })
     : error.reasons.map((r) => `- ${r}`);
   return ["This deal can't be made. Adjust these terms and try again:", ...lines].join("\n");
@@ -246,10 +264,13 @@ export function createNegotiatorTerminalTools(context: VoxContext<StrategistPara
             ni.thread.agent
           );
           // The outward Message is recorded as the deal-accept row's Content so the UI surfaces it as
-          // the diplomat's reply in the acceptance notice.
+          // the diplomat's reply in the acceptance notice. The thread rides along so the deal-accept /
+          // deal-enacted rows this call creates are captured by the chat turn that is running the
+          // diplomat right now, and reach the client with that turn's terminal rows.
           const enact = await enactAgentDeal(ni.activeProposal.messageID, {
             accepterID: ni.thread.agent,
             content: args.Message,
+            thread: ni.thread,
           });
           ni.outcome = {
             type: "accept",
@@ -390,10 +411,13 @@ export function createNegotiatorTerminalTools(context: VoxContext<StrategistPara
         if (claimed) return `Ignored because ${claimed} was the first terminal tool call in this step.`;
         if (!ni.activeProposal) return "There is no deal on the table to reject.";
         try {
+          // Rejecting permits the offer's own author (a retraction — the store's rule is that either
+          // endpoint may speak `deal-reject`), unlike accepting, which never applies to your own offer.
           await requireCurrentOpenProposal(
             ni.thread,
             ni.activeProposal.messageID,
-            ni.thread.agent
+            ni.thread.agent,
+            { allowSelfAuthored: true }
           );
           // The outward Message is recorded as the deal-reject row's Content so the UI renders it on the
           // reject's own standalone card (and the reject still reduces the proposal's status to rejected).

@@ -1,28 +1,10 @@
 /**
  * @module tests/mock/web/enrichment
  *
- * Focused identity, live-turn, assignment, and best-effort deal refresh coverage.
+ * Focused identity, live-turn, and assignment coverage.
  */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-
-const mocks = vi.hoisted(() => ({
-  reconcileDealRows: vi.fn(),
-  logError: vi.fn(),
-}));
-
-vi.mock('../../../src/utils/diplomacy/deal.js', () => ({
-  reconcileDealRows: mocks.reconcileDealRows,
-}));
-
-vi.mock('../../../src/utils/logger.js', () => ({
-  createLogger: () => ({
-    debug: vi.fn(),
-    error: mocks.logError,
-    info: vi.fn(),
-    warn: vi.fn(),
-  }),
-}));
 
 import { contextRegistry } from '../../../src/infra/context-registry.js';
 import { sessionRegistry } from '../../../src/infra/session-registry.js';
@@ -33,7 +15,6 @@ import {
   displayIdentity,
   enrichChat,
   getActiveAssignments,
-  mirrorDealRowsBestEffort,
   resolveHumanSeat,
 } from '../../../src/web/chat/enrichment.js';
 
@@ -77,8 +58,6 @@ function makeContext(options: {
 
 beforeEach(() => {
   vi.restoreAllMocks();
-  mocks.reconcileDealRows.mockReset();
-  mocks.logError.mockReset();
 });
 
 describe('chat enrichment', () => {
@@ -132,18 +111,5 @@ describe('chat enrichment', () => {
       voicedCiv: 'Bismarck of Germany',
       audienceCiv: 'Caesar of Rome',
     });
-  });
-
-  it('logs and swallows deal reconciliation failures after a committed write', async () => {
-    const thread = makeThread();
-    const failure = new Error('read failed');
-    mocks.reconcileDealRows.mockRejectedValueOnce(failure);
-
-    await expect(mirrorDealRowsBestEffort(thread)).resolves.toBeUndefined();
-    expect(mocks.reconcileDealRows).toHaveBeenCalledWith(thread);
-    expect(mocks.logError).toHaveBeenCalledWith(
-      'Failed to mirror deal rows into the live cache after a committed write',
-      { error: failure },
-    );
   });
 });

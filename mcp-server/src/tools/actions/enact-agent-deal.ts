@@ -17,27 +17,36 @@
  * Idempotency: the `deal-enacted` record is the idempotency key. A second enactment of a
  * proposal that already has a `deal-enacted` is refused (returns the prior record, `Enacted: false`,
  * since this call did not enact it).
+ *
+ * **Failure split (stage 7.04).** Losing a race over proposal state — the proposal was superseded
+ * by a newer one, was answered by a closing response, or the caller is not its recipient — is a
+ * structured `Conflict` result rather than a thrown error, so a caller can distinguish a lost race
+ * (409-class) from an infrastructure failure (502-class) without parsing message text. Everything
+ * else still throws through the MCP error channel: a proposal that does not exist or is not a
+ * proposal type, an invalid stored `Payload.Deal`, caller-supplied terms that do not match the
+ * stored ones, an unavailable bridge, and a refused enactment.
+ *
+ * It also returns the full `AcceptRow` / `EnactedRow` projections of the records it wrote (and, on
+ * the idempotent path, of the existing enactment record), so a caller can hydrate its live
+ * transcript cache from the exact durable rows without rereading the transcript.
  */
 
 import { ToolBase } from "../base.js";
 import * as z from "zod";
 import { ToolAnnotations } from "@modelcontextprotocol/sdk/types.js";
 import { knowledgeManager } from "../../server.js";
-import { applyVisibility, composeVisibility } from "../../utils/knowledge/visibility.js";
 import { DealPayloadSchema } from "../../utils/deal-schema.js";
 import { enactDeal } from "../../utils/lua/inspect-deal.js";
-
-/** Proposal/counter message types an enactment may answer. */
-const PROPOSAL_TYPES = new Set(["deal-proposal", "deal-counter"]);
-
-/** Response message types that close an open proposal. */
-const RESPONSE_TYPES = new Set(["deal-accept", "deal-reject", "deal-enacted"]);
-
-/** Read a response message's referenced proposal ID. */
-function answeredProposalID(message: { Payload: unknown }): number | undefined {
-  const id = (message.Payload as Record<string, unknown> | undefined)?.ProposalMessageID;
-  return typeof id === "number" ? id : undefined;
-}
+import { transcriptRowSchemaFor } from "../../utils/transcript-schema.js";
+import {
+  answeredProposalID,
+  buildDealOutcomeRow,
+  findAnswer,
+  isCurrentProposal,
+  loadProposalConversation,
+  projectStoredDealRow,
+  RESPONSE_TYPES,
+} from "../../utils/deal-outcome.js";
 
 /** Recursively key-sort an object tree so structural comparison ignores key ordering. */
 function canonicalize(value: unknown): unknown {
@@ -64,6 +73,11 @@ function dealsMatch(left: z.infer<typeof DealPayloadSchema>, right: z.infer<type
   return terms(left) === terms(right);
 }
 
+/** The durable `deal-accept` row this tool returns on the success path. */
+const AcceptRowSchema = transcriptRowSchemaFor("deal-accept");
+/** The durable `deal-enacted` row this tool returns on the success and idempotent paths. */
+const EnactedRowSchema = transcriptRowSchemaFor("deal-enacted");
+
 /** Input schema for the enact-agent-deal tool. */
 const EnactAgentDealInputSchema = z.object({
   ProposalMessageID: z
@@ -83,14 +97,34 @@ const EnactAgentDealInputSchema = z.object({
   Content: z.string().optional().describe("Optional outward line recorded with the acceptance."),
 });
 
-/** Output schema: the IDs of the records written (or the prior enactment when idempotent). */
+/**
+ * Output schema: the IDs and full row projections of the records written (or the prior enactment
+ * when idempotent), OR a structured proposal-state conflict.
+ *
+ * The two shapes are mutually exclusive. `Conflict` present means the enactment never ran, so the
+ * enactment fields are all absent — which is why they are optional here despite being present and
+ * unchanged on every success and idempotent path.
+ */
 const EnactAgentDealOutputSchema = z.object({
   ProposalMessageID: z.number(),
   AcceptMessageID: z.number().optional().describe("Append ID of the deal-accept record (absent when already enacted)"),
-  EnactedMessageID: z.number().describe("Append ID of the deal-enacted record (existing one when already enacted)"),
-  AlreadyEnacted: z.boolean().describe("True when this proposal had already been enacted (no new writes)"),
-  Enacted: z.boolean().describe("Whether this call enacted the deal in-game (false on the AlreadyEnacted idempotent path)"),
-  Turn: z.number(),
+  EnactedMessageID: z.number().optional().describe("Append ID of the deal-enacted record (existing one when already enacted; absent on a conflict)"),
+  AlreadyEnacted: z.boolean().optional().describe("True when this proposal had already been enacted (no new writes); absent on a conflict"),
+  Enacted: z.boolean().optional().describe("Whether this call enacted the deal in-game (false on the AlreadyEnacted idempotent path); absent on a conflict"),
+  Turn: z.number().optional().describe("Turn the records carry (absent on a conflict)"),
+  AcceptRow: AcceptRowSchema.optional().describe(
+    "The durable deal-accept row this call wrote (absent on the AlreadyEnacted idempotent path and on a conflict)"
+  ),
+  EnactedRow: EnactedRowSchema.optional().describe(
+    "The durable deal-enacted row (newly written, or the existing one when already enacted). Absent on a conflict."
+  ),
+  Conflict: z
+    .object({
+      Reason: z.enum(["superseded", "answered", "wrong-recipient"]),
+      Message: z.string(),
+    })
+    .optional()
+    .describe("Set when proposal state refused the enactment (a lost race, not an infrastructure failure). Mutually exclusive with the enactment fields."),
 });
 
 /**
@@ -121,29 +155,34 @@ class EnactAgentDealTool extends ToolBase {
     const store = knowledgeManager.getStore();
     const turn = knowledgeManager.getTurn();
 
+    /**
+     * Assemble one structured proposal-state conflict (no enactment, no writes). Only the three
+     * race-losing states use this; validation and infrastructure failures still throw.
+     */
+    const conflict = (
+      Reason: NonNullable<z.infer<typeof this.outputSchema>["Conflict"]>["Reason"],
+      Message: string
+    ): z.infer<typeof this.outputSchema> => ({
+      ProposalMessageID,
+      Conflict: { Reason, Message },
+    });
+
     // Serialize the read/check/write sequence with all other store writes. This makes the
     // idempotency check authoritative and commits deal-accept + deal-enacted atomically.
     return store.runWriteTransaction(async (transaction) => {
-      const proposal = await transaction
-        .selectFrom("DiplomaticMessages")
-        .selectAll()
-        .where("ID", "=", ProposalMessageID)
-        .executeTakeFirst();
-      if (!proposal) {
-        throw new Error(`Proposal message ${ProposalMessageID} does not exist`);
-      }
-      if (!PROPOSAL_TYPES.has(proposal.MessageType)) {
-        throw new Error(`Message ${ProposalMessageID} is not a deal-proposal or deal-counter`);
+      const loaded = await loadProposalConversation(transaction, ProposalMessageID);
+      if (!loaded.ok) {
+        // Both load failures are thrown here (unlike rejection, which reports them as conflicts):
+        // an enactment aimed at a nonexistent or non-proposal message cannot be resolved by
+        // refreshing the conversation, so it is a caller bug, not a lost race.
+        throw new Error(
+          loaded.failure === "not-found"
+            ? `Proposal message ${ProposalMessageID} does not exist`
+            : `Message ${ProposalMessageID} is not a deal-proposal or deal-counter`
+        );
       }
 
-      const { Player1ID, Player2ID, Player1Role, Player2Role } = proposal;
-      const transcript = await transaction
-        .selectFrom("DiplomaticMessages")
-        .selectAll()
-        .where("Player1ID", "=", Player1ID)
-        .where("Player2ID", "=", Player2ID)
-        .orderBy("ID")
-        .execute();
+      const { proposal, transcript, Player1ID, Player2ID } = loaded;
 
       // A completed prior call remains idempotent even if a newer proposal is now active.
       const priorEnacted = transcript.find(
@@ -158,6 +197,10 @@ class EnactAgentDealTool extends ToolBase {
           AlreadyEnacted: true,
           Enacted: false,
           Turn: priorEnacted.Turn,
+          // The existing durable record, projected from storage: the caller's cache should end up
+          // holding the row that actually exists, not a reconstruction of what this call would
+          // have written. No AcceptRow — this call wrote nothing.
+          EnactedRow: projectStoredDealRow(priorEnacted, "deal-enacted"),
         };
       }
 
@@ -172,29 +215,34 @@ class EnactAgentDealTool extends ToolBase {
         throw new Error(`Deal does not match the terms stored on proposal ${ProposalMessageID}`);
       }
 
-      const activeProposal = [...transcript]
-        .reverse()
-        .find((message) => PROPOSAL_TYPES.has(message.MessageType));
-      if (activeProposal?.ID !== ProposalMessageID) {
-        throw new Error(`Proposal message ${ProposalMessageID} is not the current active proposal`);
+      // ── The three proposal-STATE checks below are races, not caller bugs: each describes a
+      //    conversation that moved on after the caller decided to accept. They return a structured
+      //    Conflict so the caller can report "someone beat you to it" (409-class) instead of
+      //    guessing from an error string whether the store or the bridge broke (502-class). ──
+      if (!isCurrentProposal(transcript, ProposalMessageID)) {
+        return conflict(
+          "superseded",
+          `Proposal message ${ProposalMessageID} is not the current active proposal`
+        );
       }
-      const closingResponse = transcript.find(
-        (message) =>
-          message.ID > ProposalMessageID &&
-          RESPONSE_TYPES.has(message.MessageType) &&
-          answeredProposalID(message) === ProposalMessageID
-      );
+      const closingResponse = findAnswer(transcript, ProposalMessageID, RESPONSE_TYPES);
       if (closingResponse) {
-        throw new Error(
+        return conflict(
+          "answered",
           `Proposal message ${ProposalMessageID} is not open; it was answered by ${closingResponse.MessageType}`
         );
       }
 
-      // Only the endpoint that did not author the proposal can accept it.
+      // Only the endpoint that did not author the proposal can accept it. A wrong AccepterID is
+      // also a race in practice: it is how a caller that prechecked against a now-replaced
+      // proposal (whose author was the other endpoint) surfaces here.
       const recipientID = proposal.SpeakerID === Player1ID ? Player2ID : Player1ID;
       const accepterID = AccepterID ?? recipientID;
       if (accepterID !== recipientID) {
-        throw new Error(`AccepterID ${accepterID} must be the proposal recipient (${recipientID})`);
+        return conflict(
+          "wrong-recipient",
+          `AccepterID ${accepterID} must be the proposal recipient (${recipientID})`
+        );
       }
 
       // ── Enact the deal in-game (stage 6). The whole validate, then enact-items, then apply-promises
@@ -226,38 +274,29 @@ class EnactAgentDealTool extends ToolBase {
         throw new Error(`Cannot enact proposal ${ProposalMessageID}: ${reasons}`);
       }
 
-      const visibilityFlags = composeVisibility([Player1ID, Player2ID]);
+      // Both records share the conversation, speaker, answered proposal, and turn; only the type
+      // and outward line differ. The accepter — not the proposal's author — speaks both.
+      const outcomeRow = <T extends "deal-accept" | "deal-enacted">(messageType: T, content: string) =>
+        buildDealOutcomeRow({
+          conversation: loaded,
+          speakerID: accepterID,
+          messageType,
+          content,
+          proposalMessageID: ProposalMessageID,
+          turn,
+        });
 
-      /** Build one fully stamped transcript row for this atomic transaction. */
-      const messageRow = (
-        messageType: "deal-accept" | "deal-enacted",
-        content: string
-      ): Record<string, unknown> =>
-        applyVisibility(
-          {
-            Player1ID,
-            Player2ID,
-            Player1Role,
-            Player2Role,
-            SpeakerID: accepterID,
-            MessageType: messageType,
-            Content: content,
-            Payload: { ProposalMessageID },
-            Turn: turn,
-          } as any,
-          visibilityFlags
-        );
-
-      const acceptContent = Content?.trim() || "The deal was accepted.";
+      const acceptRow = outcomeRow("deal-accept", Content?.trim() || "The deal was accepted.");
+      const enactedRow = outcomeRow("deal-enacted", "The deal was enacted.");
       const accept = await transaction
         .insertInto("DiplomaticMessages")
-        .values(messageRow("deal-accept", acceptContent) as any)
-        .returning("ID")
+        .values(acceptRow.values as any)
+        .returning(["ID", "CreatedAt"])
         .executeTakeFirstOrThrow();
       const enacted = await transaction
         .insertInto("DiplomaticMessages")
-        .values(messageRow("deal-enacted", "The deal was enacted.") as any)
-        .returning("ID")
+        .values(enactedRow.values as any)
+        .returning(["ID", "CreatedAt"])
         .executeTakeFirstOrThrow();
 
       return {
@@ -267,6 +306,8 @@ class EnactAgentDealTool extends ToolBase {
         AlreadyEnacted: false,
         Enacted: true,
         Turn: turn,
+        AcceptRow: acceptRow.project(accept),
+        EnactedRow: enactedRow.project(enacted),
       };
     });
   }

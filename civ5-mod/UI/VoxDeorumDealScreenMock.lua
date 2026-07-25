@@ -1,6 +1,11 @@
--- Stage 7.02 delayed driver. Legality-probed requests exercise the deal screen until the stage 7.04 transport replaces this final include.
+-- Stage 7.02 delayed driver, retained as the offline UI sandbox behind the
+-- VoxDeorumUseMockDrivers debug toggle. Legality-probed requests exercise the deal
+-- screen without touching the transport; it registers itself with the screen rather
+-- than assigning the driver, so the real transport stays the shipped default.
 
 local MOCK_DELAY_SECONDS = 1.25
+-- The sandbox is dormant until the deal screen selects it.
+local m_active = false
 local m_mockSeconds = 0
 local m_mockPending = false
 local m_mockShouldError = false
@@ -281,10 +286,19 @@ end
 
 -- Open a named request through the context-local mock mount seam.
 local function openMock(name, counterpartID)
+	-- Scripted terms must never mount while the real driver is active: durable rows
+	-- would then resolve a sandbox editor.
+	if not m_active then print("Vox Deorum Deal Screen mock: enable the mock drivers before opening a scripted deal."); return end
 	local request, actorID = buildNamedMockRequest(name, counterpartID)
 	if request ~= nil then VoxDeorumDealUI.openMock(request, actorID) end
 end
 
-VoxDeorumDealUI.driver = { onOpen = onMockOpen, onAction = onMockAction, onUpdate = onMockUpdate }
+-- Follow the deal screen's driver selection and drop any delayed result with it.
+local function setActive(isActive)
+	m_active = isActive == true
+	if not m_active then m_mockPending, m_mockSeconds = false, 0 end
+end
+
+VoxDeorumDealUI.registerDriver("mock", { onOpen = onMockOpen, onAction = onMockAction, onUpdate = onMockUpdate, setActive = setActive })
 VoxDeorumDealMock = { Open = openMock, BuildRequest = buildNamedMockRequest }
 LuaEvents.VoxDeorumOpenDealScreenMock.Add(openMock)

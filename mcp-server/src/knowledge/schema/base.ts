@@ -29,6 +29,17 @@ import { PlayerInformation } from './public';
 export const MaxMajorCivs = 22;
 
 /**
+ * Civ 5's `MAX_PLAYERS`: the full addressable game-player range, which extends past the major civs
+ * through the city-state and barbarian slots to the observer slots at the top.
+ *
+ * Distinct from `MaxMajorCivs`, which bounds anything with a civilization identity — diplomacy
+ * counterparts, opinions, the per-player visibility columns. Use this one only where a real,
+ * addressable `Players[id]` entry is what matters and an observer is a legitimate answer, e.g. the
+ * recipient of a native notification when a human is watching from an observer slot.
+ */
+export const MaxPlayers = 64;
+
+/**
  * The leader identity recorded for a minor civ (city-state), which carries no real leader. Consumers
  * distinguish major/major pairs from minor civs by matching against this sentinel, so it is exported
  * as the single source of truth (see e.g. vox-agents' diplomacy-context guard). It lives here in a

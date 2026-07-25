@@ -33,6 +33,7 @@ function createDependencies(
     setThread: (thread) => {
       threads.set(thread.id, thread);
     },
+    isThreadBusy: () => false,
     compactThread: vi.fn(async () => undefined),
     createOrdinaryThreadId: () => 'ordinary-thread',
     createDiplomacyThreadId: (gameID, player1ID, player2ID) => {
@@ -219,6 +220,74 @@ describe('chat thread factory', () => {
       });
       expect(compactThread).toHaveBeenCalledTimes(2);
       expect(compactThread).toHaveBeenLastCalledWith(reopened);
+    });
+
+    it('should return a busy thread untouched, with no dependency mutation or compaction', async () => {
+      // A live turn owns the thread's cache: it committed the caller row and captured the index its
+      // reply begins at. A reopen that reassigned the voice and re-synced `thread.messages` would
+      // invalidate that index and drop rows the turn is about to normalize — so a reopen during a
+      // live turn is a pure lookup.
+      const compactThread = vi.fn(async () => undefined);
+      const { dependencies, threads } = createDependencies({
+        getContext: () => fakeContext(),
+        compactThread,
+      });
+      const factory = createChatThreadFactory(dependencies);
+      const india = { name: 'India', leader: 'Gandhi' };
+      const germany = { name: 'Germany', leader: 'Bismarck' };
+
+      const first = await factory.openDiplomacyChat({
+        mode: 'diplomacy',
+        contextId: 'game-7-player-1',
+        callerPlayerID: 1,
+        callerIdentity: india,
+        callerRole: 'the raja',
+        targetPlayerID: 2,
+        targetIdentity: germany,
+      });
+      // Stand in for the in-flight turn's state: a committed caller row and a fresh timestamp.
+      const liveMessages = first.messages;
+      liveMessages.push({
+        message: { role: 'user', content: 'Will you trade?' },
+        metadata: { datetime: new Date(0), turn: 7, id: 41 },
+      });
+      const snapshot = { ...first };
+      compactThread.mockClear();
+
+      // The same pair reopens from the other side while that turn is still running.
+      const busy = createChatThreadFactory({
+        ...dependencies,
+        getThread: (threadId) => threads.get(threadId),
+        isThreadBusy: (threadId) => threadId === first.id,
+        compactThread,
+      });
+      const reopened = await busy.openDiplomacyChat({
+        mode: 'diplomacy',
+        contextId: 'game-7-player-2',
+        callerPlayerID: 2,
+        callerIdentity: germany,
+        callerRole: 'the emperor',
+        targetPlayerID: 1,
+        targetIdentity: india,
+        agentName: 'spokesperson',
+      });
+
+      expect(reopened).toBe(first);
+      expect(compactThread).not.toHaveBeenCalled();
+      // Nothing the reopen would normally rewrite moved: voice, context, roles, identities, title.
+      expect(reopened).toMatchObject({
+        agent: snapshot.agent,
+        contextId: snapshot.contextId,
+        title: snapshot.title,
+        player1Role: snapshot.player1Role,
+        player2Role: snapshot.player2Role,
+        player1Identity: snapshot.player1Identity,
+        player2Identity: snapshot.player2Identity,
+      });
+      // The in-flight turn's cache array is the very same object, with its row intact.
+      expect(reopened.messages).toBe(liveMessages);
+      expect(reopened.messages.map((m) => m.metadata.id)).toEqual([41]);
+      expect(reopened.metadata!.updatedAt).toBe(snapshot.metadata!.updatedAt);
     });
   });
 });

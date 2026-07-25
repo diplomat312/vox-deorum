@@ -23,6 +23,7 @@ import type {
   ParticipantIdentity,
   TelepathistChatContext,
 } from '../../types/index.js';
+import { isThreadBusy } from '../../utils/diplomacy/chat-turn-commit.js';
 import { autoCompact, diplomacyThreadId } from '../../utils/diplomacy/transcript.js';
 import {
   parseContextIdentifier,
@@ -148,6 +149,16 @@ export function createChatThreadFactory(
     const existing = dependencies.getThread(id);
 
     if (existing) {
+      // A live turn owns this thread's message cache: it committed the caller row, captured the index
+      // the reply begins at, and will splice that slice on completion. Reassigning the voice or
+      // compacting here would replace `thread.messages` wholesale underneath it, invalidating that
+      // index and dropping rows the turn is about to normalize. So a reopen during a live turn hands
+      // back the existing thread untouched — no participant metadata, agent/context assignment, title,
+      // timestamp, message, or compaction change. Both clients benefit: a Web reopen can no longer
+      // corrupt an in-flight turn, and the in-game bridge sees the same live thread its `Begin.busy`
+      // reports. Whatever the reopen wanted to change is applied by the next reopen, once the turn ends.
+      if (dependencies.isThreadBusy(existing.id)) return existing;
+
       existing.agent = targetPlayerID;
       existing.contextId = targetContextId;
       existing.title = `${initiatorCiv ?? `Player ${initiatorID}`} ↔ ${targetCiv ?? `Player ${targetPlayerID}`}`;
@@ -319,6 +330,7 @@ export const chatThreadFactory = createChatThreadFactory({
   getAssignments: getActiveAssignments,
   getThread: (threadId) => chatThreadStore.get(threadId),
   setThread: (thread) => chatThreadStore.set(thread),
+  isThreadBusy,
   compactThread: autoCompact,
   createOrdinaryThreadId: uuidv4,
   createDiplomacyThreadId: diplomacyThreadId,

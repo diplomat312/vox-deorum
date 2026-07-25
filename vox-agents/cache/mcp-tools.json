@@ -1763,6 +1763,62 @@
     }
   },
   {
+    "name": "reject-agent-deal",
+    "description": "Reject (or retract) an open agent deal proposal by message ID and record the deal-reject in the transcript, transactionally. Idempotent: the same speaker repeating their rejection returns the existing row without writing another. Returns a structured conflict when the proposal was already answered, already rejected by the other endpoint, or superseded.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "PlayerAID": {
+          "type": "integer",
+          "minimum": -1,
+          "maximum": 9007199254740991,
+          "description": "One expected conversation endpoint's playerID (or -1 for the observer); order does not matter"
+        },
+        "PlayerBID": {
+          "type": "integer",
+          "minimum": -1,
+          "maximum": 9007199254740991,
+          "description": "The other expected conversation endpoint's playerID (or -1 for the observer); order does not matter"
+        },
+        "ProposalMessageID": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991,
+          "description": "Append ID of the deal-proposal / deal-counter being rejected"
+        },
+        "SpeakerID": {
+          "type": "integer",
+          "minimum": -1,
+          "maximum": 9007199254740991,
+          "description": "The endpoint speaking the rejection (must be one of the two endpoints; the proposal's author retracts)"
+        },
+        "Content": {
+          "description": "Optional outward line recorded with the rejection. Defaults to \"The deal was rejected.\".",
+          "type": "string"
+        },
+        "ExpectedGameID": {
+          "description": "Optional game identity guard. Rejects the call when the active game has switched.",
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "PlayerAID",
+        "PlayerBID",
+        "ProposalMessageID",
+        "SpeakerID"
+      ],
+      "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "_meta": {
+      "autoComplete": [
+        "PlayerAID",
+        "PlayerBID",
+        "SpeakerID"
+      ]
+    }
+  },
+  {
     "name": "post-notification",
     "description": "Post a native in-game notification to a human player. Set CounterpartID for a diplomacy reply; omit it for a general message.",
     "inputSchema": {
@@ -1771,11 +1827,11 @@
         "PlayerID": {
           "type": "integer",
           "minimum": 0,
-          "maximum": 21,
-          "description": "The player who receives the notification"
+          "maximum": 63,
+          "description": "The player slot that receives the notification: a major civilization, or an observer slot (0 to MAX_PLAYERS - 1)"
         },
         "CounterpartID": {
-          "description": "Optional diplomacy counterpart: when set, clicking opens the conversation with this player; when omitted, clicking shows Message in a dialog",
+          "description": "Optional diplomacy counterpart (a major civilization): when set, clicking opens the conversation with this player; when omitted, clicking shows Message in a dialog",
           "type": "integer",
           "minimum": 0,
           "maximum": 21

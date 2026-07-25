@@ -30,14 +30,18 @@
 --   playerAID, playerBID : the two major-civ player IDs
 --   proposedItems        : array of structured trade items (see deal-schema.ts).
 --                          May be empty/nil (an empty deal still yields the range).
---   enact                : OPTIONAL. Absent → read-only. Present (e.g. { promises = {...} })
+--   enact                : OPTIONAL. Absent/nil → read-only. Present (e.g. { promises = {...} })
 --                          → enact mode; carries the deal's promise commitments
 --                          ({ promiserID, recipientID, promiseType, targetPlayerID? }).
+--   proposedPromises     : OPTIONAL, READ-ONLY MODE ONLY. The promise commitments to check for
+--                          legality (same element shape as enact.promises). Deliberately appended
+--                          AFTER `enact` so enact mode's four-argument call shape is untouched.
 --
 -- Returns (read-only) one table:
 --   {
 --     items = { { fromPlayerID, toPlayerID, itemType, legal, reason,
 --                 valueToGiver, valueToReceiver, unknown? }, ... },
+--     promises = { { legal, reason }, ... },   -- aligned by index with proposedPromises
 --     range = { [tostring(playerID)] = <side range>, ... },
 --     defaultDuration = <int>,        -- standard deal duration (Game.GetDealDuration)
 --     peaceDuration = <int>,          -- peace-deal duration (Game.GetPeaceDuration)
@@ -469,6 +473,7 @@ if deal == nil then
 end
 
 proposedItems = proposedItems or {}
+proposedPromises = proposedPromises or {}
 
 -- Enact mode is opt-in: the optional `enact` argument (absent in read-only inspection) carries the
 -- deal's promise commitments and switches this invocation from "report legality/range" to "validate
@@ -496,6 +501,112 @@ local function coopWarEligible(targetID)
   return true
 end
 
+-- A promise endpoint must be a real, living major civ (city-states and barbarians hold no promises).
+local function livingMajor(pid)
+  local p = Players[pid]
+  return p ~= nil and p:IsAlive() and not p:IsMinorCiv() and not p:IsBarbarian()
+end
+
+-- The SHARED, READ-ONLY promise validator (stage 7.04 work item 4), used by BOTH read-only
+-- inspection and enactment. It only reads game state; every write stays in runEnact below.
+-- Returning one verdict per input promise, aligned by index, is what lets proposal-time inspection
+-- refuse a commitment that is ALREADY impossible instead of archiving an offer that enactment would
+-- reject on sight — and having one implementation is what keeps the two answers from drifting.
+--
+-- Rules, in evaluation order per promise:
+--   * promiser and recipient must be two distinct living majors AND exactly the two deal
+--     principals, in either direction;
+--   * a duplicate logical commitment — same promiser, recipient, and type — is illegal. The two
+--     symmetrized Coop War TWINS are not duplicates: they run in opposite directions, so they never
+--     share a key. They are ONE logical commitment: both are legal and only one is applied (the
+--     seenCoop dedup below). Note the key deliberately ignores targetPlayerID, so a second coop war
+--     from the same promiser to the same recipient in one deal is a duplicate commitment;
+--   * COOP_WAR needs a valid third party: no target, or coopWarEligible(target) false — which also
+--     covers a coop war already PREPARING between the principals against that target — is illegal;
+--   * MILITARY / EXPANSION / BORDER already in effect for the pair are illegal;
+--   * NO_DIGGING is ALWAYS legal: the game exposes no made-state query for it, and reapplying it at
+--     enactment is a harmless no-op. Same for the dormant kinds that have no made-read.
+--
+-- ONE DELIBERATE MODE DIFFERENCE: coopWarEligible returns nil when the IsValidCoopWarTarget binding
+-- is absent, i.e. eligibility is UNKNOWN rather than "no". Enact mode (enacting = true) keeps its
+-- existing behaviour and refuses — it is about to write game state and must not guess. Read-only
+-- inspection treats unknown as LEGAL, because proposal-time inspection blocks only offers that are
+-- already impossible, and enactment re-runs every check anyway. Guessing "illegal" here would
+-- silently forbid every cooperative war on a DLL build without that binding.
+--
+-- Returns:
+--   results         : { [i] = { legal = <bool>, reason = <string> } }, aligned with `promises`
+--   standingApplies : the legal non-coop promises to apply (enact mode)
+--   coopApplies     : the legal coop-war promises to apply, deduped to one per target
+local function validatePromises(promises, enacting)
+  local results, standingApplies, coopApplies = {}, {}, {}
+  local seenCommitment, seenCoop, eligibility = {}, {}, {}
+
+  for i, pr in ipairs(promises or {}) do
+    local kind = pr.promiseType
+    local giver = pr.promiserID
+    local recv = pr.recipientID
+    local legal, reason = true, ""
+
+    local principalsOk = livingMajor(giver) and livingMajor(recv)
+      and ((giver == playerAID and recv == playerBID) or (giver == playerBID and recv == playerAID))
+    local commitmentKey = tostring(giver) .. ">" .. tostring(recv) .. ":" .. tostring(kind)
+
+    if not principalsOk then
+      legal, reason = false, "promiser and recipient must be the two deal parties (distinct living majors)"
+    elseif seenCommitment[commitmentKey] then
+      legal, reason = false, "duplicate promise for this pair"
+    elseif kind == "COOP_WAR" then
+      local target = pr.targetPlayerID
+      if target == nil then
+        legal, reason = false, "cooperative war requires a third-party target"
+      else
+        local key = tostring(target)
+        -- Memoized per target: the twins ask the same question, and each call is two pcalls.
+        -- Wrapped in a table because the answer itself may legitimately be nil (unknown).
+        if eligibility[key] == nil then eligibility[key] = { value = coopWarEligible(target) } end
+        local elig = eligibility[key].value
+        if elig == nil then
+          if enacting then
+            legal, reason = false, "cooperative-war eligibility unavailable"
+          end
+          -- read-only: unknown is not impossible (see the mode-difference note above)
+        elseif not elig then
+          legal, reason = false, "not a valid cooperative-war target (" .. key .. ")"
+        end
+        if legal and not seenCoop[key] then
+          seenCoop[key] = true
+          table.insert(coopApplies, pr)
+        end
+      end
+    else
+      -- Not-already-made check via the exposed reads, where the game exposes one (they return -1
+      -- when the state is not MADE). Kinds without a made-read stay legal and are re-applied
+      -- idempotently at enactment.
+      local alreadyMade = false
+      if kind == "MILITARY" then
+        alreadyMade = Players[recv]:GetNumTurnsMilitaryPromise(giver) >= 0
+      elseif kind == "EXPANSION" then
+        alreadyMade = Players[recv]:GetNumTurnsExpansionPromise(giver) >= 0
+      elseif kind == "BORDER" then
+        alreadyMade = Players[recv]:GetNumTurnsBorderPromise(giver) >= 0
+      end
+      if alreadyMade then
+        legal, reason = false, "already in effect for this pair"
+      else
+        table.insert(standingApplies, pr)
+      end
+    end
+
+    -- Only a well-formed promise claims its commitment key, so a second malformed one still
+    -- reports the principals problem rather than a confusing "duplicate".
+    if principalsOk then seenCommitment[commitmentKey] = true end
+    results[i] = { legal = legal, reason = reason }
+  end
+
+  return results, standingApplies, coopApplies
+end
+
 -- Enact mode (stage 6, the only gameplay write): validate every trade item and promise up front, then
 -- write. On any structural problem nothing is written and { enacted = false, reasons } is returned.
 -- The ordering is failure-safe: the trade items are enacted FIRST via Deal:Enact (the fallible step),
@@ -521,56 +632,15 @@ local function runEnact(resolved, items)
     end
   end
 
-  -- (b) Validate the promise commitments and collect the ones to apply. A promise's two sides must be
-  --     the two deal principals (distinct living majors). Coop-War twins (the two symmetrized
-  --     directions of one joint war against the same target) are deduped to a single application.
-  local function livingMajor(pid)
-    local p = Players[pid]
-    return p ~= nil and p:IsAlive() and not p:IsMinorCiv() and not p:IsBarbarian()
-  end
-  local standingApplies, coopApplies = {}, {}
-  local seenCoop = {}
-  for _, pr in ipairs(enact.promises or {}) do
-    local kind = pr.promiseType
-    local giver = pr.promiserID
-    local recv = pr.recipientID
-    local label = "Promise " .. tostring(kind)
-    local principalsOk = livingMajor(giver) and livingMajor(recv)
-      and ((giver == playerAID and recv == playerBID) or (giver == playerBID and recv == playerAID))
-    if not principalsOk then
-      table.insert(reasons, label .. ": promiser and recipient must be the two deal parties (distinct living majors)")
-    elseif kind == "COOP_WAR" then
-      local target = pr.targetPlayerID
-      local key = tostring(target)
-      if not seenCoop[key] then
-        seenCoop[key] = true
-        local elig = coopWarEligible(target)
-        if elig == nil then
-          table.insert(reasons, label .. ": cooperative-war eligibility unavailable")
-        elseif not elig then
-          table.insert(reasons, label .. ": not a valid cooperative-war target (" .. tostring(target) .. ")")
-        else
-          table.insert(coopApplies, pr)
-        end
-      end
-      -- a duplicate twin is silently dropped (already represented by the first)
-    else
-      -- Not-already-made check via the exposed reads, where the game exposes one (they return -1 when
-      -- the state is not MADE). Kinds without a made-read (No-Digging and the dormant kinds) are
-      -- re-applied idempotently, a harmless no-op when the promise already exists.
-      local alreadyMade = false
-      if kind == "MILITARY" then
-        alreadyMade = Players[recv]:GetNumTurnsMilitaryPromise(giver) >= 0
-      elseif kind == "EXPANSION" then
-        alreadyMade = Players[recv]:GetNumTurnsExpansionPromise(giver) >= 0
-      elseif kind == "BORDER" then
-        alreadyMade = Players[recv]:GetNumTurnsBorderPromise(giver) >= 0
-      end
-      if alreadyMade then
-        table.insert(reasons, label .. ": already in effect for this pair")
-      else
-        table.insert(standingApplies, pr)
-      end
+  -- (b) Validate the promise commitments and collect the ones to apply, through the SHARED
+  --     validator above (`enacting = true` selects enact semantics for unknown coop-war
+  --     eligibility). Read-only inspection runs the very same rules at proposal time, so a deal
+  --     that got archived was already checked against exactly what is refused here.
+  local promiseResults, standingApplies, coopApplies = validatePromises(enact.promises, true)
+  for i, pr in ipairs(enact.promises or {}) do
+    local verdict = promiseResults[i]
+    if verdict ~= nil and not verdict.legal then
+      table.insert(reasons, "Promise " .. tostring(pr.promiseType) .. ": " .. verdict.reason)
     end
   end
 
@@ -705,8 +775,15 @@ for pid = 0, GameDefines.MAX_CIV_PLAYERS - 1 do
   end
 end
 
+-- Per-promise legality for the proposed promises, from the same shared validator enactment runs
+-- (`enacting = false` selects the read-only treatment of unknown coop-war eligibility). Aligned by
+-- index with proposedPromises, so the caller can attribute each verdict to the term the author
+-- wrote. This is the chokepoint that stops an already-impossible promise becoming a durable offer.
+local promiseResults = validatePromises(proposedPromises, false)
+
 return {
   items = items,
+  promises = promiseResults,
   range = range,
   defaultDuration = DEFAULT_DURATION,
   peaceDuration = PEACE_DURATION,

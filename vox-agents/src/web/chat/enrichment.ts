@@ -17,11 +17,13 @@ import type {
   ParticipantIdentity,
   PlayerAssignment,
 } from '../../types/index.js';
-import { reconcileDealRows } from '../../utils/diplomacy/deal.js';
+import { currentTurnOf } from '../../utils/diplomacy/live-turn.js';
 import { audienceID, identityOf } from '../../utils/diplomacy/transcript.js';
-import { createLogger } from '../../utils/logger.js';
 
-const logger = createLogger('webui:enrichment');
+// The live-turn resolver now lives beside the shared conversation guard that consumes it
+// (`utils/diplomacy/live-turn.ts`), so the chat turn runner and the deal actions cannot drift from
+// the Web enrichment view of "what turn is it?". Re-exported here for the Web's existing importers.
+export { currentTurnOf };
 
 /** Resolve the active strategist session's per-seat agent assignments, if available. */
 export function getActiveAssignments(): Record<number, PlayerAssignment> | undefined {
@@ -74,20 +76,4 @@ export function enrichChat(thread: EnvoyThread): ChatResponseEnrichment {
     voicedCiv: displayIdentity(identityOf(thread, thread.agent)),
     audienceCiv: displayIdentity(identityOf(thread, audienceID(thread))),
   };
-}
-
-/** Mirror committed deal rows into the cache without turning a refresh failure into a write failure. */
-export async function mirrorDealRowsBestEffort(thread: EnvoyThread): Promise<void> {
-  try {
-    await reconcileDealRows(thread);
-  } catch (error) {
-    logger.error('Failed to mirror deal rows into the live cache after a committed write', { error });
-  }
-}
-
-/** Resolve the authoritative turn from a live session or a sessionless context's base parameters. */
-export function currentTurnOf(
-  context: VoxContext<StrategistParameters> | undefined,
-): number | undefined {
-  return context?.session ? context.session.getTurn() : context?.getBaseParameters()?.turn;
 }

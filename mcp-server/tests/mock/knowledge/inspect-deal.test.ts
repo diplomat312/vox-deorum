@@ -82,8 +82,8 @@ describe('inspect-deal', () => {
   it('returns the tradable range for an empty deal (no proposed terms)', async () => {
     const result = await tool.execute({ PlayerAID: 1, PlayerBID: 3 } as any);
 
-    // Lua util called with an empty item list.
-    expect(inspectSpy).toHaveBeenCalledWith(1, 3, []);
+    // Lua util called with an empty item list AND an empty promise list.
+    expect(inspectSpy).toHaveBeenCalledWith(1, 3, [], []);
     expect(result.items).toEqual([]);
     expect(result.promises).toEqual([]);
     expect(Object.keys(result.tradableRange)).toEqual(['1', '3']);
@@ -160,7 +160,7 @@ describe('inspect-deal', () => {
     const deal = { version: 1, items: [{ fromPlayerID: 1, toPlayerID: 3, itemType: 'GOLD', amount: 100 }], promises: [] };
     const result = await tool.execute({ PlayerAID: 1, PlayerBID: 3, ProposedDeal: deal } as any);
 
-    expect(inspectSpy).toHaveBeenCalledWith(1, 3, deal.items);
+    expect(inspectSpy).toHaveBeenCalledWith(1, 3, deal.items, []);
     expect(result.items[0]).toMatchObject({
       itemType: 'GOLD',
       legality: true,
@@ -210,10 +210,15 @@ describe('inspect-deal', () => {
 
     await tool.execute({ PlayerAID: 1, PlayerBID: 3, ProposedDeal: deal } as any);
 
-    expect(inspectSpy).toHaveBeenCalledWith(1, 3, [
-      { fromPlayerID: 1, toPlayerID: 3, itemType: 'DECLARATION_OF_FRIENDSHIP' },
-      { fromPlayerID: 3, toPlayerID: 1, itemType: 'DECLARATION_OF_FRIENDSHIP' },
-    ]);
+    expect(inspectSpy).toHaveBeenCalledWith(
+      1,
+      3,
+      [
+        { fromPlayerID: 1, toPlayerID: 3, itemType: 'DECLARATION_OF_FRIENDSHIP' },
+        { fromPlayerID: 3, toPlayerID: 1, itemType: 'DECLARATION_OF_FRIENDSHIP' },
+      ],
+      []
+    );
   });
 
   it('normalizes DLL reason tags into discrete reason lines for an illegal item', async () => {
@@ -484,5 +489,208 @@ describe('inspect-deal', () => {
   it('throws when the game cannot inspect the deal (bridge failure)', async () => {
     inspectSpy.mockResolvedValue(null);
     await expect(tool.execute({ PlayerAID: 1, PlayerBID: 3 } as any)).rejects.toThrow(/could not inspect/);
+  });
+});
+
+/**
+ * Promise legality (stage 7.04 work item 4).
+ *
+ * The rules themselves live in `lua/inspect-deal.lua`'s shared validator and run against live game
+ * state, which no mock tier can execute (this repo has no Lua harness — see the stage plan). What
+ * IS pinned here is the contract across that boundary: the symmetrized promises reach the bridge
+ * call, each rule's Lua verdict is merged onto the right promise by INDEX, and a Lua that answers
+ * short or not at all degrades open. Each case is named for the rule whose verdict it carries.
+ */
+describe('inspect-deal promise legality', () => {
+  /** Run an inspection whose Lua answer carries the given per-index promise verdicts. */
+  async function inspectWithVerdicts(
+    promises: unknown[],
+    luaPromises: unknown
+  ) {
+    inspectSpy.mockResolvedValue(cannedResult({ promises: luaPromises } as any));
+    return tool.execute({
+      PlayerAID: 1,
+      PlayerBID: 3,
+      ProposedDeal: { version: 1, items: [], promises },
+    } as any);
+  }
+
+  it('passes the symmetrized promises into the bridge call', async () => {
+    // The Lua verdicts are index-aligned with what was SENT, so the tool must send the same
+    // symmetrized list it later reports on — including the coop-war twin it synthesizes.
+    await inspectWithVerdicts(
+      [{ promiserID: 1, recipientID: 3, promiseType: 'COOP_WAR', targetPlayerID: 5 }],
+      [{ legal: true, reason: '' }, { legal: true, reason: '' }]
+    );
+
+    expect(inspectSpy).toHaveBeenCalledWith(1, 3, [], [
+      { promiserID: 1, recipientID: 3, promiseType: 'COOP_WAR', targetPlayerID: 5 },
+      { promiserID: 3, recipientID: 1, promiseType: 'COOP_WAR', targetPlayerID: 5 },
+    ]);
+  });
+
+  it('rule: promiser and recipient must be two distinct living majors and the deal principals', async () => {
+    const result = await inspectWithVerdicts(
+      [{ promiserID: 1, recipientID: 3, promiseType: 'MILITARY' }],
+      [{ legal: false, reason: 'promiser and recipient must be the two deal parties (distinct living majors)' }]
+    );
+
+    expect(result.promises[0].legality).toBe(false);
+    expect(result.promises[0].reasons).toEqual([
+      'promiser and recipient must be the two deal parties (distinct living majors)',
+    ]);
+  });
+
+  it('rule: a duplicate logical commitment is illegal', async () => {
+    const result = await inspectWithVerdicts(
+      [
+        { promiserID: 1, recipientID: 3, promiseType: 'MILITARY' },
+        { promiserID: 1, recipientID: 3, promiseType: 'MILITARY' },
+      ],
+      [{ legal: true, reason: '' }, { legal: false, reason: 'duplicate promise for this pair' }]
+    );
+
+    // Only the SECOND one is refused, and the verdicts stay attached to the right index.
+    expect(result.promises[0]).toMatchObject({ legality: true, reasons: [] });
+    expect(result.promises[1]).toMatchObject({
+      legality: false,
+      reasons: ['duplicate promise for this pair'],
+    });
+  });
+
+  it('rule exception: the two symmetrized Coop War twins are ONE commitment, both legal', async () => {
+    const result = await inspectWithVerdicts(
+      [{ promiserID: 1, recipientID: 3, promiseType: 'COOP_WAR', targetPlayerID: 5 }],
+      [{ legal: true, reason: '' }, { legal: true, reason: '' }]
+    );
+
+    expect(result.promises).toHaveLength(2);
+    expect(result.promises[0]).toMatchObject({ promiserID: 1, legality: true, reasons: [] });
+    expect(result.promises[1]).toMatchObject({ promiserID: 3, legality: true, reasons: [] });
+  });
+
+  it('rule: COOP_WAR requires a valid third-party target', async () => {
+    const result = await inspectWithVerdicts(
+      [{ promiserID: 1, recipientID: 3, promiseType: 'COOP_WAR', targetPlayerID: 5 }],
+      [
+        { legal: false, reason: 'not a valid cooperative-war target (5)' },
+        { legal: false, reason: 'not a valid cooperative-war target (5)' },
+      ]
+    );
+
+    expect(result.promises.map((p) => p.legality)).toEqual([false, false]);
+    expect(result.promises[0].reasons).toEqual(['not a valid cooperative-war target (5)']);
+  });
+
+  it('rule: an already-PREPARING coop war is refused through the same eligibility answer', async () => {
+    // coopWarEligible folds the already-PREPARING check into its false answer, so the tool sees
+    // exactly the ineligible-target verdict.
+    const result = await inspectWithVerdicts(
+      [{ promiserID: 1, recipientID: 3, promiseType: 'COOP_WAR', targetPlayerID: 7 }],
+      [
+        { legal: false, reason: 'not a valid cooperative-war target (7)' },
+        { legal: false, reason: 'not a valid cooperative-war target (7)' },
+      ]
+    );
+
+    expect(result.promises[0].legality).toBe(false);
+  });
+
+  it('rule: MILITARY / EXPANSION / BORDER already in effect for the pair are illegal', async () => {
+    const result = await inspectWithVerdicts(
+      [
+        { promiserID: 1, recipientID: 3, promiseType: 'MILITARY' },
+        { promiserID: 1, recipientID: 3, promiseType: 'EXPANSION' },
+        { promiserID: 1, recipientID: 3, promiseType: 'BORDER' },
+      ],
+      [
+        { legal: false, reason: 'already in effect for this pair' },
+        { legal: false, reason: 'already in effect for this pair' },
+        { legal: false, reason: 'already in effect for this pair' },
+      ]
+    );
+
+    expect(result.promises.map((p) => p.promiseType)).toEqual(['MILITARY', 'EXPANSION', 'BORDER']);
+    for (const promise of result.promises) {
+      expect(promise).toMatchObject({ legality: false, reasons: ['already in effect for this pair'] });
+    }
+  });
+
+  it('rule: NO_DIGGING is always legal at inspection', async () => {
+    // The game exposes no made-state query for it and reapplying it at enactment is a harmless
+    // no-op, so the validator never refuses it.
+    const result = await inspectWithVerdicts(
+      [{ promiserID: 1, recipientID: 3, promiseType: 'NO_DIGGING' }],
+      [{ legal: true, reason: '' }]
+    );
+
+    expect(result.promises[0]).toMatchObject({
+      promiseType: 'NO_DIGGING',
+      legality: true,
+      reasons: [],
+    });
+  });
+
+  it('mode difference: unknown coop-war eligibility is LEGAL in read-only inspection', async () => {
+    // When the IsValidCoopWarTarget binding is absent, coopWarEligible answers nil — unknown, not
+    // impossible. Enact mode refuses ("cooperative-war eligibility unavailable"); read-only
+    // inspection lets the proposal through, because it blocks only already-impossible offers and
+    // enactment re-checks everything anyway.
+    const result = await inspectWithVerdicts(
+      [{ promiserID: 1, recipientID: 3, promiseType: 'COOP_WAR', targetPlayerID: 5 }],
+      [{ legal: true, reason: '' }, { legal: true, reason: '' }]
+    );
+
+    expect(result.promises.map((p) => p.legality)).toEqual([true, true]);
+    expect(result.promises.flatMap((p) => p.reasons)).toEqual([]);
+  });
+
+  it('supplies a fallback reason when an illegal promise carries no reason string', async () => {
+    const result = await inspectWithVerdicts(
+      [{ promiserID: 1, recipientID: 3, promiseType: 'MILITARY' }],
+      [{ legal: false, reason: '' }]
+    );
+
+    expect(result.promises[0].reasons).toHaveLength(1);
+    expect(result.promises[0].reasons[0]).toMatch(/current game state/i);
+  });
+
+  it('degrades OPEN when the Lua returns no verdict for an index', async () => {
+    // A short or absent promises list must never block an otherwise fine proposal.
+    const short = await inspectWithVerdicts(
+      [
+        { promiserID: 1, recipientID: 3, promiseType: 'MILITARY' },
+        { promiserID: 1, recipientID: 3, promiseType: 'EXPANSION' },
+      ],
+      [{ legal: false, reason: 'already in effect for this pair' }]
+    );
+    expect(short.promises[0].legality).toBe(false);
+    expect(short.promises[1]).toMatchObject({ legality: true, reasons: [] });
+
+    // An older script omits the field entirely; an empty Lua table arrives as {} rather than [].
+    const absent = await inspectWithVerdicts(
+      [{ promiserID: 1, recipientID: 3, promiseType: 'MILITARY' }],
+      undefined
+    );
+    expect(absent.promises[0]).toMatchObject({ legality: true, reasons: [] });
+
+    const emptyLuaTable = await inspectWithVerdicts(
+      [{ promiserID: 1, recipientID: 3, promiseType: 'MILITARY' }],
+      {}
+    );
+    expect(emptyLuaTable.promises[0]).toMatchObject({ legality: true, reasons: [] });
+  });
+
+  it('keeps agreeabilityFactors advisory and unchanged alongside a binding illegal verdict', async () => {
+    const result = await inspectWithVerdicts(
+      [{ promiserID: 1, recipientID: 3, promiseType: 'MILITARY' }],
+      [{ legal: false, reason: 'already in effect for this pair' }]
+    );
+
+    expect(result.promises[0].legality).toBe(false);
+    expect(result.promises[0].agreeabilityFactors.promiserOpinionOfRecipient).toEqual(['Wary']);
+    expect(result.promises[0].agreeabilityFactors.note).toMatch(/gates nothing/i);
+    // The full result still validates against the tool's declared output schema.
+    expect(() => tool.outputSchema.parse(result)).not.toThrow();
   });
 });

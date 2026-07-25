@@ -186,6 +186,13 @@ export interface InspectDealResult {
   coopWarPromiseDuration?: number;
   /** Eligible third-party promise targets with display names and major/minor kind. */
   promiseTargets?: PromiseTargetInfo[];
+  /**
+   * Per proposed promise, ALIGNED BY INDEX with the `promises` argument: whether the commitment is
+   * already impossible under current game state, and why. Produced by the same shared validator
+   * enactment runs, so a promise that would be refused at enactment can be refused at proposal
+   * time instead. Absent (or short) on a DLL/script without the check — consumers degrade OPEN.
+   */
+  promises?: { legal: boolean; reason: string }[];
   /** Set when the in-game scratch deal could not be obtained. */
   error?: string;
 }
@@ -207,13 +214,19 @@ export interface EnactDealResult {
 }
 
 let inspectDealFunctionInstance: LuaFunction | undefined;
-/** Lazily constructed so the (file-reading) init runs on first use, not at import. The optional
- *  fourth `enact` argument (absent in read-only inspection) switches the script to enact mode. */
+/**
+ * Lazily constructed so the (file-reading) init runs on first use, not at import. The optional
+ * fourth `enact` argument (absent in read-only inspection) switches the script to enact mode.
+ *
+ * `proposedPromises` is APPENDED LAST rather than sitting next to `proposedItems` on purpose:
+ * enact mode already carries its promises inside the `enact` table, so keeping `enact` at
+ * position four leaves `enactDeal`'s call shape byte-for-byte unchanged.
+ */
 const inspectDealFunction = () =>
   (inspectDealFunctionInstance ??= LuaFunction.fromFile(
     "inspect-deal.lua",
     "inspectDeal",
-    ["playerAID", "playerBID", "proposedItems", "enact"]
+    ["playerAID", "playerBID", "proposedItems", "enact", "proposedPromises"]
   ));
 
 /** Accept both the live bridge's direct return object and older array-wrapped mocks. */
@@ -228,14 +241,22 @@ function unwrapInspectDealResult(result: unknown): InspectDealResult | undefined
  * @param playerAID - One major-civ player ID
  * @param playerBID - The other major-civ player ID
  * @param proposedItems - The structured trade items to evaluate (may be empty)
+ * @param promises - The structured promise commitments to evaluate (may be empty). Their legality
+ *                   comes back in `result.promises`, aligned by index.
  * @returns Per-term legality/value plus the tradable range per side, or null on bridge failure
  */
 export async function inspectDeal(
   playerAID: number,
   playerBID: number,
-  proposedItems: TradeItem[]
+  proposedItems: TradeItem[],
+  promises: PromiseTerm[] = []
 ): Promise<InspectDealResult | null> {
-  const response = await inspectDealFunction().execute(playerAID, playerBID, proposedItems);
+  // `enact` must arrive as nil so the script stays in read-only mode, but it is no longer the last
+  // argument. An explicit null is what does that: the args array is JSON-serialized on the way to
+  // the DLL, and CvConnectionService::ConvertJsonToLuaValue maps a JSON null to lua_pushnil — so
+  // the fifth argument still lands in `proposedPromises` while `enact` is nil. (A JS `undefined`
+  // happens to serialize to the same null, but relying on that is implicit; null says it outright.)
+  const response = await inspectDealFunction().execute(playerAID, playerBID, proposedItems, null, promises);
 
   if (!response.success || response.result === undefined || response.result === null) {
     logger.error(`inspect-deal failed for players ${playerAID}/${playerBID}`, { error: response.error });

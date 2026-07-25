@@ -13,12 +13,14 @@
  *
  * The tool is archival only: it does not stream, notify, run agents, enact deals, or
  * decide whether a deal is current/accepted. It writes one TimedKnowledge row and sets
- * visibility for the real participant(s). `deal-accept` and `deal-enacted` are NOT
- * emitted here — acceptance goes through the enactment route (enact-agent-deal, stage 6),
- * which performs its own validation/idempotency check, and both records are written there
- * via the same store path. `deal-reject` is an ordinary archival message, spoken by
- * either endpoint — the counterparty declining the offer, or the original proposer
- * retracting their own offer (there is no separate `deal-retract` type).
+ * visibility for the real participant(s). None of the three terminal deal answers is
+ * emitted here (a pinned writer-split): `deal-accept` and `deal-enacted` go through the
+ * enactment route (enact-agent-deal, stage 6) and `deal-reject` through the rejection
+ * route (reject-agent-deal, stage 7.04). Each of those routes runs its own validation and
+ * idempotency check inside one serialized store transaction, so proposal state is decided
+ * transactionally instead of by a caller's racy read-then-write; both write their records
+ * via the same store path. This tool therefore only ever writes non-terminal messages:
+ * `text`, `close`, `deal-proposal`, and `deal-counter`.
  */
 
 import { ToolBase } from "../base.js";
@@ -28,8 +30,11 @@ import { knowledgeManager } from "../../server.js";
 import { composeVisibility } from "../../utils/knowledge/visibility.js";
 import { readPublicKnowledgeBatch } from "../../utils/knowledge/cached.js";
 import { getPlayerInformations } from "../../knowledge/getters/player-information.js";
-import { orderPlayerPair, getDiplomaticMessageById } from "../../knowledge/getters/diplomatic-messages.js";
+import { orderPlayerPair } from "../../knowledge/getters/diplomatic-messages.js";
 import { MESSAGE_TYPES } from "../../utils/transcript-schema.js";
+// The same proposal vocabulary the transactional deal routes answer against: a type that carries
+// Payload.Deal here is exactly a type they can enact or reject, so the set is defined once.
+import { PROPOSAL_TYPES } from "../../utils/deal-outcome.js";
 import { MaxMajorCivs } from "../../knowledge/schema/base.js";
 import { assertExpectedGame } from "../../utils/expected-game.js";
 
@@ -41,14 +46,17 @@ const OBSERVER_ROLE = "observer";
 /** Exact role used by the in-game pure observer's real, out-of-range seat. */
 const REAL_OBSERVER_ROLE = "Observer";
 
-/** Message types that carry proposed deal terms in Payload.Deal. */
-const PROPOSAL_TYPES = new Set(["deal-proposal", "deal-counter"]);
 /**
- * Message types that answer an earlier proposal/counter via Payload.ProposalMessageID
- * through this archival tool. Acceptance is NOT here — it goes through the enactment
- * route (see the deal-accept guard below) — so only deal-reject is a public response.
+ * Terminal answers to a proposal, each owned by a transactional route rather than by this
+ * archival tool: acceptance/enactment by `enact-agent-deal`, rejection/retraction by
+ * `reject-agent-deal`. Mapped to the tool that owns each so the refusal points the caller
+ * at the right route. No response type reaches the write path below.
  */
-const RESPONSE_TYPES = new Set(["deal-reject"]);
+const TERMINAL_ROUTES: Record<string, string> = {
+  "deal-accept": "the enactment route (enact-agent-deal, stage 6)",
+  "deal-enacted": "the enactment route (enact-agent-deal, stage 6)",
+  "deal-reject": "the rejection route (reject-agent-deal, stage 7.04)",
+};
 
 /**
  * Input schema for the append-message tool.
@@ -103,12 +111,13 @@ class AppendMessageTool extends ToolBase {
     const { PlayerAID, PlayerBID, PlayerARole, PlayerBRole, SpeakerID, MessageType, Content, Payload, Turn, ExpectedGameID } = args;
     assertExpectedGame(this.name, ExpectedGameID);
 
-    // Acceptance and the enactment record are never written through this archival tool:
-    // acceptance must go through the enactment route (enact-agent-deal, stage 6), which
-    // runs its own validation/idempotency check before recording deal-accept / deal-enacted
-    // via the store path. deal-reject, by contrast, is an ordinary archival message.
-    if (MessageType === "deal-accept" || MessageType === "deal-enacted") {
-      throw new Error(`${MessageType} is recorded by the enactment route (enact-agent-deal, stage 6), not append-message`);
+    // No terminal answer to a proposal is written through this archival tool. Each has a
+    // transactional route that serializes its own read/check/write against the store, so
+    // whether a proposal is still open is decided there — never by a caller reading the
+    // transcript first and appending afterwards, which two racing clients could both win.
+    const terminalRoute = TERMINAL_ROUTES[MessageType];
+    if (terminalRoute) {
+      throw new Error(`${MessageType} is recorded by ${terminalRoute}, not append-message`);
     }
 
     // The two endpoints must be distinct.
@@ -163,32 +172,16 @@ class AppendMessageTool extends ToolBase {
       }
     }
 
-    // Message-specific validation.
+    // Message-specific validation. Only proposals/counters need any: the response-type
+    // branch that used to resolve and re-validate Payload.ProposalMessageID moved into
+    // reject-agent-deal, which performs the same checks INSIDE its write transaction (the
+    // guard here could go stale between the lookup and the append).
     if (PROPOSAL_TYPES.has(MessageType)) {
       // Proposals and counters must carry the proposed terms. Payload.Value1 / Value2
       // are optional per-item value snapshots for either ordered player — including a
       // human side, whose items the VP AI (CvDealAI) also values.
       if (!Payload || Payload.Deal === undefined) {
         throw new Error(`${MessageType} messages must include Payload.Deal`);
-      }
-    } else if (RESPONSE_TYPES.has(MessageType)) {
-      // A reject must reference an earlier proposal/counter in the same conversation.
-      // Either endpoint may speak it: the counterparty *declines* the offer, or the
-      // original proposer *retracts* their own offer — there is no separate deal-retract
-      // type. (Acceptance is handled by the enactment route, not here.)
-      const proposalMessageID = Payload?.ProposalMessageID;
-      if (typeof proposalMessageID !== "number") {
-        throw new Error(`${MessageType} messages must include a numeric Payload.ProposalMessageID`);
-      }
-      const referenced = await getDiplomaticMessageById(proposalMessageID);
-      if (!referenced) {
-        throw new Error(`Referenced proposal message ${proposalMessageID} does not exist`);
-      }
-      if (referenced.Player1ID !== player1ID || referenced.Player2ID !== player2ID) {
-        throw new Error(`Referenced message ${proposalMessageID} is not part of this conversation`);
-      }
-      if (!PROPOSAL_TYPES.has(referenced.MessageType)) {
-        throw new Error(`Referenced message ${proposalMessageID} is not a deal-proposal or deal-counter`);
       }
     }
 

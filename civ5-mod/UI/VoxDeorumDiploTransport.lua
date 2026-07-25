@@ -1,9 +1,37 @@
--- Registers the temporary diplomacy push transport and Lua.log probe listeners.
--- TODO(stage-04): Replace the temporary push transport and remove Lua.log probes.
+-- Vox Deorum diplomacy panel transport driver.
+--
+-- Owns both directions of the panel's wire contract: it registers the four
+-- DLL-callable push functions, broadcasts the three outbound panel events, and
+-- translates every push into the VoxDeorumDiploUI surface.
+-- Wire contract: docs/plans/interactive-diplomacy/07-ingame-panel/specs.md.
 
 VoxDeorumDiploTransport = VoxDeorumDiploTransport or {}
 
+-- Two-tier responsiveness backstop: nothing arrived at all, then nothing arrived
+-- for a long time after the request was acknowledged.
+local ACK_TIMEOUT_SECONDS = 10
+local REPLY_TIMEOUT_SECONDS = 90
+local MAX_TEXT_LENGTH = 2000
+-- Agent activity states carry no content across the boundary, only a label.
+local STATUS_LABEL_KEYS = {
+	composing = "TXT_KEY_VD_DIPLO_BUSY",
+	reasoning = "TXT_KEY_VD_DIPLO_THINKING",
+	tool = "TXT_KEY_VD_DIPLO_ADVISORS",
+}
+
 local m_registered = false
+-- False while the offline mock sandbox owns the panel: no registration, no
+-- broadcast, and every push is ignored so a late live reply cannot leak in.
+local m_active = true
+local m_open = false
+local m_playerID, m_counterpartID = -1, -1
+-- "idle" = nothing outstanding, "opening"/"sending" = awaiting acknowledgement,
+-- "running" = acknowledged and a turn is in flight for this pair.
+local m_state = "idle"
+local m_ackSeconds, m_silenceSeconds = 0, 0
+local m_uiPhase = "loading"
+local m_lastText = nil
+local m_lowestRowID = nil
 
 -- Fire one LuaEvent, recording a throwing listener in Lua.log before rethrowing,
 -- so the DLL reports the push as failed and the server-side transport can react.
@@ -53,9 +81,11 @@ local function registerPushFunction(name, handler)
 	return ok
 end
 
--- Register the push functions once after all DLL bindings succeed.
+-- Register the push functions once after all DLL bindings succeed. Never called
+-- at context load: that reaches CvConnectionService before Setup() and crashes
+-- the game, so the panel drives this from its presentation instead.
 function VoxDeorumDiploTransport.EnsureRegistered()
-	if m_registered then return end
+	if m_registered or not m_active then return end
 	if Game == nil or type(Game.RegisterFunction) ~= "function" then
 		print("[VDDiploTransport] Game.RegisterFunction is unavailable")
 		return
@@ -70,52 +100,232 @@ function VoxDeorumDiploTransport.EnsureRegistered()
 	print("[VDDiploTransport] Push registration complete=" .. tostring(registered))
 end
 
--- Print a temporary Begin probe to Lua.log.
-local function onBegin(playerID, counterpartID, turn, meta)
-	meta = type(meta) == "table" and meta or {}
-	print("[VDDiploTransport] Begin player=" .. tostring(playerID) ..
-		" counterpart=" .. tostring(counterpartID) ..
-		" turn=" .. tostring(turn) ..
-		" hasEnvoy=" .. tostring(meta.hasEnvoy) ..
-		" busy=" .. tostring(meta.busy) ..
-		" hasMore=" .. tostring(meta.hasMore))
+-- Change the panel phase and remember it, so later pushes can tell a live
+-- streaming draft from an idle transcript without querying the panel.
+local function setPhase(phase, labelKey)
+	m_uiPhase = phase
+	VoxDeorumDiploUI.setPhase(phase, labelKey)
 end
 
--- Print a temporary Messages probe to Lua.log.
-local function onMessages(playerID, counterpartID, batch)
-	batch = type(batch) == "table" and batch or {}
-	local messages = type(batch.messages) == "table" and batch.messages or {}
-	print("[VDDiploTransport] Messages player=" .. tostring(playerID) ..
-		" counterpart=" .. tostring(counterpartID) ..
-		" mode=" .. tostring(batch.mode) ..
-		" hasMore=" .. tostring(batch.hasMore) ..
-		" count=" .. tostring(#messages))
-	for _, row in ipairs(messages) do
-		print("[VDDiploTransport] Row id=" .. tostring(row.ID) ..
-			" speaker=" .. tostring(row.SpeakerID) ..
-			" type=" .. tostring(row.MessageType) ..
-			" turn=" .. tostring(row.Turn) ..
-			" content=" .. tostring(row.Content))
+-- Build the common outbound payload for the effective seat, computed once per event.
+local function basePayload()
+	local seat = VoxDeorumSeat.EffectiveSeat()
+	local payload = { PlayerID = seat, CounterpartID = m_counterpartID, Turn = Game.GetGameTurn() }
+	-- AsObserver is the literal true or absent; the event schema rejects false.
+	if VoxDeorumSeat.IsPureObserver() then payload.AsObserver = true end
+	m_playerID = seat
+	return payload
+end
+
+-- Broadcast one panel event. generateId is mandatory: an id-less event crashes
+-- the mcp-server handler (the VoxDeorumHumanPanel HumanDecision precedent).
+local function broadcast(name, payload)
+	local ok, errorMessage = pcall(Game.BroadcastEvent, name, payload, true)
+	if not ok then print("[VDDiploTransport] " .. name .. " broadcast failed: " .. tostring(errorMessage)) end
+	return ok
+end
+
+-- Ask the server for a full read-only reflush of this pair. The last message is
+-- forgotten here: once a reflush is the outstanding request, a later retry must
+-- repeat that reflush and never resend an already committed message.
+local function requestReflush()
+	m_state, m_ackSeconds, m_silenceSeconds, m_lowestRowID, m_lastText = "opening", 0, 0, nil, nil
+	VoxDeorumDiploUI.setInlineError(nil)
+	setPhase("loading")
+	if not broadcast("DiplomacyPanelOpened", basePayload()) then
+		m_state = "idle"; setPhase("ack-timeout")
 	end
 end
 
--- Print a temporary Status probe to Lua.log.
+-- Start a conversation: the panel has already cleared its log for this pair.
+local function onOpen(counterpartID, activePlayerID)
+	m_open, m_counterpartID, m_lastText = true, counterpartID, nil
+	if not m_active then return end
+	requestReflush()
+end
+
+-- Send one panel message optimistically and start the acknowledgement tier.
+local function onSend(text)
+	if not m_active or not m_open then return end
+	local clean = VoxDeorumDealUtils.StripDelimiter(text)
+	if string.len(clean) > MAX_TEXT_LENGTH then
+		-- The panel's input box already caps this; clamp anyway so an oversized
+		-- send fails the event schema at neither edge.
+		print("[VDDiploTransport] Clamping an oversized panel message")
+		clean = string.sub(clean, 1, MAX_TEXT_LENGTH)
+	end
+	if string.match(clean, "^%s*$") ~= nil then return end
+	local payload = basePayload()
+	payload.Text = clean
+	m_lastText = clean
+	m_state, m_ackSeconds, m_silenceSeconds = "sending", 0, 0
+	-- A new request retires the previous failure reason.
+	VoxDeorumDiploUI.setInlineError(nil)
+	setPhase("sending", clean)
+	if not broadcast("DiplomacyChatMessage", payload) then
+		m_state = "idle"; setPhase("ack-timeout")
+	end
+end
+
+-- Retry the tier that timed out. An acknowledgement failure means nothing was
+-- delivered, so it repeats the original request; a reply-silence failure only
+-- re-requests the read-only reflush, because a committed message must never be
+-- sent twice to recover a lost stream.
+local function onRetry()
+	if not m_active or not m_open then return end
+	if m_uiPhase == "ack-timeout" and m_lastText ~= nil then onSend(m_lastText); return end
+	requestReflush()
+end
+
+-- Page older history from the oldest row the panel currently holds.
+local function onLoadEarlier()
+	if not m_active or not m_open then return end
+	-- BeforeID is a required field, so an empty transcript has no older page to
+	-- ask for; clear the panel's inline loading row instead of leaving it spinning.
+	if m_lowestRowID == nil then VoxDeorumDiploUI.prependRows({}, false); return end
+	local payload = basePayload()
+	payload.BeforeID = m_lowestRowID
+	if not broadcast("DiplomacyTranscriptRequest", payload) then VoxDeorumDiploUI.prependRows({}, false) end
+end
+
+-- Stop tracking a pair the player has left; its pushes no longer match.
+local function onHide()
+	m_open, m_state, m_lastText = false, "idle", nil
+end
+
+-- Drive both timeout tiers from the panel's per-frame update.
+local function onUpdate(delta)
+	if not m_active or not m_open then return end
+	if m_state == "opening" or m_state == "sending" then
+		m_ackSeconds = m_ackSeconds + delta
+		if m_ackSeconds >= ACK_TIMEOUT_SECONDS then m_state = "idle"; setPhase("ack-timeout") end
+	elseif m_state == "running" then
+		m_silenceSeconds = m_silenceSeconds + delta
+		if m_silenceSeconds >= REPLY_TIMEOUT_SECONDS then m_state = "idle"; setPhase("reply-timeout") end
+	end
+end
+
+-- Leave the live conversation offline while the mock sandbox owns the panel.
+local function setActive(isActive)
+	m_active = isActive == true
+	if m_active then return end
+	m_open, m_state, m_lastText = false, "idle", nil
+end
+
+-- Return whether a push belongs to the pair the panel currently has open.
+local function isOpenPair(playerID, counterpartID)
+	return m_active and m_open and playerID == m_playerID and counterpartID == m_counterpartID
+end
+
+-- Any push for the open pair acknowledges the transport and resets reply silence.
+local function noteInbound()
+	m_ackSeconds, m_silenceSeconds = 0, 0
+	if m_state == "sending" then m_state = "running" end
+end
+
+-- Track the oldest row held for the pair so paging has an exclusive cursor.
+local function trackRowIDs(rows)
+	for _, row in ipairs(rows) do
+		if type(row.ID) == "number" and (m_lowestRowID == nil or row.ID < m_lowestRowID) then m_lowestRowID = row.ID end
+	end
+end
+
+-- Move the phase after a live append batch. The batch's newest row decides: our
+-- own committed row replaces the optimistic "sending" bubble, and a counterpart
+-- reply or close row ends the turn. A reflush's history cannot end a busy turn,
+-- because the newest row of a busy pair is that turn's own caller row.
+local function applyBatchPhase(rows)
+	if m_state == "idle" then return end
+	local newest = nil
+	for _, row in ipairs(rows) do
+		if type(row.ID) == "number" and (newest == nil or row.ID > newest.ID) then newest = row end
+	end
+	if newest == nil then return end
+	if newest.SpeakerID == m_counterpartID and (newest.MessageType == "text" or newest.MessageType == "close") then
+		m_state = "idle"; setPhase("normal")
+	elseif m_uiPhase == "sending" and newest.SpeakerID == m_playerID then
+		setPhase("thinking")
+	end
+end
+
+-- Start a reflush: clear the pair log and apply the three server-only facts.
+local function onBegin(playerID, counterpartID, turn, meta)
+	if not isOpenPair(playerID, counterpartID) then return end
+	meta = type(meta) == "table" and meta or {}
+	m_lowestRowID, m_ackSeconds, m_silenceSeconds = nil, 0, 0
+	VoxDeorumDiploUI.reset(meta)
+	VoxDeorumDiploUI.setCurrentTurn(turn)
+	VoxDeorumDiploUI.setHasMore(meta.hasMore)
+	if meta.hasEnvoy == false then
+		m_state, m_uiPhase = "idle", "no-envoy"
+	elseif meta.busy == true then
+		-- A reopen during a live turn must say so immediately: no draft is replayed.
+		m_state = "running"; setPhase("thinking", "TXT_KEY_VD_DIPLO_BUSY")
+	else
+		m_state, m_uiPhase = "idle", "normal"
+	end
+end
+
+-- Apply one transcript batch; the panel deduplicates rows by ID.
+local function onMessages(playerID, counterpartID, batch)
+	if not isOpenPair(playerID, counterpartID) then return end
+	batch = type(batch) == "table" and batch or {}
+	local rows = type(batch.messages) == "table" and batch.messages or {}
+	noteInbound()
+	if batch.mode == "prepend" then
+		VoxDeorumDiploUI.prependRows(rows, batch.hasMore)
+		trackRowIDs(rows)
+		return
+	end
+	if batch.hasMore ~= nil then VoxDeorumDiploUI.setHasMore(batch.hasMore) end
+	local appended = false
+	for _, row in ipairs(rows) do
+		if VoxDeorumDiploUI.appendRow(row) then appended = true end
+	end
+	-- The panel retires a streaming draft on its own append; mirror that here so a
+	-- later delta cannot address a phase the panel has already left.
+	if appended and m_uiPhase == "streaming" then m_uiPhase = "normal" end
+	trackRowIDs(rows)
+	applyBatchPhase(rows)
+end
+
+-- Map live agent activity onto the panel's phase and inline status surfaces.
 local function onStatus(playerID, counterpartID, status)
+	if not isOpenPair(playerID, counterpartID) then return end
 	status = type(status) == "table" and status or {}
-	print("[VDDiploTransport] Status player=" .. tostring(playerID) ..
-		" counterpart=" .. tostring(counterpartID) ..
-		" state=" .. tostring(status.state) ..
-		" detail=" .. tostring(status.detail))
+	noteInbound()
+	if status.state == "error" then
+		-- An error ends whatever was pending and reports its reason inline.
+		m_state = "idle"
+		VoxDeorumDiploUI.setInlineError(status.detail)
+		setPhase("normal")
+		return
+	end
+	local labelKey = STATUS_LABEL_KEYS[status.state]
+	if labelKey == nil then return end
+	m_state = "running"
+	-- A status arriving between deltas must not drop the streamed draft.
+	if m_uiPhase == "streaming" then return end
+	setPhase("thinking", labelKey)
 end
 
--- Print a temporary Delta probe to Lua.log.
+-- Render the accumulated reply so far; re-rendering the same text is idempotent.
 local function onDelta(playerID, counterpartID, text)
-	print("[VDDiploTransport] Delta player=" .. tostring(playerID) ..
-		" counterpart=" .. tostring(counterpartID) ..
-		" text=" .. tostring(text))
+	if not isOpenPair(playerID, counterpartID) then return end
+	noteInbound()
+	-- A delta that arrives after the durable final row is stale: the transcript
+	-- already shows the committed reply.
+	if m_state ~= "running" then return end
+	if m_uiPhase ~= "streaming" then setPhase("streaming") end
+	VoxDeorumDiploUI.setStreamingText(text)
 end
 
--- TODO(stage-04): Remove the temporary Lua.log probe listeners.
+VoxDeorumDiploTransport.Driver = {
+	onOpen = onOpen, onSend = onSend, onRetry = onRetry, onLoadEarlier = onLoadEarlier,
+	onUpdate = onUpdate, onHide = onHide, setActive = setActive,
+}
+
+VoxDeorumDiploUI.registerDriver("real", VoxDeorumDiploTransport.Driver)
 LuaEvents.VoxDeorumDiploBegin.Add(onBegin)
 LuaEvents.VoxDeorumDiploMessages.Add(onMessages)
 LuaEvents.VoxDeorumDiploStatus.Add(onStatus)

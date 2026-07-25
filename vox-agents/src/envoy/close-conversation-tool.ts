@@ -38,7 +38,7 @@ export function createCloseConversationTool(context: VoxContext<StrategistParame
           .string()
           .describe("A short closing remark recorded as the conversation's final message."),
       }),
-      execute: async (input, parameters) => {
+      execute: async (input) => {
         const thread = context.currentInput as EnvoyThread | undefined;
         if (!thread || thread.player1ID === undefined || thread.player2ID === undefined) {
           return "No active conversation to close.";
@@ -46,10 +46,11 @@ export function createCloseConversationTool(context: VoxContext<StrategistParame
         // The diplomat voices the agent seat (thread.agent), so the close is authored by it.
         // closeConversation first retracts any open proposal so nothing is left enactable, then
         // records the close. The recorded turn comes from the store's authoritative current turn
-        // (returned by append-message); parameters.turn is only a fallback, since a live agent's
-        // turn is a decision-point snapshot that can be stale once a conversation outlives its pause.
+        // (returned by append-message), never the live agent's `parameters.turn` — a decision-point
+        // snapshot that can be stale once a conversation outlives its pause. The rows it commits are
+        // reported to the turn running this tool, so they reach the client with that turn's result.
         try {
-          const turn = await closeConversation(thread, thread.agent, input.Farewell, parameters.turn);
+          const { turn } = await closeConversation(thread, thread.agent, input.Farewell);
           return `Conversation closed on turn ${turn}. It cannot be reopened until a later turn.`;
         } catch (error) {
           logger.error("Failed to append close message", { error });

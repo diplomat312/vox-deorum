@@ -1,4 +1,6 @@
--- Stage 7.01 mock driver. Stage 7.04 replaces this include with the transport driver.
+-- Stage 7.01 mock driver, retained as the offline UI sandbox behind the
+-- VoxDeorumUseMockDrivers debug toggle. It registers itself with the panel rather
+-- than assigning the driver, so the real transport stays the shipped default.
 -- The mock always plays the normal seated demo, whatever seat it runs under:
 -- observers can do everything except Declare War, a native path outside its scope.
 
@@ -27,6 +29,8 @@ local PHASES = {
 	{ name = "streaming", seconds = #STREAM_CUTS * STREAM_CHUNK_SECONDS + 1.5 }, { name = "deal-pending", seconds = 5.0 },
 	{ name = "ack-timeout", seconds = 6.0 }, { name = "reply-timeout", seconds = 6.0 },
 }
+-- The sandbox is dormant until the panel selects it; the real transport ships active.
+local m_active = false
 local m_counterpartID, m_activePlayerID, m_mockTurn = -1, -1, 0
 local m_phaseIndex, m_phaseSeconds = 1, 0
 local m_lastStreamChunk = 0
@@ -48,13 +52,17 @@ local function onDealMockButton(index)
 	if entry ~= nil and m_counterpartID >= 0 then LuaEvents.VoxDeorumOpenDealScreenMock(entry.scenario, m_counterpartID) end
 end
 
--- Reveal and bind controls that exist only for the removable mock driver.
-local function initializeDealMockButtons()
+-- Bind the controls that exist only for the mock driver, still hidden.
+local function bindDealMockButtons()
 	for index, entry in ipairs(dealMockButtons) do
 		entry.control:SetVoid1(index)
 		entry.control:RegisterCallback(Mouse.eLClick, onDealMockButton)
-		entry.control:SetHide(false)
 	end
+end
+
+-- Reveal the mock deal buttons only while the sandbox owns the panel.
+local function setDealMockButtonsVisible(visible)
+	for _, entry in ipairs(dealMockButtons) do entry.control:SetHide(not visible) end
 	Controls.ActionStack:CalculateSize()
 	Controls.ActionStack:ReprocessAnchoring()
 end
@@ -195,12 +203,20 @@ local function onUpdate(delta)
 	end
 end
 
--- Keep the stage-01 smoke notification with the removable mock driver.
+-- Keep the stage-01 smoke notification with the mock driver, and only with it.
 local function postMockNotification(counterpartID)
-	local playerID, player = Game.GetActivePlayer(), Players[Game.GetActivePlayer()]
+	if not m_active then return end
+	local player = Players[Game.GetActivePlayer()]
 	if player ~= nil then player:AddNotificationName(NOTIFICATION_NAME, Locale.ConvertTextKey("TXT_KEY_VD_DIPLO_NOTIFICATION_MESSAGE"), Locale.ConvertTextKey("TXT_KEY_VD_DIPLO_NOTIFICATION_SUMMARY"), -1, -1, counterpartID, counterpartID) end
 end
 
-VoxDeorumDiploUI.driver = { onOpen = onOpen, onSend = onSend, onRetry = onRetry, onLoadEarlier = onLoadEarlier, onUpdate = onUpdate, onHide = function() end }
+-- Follow the panel's driver selection: the mock-only controls exist only while
+-- the sandbox is the active driver.
+local function setActive(isActive)
+	m_active = isActive == true
+	setDealMockButtonsVisible(m_active)
+end
+
+bindDealMockButtons()
+VoxDeorumDiploUI.registerDriver("mock", { onOpen = onOpen, onSend = onSend, onRetry = onRetry, onLoadEarlier = onLoadEarlier, onUpdate = onUpdate, onHide = function() end, setActive = setActive })
 LuaEvents.VoxDeorumDiploOpen.Add(postMockNotification)
-initializeDealMockButtons()

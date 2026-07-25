@@ -17,7 +17,7 @@
 import { LuaFunctionTool } from "../abstract/lua-function.js";
 import * as z from "zod";
 import { ToolAnnotations } from "@modelcontextprotocol/sdk/types.js";
-import { MaxMajorCivs } from "../../knowledge/schema/base.js";
+import { MaxMajorCivs, MaxPlayers } from "../../knowledge/schema/base.js";
 import { eventPipeDelimiter } from "../../bridge/protocol.js";
 /** Sentinel counterpart for a notification with no diplomacy target. */
 const NO_COUNTERPART = -1;
@@ -35,10 +35,14 @@ function normalizeNotificationText(text: string, field: "Summary" | "Message"): 
  * Input schema for the post-notification tool.
  */
 const PostNotificationInputSchema = z.object({
-  PlayerID: z.number().int().min(0).max(MaxMajorCivs - 1)
-    .describe("The player who receives the notification"),
+  // The recipient spans the FULL addressable player range, not just the major civs: a human
+  // watching from an observer slot is a real notification recipient (see the pinned-observer
+  // redirect in post-notification.lua). The counterpart is a conversation partner, so it stays
+  // bounded by the major civilizations.
+  PlayerID: z.number().int().min(0).max(MaxPlayers - 1)
+    .describe("The player slot that receives the notification: a major civilization, or an observer slot (0 to MAX_PLAYERS - 1)"),
   CounterpartID: z.number().int().min(0).max(MaxMajorCivs - 1).optional()
-    .describe("Optional diplomacy counterpart: when set, clicking opens the conversation with this player; when omitted, clicking shows Message in a dialog"),
+    .describe("Optional diplomacy counterpart (a major civilization): when set, clicking opens the conversation with this player; when omitted, clicking shows Message in a dialog"),
   Summary: z.string().min(1).max(200)
     .describe("Short notification headline (shown in the notification panel)"),
   Message: z.string().min(1).max(2000)

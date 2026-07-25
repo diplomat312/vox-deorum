@@ -4,12 +4,18 @@
  * idempotent on the proposal's deal-enacted record. A bridge error or un-enacted result now
  * throws and writes nothing. Runs against an in-memory KnowledgeStore with `enactDeal` stubbed —
  * no real bridge-service / DLL.
+ *
+ * Stage 7.04 added the failure split these tests also pin: a lost race over proposal state
+ * (superseded / answered / wrong recipient) returns a structured `Conflict` instead of throwing,
+ * while validation and infrastructure failures keep throwing — and the success and idempotent
+ * paths now also carry the full durable `AcceptRow` / `EnactedRow` projections.
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { sql } from 'kysely';
 import createAppendMessageTool from '../../../src/tools/actions/append-message.js';
 import createEnactAgentDealTool from '../../../src/tools/actions/enact-agent-deal.js';
+import createRejectAgentDealTool from '../../../src/tools/actions/reject-agent-deal.js';
 import { getDiplomaticMessages as getDiplomaticMessagesPage } from '../../../src/knowledge/getters/diplomatic-messages.js';
 import { setupDiplomacyStore, seedPlayer } from '../helpers.js';
 import type { KnowledgeStore } from '../../../src/knowledge/store.js';
@@ -23,6 +29,7 @@ vi.mock('../../../src/knowledge/getters/player-information.js', async (importOri
 
 const append = createAppendMessageTool();
 const enact = createEnactAgentDealTool();
+const reject = createRejectAgentDealTool();
 let store: KnowledgeStore;
 /** Read just the message rows while the getter exposes paging metadata. */
 async function getDiplomaticMessages(...args: Parameters<typeof getDiplomaticMessagesPage>) {
@@ -75,6 +82,7 @@ describe('enact-agent-deal', () => {
     expect(result.Enacted).toBe(true); // enacted in-game (mocked bridge)
     expect(typeof result.AcceptMessageID).toBe('number');
     expect(typeof result.EnactedMessageID).toBe('number');
+    expect(result.Conflict).toBeUndefined();
 
     const accepts = await getDiplomaticMessages(1, 3, { messageType: 'deal-accept' });
     const enacted = await getDiplomaticMessages(1, 3, { messageType: 'deal-enacted' });
@@ -86,6 +94,44 @@ describe('enact-agent-deal', () => {
     expect((enacted[0].Payload as any).ProposalMessageID).toBe(proposalID);
   });
 
+  it('returns full AcceptRow / EnactedRow projections matching the durable rows', async () => {
+    // A caller hydrates its live transcript cache from these rows instead of rereading the
+    // transcript, so each must equal the stored row field for field.
+    const proposalID = await seedProposal();
+
+    const result = await enact.execute({ ProposalMessageID: proposalID, Content: 'Agreed.' } as any);
+
+    const [storedAccept] = await getDiplomaticMessages(1, 3, { messageType: 'deal-accept' });
+    const [storedEnacted] = await getDiplomaticMessages(1, 3, { messageType: 'deal-enacted' });
+
+    expect(result.AcceptRow).toEqual({
+      ID: result.AcceptMessageID,
+      Player1ID: 1,
+      Player2ID: 3,
+      Player1Role: 'the leader',
+      Player2Role: 'negotiator',
+      SpeakerID: 1,
+      MessageType: 'deal-accept',
+      Content: 'Agreed.',
+      Payload: { ProposalMessageID: proposalID },
+      Turn: 10,
+      CreatedAt: storedAccept.CreatedAt,
+    });
+    expect(result.EnactedRow).toEqual({
+      ID: result.EnactedMessageID,
+      Player1ID: 1,
+      Player2ID: 3,
+      Player1Role: 'the leader',
+      Player2Role: 'negotiator',
+      SpeakerID: 1,
+      MessageType: 'deal-enacted',
+      Content: 'The deal was enacted.',
+      Payload: { ProposalMessageID: proposalID },
+      Turn: 10,
+      CreatedAt: storedEnacted.CreatedAt,
+    });
+  });
+
   it('honors the recipient as an explicit AccepterID', async () => {
     const proposalID = await seedProposal();
     await enact.execute({ ProposalMessageID: proposalID, AccepterID: 1 } as any);
@@ -93,11 +139,13 @@ describe('enact-agent-deal', () => {
     expect(accepts[0].SpeakerID).toBe(1);
   });
 
-  it('rejects self-acceptance by the proposal author', async () => {
+  it('refuses self-acceptance by the proposal author', async () => {
+    // Refused as a wrong-recipient conflict rather than a thrown error (see the conflict suite):
+    // in practice a caller only sends the author as accepter after prechecking against a proposal
+    // that has since been replaced, which is a lost race, not an infrastructure failure.
     const proposalID = await seedProposal();
-    await expect(
-      enact.execute({ ProposalMessageID: proposalID, AccepterID: 3 } as any)
-    ).rejects.toThrow(/must be the proposal recipient/);
+    const result = await enact.execute({ ProposalMessageID: proposalID, AccepterID: 3 } as any);
+    expect(result.Conflict?.Reason).toBe('wrong-recipient');
   });
 
   it('is idempotent — a second enactment refuses and writes nothing new', async () => {
@@ -106,8 +154,14 @@ describe('enact-agent-deal', () => {
 
     const second = await enact.execute({ ProposalMessageID: proposalID } as any);
     expect(second.AlreadyEnacted).toBe(true);
+    expect(second.Enacted).toBe(false);
     expect(second.EnactedMessageID).toBe(first.EnactedMessageID);
     expect(second.AcceptMessageID).toBeUndefined();
+    expect(second.Conflict).toBeUndefined();
+    // The idempotent path returns the EXISTING enacted row (and no AcceptRow, since this call
+    // wrote nothing), so a caller re-pushing it publishes the row that actually exists.
+    expect(second.EnactedRow).toEqual(first.EnactedRow);
+    expect(second.AcceptRow).toBeUndefined();
 
     // Still exactly one of each record.
     expect(await getDiplomaticMessages(1, 3, { messageType: 'deal-accept' })).toHaveLength(1);
@@ -144,30 +198,49 @@ describe('enact-agent-deal', () => {
     expect(await getDiplomaticMessages(1, 3, { messageType: 'deal-enacted' })).toHaveLength(0);
   });
 
-  it('rejects a superseded proposal', async () => {
+  it('reports a superseded proposal as a structured conflict, not a thrown error', async () => {
     const oldProposalID = await seedProposal();
     await seedProposal(1);
-    await expect(enact.execute({ ProposalMessageID: oldProposalID } as any)).rejects.toThrow(
-      /not the current active proposal/
-    );
+
+    const result = await enact.execute({ ProposalMessageID: oldProposalID } as any);
+
+    expect(result.Conflict?.Reason).toBe('superseded');
+    expect(result.Conflict?.Message).toMatch(/not the current active proposal/);
+    expect(result.ProposalMessageID).toBe(oldProposalID);
+    // A conflict enacted nothing, so every enactment field is absent.
+    expect(result.EnactedMessageID).toBeUndefined();
+    expect(result.AlreadyEnacted).toBeUndefined();
+    expect(result.Enacted).toBeUndefined();
+    expect(result.Turn).toBeUndefined();
+    expect(result.AcceptRow).toBeUndefined();
+    expect(result.EnactedRow).toBeUndefined();
+    expect(await getDiplomaticMessages(1, 3, { messageType: 'deal-accept' })).toHaveLength(0);
   });
 
-  it('rejects a proposal that has already been rejected', async () => {
+  it('reports a proposal that was already rejected as an answered conflict', async () => {
     const proposalID = await seedProposal();
-    await append.execute({
-      PlayerAID: 3,
-      PlayerBID: 1,
-      PlayerARole: 'negotiator',
-      PlayerBRole: 'the leader',
-      SpeakerID: 1,
-      MessageType: 'deal-reject',
-      Content: 'No.',
-      Payload: { ProposalMessageID: proposalID },
+    // Rejection now goes through its own transactional route; append-message refuses deal-reject.
+    await reject.execute({
+      PlayerAID: 3, PlayerBID: 1, ProposalMessageID: proposalID, SpeakerID: 1, Content: 'No.',
     } as any);
 
-    await expect(enact.execute({ ProposalMessageID: proposalID } as any)).rejects.toThrow(
-      /not open/
-    );
+    const result = await enact.execute({ ProposalMessageID: proposalID } as any);
+
+    expect(result.Conflict).toEqual({
+      Reason: 'answered',
+      Message: expect.stringMatching(/not open; it was answered by deal-reject/),
+    });
+    expect(result.Enacted).toBeUndefined();
+    expect(await getDiplomaticMessages(1, 3, { messageType: 'deal-accept' })).toHaveLength(0);
+  });
+
+  it('reports a non-recipient accepter as a wrong-recipient conflict', async () => {
+    const proposalID = await seedProposal(); // authored by seat 3
+    const result = await enact.execute({ ProposalMessageID: proposalID, AccepterID: 3 } as any);
+
+    expect(result.Conflict?.Reason).toBe('wrong-recipient');
+    expect(result.Conflict?.Message).toMatch(/must be the proposal recipient/);
+    expect(await getDiplomaticMessages(1, 3, { messageType: 'deal-enacted' })).toHaveLength(0);
   });
 
   it('rejects malformed stored deal terms', async () => {
@@ -253,6 +326,31 @@ describe('enact-agent-deal', () => {
     await expect(enact.execute({ ProposalMessageID: proposalID } as any)).rejects.toThrow(/bridge is unavailable/);
     expect(await getDiplomaticMessages(1, 3, { messageType: 'deal-accept' })).toHaveLength(0);
     expect(await getDiplomaticMessages(1, 3, { messageType: 'deal-enacted' })).toHaveLength(0);
+  });
+
+  it('keeps validation and infrastructure failures on the thrown error channel', async () => {
+    // The conflict boundary covers proposal STATE only. Everything a caller cannot resolve by
+    // refreshing its view of the conversation must stay a thrown MCP error, so it is never
+    // mistaken for "someone beat you to it".
+    const text = await append.execute({
+      PlayerAID: 3, PlayerBID: 1, PlayerARole: 'negotiator', PlayerBRole: 'the leader',
+      SpeakerID: 3, MessageType: 'text', Content: 'hi',
+    } as any);
+    const malformed = await seedProposal(3, {});
+    const valid = await seedProposal();
+
+    await expect(enact.execute({ ProposalMessageID: 9999 } as any)).rejects.toThrow(/does not exist/);
+    await expect(enact.execute({ ProposalMessageID: text.ID } as any)).rejects.toThrow(/not a deal-proposal/);
+    await expect(enact.execute({ ProposalMessageID: malformed } as any)).rejects.toThrow(/invalid Payload\.Deal/);
+    await expect(
+      enact.execute({
+        ProposalMessageID: valid,
+        Deal: { version: 1, items: [{ fromPlayerID: 3, toPlayerID: 1, itemType: 'GOLD', amount: 5 }], promises: [] },
+      } as any)
+    ).rejects.toThrow(/does not match/);
+
+    vi.spyOn(inspectDealUtil, 'enactDeal').mockResolvedValue(null as any);
+    await expect(enact.execute({ ProposalMessageID: valid } as any)).rejects.toThrow(/bridge is unavailable/);
   });
 
   it('enacts a promise-only / item-less deal', async () => {

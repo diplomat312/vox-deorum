@@ -1,10 +1,11 @@
 -- Vox Deorum conversation launcher wiring.
 --
 -- include()'d by our LeaderHeadRoot.lua override, so it runs INSIDE the
--- LeaderHeadRoot context and drives Controls.ConverseButton (declared in our
--- LeaderHeadRoot.xml) directly -- no cross-context lookups. The button sits in
--- the native action stack (VoxDeorumDiploStack) beside Discuss/Trade/War and is
--- shown when the leader on screen is a met, living, major civilization.
+-- LeaderHeadRoot context and drives Controls.ConverseButton and its debug twin
+-- Controls.ConverseMockButton (both declared in our LeaderHeadRoot.xml) directly
+-- -- no cross-context lookups. The buttons sit in the native action stack
+-- (VoxDeorumDiploStack) beside Discuss/Trade/War and are shown together when the
+-- leader on screen is a met, living, major civilization.
 -- Clicking it keeps the animated leader scene up; the conversation panel
 -- overlays it as a higher-priority popup (the trade-screen pattern).
 
@@ -24,9 +25,12 @@ local function canConverse(playerID)
 	return Teams[activePlayer:GetTeam()]:IsHasMet(otherPlayer:GetTeam())
 end
 
--- Toggle the launcher and reflow the native action stack around it.
+-- Toggle both launchers and reflow the native action stack around them. The two
+-- buttons share one visibility rule: the sandbox opens the same conversation
+-- surface, only against the offline mock drivers.
 local function setConverseHidden(isHidden)
 	Controls.ConverseButton:SetHide(isHidden)
+	Controls.ConverseMockButton:SetHide(isHidden)
 	Controls.VoxDeorumDiploStack:CalculateSize()
 	Controls.VoxDeorumDiploStack:ReprocessAnchoring()
 end
@@ -49,13 +53,25 @@ end
 -- when it dequeues on Goodbye the root options (including Converse) return
 -- via OnShowHide without a fresh AILeaderMessage. Seed the speech balloon the
 -- same way OnTrade does so no stale line shows on return.
-local function onConverseClicked()
+local function openConversation(useMockDrivers)
 	if not canConverse(m_diploPlayerID) then return end
+	-- Both contexts pick their driver from this one toggle, and each switch resets
+	-- the panel and closes any mounted deal editor, so the plain Converse button is
+	-- always the live conversation and one mock click enters the offline sandbox.
+	LuaEvents.VoxDeorumUseMockDrivers(useMockDrivers)
 	Controls.LeaderSpeech:SetText(Locale.ConvertTextKey("TXT_KEY_DIPLOMACY_ANYTHING_ELSE"))
 	LuaEvents.VoxDeorumDiploOpen(m_diploPlayerID)
 end
 
+-- Open the live conversation.
+local function onConverseClicked() openConversation(false) end
+
+-- Open the offline mock sandbox.
+local function onConverseMockClicked() openConversation(true) end
+
 Controls.ConverseButton:ClearCallback(Mouse.eLClick)
 Controls.ConverseButton:RegisterCallback(Mouse.eLClick, onConverseClicked)
+Controls.ConverseMockButton:ClearCallback(Mouse.eLClick)
+Controls.ConverseMockButton:RegisterCallback(Mouse.eLClick, onConverseMockClicked)
 Events.AILeaderMessage.Add(onAILeaderMessage)
 Events.LeavingLeaderViewMode.Add(onLeavingLeaderViewMode)

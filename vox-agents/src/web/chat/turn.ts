@@ -2,6 +2,20 @@
  * @module web/chat/turn
  *
  * Runs one chat turn without depending on Express or SSE wire formatting.
+ *
+ * A turn has exactly two phases, and the boundary between them is enforced rather than assumed:
+ *
+ *  1. **Pre-run.** `beginChatTurn` takes the thread lock and commits the caller's move. That single
+ *     durable row is the whole of `connected.rows`.
+ *  2. **Post-connect.** A per-thread row observer captures every durable row the run commits — the
+ *     deal/close rows the diplomat's tools write mid-run, and the final archived reply. Before either
+ *     terminal event the observer is frozen and unregistered, and its rows are snapshotted once. That
+ *     terminal-only set is what feeds `done.rows` / `error.rows`, the `done.deals` compatibility view,
+ *     and the cache repair.
+ *
+ * The observer never records the caller row's ID, so no transcript ID can appear in both phases, and
+ * detached work cannot append to the terminal set after it has been reported. Every committed turn
+ * emits exactly one terminal event: `done` or `error`, never both and never neither.
  */
 
 import { agentRegistry } from '../../infra/agent-registry.js';
@@ -15,24 +29,26 @@ import type {
   EnvoyThread,
   StreamingEventCallback,
 } from '../../types/index.js';
+import { agentName, needsRetryReply, retryMessage } from '../../utils/diplomacy/transcript.js';
 import {
-  agentName,
-  isClosedThisTurn,
-  needsRetryReply,
-  retryMessage,
-} from '../../utils/diplomacy/transcript.js';
-import { hydrateDealRow } from '../../utils/diplomacy/transcript-utils.js';
+  insertDurableRows,
+  isDealRow,
+  type TranscriptPushMessage,
+} from '../../utils/diplomacy/transcript-utils.js';
+import { observeThreadRows } from '../../utils/diplomacy/row-observer.js';
 import {
   beginChatTurn,
   ThreadBusyError,
+  threadBusyMessage,
   type ChatTurn,
   type TurnCommit,
 } from '../../utils/diplomacy/chat-turn-commit.js';
 import {
-  IllegalDealError,
-  ProposalConflictError,
-  readDealMessages,
-} from '../../utils/diplomacy/deal.js';
+  ConversationClosedThisTurnError,
+  LiveTurnUnavailableError,
+  requireOpenConversationTurn,
+} from '../../utils/diplomacy/live-turn.js';
+import { IllegalDealError, ProposalConflictError } from '../../utils/diplomacy/deal.js';
 import { createLogger } from '../../utils/logger.js';
 import {
   createSendMessageStreamer,
@@ -40,7 +56,6 @@ import {
 } from '../../utils/models/send-message-stream.js';
 import { DealPayloadSchema } from '../../../../mcp-server/dist/utils/deal-schema.js';
 import type { DealTranscriptMessage } from '../../../../mcp-server/dist/utils/deal-schema.js';
-import { currentTurnOf } from './enrichment.js';
 import { chatThreadStore } from './store.js';
 
 const logger = createLogger('webui:chat-turn');
@@ -114,13 +129,20 @@ function isRejection(value: TurnCommit | ChatTurnRejection): value is ChatTurnRe
   return 'status' in value;
 }
 
+/** Map the shared live-turn/closed guard's typed failures to the public pre-stream HTTP contract. */
+function mapTurnGuardError(error: unknown): ChatTurnRejection {
+  if (error instanceof LiveTurnUnavailableError) return { status: 503, error: error.message };
+  if (error instanceof ConversationClosedThisTurnError) return { status: 409, error: error.message };
+  // The guard raises only those two, but a pre-commit failure must never escape as an unhandled
+  // rejection: nothing has streamed yet, so degrade to the generic upstream-failure class.
+  logger.error('Failed to resolve the conversation turn', { error });
+  return { status: 502, error: 'Could not determine the current game turn. Please retry.' };
+}
+
 /** Map a begin-turn failure to the public pre-stream HTTP contract. */
 function mapBeginTurnError(error: unknown): ChatTurnRejection {
   if (error instanceof ThreadBusyError) {
-    return {
-      status: 409,
-      error: 'A reply is already being generated for this conversation. Please wait for it to finish.',
-    };
+    return { status: 409, error: threadBusyMessage };
   }
   if (error instanceof ProposalConflictError) {
     return { status: 409, error: error.message };
@@ -135,6 +157,16 @@ function mapBeginTurnError(error: unknown): ChatTurnRejection {
 /** Emit one spoken text delta through the transport-neutral sink. */
 function emitSpoken(sink: ChatStreamSink, text: string, id: string): void {
   sink.message({ type: 'text-delta', text, id });
+}
+
+/**
+ * The Web client's compatibility view of a turn's captured rows. It consumes `deals` (full deal rows
+ * with their payload), not the transport-neutral projection, so derive it from the same captured set
+ * instead of rereading the transcript. Every `deal-*` row this codebase reports is a full row, so the
+ * narrowing cast holds.
+ */
+function dealRowsOf(rows: TranscriptPushMessage[]): DealTranscriptMessage[] {
+  return rows.filter(isDealRow) as DealTranscriptMessage[];
 }
 
 /**
@@ -161,19 +193,13 @@ export async function runChatTurn(
     return { status: 400, error: 'Context not found. It may have been shut down.' };
   }
 
-  const liveTurn = currentTurnOf(voxContext);
-  if (thread.contextType === 'live' && liveTurn === undefined) {
-    return {
-      status: 503,
-      error: 'The live game turn is not available yet. Please retry once the game is running.',
-    };
-  }
-  const currentTurn = liveTurn ?? 0;
-  if (thread.diplomacy && isClosedThisTurn(thread.closeTurn, currentTurn)) {
-    return {
-      status: 409,
-      error: 'This conversation was closed this turn and cannot be reopened until a later turn.',
-    };
+  // The same guard the shared deal actions run: a live thread without a reported turn is unavailable
+  // (never turn zero), and a conversation closed on this turn cannot be resumed.
+  let currentTurn: number;
+  try {
+    currentTurn = requireOpenConversationTurn(thread);
+  } catch (error) {
+    return mapTurnGuardError(error);
   }
 
   let turn: ChatTurn;
@@ -183,9 +209,57 @@ export async function runChatTurn(
     return mapBeginTurnError(error);
   }
 
+  // Everything committed from here on belongs to the post-connect phase. The caller row is excluded
+  // by ID so the two phases can never overlap, whatever a nested writer reports.
+  const observer = observeThreadRows(thread, {
+    ignoreIDs: turn.callerRow ? [turn.callerRow.ID] : undefined,
+  });
+  const replyStart = thread.messages.length;
+  let terminal: 'done' | 'error' | undefined;
+  let terminalRows: TranscriptPushMessage[] | undefined;
   let completed = false;
+
+  /** Freeze and unregister the capture, snapshotting its rows exactly once for the terminal event. */
+  const takeTerminalRows = (): TranscriptPushMessage[] => (terminalRows ??= observer.close());
+
+  /**
+   * Emit the turn's single terminal success event: freeze the capture, splice the mid-run durable
+   * rows in at the reply boundary (ahead of the normalized reply, matching the durable order), and
+   * report them.
+   */
+  const emitDone = (): void => {
+    if (terminal) return;
+    terminal = 'done';
+    const rows = takeTerminalRows();
+    insertDurableRows(thread, rows, replyStart);
+    sink.done({
+      sessionId: thread.id,
+      messageCount: thread.messages.length,
+      deals: dealRowsOf(rows),
+      rows,
+    });
+  };
+
+  /**
+   * Emit the turn's single terminal failure event. `finish` runs first so the transient model output
+   * is gone, then every durable row the turn did commit is restored — an append-only store cannot
+   * unwrite them, so the live cache must keep them even though the turn failed.
+   */
+  const emitError = (message: string): void => {
+    if (terminal) return;
+    terminal = 'error';
+    const rows = takeTerminalRows();
+    turn.finish();
+    insertDurableRows(thread, rows);
+    sink.error({ message, rows });
+  };
+
   try {
-    sink.connected({ sessionId: thread.id, deal: turn.dealRow });
+    sink.connected({
+      sessionId: thread.id,
+      deal: turn.dealRow,
+      rows: turn.callerRow ? [turn.callerRow] : [],
+    });
 
     const voiceName = agentName(thread);
     const suppressFreeText = Boolean(voiceName && agentRegistry.get(voiceName)?.suppressFreeText);
@@ -211,10 +285,6 @@ export async function runChatTurn(
         after: currentTurn * 1000000,
       }
       : undefined;
-    const knownDealIDs = new Set(thread.messages.flatMap((message) => (
-      message.deal ? [message.deal.ID] : []
-    )));
-    const replyStart = thread.messages.length;
     let contextLengthFailed = false;
     await voxContext.withRun({ overrides, streamProgress }, async (run) => {
       sink.onDisconnect(() => {
@@ -230,14 +300,14 @@ export async function runChatTurn(
 
       const voice = agentName(thread);
       if (!voice) {
-        sink.error({ message: 'Could not resolve the voicing agent for this conversation' });
+        emitError('Could not resolve the voicing agent for this conversation');
         return;
       }
 
       const agent = agentRegistry.get(voice);
       if (agent?.programmatic) {
         if (commit.kind === 'deal') {
-          sink.error({ message: 'Deal actions are not supported by this conversation.' });
+          emitError('Deal actions are not supported by this conversation.');
           return;
         }
         await agent.handleMessage(params, thread, commit.message, (text: string) => {
@@ -255,9 +325,7 @@ export async function runChatTurn(
       }
 
       if (contextLengthFailed) {
-        sink.error({
-          message: 'This conversation is too long for the model to continue. Please start a new one.',
-        });
+        emitError('This conversation is too long for the model to continue. Please start a new one.');
         return;
       }
 
@@ -266,36 +334,25 @@ export async function runChatTurn(
         emitSpoken(sink, retryMessage, 'retry');
       }
 
+      // Archival is no longer best-effort: a refused reply append throws here and becomes `error`.
       await turn.complete({ sendMessageOnly: suppressFreeText });
-      let newDeals: DealTranscriptMessage[] = [];
-      if (thread.diplomacy) {
-        try {
-          const rows = await readDealMessages(thread.player1ID, thread.player2ID);
-          newDeals = rows.filter((row) => !knownDealIDs.has(row.ID));
-          if (newDeals.length > 0) {
-            thread.messages.splice(
-              replyStart,
-              0,
-              ...newDeals.map((row) => hydrateDealRow(row, thread.agent)),
-            );
-          }
-        } catch (error) {
-          logger.error("Failed to reconcile the diplomat's mid-run deal rows after the turn", { error });
-        }
-      }
-      sink.done({
-        sessionId: thread.id,
-        messageCount: thread.messages.length,
-        deals: newDeals,
-      });
+      emitDone();
     });
   } catch (error) {
     logger.error('Failed to execute agent', { error });
     const errorMessage = error instanceof Error ? error.message : 'unknown';
-    sink.error({ message: `Failed to execute agent: ${errorMessage}` });
+    emitError(`Failed to execute agent: ${errorMessage}`);
   } finally {
     turn.finish();
     completed = true;
+  }
+
+  // A committed turn owes its client exactly one terminal event. Every path above emits one, but the
+  // guarantee is asserted here rather than assumed: a future branch that returns without reporting
+  // must not leave a client waiting forever on a turn that already released its lock.
+  if (!terminal) {
+    logger.error('Chat turn ended without a terminal event', { chatId });
+    emitError('The conversation ended without a result. Please retry.');
   }
 
   return undefined;

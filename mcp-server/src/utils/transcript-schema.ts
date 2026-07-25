@@ -44,3 +44,20 @@ export const TranscriptMessageSchema = z.object({
 
 /** The projected wire shape of one transcript message (no DB/visibility columns). */
 export type TranscriptMessage = z.infer<typeof TranscriptMessageSchema>;
+
+/**
+ * Build the row-projection schema a deal action returns for the durable row it just wrote
+ * (or found already written), narrowed to that action's single message type.
+ *
+ * The deal writers (`enact-agent-deal`, `reject-agent-deal`) hand their caller the exact
+ * committed rows so the caller never has to reread the transcript to learn what it created
+ * (stage 7.04 work item 2). Reusing `TranscriptMessageSchema` here — rather than each tool
+ * re-declaring the eleven fields — keeps those returned rows structurally assignable to the
+ * ordinary `TranscriptMessage` a transcript read produces, so a consumer can merge them into
+ * a live transcript cache without a second projection step.
+ *
+ * @param messageType - The single message type rows of this shape always carry
+ * @returns A `TranscriptMessageSchema` whose `MessageType` is pinned to that literal
+ */
+export const transcriptRowSchemaFor = <T extends MessageType>(messageType: T) =>
+  TranscriptMessageSchema.extend({ MessageType: z.literal(messageType) });

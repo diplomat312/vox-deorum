@@ -30,6 +30,8 @@
 			<GridButton Style="FrameButton200"  Offset="0,0" String="TXT_KEY_DIPLO_DISCUSS_BUTTON" ID="DiscussButton" />
 			<!-- VD: Vox Deorum conversation launcher, shown by VoxDeorumConverse.lua -->
 			<GridButton Style="FrameButton200"  Offset="0,0" String="TXT_KEY_VD_CONVERSE" ToolTip="TXT_KEY_VD_CONVERSE_TT" ID="ConverseButton" Hidden="1" />
+			<!-- VD: debug entry into the offline mock sandbox, shown beside Converse -->
+			<GridButton Style="FrameButton200"  Offset="0,0" String="TXT_KEY_VD_CONVERSE_MOCK" ToolTip="TXT_KEY_VD_CONVERSE_MOCK_TT" ID="ConverseMockButton" Hidden="1" />
 			<GridButton Style="FrameButton200"  Offset="0,0" String="TXT_KEY_DIPLO_DEMAND_BUTTON" ID="DemandButton" />
 			<GridButton Style="FrameButton200"  Offset="0,0" String="TXT_KEY_DIPLO_TRADE_BUTTON" ID="TradeButton" />
 

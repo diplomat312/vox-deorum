@@ -37,6 +37,7 @@ import createSearchDatabaseTool from "./general/search-database.js";
 import createGetDiplomaticEventsTool from "./knowledge/get-diplomatic-events.js";
 import createAppendMessageTool from "./actions/append-message.js";
 import createEnactAgentDealTool from "./actions/enact-agent-deal.js";
+import createRejectAgentDealTool from "./actions/reject-agent-deal.js";
 import createPostNotificationTool from "./actions/post-notification.js";
 import createReadTranscriptTool from "./knowledge/read-transcript.js";
 import createInspectDealTool from "./knowledge/inspect-deal.js";
@@ -81,6 +82,7 @@ const toolFactories = {
     relayMessage: createRelayMessageTool,
     appendMessage: createAppendMessageTool,
     enactAgentDeal: createEnactAgentDealTool,
+    rejectAgentDeal: createRejectAgentDealTool,
     postNotification: createPostNotificationTool,
     presentDecision: createPresentDecisionTool,
     pauseGame: createPauseGameTool,

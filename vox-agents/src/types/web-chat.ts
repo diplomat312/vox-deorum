@@ -6,6 +6,7 @@
 
 import type { CreateChatRequest, PlayerAssignment } from './api.js';
 import type { EnvoyThread, ParticipantIdentity } from './chat.js';
+import type { TranscriptPushMessage } from '../utils/diplomacy/transcript-utils.js';
 import type { DealTranscriptMessage } from '../../../mcp-server/dist/utils/deal-schema.js';
 
 /** Refresh a diplomacy thread from its durable transcript. */
@@ -47,6 +48,8 @@ export interface ChatThreadFactoryDependencies<TContext = unknown> {
   getAssignments: () => Record<number, PlayerAssignment> | undefined;
   getThread: (threadId: string) => EnvoyThread | undefined;
   setThread: (thread: EnvoyThread) => void;
+  /** Whether a chat turn or exclusive thread action currently owns the thread's cache. */
+  isThreadBusy: (threadId: string) => boolean;
   compactThread: (thread: EnvoyThread) => Promise<void>;
   createOrdinaryThreadId: () => string;
   createDiplomacyThreadId: (gameID: string, player1ID: number, player2ID: number) => string;
@@ -62,10 +65,19 @@ export interface ChatThreadFactory {
   openOrdinaryChat: (request: CreateChatRequest) => Promise<EnvoyThread>;
 }
 
-/** Data sent when a committed turn first opens its stream. */
+/**
+ * Data sent when a committed turn first opens its stream.
+ *
+ * `rows` is the transport-neutral row contract (stage 7.04): the durable caller row committed BEFORE
+ * the model ran, and nothing else. The turn's later capture never records these IDs, so a row can
+ * never appear both here and in a terminal event. The Web SSE adapter omits `rows` — the public Web
+ * event contract is unchanged and `deal` remains its compatibility view of the same committed row —
+ * while the in-game sink pushes `rows` straight to the panel.
+ */
 export interface ChatConnectedEvent {
   sessionId: string;
   deal?: DealTranscriptMessage;
+  rows: TranscriptPushMessage[];
 }
 
 /** A text or model chunk emitted while the agent is running. */
@@ -79,16 +91,29 @@ export interface ChatMessageEvent {
   input?: unknown;
 }
 
-/** Data sent when a committed turn fails after streaming has begun. */
+/**
+ * Data sent when a committed turn fails after streaming has begun.
+ *
+ * `rows` carries any durable rows committed after `connected` but before the failure — an append-only
+ * store cannot unwrite them, so the client must be told about them even though the turn failed.
+ */
 export interface ChatErrorEvent {
   message: string;
+  rows: TranscriptPushMessage[];
 }
 
-/** Data sent when a committed turn completes successfully. */
+/**
+ * Data sent when a committed turn completes successfully.
+ *
+ * `rows` is every durable row committed after `connected`: the mid-run deal/close rows the diplomat's
+ * tools wrote and the final archived reply, snapshotted once from the turn's frozen capture. `deals`
+ * is the Web client's compatibility view, derived from those same rows — no second transcript read.
+ */
 export interface ChatDoneEvent {
   sessionId: string;
   messageCount: number;
   deals: DealTranscriptMessage[];
+  rows: TranscriptPushMessage[];
 }
 
 /** Transport-neutral output surface for a chat turn. */

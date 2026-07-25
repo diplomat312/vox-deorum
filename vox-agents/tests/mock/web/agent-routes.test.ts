@@ -29,7 +29,10 @@ vi.mock('../../../src/telepathist/telepathist-parameters.js', async () => {
 });
 
 import { createAgentRoutes } from '../../../src/web/routes/agent.js';
+import { appendDealProposal } from '../../../src/utils/diplomacy/deal.js';
+import { withThreadLock } from '../../../src/utils/diplomacy/chat-turn-commit.js';
 import { retryMessage } from '../../../src/utils/diplomacy/transcript-utils.js';
+import { chatThreadStore } from '../../../src/web/chat/store.js';
 import { agentRegistry } from '../../../src/infra/agent-registry.js';
 import { contextRegistry } from '../../../src/infra/context-registry.js';
 import { pacingInterruptionRegistry } from '../../../src/strategist/pacing/registry.js';
@@ -105,6 +108,52 @@ function getTestSpanExporter(): VoxSpanExporter {
     VoxSpanExporter.setInstance(exporter as unknown as VoxSpanExporter);
     return exporter as unknown as VoxSpanExporter;
   }
+}
+
+/**
+ * Make `append-message` behave like the real store: echo the canonical committed row (a fresh ID, the
+ * request's speaker / type / content / payload, and the server-stamped turn). Every writer now mirrors
+ * that row's ID and turn into the live cache and reports it to the running turn's row capture, so a
+ * bare `{ ID, Turn }` stub is no longer a valid store echo.
+ */
+function echoAppends(mcp: ReturnType<typeof installMockMcpClient>, startID: number): void {
+  let nextID = startID;
+  mcp.onTool('append-message', (args) => structuredResult({
+    ID: nextID++,
+    Player1ID: 1,
+    Player2ID: 3,
+    Player1Role: 'the leader',
+    Player2Role: 'diplomat',
+    SpeakerID: args.SpeakerID,
+    MessageType: args.MessageType,
+    Content: args.Content,
+    Payload: args.Payload ?? {},
+    Turn: 5,
+    CreatedAt: 0,
+  }));
+}
+
+/** Make `reject-agent-deal` behave like the transactional action: commit and echo the deal-reject row. */
+function echoRejections(mcp: ReturnType<typeof installMockMcpClient>, startID: number): void {
+  let nextID = startID;
+  mcp.onTool('reject-agent-deal', (args) => structuredResult({
+    Result: 'rejected',
+    ProposalMessageID: args.ProposalMessageID,
+    AlreadyRejected: false,
+    Row: {
+      ID: nextID++,
+      Player1ID: 1,
+      Player2ID: 3,
+      Player1Role: 'the leader',
+      Player2Role: 'diplomat',
+      SpeakerID: args.SpeakerID,
+      MessageType: 'deal-reject',
+      Content: args.Content,
+      Payload: { ProposalMessageID: args.ProposalMessageID },
+      Turn: 5,
+      CreatedAt: 0,
+    },
+  }));
 }
 
 beforeEach(() => {
@@ -392,8 +441,7 @@ describe('agent routes', () => {
 
     it('archives the caller text then the diplomat reply, in order (both text)', async () => {
       const { mcp, chatId } = await openDiplomacy({ liveTurn: 5, execute: replyWith('A measured reply.') });
-      let nextID = 30;
-      mcp.onTool('append-message', () => structuredResult({ ID: nextID++, Turn: 5 }));
+      echoAppends(mcp, 30);
 
       const res = await request(app).post('/api/agents/message').send({ kind: 'text', chatId, message: 'Will you trade?' });
       expect(res.status).toBe(200);
@@ -409,8 +457,7 @@ describe('agent routes', () => {
       // shared retry line and the commit path archives the SAME line, so the user sees a polite request
       // to repeat both live and on reload rather than dead air. (The mock execute pushes no reply.)
       const { mcp, chatId } = await openDiplomacy({ liveTurn: 5, execute: vi.fn(async (_n: string, input: any) => input) });
-      let nextID = 70;
-      mcp.onTool('append-message', () => structuredResult({ ID: nextID++, Turn: 5 }));
+      echoAppends(mcp, 70);
 
       const res = await request(app).post('/api/agents/message').send({ kind: 'text', chatId, message: 'Will you trade?' });
       expect(res.status).toBe(200);
@@ -435,8 +482,7 @@ describe('agent routes', () => {
         return input;
       });
       const { mcp, chatId } = await openDiplomacy({ liveTurn: 5, execute: handoff });
-      let nextID = 80;
-      mcp.onTool('append-message', () => structuredResult({ ID: nextID++, Turn: 5 }));
+      echoAppends(mcp, 80);
 
       const res = await request(app).post('/api/agents/message').send({ kind: 'text', chatId, message: 'Will you trade?' });
       expect(res.status).toBe(200);
@@ -451,8 +497,7 @@ describe('agent routes', () => {
 
     it('never archives a {{{Greeting}}} trigger as a caller message', async () => {
       const { mcp, chatId } = await openDiplomacy({ liveTurn: 5, execute: replyWith('Greetings, neighbor.') });
-      let nextID = 40;
-      mcp.onTool('append-message', () => structuredResult({ ID: nextID++, Turn: 5 }));
+      echoAppends(mcp, 40);
 
       const res = await request(app).post('/api/agents/message').send({ kind: 'text', chatId, message: '{{{Greeting}}}' });
       expect(res.status).toBe(200);
@@ -491,8 +536,7 @@ describe('agent routes', () => {
         SpeakerID: 3, MessageType: 'close', Content: '', Payload: {}, Turn: 4, CreatedAt: 0,
       };
       const { mcp, chatId } = await openDiplomacy({ liveTurn: 5, transcript: [closeRow], execute: replyWith('Back to talks.') });
-      let nextID = 50;
-      mcp.onTool('append-message', () => structuredResult({ ID: nextID++, Turn: 5 }));
+      echoAppends(mcp, 50);
 
       const res = await request(app).post('/api/agents/message').send({ kind: 'text', chatId, message: 'back again' });
       expect(res.status).toBe(200);
@@ -506,8 +550,7 @@ describe('agent routes', () => {
       // stays put (an append-only store can't unwrite it) and only the unwritten reply is skipped.
       const failing = vi.fn(async () => { throw new Error('LLM exploded'); });
       const { mcp, chatId } = await openDiplomacy({ liveTurn: 5, execute: failing });
-      let nextID = 80;
-      mcp.onTool('append-message', () => structuredResult({ ID: nextID++, Turn: 5 }));
+      echoAppends(mcp, 80);
 
       const res = await request(app).post('/api/agents/message').send({ kind: 'text', chatId, message: 'Will you trade?' });
       expect(res.status).toBe(200);
@@ -527,8 +570,7 @@ describe('agent routes', () => {
       // tool-written row follows it), then the diplomat streams its reply exactly like a chat message.
       const { mcp, ctx, chatId } = await openDiplomacy({ liveTurn: 5, execute: replyWith('We will weigh your offer.') });
       mcp.respondWith('inspect-deal', structuredResult({ items: [], promises: [], tradableRange: {} }));
-      let nextID = 60;
-      mcp.onTool('append-message', () => structuredResult({ ID: nextID++, Turn: 5 }));
+      echoAppends(mcp, 60);
 
       const res = await request(app).post('/api/agents/message').send({
         kind: 'deal',
@@ -564,8 +606,7 @@ describe('agent routes', () => {
       };
       const { mcp, chatId } = await openDiplomacy({ liveTurn: 5, transcript: [proposal], execute: replyWith('Considering your counter.') });
       mcp.respondWith('inspect-deal', structuredResult({ items: [], promises: [], tradableRange: {} }));
-      let nextID = 60;
-      mcp.onTool('append-message', () => structuredResult({ ID: nextID++, Turn: 5 }));
+      echoAppends(mcp, 60);
 
       const res = await request(app).post('/api/agents/message').send({
         kind: 'deal',
@@ -590,7 +631,7 @@ describe('agent routes', () => {
       };
       const { mcp, chatId } = await openDiplomacy({ liveTurn: 5, transcript: [newer] });
       mcp.respondWith('inspect-deal', structuredResult({ items: [], promises: [], tradableRange: {} }));
-      mcp.onTool('append-message', () => structuredResult({ ID: 60, Turn: 5 }));
+      echoAppends(mcp, 60);
 
       const res = await request(app).post('/api/agents/message').send({
         kind: 'deal',
@@ -616,7 +657,7 @@ describe('agent routes', () => {
       };
       const { mcp, chatId } = await openDiplomacy({ liveTurn: 5, transcript: [open] });
       mcp.respondWith('inspect-deal', structuredResult({ items: [], promises: [], tradableRange: {} }));
-      mcp.onTool('append-message', () => structuredResult({ ID: 60, Turn: 5 }));
+      echoAppends(mcp, 60);
 
       const res = await request(app).post('/api/agents/message').send({
         kind: 'deal',
@@ -632,31 +673,30 @@ describe('agent routes', () => {
 
     it("streams the diplomat's mid-run deal rows on `done` so the board updates without a reload", async () => {
       // The diplomat's negotiator tools write deal rows (counter/accept/reject/enacted) straight to the
-      // durable store DURING the streamed reply — they never ride the text stream. After the run the route
-      // reconciles those rows and ships the NEW ones on `done`, so the live board reflects the outcome
-      // without a full refresh (which would flatten the streamed reasoning/tool traces).
-      const counterRow = {
-        ID: 77, Player1ID: 1, Player2ID: 3, Player1Role: 'the leader', Player2Role: 'diplomat',
-        SpeakerID: 3, MessageType: 'deal-counter', Content: 'Consider this instead.',
-        Payload: { Deal: { version: 1, items: [], promises: [] }, Value1: {}, Value2: {} }, Turn: 5, CreatedAt: 0,
-      };
-      let diplomatCountered = false;
+      // durable store DURING the streamed reply — they never ride the text stream. Each write reports
+      // the exact committed row into the running turn's capture, so `done` ships them with no second
+      // transcript read (which would also flatten the streamed reasoning/tool traces).
       const execute = vi.fn(async (_n: string, input: any) => {
-        diplomatCountered = true; // the diplomat's tool durably wrote a deal-counter mid-run
+        // The real shared chokepoint the negotiator's propose-deal tool calls, mid-run.
+        await appendDealProposal(input, input.agent, 'deal-counter', {
+          version: 1, items: [], promises: [], message: 'Consider this instead.',
+        });
         input.messages.push({ message: { role: 'assistant', content: 'A measured reply.' }, metadata: { datetime: new Date(), turn: 5 } });
         return input;
       });
       const { mcp, chatId } = await openDiplomacy({ liveTurn: 5, execute });
-      // read-transcript reflects the counter only after the run wrote it (the post-run reconcile reads it).
-      mcp.onTool('read-transcript', () => structuredResult({ messages: diplomatCountered ? [counterRow] : [] }));
-      let nextID = 60;
-      mcp.onTool('append-message', () => structuredResult({ ID: nextID++, Turn: 5 }));
+      mcp.respondWith('inspect-deal', structuredResult({ items: [], promises: [], tradableRange: {} }));
+      echoAppends(mcp, 60);
 
       const res = await request(app).post('/api/agents/message').send({ kind: 'text', chatId, message: 'Will you trade?' });
       expect(res.status).toBe(200);
       expect(res.text).toMatch(/event: done/);
-      // The diplomat's mid-run counter (ID 77) is reconciled and carried on `done`, not lost until reload.
-      expect(res.text).toMatch(/"deals":\[\{"ID":77/);
+      // Caller text = 60 (the `connected` phase), the mid-run counter = 61, the archived reply = 62.
+      // Only the counter is a deal row, and it rides `done.deals` — the unchanged public Web view.
+      expect(res.text).toMatch(/"deals":\[\{"ID":61/);
+      expect(res.text).toContain('Consider this instead.');
+      // No post-run transcript reread: the only read is the one the open performed.
+      expect(mcp.calls('read-transcript')).toHaveLength(1);
     });
 
     it('rejects a structurally malformed deal pre-stream (400, not 502) without archiving', async () => {
@@ -683,7 +723,7 @@ describe('agent routes', () => {
         items: [{ fromPlayerID: 1, toPlayerID: 3, itemType: 'GOLD', legality: false, reasons: ['No gold to give'] }],
         promises: [], tradableRange: {},
       }));
-      mcp.onTool('append-message', () => structuredResult({ ID: 99, Turn: 5 }));
+      echoAppends(mcp, 99);
 
       const res = await request(app).post('/api/agents/message').send({
         kind: 'deal',
@@ -692,6 +732,37 @@ describe('agent routes', () => {
       });
 
       expect(res.status).toBe(400);
+      expect(mcp.calls('append-message')).toHaveLength(0);
+    });
+
+    it('rejects a Web-authored deal whose promise is already impossible (400) without archiving', async () => {
+      // Promises are gated at the same chokepoint as trade items now: a schema-valid but
+      // dead-on-arrival commitment is refused BEFORE the SSE opens, so no proposal row is stored and
+      // the optimistic UI card rolls back.
+      const { mcp, chatId } = await openDiplomacy({ liveTurn: 5 });
+      mcp.respondWith('inspect-deal', structuredResult({
+        items: [],
+        promises: [{
+          promiserID: 1, recipientID: 3, promiseType: 'COOP_WAR', targetPlayerID: 9,
+          legality: false, reasons: ['A cooperative war against this civilization is already being prepared.'],
+          agreeabilityFactors: { recentDiplomaticEvents: {}, note: '' },
+        }],
+        tradableRange: {},
+      }));
+      echoAppends(mcp, 99);
+
+      const res = await request(app).post('/api/agents/message').send({
+        kind: 'deal',
+        chatId,
+        deal: {
+          version: 1,
+          items: [],
+          promises: [{ promiserID: 1, recipientID: 3, promiseType: 'COOP_WAR', targetPlayerID: 9 }],
+        },
+      });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toContain('already being prepared');
       expect(mcp.calls('append-message')).toHaveLength(0);
     });
 
@@ -723,8 +794,7 @@ describe('agent routes', () => {
       const failing = vi.fn(async () => { throw new Error('LLM exploded'); });
       const { mcp, chatId } = await openDiplomacy({ liveTurn: 5, execute: failing });
       mcp.respondWith('inspect-deal', structuredResult({ items: [], promises: [], tradableRange: {} }));
-      let nextID = 80;
-      mcp.onTool('append-message', () => structuredResult({ ID: nextID++, Turn: 5 }));
+      echoAppends(mcp, 80);
 
       const res = await request(app).post('/api/agents/message').send({
         kind: 'deal',
@@ -746,8 +816,7 @@ describe('agent routes', () => {
         onContextLengthError?.();
       });
       const { mcp, chatId } = await openDiplomacy({ liveTurn: 5, execute: overflow });
-      let nextID = 90;
-      mcp.onTool('append-message', () => structuredResult({ ID: nextID++, Turn: 5 }));
+      echoAppends(mcp, 90);
 
       const res = await request(app).post('/api/agents/message').send({ kind: 'text', chatId, message: 'Will you trade?' });
       expect(res.status).toBe(200);
@@ -764,7 +833,7 @@ describe('agent routes', () => {
       // and decline a re-greet. (A real caller utterance stays committed; a special trigger does not.)
       const failing = vi.fn(async () => { throw new Error('LLM exploded'); });
       const { mcp, chatId } = await openDiplomacy({ liveTurn: 5, execute: failing });
-      mcp.onTool('append-message', () => structuredResult({ ID: 1, Turn: 5 }));
+      echoAppends(mcp, 1);
 
       const res = await request(app).post('/api/agents/message').send({ kind: 'text', chatId, message: '{{{Greeting}}}' });
       expect(res.status).toBe(200);
@@ -790,8 +859,7 @@ describe('agent routes', () => {
         return input;
       });
       const { mcp, chatId } = await openDiplomacy({ liveTurn: 5, execute: slow });
-      let nextID = 110;
-      mcp.onTool('append-message', () => structuredResult({ ID: nextID++, Turn: 5 }));
+      echoAppends(mcp, 110);
 
       // Fire the first turn but don't await its completion — superagent dispatches lazily on .then(), so
       // the trailing .then() kicks it off; it then parks in the gated execute, holding the thread lock.
@@ -824,8 +892,7 @@ describe('agent routes', () => {
         return input;
       });
       const { mcp, chatId } = await openDiplomacy({ liveTurn: 5, execute: slow });
-      let nextID = 200;
-      mcp.onTool('append-message', () => structuredResult({ ID: nextID++, Turn: 5 }));
+      echoAppends(mcp, 200);
 
       // Park the first turn inside the gated execute, holding the thread lock (see the concurrent-turn test).
       const first = request(app).post('/api/agents/message').send({ kind: 'text', chatId, message: 'First message' }).then((r) => r);
@@ -853,23 +920,27 @@ describe('agent routes', () => {
         Payload: { Deal: { version: 1, items: [], promises: [] } }, Turn: 5, CreatedAt: 0,
       };
       const { mcp, chatId } = await openDiplomacy({ liveTurn: 5, transcript: [proposal] });
-      let nextID = 60;
-      mcp.onTool('append-message', () => structuredResult({ ID: nextID++, Turn: 5 }));
+      echoRejections(mcp, 60);
+      echoAppends(mcp, 61);
 
       const res = await request(app).post(`/api/agents/chat/${chatId}/close`).send({});
       expect(res.status).toBe(200);
 
       // The open proposal is retracted (a deal-reject referencing it) BEFORE the close is written, so
-      // nothing is left enactable on the closed conversation.
-      const appends = mcp.calls('append-message');
-      expect(appends.map((c) => c.args.MessageType)).toEqual(['deal-reject', 'close']);
-      expect(appends[0]!.args.Payload.ProposalMessageID).toBe(7);
+      // nothing is left enactable on the closed conversation. The retraction now goes through the
+      // transactional reject action; append-message writes only the close.
+      const rejections = mcp.calls('reject-agent-deal');
+      expect(rejections).toHaveLength(1);
+      expect(rejections[0]!.args.ProposalMessageID).toBe(7);
+      expect(mcp.calls('append-message').map((c) => c.args.MessageType)).toEqual(['close']);
+      // Both committed rows are hydrated straight into the live cache, in durable order, after the
+      // proposal the open had hydrated — no transcript reread.
+      expect(res.body.messages.map((m: { metadata: { id?: number } }) => m.metadata.id)).toEqual([7, 60, 61]);
     });
 
     it('writes only the close when there is no open proposal to retract', async () => {
       const { mcp, chatId } = await openDiplomacy({ liveTurn: 5 });
-      let nextID = 70;
-      mcp.onTool('append-message', () => structuredResult({ ID: nextID++, Turn: 5 }));
+      echoAppends(mcp, 70);
 
       const res = await request(app).post(`/api/agents/chat/${chatId}/close`).send({});
       expect(res.status).toBe(200);
@@ -1327,6 +1398,213 @@ describe('agent routes', () => {
         ProposalMessageID: 8,
         AccepterID: 1,
       });
+    });
+  });
+
+  describe('deal-action status classes', () => {
+    /** An open proposal authored by the diplomat seat, awaiting the human audience's answer. */
+    const openProposal = {
+      ID: 8, Player1ID: 1, Player2ID: 3, Player1Role: 'the leader', Player2Role: 'diplomat',
+      SpeakerID: 3, MessageType: 'deal-proposal', Content: 'Offer',
+      Payload: { Deal: { version: 1, items: [], promises: [] } }, Turn: 5, CreatedAt: 0,
+    };
+    /** A close row, used to put the conversation into the closed-this-turn state. */
+    const closeRow = (turn: number) => ({
+      ID: 4, Player1ID: 1, Player2ID: 3, Player1Role: 'the leader', Player2Role: 'diplomat',
+      SpeakerID: 3, MessageType: 'close', Content: 'Enough.', Payload: {}, Turn: turn, CreatedAt: 0,
+    });
+
+    /** Open the pair over a live context reporting `liveTurn`; pass `null` for "the game has no turn". */
+    async function openThread(transcript: unknown[] = [], liveTurn: number | null = 5) {
+      const turn = liveTurn ?? undefined;
+      const mcp = installMockMcpClient();
+      mcp.respondWith('read-transcript', structuredResult({ messages: transcript }));
+      const ctx = makeMockContext({
+        session: { getTurn: () => turn },
+        baseParameters: {
+          // Seeded the way production does, to prove the guard never falls back to it.
+          turn: turn ?? -1, gameID: 'g', playerID: 3,
+          gameStates: { [turn ?? 5]: { options: {}, players: {} } },
+        },
+      });
+      vi.spyOn(contextRegistry, 'get').mockReturnValue(ctx as any);
+      vi.spyOn(agentRegistry, 'get').mockReturnValue({ name: 'diplomat', description: 'Diplomat', tags: [] } as any);
+      const opened = await request(app).post('/api/agents/chat').send({
+        mode: 'diplomacy', contextId: 'g-player-3', callerPlayerID: 1, targetPlayerID: 3,
+      });
+      expect(opened.status).toBe(200);
+      return { mcp, chatId: opened.body.id as string };
+    }
+
+    const post = (chatId: string, action: 'accept' | 'reject', body: object) =>
+      request(app).post(`/api/agents/chat/${chatId}/deal/${action}`).send(body);
+
+    it('maps a proposal conflict raised AFTER the accept precheck to 409, not 502', async () => {
+      // The proposal was open when the precheck read it and answered by the time the enactment ran.
+      // The structured conflict keeps this a lost race, not an infrastructure failure — and there is
+      // no catch-time re-probe, so the transcript is read exactly once.
+      const { mcp, chatId } = await openThread([openProposal]);
+      mcp.respondWith('enact-agent-deal', structuredResult({
+        ProposalMessageID: 8,
+        Conflict: { Reason: 'answered', Message: 'Proposal message 8 is not open; it was answered by deal-reject' },
+      }));
+
+      const res = await post(chatId, 'accept', { proposalMessageID: 8 });
+
+      expect(res.status).toBe(409);
+      expect(res.body.error).toMatch(/not open/i);
+      // Two reads total: the thread open's hydration and the accept precheck. The route's old
+      // catch-time re-probe would have made a third — and could have reported a stale verdict.
+      expect(mcp.calls('read-transcript')).toHaveLength(2);
+    });
+
+    it('maps a genuine enactment failure to 502', async () => {
+      const { mcp, chatId } = await openThread([openProposal]);
+      mcp.failWith('enact-agent-deal', 'the game bridge is unavailable');
+
+      const res = await post(chatId, 'accept', { proposalMessageID: 8 });
+
+      expect(res.status).toBe(502);
+    });
+
+    it.each([
+      ['accept', 'accept' as const],
+      ['reject', 'reject' as const],
+    ])('maps a conversation closed this turn to 409 for %s', async (_label, action) => {
+      const { chatId } = await openThread([openProposal, closeRow(5)]);
+
+      const res = await post(chatId, action, { proposalMessageID: 8 });
+
+      expect(res.status).toBe(409);
+      expect(res.body.error).toMatch(/closed this turn/i);
+    });
+
+    it.each([
+      ['accept', 'accept' as const],
+      ['reject', 'reject' as const],
+    ])('maps an unavailable live turn to 503 for %s (never a turn-zero fallback)', async (_label, action) => {
+      // The consolidated guard's whole point: a live conversation with no reported game turn is
+      // unavailable. The old routes fell back to the thread's cached turn, which silently treated a
+      // conversation closed this turn as open.
+      const { mcp, chatId } = await openThread([openProposal, closeRow(5)], null);
+
+      const res = await post(chatId, action, { proposalMessageID: 8 });
+
+      expect(res.status).toBe(503);
+      expect(res.body.error).toMatch(/live game turn is not available/i);
+      expect(mcp.calls('enact-agent-deal')).toHaveLength(0);
+      expect(mcp.calls('reject-agent-deal')).toHaveLength(0);
+    });
+
+    it.each([
+      ['accept', 'accept' as const],
+      ['reject', 'reject' as const],
+    ])('maps a busy thread to 409 for %s', async (_label, action) => {
+      const { chatId } = await openThread([openProposal]);
+      const thread = chatThreadStore.get(chatId)!;
+      let release!: () => void;
+      const held = withThreadLock(thread, () => new Promise<void>((resolve) => { release = resolve; }));
+
+      const res = await post(chatId, action, { proposalMessageID: 8 });
+
+      expect(res.status).toBe(409);
+      expect(res.body.error).toMatch(/already being generated/i);
+      release();
+      await held;
+    });
+
+    it.each([
+      ['accept', 'accept' as const],
+      ['reject', 'reject' as const],
+    ])('requires a numeric proposalMessageID (400) for %s', async (_label, action) => {
+      const { chatId } = await openThread([openProposal]);
+      const res = await post(chatId, action, {});
+      expect(res.status).toBe(400);
+      expect(res.body.error).toMatch(/proposalMessageID/);
+    });
+
+    it('maps a rejection conflict to 409 and a repeated rejection to a clean 200', async () => {
+      const { mcp, chatId } = await openThread([openProposal]);
+      mcp.respondWith('reject-agent-deal', structuredResult({
+        Result: 'conflict', ProposalMessageID: 8, AlreadyRejected: false,
+        ConflictReason: 'superseded', ConflictMessage: 'Proposal message 8 is not the current active proposal',
+      }));
+
+      const conflicted = await post(chatId, 'reject', { proposalMessageID: 8 });
+      expect(conflicted.status).toBe(409);
+
+      // The idempotent path is a normal success for the Web client: same conversation, one row.
+      mcp.respondWith('reject-agent-deal', structuredResult({
+        Result: 'already-rejected', ProposalMessageID: 8, AlreadyRejected: true,
+        Row: {
+          ID: 12, Player1ID: 1, Player2ID: 3, Player1Role: 'the leader', Player2Role: 'diplomat',
+          SpeakerID: 1, MessageType: 'deal-reject', Content: 'The deal was rejected.',
+          Payload: { ProposalMessageID: 8 }, Turn: 5, CreatedAt: 0,
+        },
+      }));
+      const repeated = await post(chatId, 'reject', { proposalMessageID: 8 });
+      expect(repeated.status).toBe(200);
+      expect(repeated.body.messages.filter((m: { deal?: { ID: number } }) => m.deal?.ID === 12)).toHaveLength(1);
+    });
+
+    it('maps an already-closed conversation to 409 and an unavailable turn to 503 on close', async () => {
+      const closedThisTurn = await openThread([closeRow(5)]);
+      const closed = await request(app).post(`/api/agents/chat/${closedThisTurn.chatId}/close`).send({});
+      expect(closed.status).toBe(409);
+      expect(closed.body.error).toMatch(/already closed this turn/i);
+
+      const noTurn = await openThread([], null);
+      const unavailable = await request(app).post(`/api/agents/chat/${noTurn.chatId}/close`).send({});
+      expect(unavailable.status).toBe(503);
+    });
+
+    it('keeps the close failure class at 500 when the store refuses the write', async () => {
+      const { mcp, chatId } = await openThread([]);
+      mcp.failWith('append-message', 'store down');
+
+      const res = await request(app).post(`/api/agents/chat/${chatId}/close`).send({});
+
+      expect(res.status).toBe(500);
+      expect(res.body.error).toBe('Failed to close conversation');
+    });
+  });
+
+  describe('the public Web SSE payload', () => {
+    it('omits the internal `rows` contract while keeping `deal` and `deals` unchanged', async () => {
+      // `connected.rows` / `done.rows` / `error.rows` are for the in-game panel. The Web adapter must
+      // strip them, so the public event contract stays byte-for-byte what the browser client parses.
+      const mcp = installMockMcpClient();
+      mcp.respondWith('read-transcript', structuredResult({ messages: [] }));
+      mcp.respondWith('inspect-deal', structuredResult({ items: [], promises: [], tradableRange: {} }));
+      const ctx = makeMockContext({
+        session: { getTurn: () => 5 },
+        baseParameters: { turn: 5, gameID: 'g', playerID: 3, gameStates: { 5: { options: {}, players: {} } } },
+        execute: vi.fn(async (_n: string, input: any) => {
+          input.messages.push({ message: { role: 'assistant', content: 'Noted.' }, metadata: { datetime: new Date(), turn: 5 } });
+          return input;
+        }),
+      });
+      vi.spyOn(contextRegistry, 'get').mockReturnValue(ctx as any);
+      vi.spyOn(agentRegistry, 'get').mockReturnValue({ name: 'diplomat', description: 'Diplomat', tags: [] } as any);
+      const opened = await request(app).post('/api/agents/chat').send({
+        mode: 'diplomacy', contextId: 'g-player-3', callerPlayerID: 1, targetPlayerID: 3,
+      });
+      echoAppends(mcp, 60);
+
+      const res = await request(app).post('/api/agents/message').send({
+        kind: 'deal',
+        chatId: opened.body.id,
+        deal: { version: 1, items: [{ fromPlayerID: 1, toPlayerID: 3, itemType: 'GOLD', amount: 50 }], promises: [] },
+      });
+
+      expect(res.status).toBe(200);
+      expect(res.text).not.toContain('"rows"');
+      const connected = JSON.parse(res.text.match(/event: connected\ndata: (.*)\n/)![1]!);
+      expect(Object.keys(connected).sort()).toEqual(['deal', 'sessionId']);
+      expect(connected.deal.ID).toBe(60);
+      const done = JSON.parse(res.text.match(/event: done\ndata: (.*)\n/)![1]!);
+      expect(Object.keys(done).sort()).toEqual(['deals', 'messageCount', 'sessionId']);
+      expect(done.deals).toEqual([]);
     });
   });
 });

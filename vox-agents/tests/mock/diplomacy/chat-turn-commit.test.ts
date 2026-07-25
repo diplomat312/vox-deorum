@@ -25,8 +25,17 @@ import { sendMessageToolName } from '../../../src/utils/diplomacy/send-message-t
 let mcp: ReturnType<typeof installMockMcpClient>;
 beforeEach(() => {
   mcp = installMockMcpClient();
-  // Every commit and reply append in these tests resolves to the same stamped turn.
-  mcp.respondWith('append-message', structuredResult({ Turn: 5 }));
+  // Every commit and reply append resolves to a committed row echo: the store returns the canonical
+  // row, and both the caller commit and the reply archive now carry its ID and stamped turn into the
+  // live cache (and into the turn's reported rows), so a bare `{ Turn }` is no longer a valid echo.
+  let nextID = 100;
+  mcp.onTool('append-message', (args) => structuredResult({
+    ID: nextID++,
+    SpeakerID: args.SpeakerID,
+    MessageType: args.MessageType,
+    Content: args.Content,
+    Turn: 5,
+  }));
 });
 
 /** Minimal diplomacy thread (ordered pair 1↔3, agent voices seat 3). A fresh id per test keeps the

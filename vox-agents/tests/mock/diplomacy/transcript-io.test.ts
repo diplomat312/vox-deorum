@@ -16,13 +16,13 @@ vi.mock('../../../src/utils/models/mcp-client.js', async () => {
 import {
   readTranscript,
   readTranscriptPage,
-  appendTranscriptMessage,
   appendTranscriptMessageRow,
   appendCloseMessage,
   syncThreadMessages,
   autoCompact,
   maybeAutoCompact,
 } from '../../../src/utils/diplomacy/transcript.js';
+import { observeThreadRows } from '../../../src/utils/diplomacy/row-observer.js';
 
 let mcp: ReturnType<typeof installMockMcpClient>;
 beforeEach(() => {
@@ -99,13 +99,14 @@ describe('readTranscriptPage', () => {
   });
 });
 
-describe('appendTranscriptMessage', () => {
+describe('appendTranscriptMessageRow', () => {
   it('never sends Turn and shapes the row from the thread', async () => {
-    mcp.respondWith('append-message', structuredResult({ Turn: 7 }));
+    const committed = {
+      ID: 5, SpeakerID: 1, MessageType: 'text', Content: 'hello there', Turn: 7,
+    };
+    mcp.respondWith('append-message', structuredResult(committed));
 
-    const stamped = await appendTranscriptMessage(thread(), 1, 'text', 'hello there');
-
-    expect(stamped).toBe(7);
+    await expect(appendTranscriptMessageRow(thread(), 1, 'hello there')).resolves.toEqual(committed);
     const args = mcp.calls('append-message')[0].args;
     expect(args).toEqual({
       PlayerAID: 1,
@@ -119,23 +120,6 @@ describe('appendTranscriptMessage', () => {
     expect(args).not.toHaveProperty('Turn');
   });
 
-  it('returns undefined when the response omits a numeric Turn', async () => {
-    mcp.respondWith('append-message', structuredResult({ ID: 5 }));
-    expect(await appendTranscriptMessage(thread(), 3, 'text', 'reply')).toBeUndefined();
-  });
-
-  it('throws on an isError envelope instead of treating the append as committed', async () => {
-    mcp.respondWith('append-message', {
-      isError: true,
-      content: [{ type: 'text', text: 'append rejected' }],
-    });
-
-    await expect(appendTranscriptMessage(thread(), 3, 'text', 'reply'))
-      .rejects.toThrow('append-message failed: append rejected');
-  });
-});
-
-describe('appendTranscriptMessageRow', () => {
   it('returns the committed row projection used by the game transport', async () => {
     const committed = {
       ID: 17, SpeakerID: 3, MessageType: 'text', Content: 'A **durable** reply.',
@@ -148,6 +132,25 @@ describe('appendTranscriptMessageRow', () => {
       PlayerAID: 1, PlayerBID: 3, PlayerARole: 'the leader', PlayerBRole: 'diplomat',
       SpeakerID: 3, MessageType: 'text', Content: committed.Content,
     });
+  });
+
+  it('throws when the store echoes no committed row (a store-contract violation, not a soft miss)', async () => {
+    // Every caller now mirrors the committed row's ID and turn into the live cache and reports it to
+    // its turn's capture, so an append that does not echo a usable row cannot be papered over.
+    mcp.respondWith('append-message', structuredResult({ Turn: 7 }));
+
+    await expect(appendTranscriptMessageRow(thread(), 3, 'reply'))
+      .rejects.toThrow('did not return a committed transcript row');
+  });
+
+  it('throws on an isError envelope instead of treating the append as committed', async () => {
+    mcp.respondWith('append-message', {
+      isError: true,
+      content: [{ type: 'text', text: 'append rejected' }],
+    });
+
+    await expect(appendTranscriptMessageRow(thread(), 3, 'reply'))
+      .rejects.toThrow('append-message failed: append rejected');
   });
 });
 
@@ -242,25 +245,34 @@ describe('syncThreadMessages', () => {
 });
 
 describe('appendCloseMessage', () => {
-  it('records the server-stamped turn on the thread and returns it', async () => {
-    mcp.respondWith('append-message', structuredResult({ Turn: 12 }));
+  it('records the server-stamped turn on the thread and returns it with the committed close row', async () => {
+    const committed = { ID: 31, SpeakerID: 3, MessageType: 'close', Content: 'farewell', Turn: 12 };
+    mcp.respondWith('append-message', structuredResult(committed));
     const t = thread();
 
-    const turn = await appendCloseMessage(t, t.agent, 'farewell', 99);
+    const { turn, row } = await appendCloseMessage(t, t.agent, 'farewell');
 
     expect(turn).toBe(12);
     expect(t.closeTurn).toBe(12);
+    // The exact durable row travels back so the caller hydrates its cache (and the panel its
+    // transcript) without rereading the transcript.
+    expect(row).toEqual(committed);
     expect(mcp.calls('append-message')[0].args.MessageType).toBe('close');
   });
 
-  it('falls back to fallbackTurn when the response omits Turn', async () => {
-    mcp.respondWith('append-message', structuredResult({ ID: 1 }));
+  it('reports the close row to the turn observing the thread, and nothing when none does', async () => {
+    // A close written by the diplomat's tool mid-run belongs to that turn's terminal rows; the Web
+    // close control holds the lock outright with no turn observing, so reporting is a no-op there.
+    const committed = { ID: 32, SpeakerID: 3, MessageType: 'close', Content: 'farewell', Turn: 12 };
+    mcp.respondWith('append-message', structuredResult(committed));
     const t = thread();
 
-    const turn = await appendCloseMessage(t, t.agent, 'farewell', 42);
+    await expect(appendCloseMessage(t, t.agent, 'farewell')).resolves.toMatchObject({ turn: 12 });
 
-    expect(turn).toBe(42);
-    expect(t.closeTurn).toBe(42);
+    const observer = observeThreadRows(t);
+    mcp.respondWith('append-message', structuredResult({ ...committed, ID: 33 }));
+    await appendCloseMessage(t, t.agent, 'farewell again');
+    expect(observer.close().map((r) => r.ID)).toEqual([33]);
   });
 });
 

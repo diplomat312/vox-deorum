@@ -1,16 +1,23 @@
 /**
- * Runtime transport coverage for the in-game diplomacy bridge. The MCP, transcript,
- * and chat edges are mocked so these tests exercise queue ordering and game switches.
+ * Runtime transport coverage for the in-game diplomacy bridge. The MCP, transcript, chat-turn, and
+ * deal-action edges are mocked so these tests exercise what the bridge itself owns: queue ordering,
+ * game switches, the routing of every event kind to the shared backend action, and the notification
+ * boundary. What those shared actions *do* is covered by their own suites (deal-actions.test.ts,
+ * chat-turn tests); what the notification helper decides is covered by notify.test.ts.
  */
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { ChatStreamSink } from "../../../src/types/index.js";
 
 const mocks = vi.hoisted(() => ({
-  appendRow: vi.fn(),
+  accept: vi.fn(),
   callTool: vi.fn(),
   loggerError: vi.fn(),
+  notify: vi.fn(),
   openChat: vi.fn(),
   readPage: vi.fn(),
+  reject: vi.fn(),
+  runChatTurn: vi.fn(),
 }));
 
 vi.mock("../../../src/utils/models/mcp-client.js", () => ({
@@ -18,26 +25,49 @@ vi.mock("../../../src/utils/models/mcp-client.js", () => ({
 }));
 
 vi.mock("../../../src/utils/diplomacy/transcript.js", () => ({
-  appendTranscriptMessageRow: mocks.appendRow,
   diplomacyThreadId: (playerAID: number, playerBID: number, gameID: string) => `${gameID}:${playerAID}:${playerBID}`,
   readTranscriptPage: mocks.readPage,
 }));
 
 vi.mock("../../../src/web/chat/factory.js", () => ({ openDiplomacyChat: mocks.openChat }));
+vi.mock("../../../src/web/chat/turn.js", () => ({ runChatTurn: mocks.runChatTurn }));
 vi.mock("../../../src/web/chat/enrichment.js", () => ({
   civIdentity: () => ({ name: "Rome", leader: "Caesar" }),
 }));
-vi.mock("../../../src/utils/diplomacy/chat-turn-commit.js", () => ({ isThreadBusy: () => false }));
+vi.mock("../../../src/utils/diplomacy/notify.js", () => ({ notifyDiplomacyOutcome: mocks.notify }));
+vi.mock("../../../src/utils/diplomacy/deal-actions.js", () => ({
+  acceptDealAction: mocks.accept,
+  rejectDealAction: mocks.reject,
+  NotDiplomacyThreadError: class NotDiplomacyThreadError extends Error {},
+}));
+// The bridge only reads these modules for their error vocabulary; the real ones pull the whole
+// transcript I/O layer in behind them, which this transport suite deliberately replaces.
+vi.mock("../../../src/utils/diplomacy/deal.js", () => ({
+  IllegalDealError: class IllegalDealError extends Error {},
+  ProposalConflictError: class ProposalConflictError extends Error {},
+}));
+vi.mock("../../../src/utils/diplomacy/chat-turn-commit.js", () => ({
+  isThreadBusy: () => false,
+  ThreadBusyError: class ThreadBusyError extends Error {},
+  threadBusyMessage: "A reply is already being generated for this conversation. Please wait for it to finish.",
+}));
 vi.mock("../../../src/utils/diplomacy/civ5-markup.js", () => ({ markdownToCiv5: (content: string) => content }));
 vi.mock("../../../src/utils/logger.js", () => ({
-  createLogger: () => ({ error: mocks.loggerError, warn: vi.fn() }),
+  createLogger: () => ({ error: mocks.loggerError, warn: vi.fn(), info: vi.fn(), debug: vi.fn() }),
 }));
 
 import { IngameBridge } from "../../../src/envoy/ingame-bridge.js";
+import { ProposalConflictError } from "../../../src/utils/diplomacy/deal.js";
+import { ThreadBusyError, threadBusyMessage } from "../../../src/utils/diplomacy/chat-turn-commit.js";
 
 /** Build one committed transcript row. */
-function row(id: number, content: string = `row ${id}`) {
-  return { ID: id, SpeakerID: 3, MessageType: "text", Content: content, Turn: 7 };
+function row(id: number, content: string = `row ${id}`, speakerID = 3) {
+  return { ID: id, SpeakerID: speakerID, MessageType: "text", Content: content, Turn: 7 };
+}
+
+/** Build one durable deal outcome row. */
+function dealRow(id: number, type: string, content = `deal ${id}`) {
+  return { ID: id, SpeakerID: 1, MessageType: type, Content: content, Turn: 7, Payload: { ProposalMessageID: 7 } };
 }
 
 /** Create an unresolved promise whose test controls its completion. */
@@ -75,9 +105,19 @@ function event(eventName: string, latestID: number, data: Record<string, unknown
   } as never;
 }
 
+/** A well-formed deal action for the 1↔3 pair. */
+function dealEvent(latestID: number, data: Record<string, unknown>) {
+  return event("DiplomacyDealAction", latestID, { PlayerID: 1, CounterpartID: 3, Turn: 7, ...data });
+}
+
 /** Extract the Lua function names sent through the generic passthrough. */
 function pushedNames(): string[] {
   return mocks.callTool.mock.calls.map((call) => call[1].Name as string);
+}
+
+/** The payload argument of the nth Lua call. */
+function pushedArg(index: number): unknown {
+  return mocks.callTool.mock.calls[index][1].Args[2];
 }
 
 describe("IngameBridge runtime transport", () => {
@@ -85,8 +125,14 @@ describe("IngameBridge runtime transport", () => {
     vi.clearAllMocks();
     mocks.callTool.mockResolvedValue({ structuredContent: { success: true } });
     mocks.readPage.mockResolvedValue({ messages: [], hasMore: false });
-    mocks.openChat.mockResolvedValue({ player1ID: 1, player2ID: 3 });
-    mocks.appendRow.mockResolvedValue(row(91));
+    mocks.openChat.mockResolvedValue({ id: "dipl:game-a:1:3", player1ID: 1, player2ID: 3 });
+    mocks.notify.mockResolvedValue(true);
+    // A turn that commits the caller row, then completes with the diplomat's archived reply.
+    mocks.runChatTurn.mockImplementation(async (_body: unknown, sink: ChatStreamSink) => {
+      sink.connected({ sessionId: "s", rows: [row(90, "hello", 1)] });
+      sink.done({ sessionId: "s", messageCount: 2, deals: [], rows: [row(91, "Greetings.")] });
+      return undefined;
+    });
   });
 
   it("dispatches a valid panel-open event into an atomic begin then transcript push", async () => {
@@ -111,8 +157,25 @@ describe("IngameBridge runtime transport", () => {
     bridge.handleNotification(event("DiplomacyPanelOpened", 3, { PlayerID: 1, CounterpartID: 3 }));
 
     await vi.waitFor(() => expect(pushedNames()).toEqual(["VoxDeorumDiploBegin"]));
-    opening.resolve({ player1ID: 1, player2ID: 3 });
-    await vi.waitFor(() => expect(mocks.appendRow).toHaveBeenCalledOnce());
+    opening.resolve({ id: "dipl:game-a:1:3", player1ID: 1, player2ID: 3 });
+    await vi.waitFor(() => expect(mocks.runChatTurn).toHaveBeenCalledOnce());
+  });
+
+  it("lands a sink push while the turn that produced it still owns the action FIFO", async () => {
+    const bridge = bridgeFor();
+    const running = deferred<undefined>();
+    mocks.runChatTurn.mockImplementation(async (_body: unknown, sink: ChatStreamSink) => {
+      sink.connected({ sessionId: "s", rows: [row(90, "hello", 1)] });
+      return running.promise;
+    });
+
+    bridge.handleNotification(event("DiplomacyChatMessage", 4, { PlayerID: 1, CounterpartID: 3, Text: "hello" }));
+
+    // The turn has not returned, so the action FIFO is still blocked; the caller row must not be
+    // waiting behind it. A sink callback that awaited the action queue would hang here forever.
+    await vi.waitFor(() => expect(pushedNames()).toEqual(["VoxDeorumDiploMessages"]));
+    expect(mocks.notify).not.toHaveBeenCalled();
+    running.resolve(undefined);
   });
 
   it("finishes a reflush before a later history request can prepend", async () => {
@@ -120,8 +183,8 @@ describe("IngameBridge runtime transport", () => {
     const firstPage = deferred<{ messages: ReturnType<typeof row>[]; hasMore: boolean }>();
     mocks.readPage.mockReturnValueOnce(firstPage.promise).mockResolvedValue({ messages: [row(1)], hasMore: true });
 
-    bridge.handleNotification(event("DiplomacyPanelOpened", 4, { PlayerID: 1, CounterpartID: 3 }));
-    bridge.handleNotification(event("DiplomacyTranscriptRequest", 5, { PlayerID: 1, CounterpartID: 3, BeforeID: 10 }));
+    bridge.handleNotification(event("DiplomacyPanelOpened", 5, { PlayerID: 1, CounterpartID: 3 }));
+    bridge.handleNotification(event("DiplomacyTranscriptRequest", 6, { PlayerID: 1, CounterpartID: 3, BeforeID: 10 }));
     expect(mocks.callTool).not.toHaveBeenCalled();
     firstPage.resolve({ messages: [row(10)], hasMore: false });
 
@@ -139,7 +202,7 @@ describe("IngameBridge runtime transport", () => {
       hasMore: true,
     });
 
-    bridge.handleNotification(event("DiplomacyTranscriptRequest", 6, { PlayerID: 1, CounterpartID: 3, BeforeID: 20 }));
+    bridge.handleNotification(event("DiplomacyTranscriptRequest", 7, { PlayerID: 1, CounterpartID: 3, BeforeID: 20 }));
 
     await vi.waitFor(() => expect(pushedNames()).toEqual([
       "VoxDeorumDiploMessages",
@@ -153,7 +216,7 @@ describe("IngameBridge runtime transport", () => {
 
   it("suppresses duplicate deliveries before parsing or dispatch", async () => {
     const bridge = bridgeFor();
-    const duplicate = event("DiplomacyPanelOpened", 7, { PlayerID: 1, CounterpartID: 3 });
+    const duplicate = event("DiplomacyPanelOpened", 8, { PlayerID: 1, CounterpartID: 3 });
 
     bridge.handleNotification(duplicate);
     bridge.handleNotification(duplicate);
@@ -171,35 +234,101 @@ describe("IngameBridge runtime transport", () => {
     await vi.waitFor(() => expect(pushedNames()).toEqual(["VoxDeorumDiploStatus"]));
   });
 
-  it("preserves a real observer identity through the temporary probe append", async () => {
+  it("preserves a real observer identity through the shared chat turn", async () => {
     const bridge = bridgeFor();
-    bridge.handleNotification(event("DiplomacyChatMessage", 8, {
+    bridge.handleNotification(event("DiplomacyChatMessage", 9, {
       PlayerID: 27,
       CounterpartID: 3,
       AsObserver: true,
       Text: "Observer note",
     }));
 
-    await vi.waitFor(() => expect(mocks.appendRow).toHaveBeenCalledOnce());
+    await vi.waitFor(() => expect(mocks.runChatTurn).toHaveBeenCalledOnce());
     expect(mocks.openChat).toHaveBeenCalledWith(expect.objectContaining({
       callerPlayerID: 27,
       callerRole: "Observer",
+      callerIdentity: undefined,
     }));
-    expect(mocks.appendRow).toHaveBeenCalledWith(expect.anything(), 27, "Observer note", "game-a");
+    expect(mocks.runChatTurn.mock.calls[0][0]).toEqual({
+      kind: "text",
+      chatId: "dipl:game-a:1:3",
+      message: "Observer note",
+    });
   });
 
-  it("pushes an error Status when a chat append fails", async () => {
+  it("pushes the caller row, the terminal rows, and then notifies the successful outcome", async () => {
+    const bridge = bridgeFor();
+    mocks.notify.mockImplementation(async () => {
+      // Captured at call time: the notification must follow the rows it announces.
+      expect(pushedNames()).toEqual(["VoxDeorumDiploMessages", "VoxDeorumDiploMessages"]);
+      return true;
+    });
+
+    bridge.handleNotification(event("DiplomacyChatMessage", 10, { PlayerID: 1, CounterpartID: 3, Text: "hello" }));
+
+    await vi.waitFor(() => expect(mocks.notify).toHaveBeenCalledOnce());
+    expect((pushedArg(0) as { messages: { ID: number }[] }).messages.map((m) => m.ID)).toEqual([90]);
+    expect((pushedArg(1) as { messages: { ID: number }[] }).messages.map((m) => m.ID)).toEqual([91]);
+    expect(mocks.notify).toHaveBeenCalledWith(expect.objectContaining({
+      playerID: 1,
+      counterpartID: 3,
+      rows: [row(91, "Greetings.")],
+    }));
+  });
+
+  it("turns a pre-stream chat rejection into an error Status without notifying", async () => {
+    const bridge = bridgeFor();
+    mocks.runChatTurn.mockResolvedValue({ status: 409, error: "This conversation was closed this turn." });
+
+    bridge.handleNotification(event("DiplomacyChatMessage", 11, { PlayerID: 1, CounterpartID: 3, Text: "hello" }));
+
+    await vi.waitFor(() => expect(pushedNames()).toEqual(["VoxDeorumDiploStatus"]));
+    expect(pushedArg(0)).toEqual({ state: "error", detail: "This conversation was closed this turn." });
+    expect(mocks.notify).not.toHaveBeenCalled();
+  });
+
+  it("delivers the durable rows of a post-commit failure and never notifies", async () => {
+    const bridge = bridgeFor();
+    mocks.runChatTurn.mockImplementation(async (_body: unknown, sink: ChatStreamSink) => {
+      sink.connected({ sessionId: "s", rows: [row(90, "hello", 1)] });
+      sink.error({ message: "Failed to execute agent: boom", rows: [dealRow(92, "deal-proposal")] });
+      return undefined;
+    });
+
+    bridge.handleNotification(event("DiplomacyChatMessage", 12, { PlayerID: 1, CounterpartID: 3, Text: "hello" }));
+
+    await vi.waitFor(() => expect(pushedNames()).toEqual([
+      "VoxDeorumDiploMessages",
+      "VoxDeorumDiploMessages",
+      "VoxDeorumDiploStatus",
+    ]));
+    expect((pushedArg(1) as { messages: { ID: number }[] }).messages.map((m) => m.ID)).toEqual([92]);
+    expect(pushedArg(2)).toEqual({ state: "error", detail: "Failed to execute agent: boom" });
+    expect(mocks.notify).not.toHaveBeenCalled();
+  });
+
+  it("rejects an empty chat message before it can open a thread", async () => {
+    const bridge = bridgeFor();
+
+    bridge.handleNotification(event("DiplomacyChatMessage", 13, { PlayerID: 1, CounterpartID: 3, Text: "   " }));
+
+    await vi.waitFor(() => expect(pushedNames()).toEqual(["VoxDeorumDiploStatus"]));
+    expect(pushedArg(0)).toEqual({ state: "error", detail: "A chat message is required." });
+    expect(mocks.openChat).not.toHaveBeenCalled();
+  });
+
+  it("pushes an error Status when opening the pair fails", async () => {
     const bridge = bridgeFor();
     mocks.openChat.mockRejectedValue(new Error("The requested seat is not active."));
 
-    bridge.handleNotification(event("DiplomacyChatMessage", 81, {
+    bridge.handleNotification(event("DiplomacyChatMessage", 14, {
       PlayerID: 1,
       CounterpartID: 3,
       Text: "hello",
     }));
 
     await vi.waitFor(() => expect(pushedNames()).toEqual(["VoxDeorumDiploStatus"]));
-    expect(mocks.callTool.mock.calls[0][1].Args[2]).toEqual({
+    expect(pushedArg(0)).toEqual({
       state: "error",
       detail: "Diplomacy request failed: The requested seat is not active.",
     });
@@ -212,7 +341,7 @@ describe("IngameBridge runtime transport", () => {
       .mockResolvedValueOnce({ structuredContent: { success: false, error: { code: "NO_DLL", message: "offline" } } })
       .mockResolvedValue({ structuredContent: { success: true } });
 
-    bridge.handleNotification(event("DiplomacyPanelOpened", 9, { PlayerID: 1, CounterpartID: 3 }));
+    bridge.handleNotification(event("DiplomacyPanelOpened", 15, { PlayerID: 1, CounterpartID: 3 }));
 
     await vi.waitFor(() => expect(pushedNames()).toEqual([
       "VoxDeorumDiploBegin",
@@ -221,18 +350,18 @@ describe("IngameBridge runtime transport", () => {
     expect(pushedNames()).not.toContain("VoxDeorumDiploMessages");
   });
 
-  it("invalidates an in-flight action before its append can reach a new game database", async () => {
+  it("invalidates an in-flight action before its turn can reach a new game database", async () => {
     const bridge = bridgeFor("game-a");
     const opening = deferred<unknown>();
     mocks.openChat.mockReturnValue(opening.promise);
 
-    bridge.handleNotification(event("DiplomacyChatMessage", 10, { PlayerID: 1, CounterpartID: 3, Text: "stale" }));
+    bridge.handleNotification(event("DiplomacyChatMessage", 16, { PlayerID: 1, CounterpartID: 3, Text: "stale" }));
     await vi.waitFor(() => expect(mocks.openChat).toHaveBeenCalledOnce());
     bridge.resetForGame("game-b");
-    opening.resolve({ player1ID: 1, player2ID: 3 });
+    opening.resolve({ id: "dipl:game-a:1:3", player1ID: 1, player2ID: 3 });
 
     await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(mocks.appendRow).not.toHaveBeenCalled();
+    expect(mocks.runChatTurn).not.toHaveBeenCalled();
     expect(mocks.callTool).not.toHaveBeenCalled();
   });
 
@@ -241,13 +370,13 @@ describe("IngameBridge runtime transport", () => {
     const opening = deferred<unknown>();
     mocks.openChat.mockReturnValue(opening.promise);
 
-    bridge.handleNotification(event("DiplomacyChatMessage", 11, { PlayerID: 1, CounterpartID: 3, Text: "stale" }));
+    bridge.handleNotification(event("DiplomacyChatMessage", 17, { PlayerID: 1, CounterpartID: 3, Text: "stale" }));
     await vi.waitFor(() => expect(mocks.openChat).toHaveBeenCalledOnce());
     bridge.dispose();
-    opening.resolve({ player1ID: 1, player2ID: 3 });
+    opening.resolve({ id: "dipl:game-a:1:3", player1ID: 1, player2ID: 3 });
 
     await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(mocks.appendRow).not.toHaveBeenCalled();
+    expect(mocks.runChatTurn).not.toHaveBeenCalled();
     expect(mocks.callTool).not.toHaveBeenCalled();
   });
 
@@ -266,5 +395,148 @@ describe("IngameBridge runtime transport", () => {
       ) => Promise<boolean>;
     }).push("VoxDeorumDiploBegin", [], { generation: 1, gameID: "game-a" }))
       .rejects.toThrow("call-lua-function VoxDeorumDiploBegin failed: The active game no longer matches.");
+  });
+});
+
+describe("IngameBridge deal actions", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.callTool.mockResolvedValue({ structuredContent: { success: true } });
+    mocks.readPage.mockResolvedValue({ messages: [], hasMore: false });
+    mocks.openChat.mockResolvedValue({ id: "dipl:game-a:1:3", player1ID: 1, player2ID: 3 });
+    mocks.notify.mockResolvedValue(true);
+    mocks.runChatTurn.mockImplementation(async (_body: unknown, sink: ChatStreamSink) => {
+      sink.connected({ sessionId: "s", rows: [dealRow(80, "deal-proposal")] });
+      sink.done({ sessionId: "s", messageCount: 2, deals: [], rows: [row(81, "Interesting.")] });
+      return undefined;
+    });
+  });
+
+  it("routes a propose action through the shared chat turn without an expected proposal", async () => {
+    const bridge = bridgeFor();
+
+    bridge.handleNotification(dealEvent(20, { Action: "propose", Deal: { version: 1, items: [] } }));
+
+    await vi.waitFor(() => expect(mocks.runChatTurn).toHaveBeenCalledOnce());
+    expect(mocks.runChatTurn.mock.calls[0][0]).toEqual({
+      kind: "deal",
+      chatId: "dipl:game-a:1:3",
+      deal: { version: 1, items: [] },
+    });
+  });
+
+  it("routes a counter action with the mounted proposal as expectedProposalID", async () => {
+    const bridge = bridgeFor();
+
+    bridge.handleNotification(dealEvent(21, {
+      Action: "counter",
+      Deal: { version: 1, items: [] },
+      ProposalMessageID: 7,
+    }));
+
+    await vi.waitFor(() => expect(mocks.runChatTurn).toHaveBeenCalledOnce());
+    expect(mocks.runChatTurn.mock.calls[0][0]).toEqual({
+      kind: "deal",
+      chatId: "dipl:game-a:1:3",
+      deal: { version: 1, items: [] },
+      expectedProposalID: 7,
+    });
+  });
+
+  it("opens the pair before dispatching a direct action, since a panel open caches no thread", async () => {
+    const bridge = bridgeFor();
+    mocks.accept.mockResolvedValue({ rows: [dealRow(30, "deal-accept"), dealRow(31, "deal-enacted")], changed: true });
+
+    bridge.handleNotification(dealEvent(22, { Action: "accept", ProposalMessageID: 7 }));
+
+    await vi.waitFor(() => expect(mocks.accept).toHaveBeenCalledOnce());
+    expect(mocks.openChat).toHaveBeenCalledBefore(mocks.accept);
+    expect(mocks.openChat).toHaveBeenCalledWith(expect.objectContaining({
+      callerPlayerID: 1,
+      targetPlayerID: 3,
+      callerRole: "the leader",
+    }));
+  });
+
+  it("queues the exact accept rows and notifies a state-changing acceptance", async () => {
+    const bridge = bridgeFor();
+    mocks.accept.mockResolvedValue({ rows: [dealRow(30, "deal-accept"), dealRow(31, "deal-enacted")], changed: true });
+
+    bridge.handleNotification(dealEvent(23, { Action: "accept", ProposalMessageID: 7 }));
+
+    await vi.waitFor(() => expect(mocks.notify).toHaveBeenCalledOnce());
+    expect(mocks.accept).toHaveBeenCalledWith(expect.objectContaining({ id: "dipl:game-a:1:3" }), 7);
+    expect((pushedArg(0) as { messages: { ID: number }[] }).messages.map((m) => m.ID)).toEqual([30, 31]);
+    expect(mocks.notify).toHaveBeenCalledWith(expect.objectContaining({ changed: true }));
+  });
+
+  it("routes a retract, which arrives as canonical reject, through the shared rejection action", async () => {
+    const bridge = bridgeFor();
+    mocks.reject.mockResolvedValue({ rows: [dealRow(40, "deal-reject")], changed: true });
+
+    bridge.handleNotification(dealEvent(24, {
+      Action: "reject",
+      ProposalMessageID: 7,
+      Text: "I withdraw this offer.",
+    }));
+
+    await vi.waitFor(() => expect(mocks.reject).toHaveBeenCalledOnce());
+    expect(mocks.reject).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "dipl:game-a:1:3" }),
+      7,
+      "I withdraw this offer.",
+    );
+    expect((pushedArg(0) as { messages: { ID: number }[] }).messages.map((m) => m.ID)).toEqual([40]);
+  });
+
+  it("re-pushes an idempotent rejection's existing row while reporting no state change", async () => {
+    const bridge = bridgeFor();
+    mocks.reject.mockResolvedValue({ rows: [dealRow(40, "deal-reject")], changed: false });
+
+    bridge.handleNotification(dealEvent(25, { Action: "reject", ProposalMessageID: 7 }));
+
+    await vi.waitFor(() => expect(mocks.notify).toHaveBeenCalledOnce());
+    // The panel dedupes the repeated row by ID, but the deal screen's resolver needs it to release
+    // the mounted editor, so the acknowledgement is pushed exactly as a fresh rejection would be.
+    expect(pushedNames()).toEqual(["VoxDeorumDiploMessages"]);
+    expect((pushedArg(0) as { messages: { ID: number }[] }).messages.map((m) => m.ID)).toEqual([40]);
+    expect(mocks.notify).toHaveBeenCalledWith(expect.objectContaining({ changed: false }));
+  });
+
+  it("maps a typed proposal conflict to one error Status", async () => {
+    const bridge = bridgeFor();
+    mocks.accept.mockRejectedValue(new ProposalConflictError("That proposal is no longer the open offer."));
+
+    bridge.handleNotification(dealEvent(26, { Action: "accept", ProposalMessageID: 7 }));
+
+    await vi.waitFor(() => expect(pushedNames()).toEqual(["VoxDeorumDiploStatus"]));
+    expect(pushedArg(0)).toEqual({
+      state: "error",
+      detail: "That proposal is no longer the open offer.",
+    });
+    expect(mocks.notify).not.toHaveBeenCalled();
+  });
+
+  it("maps a busy thread to the one shared busy wording", async () => {
+    const bridge = bridgeFor();
+    mocks.reject.mockRejectedValue(new ThreadBusyError());
+
+    bridge.handleNotification(dealEvent(27, { Action: "reject", ProposalMessageID: 7 }));
+
+    await vi.waitFor(() => expect(pushedNames()).toEqual(["VoxDeorumDiploStatus"]));
+    expect(pushedArg(0)).toEqual({ state: "error", detail: threadBusyMessage });
+  });
+
+  it("keeps an untyped deal failure on the generic transport-failure path", async () => {
+    const bridge = bridgeFor();
+    mocks.accept.mockRejectedValue(new Error("store unreachable"));
+
+    bridge.handleNotification(dealEvent(28, { Action: "accept", ProposalMessageID: 7 }));
+
+    await vi.waitFor(() => expect(pushedNames()).toEqual(["VoxDeorumDiploStatus"]));
+    expect(pushedArg(0)).toEqual({
+      state: "error",
+      detail: "Diplomacy request failed: store unreachable",
+    });
   });
 });

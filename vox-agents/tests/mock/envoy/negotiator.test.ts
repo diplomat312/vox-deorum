@@ -318,6 +318,66 @@ describe('propose-deal', () => {
     expect(mcp.calls('append-message')).toHaveLength(0);
   });
 
+  it('reframes an impossible promise as Give/Receive feedback, writing nothing', async () => {
+    // Stage 7.04: promise legality is binding at the shared proposal chokepoint, exactly like item
+    // legality. A commitment that is already in effect (or otherwise impossible) must never become the
+    // durable active offer — and the model gets structured, first-person feedback it can act on.
+    mcp.respondWith('inspect-deal', structuredResult({
+      items: [],
+      promises: [{
+        promiserID: 3, recipientID: 1, promiseType: 'EXPANSION',
+        legality: false, reasons: ['You have already made this promise.'],
+        agreeabilityFactors: { recentDiplomaticEvents: {}, note: '' },
+      }],
+      tradableRange: {},
+    }));
+    const input = negotiatorInput({ intent: 'reassure them', upfrontInspection: legalInspection });
+    const tools = createNegotiatorTerminalTools(makeContext(input));
+
+    const msg = await run(tools['propose-deal'], {
+      Rationale: 'Buy goodwill cheaply.',
+      Message: 'We will keep our distance.',
+      Give: ["Won't settle near you"],
+      Receive: [],
+    });
+
+    // The promiser is our own seat, so it reframes as a Give — read from the structured detail's
+    // `kind` discriminant, never by parsing the display line.
+    expect(msg).toContain('[Give]');
+    expect(msg).toContain('You have already made this promise.');
+    expect(input.outcome).toBeUndefined();
+    // The whole point: an illegal promise writes no proposal row.
+    expect(mcp.calls('append-message')).toHaveLength(0);
+  });
+
+  it('archives a promise the inspector reports as legal', async () => {
+    mcp.respondWith('inspect-deal', structuredResult({
+      items: [],
+      promises: [{
+        promiserID: 3, recipientID: 1, promiseType: 'EXPANSION',
+        legality: true, reasons: [],
+        agreeabilityFactors: { recentDiplomaticEvents: {}, note: '' },
+      }],
+      tradableRange: {},
+    }));
+    mcp.respondWith('append-message', structuredResult({
+      ID: 31, Player1ID: 1, Player2ID: 3, Player1Role: 'the leader', Player2Role: 'negotiator',
+      SpeakerID: 3, MessageType: 'deal-proposal', Content: 'We will keep our distance.', Turn: 5,
+    }));
+    const input = negotiatorInput({ intent: 'reassure them', upfrontInspection: legalInspection });
+    const tools = createNegotiatorTerminalTools(makeContext(input));
+
+    const msg = await run(tools['propose-deal'], {
+      Rationale: 'Buy goodwill cheaply.',
+      Message: 'We will keep our distance.',
+      Give: ["Won't settle near you"],
+      Receive: [],
+    });
+
+    expect(msg).toContain('deal message #31');
+    expect(mcp.calls('append-message')).toHaveLength(1);
+  });
+
   it('does not create an opening proposal while another proposal is open', async () => {
     setOpenProposal();
     const input = negotiatorInput({ intent: 'open trade', upfrontInspection: legalInspection });
@@ -337,19 +397,29 @@ describe('propose-deal', () => {
 });
 
 describe('reject-deal', () => {
-  it('appends a deal-reject referencing the on-the-table proposal', async () => {
+  it('rejects the on-the-table proposal through the transactional reject action', async () => {
     setOpenProposal();
-    mcp.respondWith('append-message', structuredResult({ ID: 13, Turn: 5 }));
+    // `append-message` refuses deal-reject now; the transactional action owns the row.
+    mcp.onTool('reject-agent-deal', (args) => structuredResult({
+      Result: 'rejected',
+      ProposalMessageID: args.ProposalMessageID,
+      AlreadyRejected: false,
+      Row: {
+        ID: 13, Player1ID: 1, Player2ID: 3, Player1Role: 'the leader', Player2Role: 'diplomat',
+        SpeakerID: args.SpeakerID, MessageType: 'deal-reject', Content: args.Content,
+        Payload: { ProposalMessageID: args.ProposalMessageID }, Turn: 5, CreatedAt: 0,
+      },
+    }));
     const input = negotiatorInput({ activeProposal: { messageID: 7, deal: { version: 1, items: [], promises: [] } } });
     const tools = createNegotiatorTerminalTools(makeContext(input));
 
     await run(tools['reject-deal'], { rationale: 'Insulting offer.', Message: 'We must decline this.' });
 
-    const append = mcp.calls('append-message')[0]!.args;
-    expect(append.MessageType).toBe('deal-reject');
+    const rejection = mcp.calls('reject-agent-deal')[0]!.args;
     // The outward Message is the deal-reject row's Content, rendered on the reject's own standalone card.
-    expect(append.Content).toBe('We must decline this.');
-    expect((append.Payload as any).ProposalMessageID).toBe(7);
+    expect(rejection.Content).toBe('We must decline this.');
+    expect(rejection.ProposalMessageID).toBe(7);
+    expect(mcp.calls('append-message')).toHaveLength(0);
     expect(input.outcome).toMatchObject({ type: 'reject', proposalMessageID: 7, rejectMessageID: 13, message: 'We must decline this.' });
   });
 

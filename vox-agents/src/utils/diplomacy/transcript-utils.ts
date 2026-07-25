@@ -16,9 +16,24 @@ import type { EnvoyThread, MessageWithMetadata, ParticipantIdentity } from "../.
 // The canonical transcript/deal wire contracts are owned by mcp-server; re-export the row
 // type so existing importers keep working, and reuse the shared deal-message guard.
 import type { TranscriptMessage } from "../../../../mcp-server/dist/utils/transcript-schema.js";
-import { isDealMessage, type DealTranscriptMessage } from "../../../../mcp-server/dist/utils/deal-schema.js";
+import { DEAL_MESSAGE_TYPES, type DealTranscriptMessage } from "../../../../mcp-server/dist/utils/deal-schema.js";
 import { sendMessageToolName } from "./send-message-tool-name.js";
 export type { TranscriptMessage } from "../../../../mcp-server/dist/utils/transcript-schema.js";
+
+/**
+ * The durable row fields every transport needs after a write commits: the identity the panel
+ * deduplicates by, who spoke, what kind of row it is, its text, the server-stamped turn, and (for
+ * deal rows) the payload that carries the terms/outcome. `CreatedAt` rides along when the store
+ * echoed it, so a row hydrated straight into the live cache keeps its real timestamp.
+ *
+ * Every deal/transcript writer returns this projection, so a caller never has to reread the
+ * transcript to learn what it just created (stage 7.04 work item 2). A full {@link TranscriptMessage}
+ * is structurally assignable to it, so a read row and a freshly committed row flow through the same
+ * code paths.
+ */
+export type TranscriptPushMessage =
+  Pick<TranscriptMessage, "ID" | "SpeakerID" | "MessageType" | "Content" | "Turn">
+  & Partial<Pick<TranscriptMessage, "Payload" | "CreatedAt">>;
 
 /**
  * Expands a deal transcript row into the inline conversation line the chat record renders in place of
@@ -80,27 +95,81 @@ export function speakerRole(speakerID: number, voicedID: number): "assistant" | 
 }
 
 /**
- * Hydrate a single stored row into a thread cache item: a chat `message` + `metadata`, plus the
- * `deal` payload when it is a `deal-*` row (so the UI renders an inline deal card and reduces deal
- * state from it). The one place a transcript row becomes a cache item — used both for bulk
- * hydration and for mirroring a freshly-written deal row into the live cache.
+ * True when a durable row (read or freshly committed) is one of the `deal-*` types, i.e. it carries
+ * deal terms or a deal outcome on its Payload. Typed over the projected {@link TranscriptPushMessage}
+ * rather than the full row so a committed write's projection can be classified without a reread.
  */
-export function hydrateRow(m: TranscriptMessage, voicedID: number): MessageWithMetadata {
+export function isDealRow(row: Pick<TranscriptPushMessage, "MessageType">): boolean {
+  return (DEAL_MESSAGE_TYPES as readonly string[]).includes(row.MessageType);
+}
+
+/**
+ * Hydrate a durable row projection into a thread cache item: a chat `message` + `metadata`, plus the
+ * `deal` payload when it is a `deal-*` row (so the UI renders an inline deal card and reduces deal
+ * state from it). The one place a transcript row becomes a cache item — used for bulk hydration, for
+ * the caller/reply rows a chat turn commits, and for mirroring a freshly-written deal row.
+ *
+ * A committed-write projection may omit `CreatedAt` (the store's exact unixepoch loads on the next
+ * full re-hydrate), in which case the cache row is stamped now; the timestamp is display-only.
+ */
+export function hydrateRow(m: TranscriptPushMessage, voicedID: number): MessageWithMetadata {
   const item: MessageWithMetadata = {
     message: { role: speakerRole(m.SpeakerID, voicedID), content: m.Content } as ModelMessage,
     // SQLite's unixepoch() stores whole seconds; JavaScript Date expects milliseconds.
     // The durable row ID rides along so the prompt builder can split past/ongoing by the
     // monotonic store ID (EnvoyThread.pastMessageID) without any index bookkeeping.
-    metadata: { datetime: new Date(m.CreatedAt * 1000), turn: m.Turn, id: m.ID },
+    metadata: {
+      datetime: typeof m.CreatedAt === "number" ? new Date(m.CreatedAt * 1000) : new Date(),
+      turn: m.Turn,
+      id: m.ID,
+    },
   };
-  // The guard narrows `m` to DealTranscriptMessage — no cast needed.
-  if (isDealMessage(m)) item.deal = m;
+  // A deal row's cache item carries the row itself so the board reduces state from the same ordered
+  // list it renders. Every deal-* projection this codebase produces is a full row (the store echoes
+  // the canonical columns), so the narrowing cast is safe where the type only promises the projection.
+  if (isDealRow(m)) item.deal = m as DealTranscriptMessage;
   return item;
 }
 
 /** Mirror a known deal row into a cache item (the row is already narrowed to a deal message). */
 export function hydrateDealRow(row: DealTranscriptMessage, voicedID: number): MessageWithMetadata {
   return hydrateRow(row, voicedID);
+}
+
+/** The durable store IDs already mirrored into a thread's live message cache. */
+export function cachedRowIDs(thread: EnvoyThread): Set<number> {
+  const ids = new Set<number>();
+  for (const item of thread.messages) {
+    if (item.metadata.id !== undefined) ids.add(item.metadata.id);
+    if (item.deal) ids.add(item.deal.ID);
+  }
+  return ids;
+}
+
+/**
+ * Mirror durable rows that are not yet in a thread's live cache, in ascending store-ID order, at
+ * `index` (default: the end). Rows already present by ID are skipped, so this is safe to call with a
+ * turn's whole captured row set — including the caller/reply rows the commit path already placed.
+ *
+ * This is how a turn repairs its cache from what it actually committed instead of rereading the
+ * transcript: on success the mid-run deal/close rows land at the reply boundary (ahead of the
+ * normalized reply), and on failure every durable row survives the transient-output rollback.
+ *
+ * @returns the number of rows inserted
+ */
+export function insertDurableRows(
+  thread: EnvoyThread,
+  rows: TranscriptPushMessage[],
+  index?: number
+): number {
+  const present = cachedRowIDs(thread);
+  const missing = rows
+    .filter((row) => !present.has(row.ID))
+    .sort((left, right) => left.ID - right.ID);
+  if (missing.length === 0) return 0;
+  const items = missing.map((row) => hydrateRow(row, thread.agent));
+  thread.messages.splice(index ?? thread.messages.length, 0, ...items);
+  return items.length;
 }
 
 /**
@@ -112,7 +181,7 @@ export function hydrateDealRow(row: DealTranscriptMessage, voicedID: number): Me
  */
 export function hydrateMessages(transcript: TranscriptMessage[], voicedID: number): MessageWithMetadata[] {
   return transcript
-    .filter((m) => CONVERSATION_TYPES.has(m.MessageType) || isDealMessage(m))
+    .filter((m) => CONVERSATION_TYPES.has(m.MessageType) || isDealRow(m))
     .map((m) => hydrateRow(m, voicedID));
 }
 

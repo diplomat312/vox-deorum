@@ -38,7 +38,10 @@ local m_presentation = nil -- nil | "pending" | "leader" | "static"
 local m_sceneLeaderID = -1
 local m_pendingCounterpartID, m_pendingSeconds = -1, 0
 local m_dealScreenPriorPresentation = nil
-local m_dealOpenError = nil
+local m_inlineError = nil
+-- Two installed drivers, one active: the real transport ships by default and the
+-- offline mock sandbox replaces it while VoxDeorumUseMockDrivers is true.
+local m_drivers, m_driverKind, m_driverMissReported = {}, "real", {}
 
 ContextPtr:SetHide(true)
 
@@ -278,7 +281,7 @@ local function openDeal(row, mode)
 	if mode ~= "incoming" and mode ~= "own" then return end
 	local deal = row.Payload and row.Payload.Deal or nil
 	if deal == nil then return end
-	m_dealOpenError = nil
+	m_inlineError = nil
 	local proposalID = (mode == "incoming" or mode == "own") and row.ID or nil
 	LuaEvents.VoxDeorumOpenDealScreen({
 		counterpartID = m_counterpartID,
@@ -419,9 +422,9 @@ local function refreshTail(reduction)
 	elseif m_phase == "streaming" then
 		bindTailMessage(m_tail.streaming, m_counterpartID, m_streamingText); m_tail.streaming.Row:SetHide(false)
 	end
-	if m_dealOpenError ~= nil then
+	if m_inlineError ~= nil then
 		m_tail.status.Row:SetSizeX(m_geometry.rowWidth); m_tail.status.Text:SetWrapWidth(m_geometry.rowWidth - 60)
-		m_tail.status.Row:SetHide(false); m_tail.status.Text:SetText(m_dealOpenError)
+		m_tail.status.Row:SetHide(false); m_tail.status.Text:SetText(m_inlineError)
 	elseif m_loadingEarlier then
 		m_tail.status.Row:SetSizeX(m_geometry.rowWidth); m_tail.status.Text:SetWrapWidth(m_geometry.rowWidth - 60)
 		m_tail.status.Row:SetHide(false); addAnimated(m_tail.status.Text, Locale.ConvertTextKey("TXT_KEY_VD_DIPLO_LOADING_EARLIER") .. " ")
@@ -455,7 +458,12 @@ local function refreshInput()
 	elseif isClosedThisTurn(m_rows, m_currentTurn) then reason = Locale.ConvertTextKey("TXT_KEY_VD_DIPLO_CLOSED")
 	elseif m_phase == "ack-timeout" then reason = Locale.ConvertTextKey("TXT_KEY_VD_DIPLO_NOT_DELIVERED")
 	elseif m_phase == "reply-timeout" then reason = Locale.ConvertTextKey("TXT_KEY_VD_DIPLO_ENVOY_UNAVAILABLE")
-	elseif m_phase ~= "normal" then reason, animated = Locale.ConvertTextKey("TXT_KEY_VD_DIPLO_THINKING"), true end
+	elseif m_phase ~= "normal" then
+		-- Only the thinking phase carries a label key; every other phase argument
+		-- is data (the optimistic send text, a pending proposal ID).
+		local labelKey = m_phase == "thinking" and type(m_phaseArg) == "string" and m_phaseArg or "TXT_KEY_VD_DIPLO_THINKING"
+		reason, animated = Locale.ConvertTextKey(labelKey), true
+	end
 	Controls.InputFrame:SetHide(reason ~= nil); Controls.SendButton:SetHide(reason ~= nil); Controls.InputStatusSlot:SetHide(reason == nil); Controls.InputReason:SetHide(reason == nil)
 	if animated then addAnimated(Controls.InputReason, reason .. " ") else Controls.InputReason:SetText(reason or "") end
 	local canRetry = (m_phase == "ack-timeout" or m_phase == "reply-timeout") and not m_loadingEarlier
@@ -548,7 +556,7 @@ end
 -- Clear the panel before a new pair or server reflush.
 local function reset(meta)
 	m_rows, m_rowByID, m_rowInstances, m_lastBuiltTurn, m_streamingText = {}, {}, {}, nil, ""
-	m_dealOpenError = nil
+	m_inlineError = nil
 	m_hasMore, m_loadingEarlier = meta and meta.hasMore == true or false, false
 	if meta == nil then m_phase = "loading" elseif meta.hasEnvoy == false then m_phase = "no-envoy" elseif meta.busy then m_phase = "thinking" else m_phase = "normal" end
 	m_phaseArg, m_dotSeconds, m_dotCount = nil, 0, 1
@@ -612,8 +620,38 @@ local function setCurrentTurn(turn)
 	local stick = isAtBottom(); m_currentTurn = tonumber(turn) or Game.GetGameTurn(); refreshState(stick)
 end
 
+-- Show one transient failure reason in the transcript tail; nil clears it.
+local function setInlineError(text)
+	local clean = text ~= nil and sanitizeText(text) or ""
+	m_inlineError = string.match(clean, "^%s*$") == nil and colorText(clean, "COLOR_NEGATIVE_TEXT") or nil
+	refreshState(isAtBottom())
+end
+
+-- Mock-only seam: present the offline sandbox as a pure observer would see it.
+local function setMockPureObserver(flag)
+	m_isPureObserver = flag == true
+	populateHeader(); rebuildRows(isAtBottom())
+end
+
+-- Drain the bridge's incoming Lua queue on the game core's behalf.
+--
+-- The engine stops ticking CvGame::update while the leaderhead scene is up, and every
+-- game-core pump point for CvConnectionService hangs off that tick. So for as long as the
+-- player sits in this conversation nothing routes the server's pushes: the Lua call never
+-- returns, neither end raises an error, and the panel just reaches its transport
+-- acknowledgement timeout. The UI thread keeps running here, so this context pumps for it.
+-- Absent on a DLL older than the binding, in which case we degrade to that same stall.
+local function pumpConnection()
+	if type(Game.ProcessConnectionMessages) ~= "function" then return end
+	local ok, errorMessage = pcall(Game.ProcessConnectionMessages)
+	if not ok then print("[VDDiploPanel] Connection pump failed: " .. tostring(errorMessage)) end
+end
+
 -- Tick animated labels and the active driver.
 local function onUpdate(delta)
+	-- Pump before the driver ticks, so a push landing this frame is applied before the
+	-- timeout that would otherwise have blamed it for silence.
+	pumpConnection()
 	m_dotSeconds = m_dotSeconds + delta
 	if m_dotSeconds >= 0.45 then m_dotSeconds, m_dotCount = 0, (m_dotCount % 3) + 1; for _, entry in ipairs(m_animated) do applyAnimated(entry) end end
 	if VoxDeorumDiploUI.driver ~= nil and VoxDeorumDiploUI.driver.onUpdate ~= nil then VoxDeorumDiploUI.driver.onUpdate(delta) end
@@ -626,6 +664,10 @@ local function onNotificationAdded(id, notificationType, tooltip, summary, gameV
 	if expected == nil or notificationType ~= expected or playerID ~= Game.GetActivePlayer() then return end
 	m_notificationIDs[gameValue] = m_notificationIDs[gameValue] or {}; m_notificationIDs[gameValue][id] = true; m_notificationOwner[id] = gameValue
 	m_notificationMessages[id] = tooltip
+	-- The bridge always posts after a successful outcome, so one for the pair the
+	-- player is already reading would only pile up behind the open panel. The mock
+	-- posts its own smoke notification on open, which is a seam, not an outcome.
+	if m_driverKind == "real" and m_presentation ~= nil and gameValue == m_counterpartID then UI.RemoveNotification(id) end
 end
 
 -- Prune indexes after native or programmatic removal.
@@ -671,7 +713,7 @@ local function presentPanel(counterpartID, mode)
 	cancelPending()
 	local wasQueued = m_presentation == "leader"
 	m_activePlayerID, m_counterpartID, m_currentTurn, m_warPromptOpen = VoxDeorumSeat.EffectiveSeat(), counterpartID, Game.GetGameTurn(), false
-	m_isPureObserver, m_mockPureObserver = VoxDeorumSeat.IsPureObserver(), false
+	m_isPureObserver = VoxDeorumSeat.IsPureObserver()
 	populateHeader()
 	m_presentation = mode
 	Controls.WarDim:SetHide(true); Controls.MainGrid:SetHide(false)
@@ -694,7 +736,7 @@ local function hidePanel()
 	if m_presentation == "pending" then cancelPending(); return end
 	if m_presentation == nil then return end
 	local wasLeader = m_presentation == "leader"
-	m_presentation, m_warPromptOpen, m_dealOpenError = nil, false, nil
+	m_presentation, m_warPromptOpen, m_inlineError = nil, false, nil
 	local driver = VoxDeorumDiploUI.driver
 	if driver ~= nil and driver.onHide ~= nil then driver.onHide() end
 	Controls.WarDim:SetHide(true); ContextPtr:ClearUpdate()
@@ -723,7 +765,7 @@ local function restorePanelAfterDeal(errorText, errorIsLiteral)
 	m_dealScreenPriorPresentation = nil
 	if errorText ~= nil then
 		local message = errorIsLiteral and tostring(errorText) or Locale.ConvertTextKey(errorText)
-		m_dealOpenError = colorText(sanitizeText(message), "COLOR_NEGATIVE_TEXT")
+		m_inlineError = colorText(sanitizeText(message), "COLOR_NEGATIVE_TEXT")
 	end
 	if prior ~= nil and m_presentation ~= nil then
 		if prior == "leader" and m_sceneLeaderID == m_counterpartID then
@@ -826,7 +868,7 @@ local function onSend() sendText(Controls.InputBox:GetText()) end
 -- Open deal authoring when input is available.
 local function onProposeDeal()
 	if isBoundActorCurrent() and not inputIsLocked() then
-		m_dealOpenError = nil
+		m_inlineError = nil
 		LuaEvents.VoxDeorumOpenDealScreen({ counterpartID = m_counterpartID, mode = "author" })
 	end
 end
@@ -885,13 +927,47 @@ local function showHideHandler(isHide, isInit)
 	elseif m_presentation == "leader" or m_presentation == "static" then ContextPtr:SetUpdate(onUpdate) end
 end
 
+-- Install one named driver table, activating it when it matches the current mode.
+-- Include order no longer decides which driver wins: this context does.
+local function registerDriver(kind, driver)
+	if (kind ~= "real" and kind ~= "mock") or type(driver) ~= "table" then return end
+	m_drivers[kind] = driver
+	if kind ~= m_driverKind then return end
+	VoxDeorumDiploUI.driver = driver
+	if type(driver.setActive) == "function" then driver.setActive(true) end
+end
+
+-- Swap the active driver. Every switch, in either direction, closes the panel and
+-- clears its transcript, so mock rows can never be mistaken for durable ones and a
+-- live pending action can never be resolved by the sandbox.
+local function setMockDrivers(useMock)
+	local wanted = useMock == true and "mock" or "real"
+	if wanted == m_driverKind then return end
+	local driver = m_drivers[wanted]
+	if driver == nil then
+		if not m_driverMissReported[wanted] then
+			m_driverMissReported[wanted] = true
+			print("Vox Deorum: no " .. wanted .. " conversation driver is registered; keeping " .. m_driverKind)
+		end
+		return
+	end
+	local previous = m_drivers[m_driverKind]
+	hidePanel()
+	if previous ~= nil and type(previous.setActive) == "function" then previous.setActive(false) end
+	m_driverKind, VoxDeorumDiploUI.driver = wanted, driver
+	if type(driver.setActive) == "function" then driver.setActive(true) end
+	reset(nil)
+end
+
 -- Expose the stable interface shared by mock and transport drivers.
-VoxDeorumDiploUI = { reset = reset, setRows = setRows, appendRow = appendRow, prependRows = prependRows, setPhase = setPhase, setStreamingText = setStreamingText, setHasMore = setHasMore, setCurrentTurn = setCurrentTurn, setMockPureObserver = setMockPureObserver, driver = {} }
+VoxDeorumDiploUI = { reset = reset, setRows = setRows, appendRow = appendRow, prependRows = prependRows, setPhase = setPhase, setStreamingText = setStreamingText, setHasMore = setHasMore, setCurrentTurn = setCurrentTurn, setInlineError = setInlineError, setMockPureObserver = setMockPureObserver, registerDriver = registerDriver, driver = {} }
 
 buildTailPool()
 Events.NotificationAdded.Add(onNotificationAdded); Events.NotificationRemoved.Add(onNotificationRemoved)
 Events.AILeaderMessage.Add(onPanelAILeaderMessage); Events.LeavingLeaderViewMode.Add(onPanelLeavingLeaderView)
 LuaEvents.VoxDeorumDiploOpen.Add(onConverseOpen); LuaEvents.VoxDeorumDiplomacyNotificationActivated.Add(onNotificationActivated)
+-- One shared toggle moves this context and the deal screen together.
+LuaEvents.VoxDeorumUseMockDrivers.Add(setMockDrivers)
 LuaEvents.VoxDeorumDiploPanelDemoteForDeal.Add(demotePanelForDeal); LuaEvents.VoxDeorumDiploPanelRestoreAfterDeal.Add(restorePanelAfterDeal)
 Controls.GoodbyeButton:RegisterCallback(Mouse.eLClick, hidePanel)
 Controls.LoadEarlierButton:RegisterCallback(Mouse.eLClick, onLoadEarlier); Controls.InputBox:RegisterCallback(onInputChanged); Controls.SendButton:RegisterCallback(Mouse.eLClick, onSend)

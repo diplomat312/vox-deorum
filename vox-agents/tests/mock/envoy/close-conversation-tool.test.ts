@@ -63,7 +63,9 @@ describe('close-conversation tool', () => {
   });
 
   it('writes a close authored by the agent seat and returns the stamped turn', async () => {
-    mcp.respondWith('append-message', structuredResult({ Turn: 8 }));
+    mcp.onTool('append-message', (args) => structuredResult({
+      ID: 30, SpeakerID: args.SpeakerID, MessageType: args.MessageType, Content: args.Content, Turn: 8,
+    }));
 
     const result = await close(thread(), 'Until next time.');
 
@@ -80,17 +82,31 @@ describe('close-conversation tool', () => {
       SpeakerID: 1, MessageType: 'deal-proposal', Content: 'Offer',
       Payload: { Deal: { version: 1, items: [], promises: [] } }, Turn: 5, CreatedAt: 0,
     }] }));
-    let nextID = 20;
-    mcp.onTool('append-message', () => structuredResult({ ID: nextID++, Turn: 7 }));
+    // The retraction goes through the transactional reject action; only the close still uses
+    // append-message (which refuses deal-reject outright).
+    mcp.onTool('reject-agent-deal', (args) => structuredResult({
+      Result: 'rejected',
+      ProposalMessageID: args.ProposalMessageID,
+      AlreadyRejected: false,
+      Row: {
+        ID: 20, Player1ID: 1, Player2ID: 3, Player1Role: 'the leader', Player2Role: 'diplomat',
+        SpeakerID: args.SpeakerID, MessageType: 'deal-reject', Content: args.Content,
+        Payload: { ProposalMessageID: args.ProposalMessageID }, Turn: 7, CreatedAt: 0,
+      },
+    }));
+    mcp.onTool('append-message', (args) => structuredResult({
+      ID: 21, SpeakerID: args.SpeakerID, MessageType: args.MessageType, Content: args.Content, Turn: 7,
+    }));
 
     const result = await close(thread(), 'Done here.');
 
     expect(result).toBe('Conversation closed on turn 7. It cannot be reopened until a later turn.');
     // The open proposal is rejected first, then the close is written — both authored by seat 3.
-    const appends = mcp.calls('append-message');
-    expect(appends.map((c) => c.args.MessageType)).toEqual(['deal-reject', 'close']);
-    expect(appends[0].args.SpeakerID).toBe(3); // thread.agent retracts
-    expect(appends[0].args.Payload.ProposalMessageID).toBe(9);
+    const rejects = mcp.calls('reject-agent-deal');
+    expect(rejects).toHaveLength(1);
+    expect(rejects[0].args.SpeakerID).toBe(3); // thread.agent retracts
+    expect(rejects[0].args.ProposalMessageID).toBe(9);
+    expect(mcp.calls('append-message').map((c) => c.args.MessageType)).toEqual(['close']);
   });
 
   it('returns a failure string when the store write throws', async () => {

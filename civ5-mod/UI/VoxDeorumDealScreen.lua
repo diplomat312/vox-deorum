@@ -19,6 +19,9 @@ local counterRequired, editedSinceFilter, removalNoticeVisible = false, false, f
 local queuedAsPopup = false
 local pendingSeconds, clobberSeconds, targetPromiserID = 0, 0, nil
 local coopWarTargetAvailability = {}
+-- Two installed drivers, one active: the real transport ships by default and the
+-- offline mock sandbox replaces it while VoxDeorumUseMockDrivers is true.
+local drivers, driverKind, driverMissReported = {}, "real", {}
 local refresh
 local usPromiseIM = InstanceManager:new("VoxPromisePocketEntry", "Button", Controls.VoxUsPocketPromiseStack)
 local themPromiseIM = InstanceManager:new("VoxPromisePocketEntry", "Button", Controls.VoxThemPocketPromiseStack)
@@ -79,6 +82,18 @@ end
 -- Return whether one player is a living major civilization.
 local function livingMajor(playerID)
 	return VoxDeorumDealUtils.IsLivingMajor(playerID, Players, GameDefines)
+end
+
+-- Return whether one ID is an addressable Civ player slot with live engine tables.
+-- Presentation admits an observer slot, matching VP's own native trade screen; item
+-- legality, inspection, archival, and enactment keep their major-civilization limits.
+local function addressableSeat(playerID)
+	local maxCivPlayers = GameDefines ~= nil and GameDefines.MAX_CIV_PLAYERS or nil
+	if not isInteger(playerID) or type(maxCivPlayers) ~= "number" or playerID < 0 or playerID >= maxCivPlayers then return false end
+	local player = Players[playerID]
+	if player == nil then return false end
+	local teamOK, teamID = VoxDeorumDealUtils.TryCall(player, "GetTeam")
+	return teamOK and type(teamID) == "number" and Teams[teamID] ~= nil
 end
 
 -- Return whether the mounted effective seat is still current.
@@ -287,6 +302,11 @@ local function evaluatePromises(promises)
 		availability[index] = { available = false, reason = reason }
 		allAvailable, firstReason = false, firstReason or reason
 	end
+	-- Memory safety, not presentation admission: CvDiplomacyAI keeps promise state in
+	-- arrays sized MAX_MAJOR_CIVS whose only bounds check is a PRECONDITION that
+	-- compiles out of the release DLL, so an out-of-range seat reads out of bounds
+	-- inside C++ where pcall cannot reach. Mount admission stays wide (addressableSeat);
+	-- an unsupported seat fails cleanly here instead.
 	if not effectiveSeatIsCurrent() or not livingMajor(actorID) or not livingMajor(counterpartID) then
 		local reason = text("TXT_KEY_VD_DEAL_ERROR_ACTOR_UNAVAILABLE")
 		for index = 1, #normalized do fail(index, reason) end
@@ -375,6 +395,11 @@ end
 local function projectProposal(items, promises)
 	local payload = { version = 1, items = items or {}, promises = promises or {}, message = nil }
 	if not VoxDeorumDealUtils.ValidatePayload(payload, actorID, counterpartID) then return { blockingReason = text("TXT_KEY_VD_DEAL_ERROR_MALFORMED_TERMS"), visibleItems = {}, visiblePromises = {}, droppedReasons = {} } end
+	-- The same unsupported-seat gate, and here it is exactly the native item test run
+	-- once instead of per term: CvDeal::IsPossibleToTradeItem refuses every item whose
+	-- owner is not a living major civilization, so no term can enter the shared scratch
+	-- deal and the native table renders empty either way. The proposal's terms stay
+	-- readable in the panel's transcript card.
 	if not effectiveSeatIsCurrent() or not livingMajor(actorID) or not livingMajor(counterpartID) then return { blockingReason = text("TXT_KEY_VD_DEAL_ERROR_ACTOR_UNAVAILABLE"), visibleItems = {}, visiblePromises = {}, droppedReasons = {} } end
 	local itemResult = projectItems(items)
 	if itemResult.blockingReason ~= nil then return { blockingReason = itemResult.blockingReason, visibleItems = {}, visiblePromises = {}, droppedReasons = {} } end
@@ -859,8 +884,25 @@ local function resolve(result)
 	refresh()
 end
 
+-- Drain the bridge's incoming Lua queue on the game core's behalf.
+--
+-- The engine stops ticking CvGame::update while the leaderhead scene is up, so every
+-- game-core pump point for CvConnectionService goes quiet for as long as this editor is
+-- open over it. The conversation panel pumps for itself, but it is queued below this
+-- popup and stops updating while we are mounted, so we cannot lean on it: without this
+-- the rows that resolve a mounted deal never arrive and every action hits its timeout.
+-- Absent on a DLL older than the binding, in which case we degrade to that same stall.
+local function pumpConnection()
+	if type(Game.ProcessConnectionMessages) ~= "function" then return end
+	local ok, errorMessage = pcall(Game.ProcessConnectionMessages)
+	if not ok then print("[VDDealScreen] Connection pump failed: " .. tostring(errorMessage)) end
+end
+
 -- Advance pending animation, detect scratch clobbers, and service the mock driver.
 local function onUpdate(delta)
+	-- Ahead of the mounted check and the timers below: a push landing this frame must be
+	-- applied before the timeout that would otherwise have blamed it for silence.
+	pumpConnection()
 	if not mounted then return end
 	if pending then
 		pendingSeconds = pendingSeconds + delta
@@ -880,7 +922,8 @@ end
 -- Mount one validated request for an explicitly authorized native actor.
 local function mount(request, mountActorID, allowMockAuthorization)
 	if type(request) ~= "table" or (request.mode ~= "author" and request.mode ~= "incoming" and request.mode ~= "own") then return end
-	if not isInteger(mountActorID) or not isInteger(request.counterpartID) or not livingMajor(mountActorID) or not livingMajor(request.counterpartID) or request.counterpartID == mountActorID then return end
+	-- The mounted seat only has to be addressable; the counterpart is still a living major civilization.
+	if not addressableSeat(mountActorID) or not isInteger(request.counterpartID) or not livingMajor(request.counterpartID) or request.counterpartID == mountActorID then return end
 	if (request.mode == "incoming" or request.mode == "own") and (not isInteger(request.proposalMessageID) or request.proposalMessageID <= 0 or not VoxDeorumDealUtils.ValidatePayload(request.deal, mountActorID, request.counterpartID)) then return end
 	if (request.mode == "incoming" or request.mode == "own") and not validPromiseWireShape(request.deal.promises, mountActorID, request.counterpartID) then return end
 	if request.mode == "author" and request.deal ~= nil then return end
@@ -913,10 +956,10 @@ local function mount(request, mountActorID, allowMockAuthorization)
 	if driver ~= nil and type(driver.onOpen) == "function" then driver.onOpen(request) end
 end
 
--- Mount a live request only for the current effective seat.
+-- Mount a live request for the current effective seat, observer slots included.
 local function open(request)
 	local seat = VoxDeorumSeat.EffectiveSeat()
-	if not isInteger(seat) or not livingMajor(seat) then return end
+	if not addressableSeat(seat) then return end
 	mount(request, seat, false)
 end
 
@@ -1002,6 +1045,40 @@ LuaEvents.VoxDeorumTradeLogicClearTable.Add(onTradeLogicTableRefresh)
 LuaEvents.VoxDeorumTradeLogicDisplayDeal.Add(onTradeLogicTableRefresh)
 LuaEvents.VoxDeorumTradeLogicResetDisplay.Add(onTradeLogicPocketRefresh)
 LuaEvents.VoxDeorumTradeLogicUpdateButtons.Add(onTradeLogicUpdate)
-VoxDeorumDealUI = { driver = {}, onAction = dispatch, resolve = resolve, open = open, openMock = openMock, close = closeScreen }
+-- Install one named driver table, activating it when it matches the current mode.
+-- Include order no longer decides which driver wins: this context does.
+local function registerDriver(kind, driver)
+	if (kind ~= "real" and kind ~= "mock") or type(driver) ~= "table" then return end
+	drivers[kind] = driver
+	if kind ~= driverKind then return end
+	VoxDeorumDealUI.driver = driver
+	if type(driver.setActive) == "function" then driver.setActive(true) end
+end
 
+-- Swap the active driver. Every switch, in either direction, closes a mounted
+-- editor, so a live pending action can never be resolved by the sandbox and mock
+-- terms can never reach a real action.
+local function setMockDrivers(useMock)
+	local wanted = useMock == true and "mock" or "real"
+	if wanted == driverKind then return end
+	local driver = drivers[wanted]
+	if driver == nil then
+		if not driverMissReported[wanted] then
+			driverMissReported[wanted] = true
+			print("Vox Deorum: no " .. wanted .. " deal driver is registered; keeping " .. driverKind)
+		end
+		return
+	end
+	local previous = drivers[driverKind]
+	if mounted then closeScreen() end
+	if previous ~= nil and type(previous.setActive) == "function" then previous.setActive(false) end
+	driverKind, VoxDeorumDealUI.driver = wanted, driver
+	if type(driver.setActive) == "function" then driver.setActive(true) end
+end
+
+VoxDeorumDealUI = { driver = {}, onAction = dispatch, resolve = resolve, open = open, openMock = openMock, close = closeScreen, registerDriver = registerDriver }
+-- One shared toggle moves this context and the conversation panel together.
+LuaEvents.VoxDeorumUseMockDrivers.Add(setMockDrivers)
+
+include("VoxDeorumDealTransport")
 include("VoxDeorumDealScreenMock")
