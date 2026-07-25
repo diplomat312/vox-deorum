@@ -86,9 +86,16 @@ local function layoutPanel()
 	Controls.MainGrid:ReprocessAnchoring(); Controls.ContentColumn:ReprocessAnchoring(); Controls.TranscriptScroll:CalculateInternalSize()
 end
 
--- Strip the named-pipe delimiter from text.
+-- Strip the named-pipe delimiter from text and fold punctuation the Civ 5 font cannot
+-- draw. Folding first means a fullwidth "！＠＃＄％＾！" cannot fold into a live
+-- delimiter behind the strip. Every panel surface routes through here -- bubbles, deal
+-- summaries, the streaming and optimistic tails, inline errors, and the input box --
+-- so both directions normalize identically and the input box shows the player the
+-- exact punctuation their message will carry.
 local function sanitizeText(value)
-	return VoxDeorumDealUtils.StripDelimiter(value)
+	-- Bound to one value: StripDelimiter tail-returns gsub's replacement count too.
+	local clean = VoxDeorumDealUtils.StripDelimiter(VoxDeorumDealUtils.FoldUnrenderablePunctuation(value))
+	return clean
 end
 
 -- Wrap display text in one of Civilization V's named text colors.

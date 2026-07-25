@@ -269,6 +269,67 @@ function VoxDeorumDealUtils.StripDelimiter(text)
 	return string.gsub(tostring(text or ""), delimiterPattern, "")
 end
 
+-- Civilization V draws UI text from the bitmap atlases in
+-- Assets/UI/Fonts/Tw Cent MT/TwCenMT*.ggxml, and those carry only U+0020-U+007E,
+-- U+00A0-U+00FF, OE/oe, and R-acute. Every other codepoint draws *nothing at all* --
+-- the character is silently missing rather than shown as a fallback box. Two sources
+-- routinely produce such text on the diplomacy path: a fullwidth IME (U+FF01-U+FF5E,
+-- so a typed "，" vanishes) and model prose (em dashes, curly quotes, ellipses,
+-- U+02BB). Each of those has an exact ASCII counterpart, so folding them is lossless
+-- in meaning and safe in both directions.
+--
+-- Ideographs, emoji, and other scripts have no ASCII counterpart and are deliberately
+-- left untouched: the game cannot render them either way, and rewriting them would
+-- corrupt the outbound message the envoy reads.
+local punctuationFolds = {
+	-- General Punctuation dashes (U+2010-U+2015) and the minus sign (U+2212).
+	["\226\128\144"] = "-", ["\226\128\145"] = "-", ["\226\128\146"] = "-",
+	["\226\128\147"] = "-", ["\226\128\148"] = "-", ["\226\128\149"] = "-",
+	["\226\136\146"] = "-",
+	-- Curly quotes and primes (U+2018-U+201F, U+2032-U+2033).
+	["\226\128\152"] = "'", ["\226\128\153"] = "'", ["\226\128\154"] = ",",
+	["\226\128\155"] = "'", ["\226\128\156"] = "\"", ["\226\128\157"] = "\"",
+	["\226\128\158"] = "\"", ["\226\128\159"] = "\"",
+	["\226\128\178"] = "'", ["\226\128\179"] = "\"",
+	-- Bullet, ellipsis, angle quotes, fraction slash.
+	["\226\128\162"] = "*", ["\226\128\166"] = "...",
+	["\226\128\185"] = "<", ["\226\128\186"] = ">", ["\226\129\132"] = "/",
+	-- Exotic spaces (U+2002-U+200A, U+202F) collapse to one space; ZWSP disappears.
+	["\226\128\130"] = " ", ["\226\128\131"] = " ", ["\226\128\132"] = " ",
+	["\226\128\133"] = " ", ["\226\128\134"] = " ", ["\226\128\135"] = " ",
+	["\226\128\136"] = " ", ["\226\128\137"] = " ", ["\226\128\138"] = " ",
+	["\226\128\175"] = " ", ["\226\128\139"] = "",
+	-- Modifier letter apostrophes, as in "Hawai'i" (U+02B9-U+02BC).
+	["\202\185"] = "'", ["\202\186"] = "\"", ["\202\187"] = "'", ["\202\188"] = "'",
+	-- CJK punctuation an IME emits alongside the fullwidth forms (U+3000-U+3002,
+	-- U+300C-U+300D, U+3010-U+3011). Brackets fold to parentheses, never to "[",
+	-- so a fold can never manufacture Civ 5 markup.
+	["\227\128\128"] = " ", ["\227\128\129"] = ",", ["\227\128\130"] = ".",
+	["\227\128\140"] = "\"", ["\227\128\141"] = "\"",
+	["\227\128\144"] = "(", ["\227\128\145"] = ")",
+}
+
+-- Fold one UTF-8 sequence: an explicit counterpart first, then the fullwidth block.
+local function foldSequence(sequence)
+	local mapped = punctuationFolds[sequence]
+	if mapped ~= nil then return mapped end
+	-- U+FF01-U+FF5E are ASCII 0x21-0x7E shifted by 0xFEE0, which in UTF-8 means the
+	-- EF BC and EF BD lead pairs with a fixed offset on the trailing byte.
+	if #sequence == 3 and string.byte(sequence, 1) == 239 then
+		local lead, trail = string.byte(sequence, 2), string.byte(sequence, 3)
+		if lead == 188 and trail >= 129 then return string.char(trail - 96) end
+		if lead == 189 and trail <= 158 then return string.char(trail - 32) end
+	end
+	return sequence
+end
+
+-- Replace punctuation the Civ 5 font cannot draw with its ASCII counterpart. Valid
+-- UTF-8 lets one pass claim a whole sequence: continuation bytes never start one.
+function VoxDeorumDealUtils.FoldUnrenderablePunctuation(text)
+	local folded = string.gsub(tostring(text or ""), "[\194-\244][\128-\191]*", foldSequence)
+	return folded
+end
+
 -- Remove the named-pipe delimiter and trim a message for serialization.
 function VoxDeorumDealUtils.SanitizeMessage(text)
 	local clean = VoxDeorumDealUtils.StripDelimiter(text)
