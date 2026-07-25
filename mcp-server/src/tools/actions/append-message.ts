@@ -12,8 +12,11 @@
  * is available). Roles do not encode human-vs-LLM.
  *
  * The tool is archival only: it does not stream, notify, run agents, enact deals, or
- * decide whether a deal is current/accepted. It writes one TimedKnowledge row and sets
- * visibility for the real participant(s). None of the three terminal deal answers is
+ * decide whether a deal is current/accepted. A pure observer's real seat is accepted the
+ * same way, under the exact `Observer` role: it is a concrete slot that holds no
+ * civilization, so it is exempt from the living-major check and owns no visibility column,
+ * but it must be paired with one in-range major civilization. It writes one TimedKnowledge
+ * row and sets visibility for the real participant(s). None of the three terminal deal answers is
  * emitted here (a pinned writer-split): `deal-accept` and `deal-enacted` go through the
  * enactment route (enact-agent-deal, stage 6) and `deal-reject` through the rejection
  * route (reject-agent-deal, stage 7.04). Each of those routes runs its own validation and
@@ -42,8 +45,8 @@ import { assertExpectedGame } from "../../utils/expected-game.js";
 const OBSERVER_ID = -1;
 
 /** Default role descriptor for the observer endpoint when none is provided. */
-const OBSERVER_ROLE = "observer";
-/** Exact role used by the in-game pure observer's real, out-of-range seat. */
+const OBSERVER_ROLE = "observer";  
+/** Exact role used by the in-game pure observer's real seat. */
 const REAL_OBSERVER_ROLE = "Observer";
 
 /**
@@ -143,30 +146,42 @@ class AppendMessageTool extends ToolBase {
     const player1Role = roleOf(player1ID);
     const player2Role = roleOf(player2ID);
     const endpointRoles = new Map([[player1ID, player1Role], [player2ID, player2Role]]);
-    const realObserverIDs = [player1ID, player2ID].filter(
-      (id) => id >= MaxMajorCivs && endpointRoles.get(id) === REAL_OBSERVER_ROLE
+
+    // Cached PlayerInformations (no live bridge call; only falls back to fetching when the
+    // cache is empty). Read before the endpoints are classified, because "is this slot a real
+    // observer?" and "is this slot a major civilization?" are the same question asked twice.
+    const infos = await readPublicKnowledgeBatch("PlayerInformations", getPlayerInformations);
+    const isLivingMajor = (id: number): boolean =>
+      infos.some((info) => info.Key === id && info.IsMajor === 1);
+
+    // A real observer endpoint is a concrete game slot that holds no civilization of its own.
+    // Its slot INDEX is not a usable test for that: Civ 5 seats an observer in the first free
+    // player slot, which lands inside the major-civilization range whenever the game has fewer
+    // than MaxMajorCivs majors — an eight-civ game observes from slot 8. So the endpoint is
+    // classified by what this server can actually verify: the exact Observer role on a slot
+    // that holds no living major civilization. A real civ cannot slip past the major check by
+    // claiming the role, because holding the civilization is exactly what disqualifies it.
+    const observerIDs = [player1ID, player2ID].filter(
+      (id) => id !== OBSERVER_ID && endpointRoles.get(id) === REAL_OBSERVER_ROLE && !isLivingMajor(id)
     );
-    const outOfRangeIDs = [player1ID, player2ID].filter((id) => id >= MaxMajorCivs);
-    if (outOfRangeIDs.length !== realObserverIDs.length) {
+    // A slot past the major range can only ever be here as the observer endpoint.
+    if ([player1ID, player2ID].some((id) => id >= MaxMajorCivs && !observerIDs.includes(id))) {
       throw new Error("An out-of-range transcript endpoint must use the exact Observer role");
     }
-    if (realObserverIDs.length > 0) {
-      const counterpartID = player1ID === realObserverIDs[0] ? player2ID : player1ID;
-      if (realObserverIDs.length !== 1 || counterpartID < 0 || counterpartID >= MaxMajorCivs) {
+    if (observerIDs.length > 0) {
+      const counterpartID = player1ID === observerIDs[0] ? player2ID : player1ID;
+      if (observerIDs.length !== 1 || counterpartID < 0 || counterpartID >= MaxMajorCivs) {
         throw new Error("A real observer endpoint must be paired with one in-range major civilization");
       }
     }
 
-    // Major-civ validation against cached PlayerInformations (no live bridge call; only
-    // falls back to fetching when the cache is empty). The observer endpoint (-1) is
-    // exempt; the real civ endpoint(s) must each be a major civilization.
-    const infos = await readPublicKnowledgeBatch("PlayerInformations", getPlayerInformations);
+    // Major-civ validation. Both observer flavors — the -1 sentinel and a real observer slot —
+    // are exempt; every other endpoint must be a major civilization. Skipped wholesale when the
+    // cache is empty and the fallback fetch returned nothing: there is nothing to validate against.
     if (infos.length > 0) {
       for (const id of [player1ID, player2ID]) {
-        const isRealObserver = id >= MaxMajorCivs && endpointRoles.get(id) === REAL_OBSERVER_ROLE;
-        if (id === OBSERVER_ID || isRealObserver) continue;
-        const info = infos.find((i) => i.Key === id);
-        if (!info || info.IsMajor !== 1) {
+        if (id === OBSERVER_ID || observerIDs.includes(id)) continue;
+        if (!isLivingMajor(id)) {
           throw new Error(`Player ${id} is not a major civilization`);
         }
       }
@@ -187,8 +202,9 @@ class AppendMessageTool extends ToolBase {
 
     // Write one row and recover its append ID directly (race-free; a re-query would
     // be unsafe under concurrent appends to the same pair). Visibility is set only for
-    // the real participant(s); the observer (-1) has no player slot and composeVisibility
-    // ignores it. Default Turn falls back to the server's current turn inside the store.
+    // the real participant(s): composeVisibility drops the -1 sentinel on its own, and a
+    // real observer slot is filtered out here because an in-range one would otherwise claim
+    // a column. Default Turn falls back to the server's current turn inside the store.
     // Repeat immediately before retaining the store reference. Earlier validation can await
     // cache-backed reads, during which a GameSwitched event may replace the active store.
     assertExpectedGame(this.name, ExpectedGameID);
@@ -205,7 +221,9 @@ class AppendMessageTool extends ToolBase {
         Content,
         Payload: Payload ?? {},
       },
-      visibilityFlags: composeVisibility([player1ID, player2ID]),
+      visibilityFlags: composeVisibility(
+        [player1ID, player2ID].filter((id) => !observerIDs.includes(id))
+      ),
       turn: Turn,
     });
 

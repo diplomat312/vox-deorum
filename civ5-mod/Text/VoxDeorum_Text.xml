@@ -401,12 +401,20 @@
 		<Row Tag="TXT_KEY_VD_DIPLO_STATUS_ENACTED"><Text>Enacted</Text></Row>
 
 		<!-- Vox Deorum deal authoring and review screen. -->
-		<Row Tag="TXT_KEY_VD_DEAL_PROMISES"><Text>Promises</Text></Row>
-		<Row Tag="TXT_KEY_VD_DEAL_PROMISE_MILITARY"><Text>Limit military buildup</Text></Row>
-		<Row Tag="TXT_KEY_VD_DEAL_PROMISE_EXPANSION"><Text>Limit expansion</Text></Row>
-		<Row Tag="TXT_KEY_VD_DEAL_PROMISE_BORDER"><Text>Keep forces away from the border</Text></Row>
-		<Row Tag="TXT_KEY_VD_DEAL_PROMISE_NO_DIGGING"><Text>Stop excavating artifacts</Text></Row>
-		<Row Tag="TXT_KEY_VD_DEAL_PROMISE_COOP_WAR"><Text>Prepare for a cooperative war</Text></Row>
+		<!-- Promise rows sit in the native trade pocket and table, so their names are
+		     short and upper case like the native trade item rows beside them. The full
+		     meaning lives in the row tooltip. -->
+		<Row Tag="TXT_KEY_VD_DEAL_PROMISES"><Text>PROMISES</Text></Row>
+		<Row Tag="TXT_KEY_VD_DEAL_PROMISE_MILITARY"><Text>MOVE TROOPS</Text></Row>
+		<Row Tag="TXT_KEY_VD_DEAL_PROMISE_MILITARY_TT"><Text>Promise to move military units away from their borders and not attack them.</Text></Row>
+		<Row Tag="TXT_KEY_VD_DEAL_PROMISE_EXPANSION"><Text>NO SETTLING</Text></Row>
+		<Row Tag="TXT_KEY_VD_DEAL_PROMISE_EXPANSION_TT"><Text>Promise not to found new cities near their lands.</Text></Row>
+		<Row Tag="TXT_KEY_VD_DEAL_PROMISE_BORDER"><Text>NO LAND BUYING</Text></Row>
+		<Row Tag="TXT_KEY_VD_DEAL_PROMISE_BORDER_TT"><Text>Promise not to buy tiles near their cities.</Text></Row>
+		<Row Tag="TXT_KEY_VD_DEAL_PROMISE_NO_DIGGING"><Text>NO DIGGING</Text></Row>
+		<Row Tag="TXT_KEY_VD_DEAL_PROMISE_NO_DIGGING_TT"><Text>Promise not to excavate their antiquity sites.</Text></Row>
+		<Row Tag="TXT_KEY_VD_DEAL_PROMISE_COOP_WAR"><Text>COOP WAR</Text></Row>
+		<Row Tag="TXT_KEY_VD_DEAL_PROMISE_COOP_WAR_TT"><Text>Promise to prepare a cooperative war against another civilization.</Text></Row>
 		<Row Tag="TXT_KEY_VD_DEAL_MESSAGE_HINT"><Text>Add an optional one-sentence message</Text></Row>
 		<Row Tag="TXT_KEY_VD_DEAL_STATUS_PENDING"><Text>Sending deal</Text></Row>
 		<Row Tag="TXT_KEY_VD_DEAL_STATUS_TERMS_REMOVED"><Text>Unavailable terms were removed. Review and counter.</Text></Row>

@@ -77,6 +77,48 @@ const getLevelStyle = (level: string) => {
 };
 
 /**
+ * Flatten one Error into a plain, serializable object.
+ *
+ * `message` and `stack` are non-enumerable on an Error, so `JSON.stringify` renders one as `{}`.
+ * Own enumerable properties are spread first because the AI SDK hangs its diagnostics off them
+ * (and `sanitizeErrors` below still has to be able to see `requestBodyValues`); the standard trio
+ * is written afterwards so it always wins. `cause` is flattened one level only — deep enough to
+ * name the underlying failure, shallow enough that a self-referential chain cannot recurse.
+ */
+function plainError(error: Error): Record<string, unknown> {
+  const cause = (error as { cause?: unknown }).cause;
+  return {
+    ...error,
+    name: error.name,
+    message: error.message,
+    stack: error.stack,
+    ...(cause === undefined
+      ? {}
+      : {
+        cause: cause instanceof Error
+          ? { name: cause.name, message: cause.message, stack: cause.stack }
+          : cause,
+      }),
+  };
+}
+
+/**
+ * Winston format that expands an Error carried in metadata.
+ *
+ * `winston.format.errors` only unwraps an Error that IS the log's info object; the idiom used
+ * throughout this codebase — `logger.error('...', { error })` — leaves it a bare Error inside the
+ * metadata, which then reaches the JSON transports as an empty object. That turned every logged
+ * failure into `"error":{}`, so a caught exception named neither itself nor where it came from.
+ */
+const expandErrors = winston.format((info) => {
+  for (const key of Object.keys(info)) {
+    const value = info[key];
+    if (value instanceof Error) info[key] = plainError(value);
+  }
+  return info;
+});
+
+/**
  * Sanitize AI SDK errors to prevent full prompts from being logged.
  * APICallError includes requestBodyValues with the entire messages array;
  * this replaces the messages with a redacted placeholder.
@@ -131,6 +173,7 @@ const customFormat = winston.format.combine(
     format: 'YYYY-MM-DD HH:mm:ss.SSS'
   }),
   winston.format.errors({ stack: true }),
+  expandErrors(),
   sanitizeErrors(),
   winston.format.printf(({ timestamp, level, message, context, source, ...meta }) => {
     const style = getLevelStyle(level);
@@ -171,6 +214,7 @@ const customFormat = winston.format.combine(
 const jsonFormat = winston.format.combine(
   winston.format.timestamp(),
   winston.format.errors({ stack: true }),
+  expandErrors(),
   sanitizeErrors(),
   winston.format.json()
 );

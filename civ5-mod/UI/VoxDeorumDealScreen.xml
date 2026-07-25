@@ -65,23 +65,25 @@
 			<Label String="" Offset="10,0" Anchor="R,C" ID="DurationEdit"/>
 		</Container>
 	</Instance>
-	<!-- Vox Deorum: wrapper-owned promise controls that extend the native trade stacks. -->
+	<!-- Vox Deorum: wrapper-owned promise controls that extend the native trade stacks.
+	     Promise rows are indented one step under their category header, and Coop War
+	     targets one step further, the way the native nested trade rows are offset. -->
 	<Instance Name="VoxPromisePocketEntry">
 		<Button Style="TradeItemButton" Anchor="L,C" ID="Button">
-			<Label Anchor="L,C" Offset="5,0" Font="TwCenMT14" ID="Label"/>
+			<Label Anchor="L,C" Offset="20,0" Font="TwCenMT14" ID="Label"/>
 		</Button>
 	</Instance>
 	<Instance Name="VoxPromiseTableEntry">
 		<Container Size="195,24" ID="Container">
 			<Button Style="TradeItemButton" Anchor="L,T" ID="Button">
-				<Label Anchor="L,C" Offset="5,0" Font="TwCenMT14" ID="Label"/>
+				<Label Anchor="L,C" Offset="20,0" Font="TwCenMT14" TruncateWidth="140" ID="Label"/>
 			</Button>
 			<Label Anchor="R,C" Offset="10,0" Font="TwCenMT14" ID="Duration"/>
 		</Container>
 	</Instance>
 	<Instance Name="VoxPromiseTargetEntry">
-		<Button Style="TradeItemButton" Anchor="L,C" TextOffset="32,0" ID="Button">
-			<Label Anchor="L,C" Offset="32,0" Font="TwCenMT14" ID="Label"/>
+		<Button Style="TradeItemButton" Anchor="L,C" TextOffset="40,0" ID="Button">
+			<Label Anchor="L,C" Offset="40,0" Font="TwCenMT14" ID="Label"/>
 		</Button>
 	</Instance>
 	<Grid Size="500,237" Anchor="C,B" Offset="0,100" Style="Grid9Detail48">

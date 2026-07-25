@@ -157,6 +157,35 @@ describe('append-message observer endpoint', () => {
     expect(getVisibility(stored, 0)).toBe(0);
   });
 
+  it('accepts an IN-RANGE observer slot, which is where Civ 5 actually seats an observer', async () => {
+    // Civ 5 gives the observer the first free player slot, so an eight-civ game observes from
+    // slot 8 — inside the major range. Classifying by slot index refused every such message.
+    await seedPlayer(store, 6);
+    await seedPlayer(store, 8, { isMajor: 0 });
+    const row = await tool.execute(
+      args({ PlayerAID: 8, PlayerBID: 6, PlayerARole: 'Observer', PlayerBRole: 'diplomat', SpeakerID: 8 }) as any
+    );
+
+    expect(row).toMatchObject({ Player1ID: 6, Player2ID: 8, Player1Role: 'diplomat', Player2Role: 'Observer' });
+    const [stored] = (await getDiplomaticMessages(8, 6)).messages;
+    // The observer slot is an endpoint of the pair but owns no visibility column.
+    expect(getVisibility(stored, 6)).toBe(2);
+    expect(getVisibility(stored, 8)).toBe(0);
+  });
+
+  it('does not let a living major civilization claim the Observer exemption', async () => {
+    // The role alone is not the test: a slot holding a real civ is validated as one.
+    await seedPlayer(store, 5);
+    await seedPlayer(store, 7, { isMajor: 0 });
+    await expect(
+      tool.execute(args({ PlayerAID: 7, PlayerBID: 5, PlayerARole: 'the leader', PlayerBRole: 'diplomat', SpeakerID: 7 }) as any)
+    ).rejects.toThrow(/Player 7 is not a major civilization/);
+    // ...and the counterpart of an observer must still be a real major civilization.
+    await expect(
+      tool.execute(args({ PlayerAID: 8, PlayerBID: 7, PlayerARole: 'Observer', PlayerBRole: 'the leader', SpeakerID: 8 }) as any)
+    ).rejects.toThrow(/Player 7 is not a major civilization/);
+  });
+
   it('rejects a real observer slot without a valid major counterpart', async () => {
     await expect(
       tool.execute(args({ PlayerAID: 27, PlayerBID: 28, PlayerARole: 'Observer', PlayerBRole: 'Observer', SpeakerID: 27 }) as any)

@@ -35,6 +35,15 @@ local promiseKeys = {
 	BORDER = "TXT_KEY_VD_DEAL_PROMISE_BORDER", NO_DIGGING = "TXT_KEY_VD_DEAL_PROMISE_NO_DIGGING",
 	COOP_WAR = "TXT_KEY_VD_DEAL_PROMISE_COOP_WAR",
 }
+-- Row labels are terse and upper case like the native trade rows, so the full
+-- meaning of each promise is carried by its tooltip.
+local promiseTooltipKeys = {
+	MILITARY = "TXT_KEY_VD_DEAL_PROMISE_MILITARY_TT", EXPANSION = "TXT_KEY_VD_DEAL_PROMISE_EXPANSION_TT",
+	BORDER = "TXT_KEY_VD_DEAL_PROMISE_BORDER_TT", NO_DIGGING = "TXT_KEY_VD_DEAL_PROMISE_NO_DIGGING_TT",
+	COOP_WAR = "TXT_KEY_VD_DEAL_PROMISE_COOP_WAR_TT",
+}
+-- Native trade rows gray their own label when an item cannot be traded.
+local ENABLED_ROW_COLOR, DISABLED_ROW_COLOR = "Beige_Black", "Gray_Black"
 local promiseKinds = { "MILITARY", "EXPANSION", "BORDER", "NO_DIGGING", "COOP_WAR" }
 local promiseDurationKinds = { MILITARY = true, EXPANSION = true, BORDER = true, COOP_WAR = true }
 local coopWarReasonKeys = { ["target-invalid"] = "TXT_KEY_VD_DEAL_ERROR_COOP_TARGET_INVALID", contact = "TXT_KEY_VD_DEAL_ERROR_COOP_TARGET_CONTACT", ["target-unavailable"] = "TXT_KEY_VD_DEAL_ERROR_COOP_TARGET_UNAVAILABLE", ["state-unavailable"] = "TXT_KEY_VD_DEAL_ERROR_COOP_STATE", preparing = "TXT_KEY_VD_DEAL_ERROR_COOP_PREPARING" }
@@ -569,6 +578,11 @@ local function togglePromiseCategory(isUs, _, control)
 	recalcPocket(isUs == 1)
 end
 
+-- Gray one wrapper-owned row label the way the native trade rows gray their own.
+local function colorRow(label, enabled)
+	label:SetColorByName(enabled and ENABLED_ROW_COLOR or DISABLED_ROW_COLOR)
+end
+
 -- Render the five promise choices into both native pocket categories.
 local function renderPromisePockets()
 	local editable = mounted and not pending
@@ -582,7 +596,9 @@ local function renderPromisePockets()
 			else choiceOK, choiceReason = evaluatePromises(candidatePromises(setup[2], kind)) end
 			local enabled = editable and choiceOK
 			instance.Label:SetText(Locale.ConvertTextKey(promiseKeys[kind])); instance.Button:SetVoids(setup[2], index); instance.Button:SetDisabled(not enabled)
-			instance.Button:SetToolTipString(enabled and "" or choiceReason)
+			colorRow(instance.Label, enabled)
+			-- The short row name carries no detail, so an available promise explains itself.
+			instance.Button:SetToolTipString(choiceOK and text(promiseTooltipKeys[kind]) or choiceReason)
 			instance.Button:RegisterCallback(Mouse.eLClick, addPromise)
 		end
 	end
@@ -602,6 +618,7 @@ local function renderCoopTargets()
 			local targetReason = availability and availability.reason or text("TXT_KEY_VD_DEAL_ERROR_NO_COOP_TARGET")
 			local instance = manager:GetInstance()
 			instance.Label:SetText(playerName(playerID)); instance.Button:SetVoid1(playerID); instance.Button:SetDisabled(pending or not targetOK)
+			colorRow(instance.Label, targetOK)
 			instance.Button:SetToolTipString(targetOK and "" or targetReason); instance.Button:RegisterCallback(Mouse.eLClick, chooseCoopTarget)
 		end
 	end
@@ -616,7 +633,10 @@ local function renderPromiseTableRows()
 		local instance = manager:GetInstance()
 		local label, duration = promiseLabel(promise), tostring(promise.duration or "")
 		instance.Label:SetText(label); instance.Duration:SetText(duration)
-		instance.Button:SetVoid1(index); instance.Button:SetDisabled(pending); instance.Button:SetToolTipString("")
+		colorRow(instance.Label, true)
+		local tooltipKey = promiseTooltipKeys[promise.promiseType]
+		instance.Button:SetVoid1(index); instance.Button:SetDisabled(pending)
+		instance.Button:SetToolTipString(tooltipKey ~= nil and text(tooltipKey) or "")
 		instance.Button:RegisterCallback(Mouse.eLClick, removePromise)
 	end
 	for index, promise in ipairs(draftPromises) do
