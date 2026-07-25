@@ -65,13 +65,17 @@ describe('formatUserDescription', () => {
       .toBe('a representative of Rome');
   });
 
-  it('throws when the audience civ identity is missing (corrupted thread state)', () => {
-    expect(() => diplomat.formatUserDescription(thread({ player1Identity: undefined })))
-      .toThrow(/no civ identity/);
+  it('falls back to the observer when the audience civ identity is missing', () => {
+    // Only the human caller opens a conversation, and the observer paths carry no civ identity by
+    // design, so a missing audience civ is the observer — never a reason to fail the turn.
+    expect(diplomat.formatUserDescription(thread({ player1Identity: undefined })))
+      .toBe('the Observer');
   });
 
-  it('throws when neither role nor civ is known', () => {
-    expect(() => diplomat.formatUserDescription(thread({ player1Role: undefined, player1Identity: undefined })))
-      .toThrow(/no civ identity/);
+  it('drops the free-form role when the civ is missing (never a roleless "the leader")', () => {
+    expect(diplomat.formatUserDescription(thread({ player1Role: undefined, player1Identity: undefined })))
+      .toBe('the Observer');
+    expect(diplomat.formatUserDescription(thread({ player1Role: 'the leader', player1Identity: undefined })))
+      .toBe('the Observer');
   });
 });

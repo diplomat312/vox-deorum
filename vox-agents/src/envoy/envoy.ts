@@ -89,6 +89,19 @@ export const specialMessages: Record<string, string> = {
 };
 
 /**
+ * The stand-in name for an audience seat the thread carries no civ identity for.
+ *
+ * A conversation is only ever opened by the human caller, and the observer paths deliberately carry
+ * no civ: the in-game bridge suppresses the caller identity for `AsObserver` events (see
+ * `resolveCaller`), the Web factory seats the observer at the `-1` sentinel, and a seat the game
+ * state cannot resolve (fog of war, a stale/absent players map) looks identical. So a missing
+ * audience identity always means "a human watching", never a broken civ seat — rendering this fixed
+ * name keeps the prompt (and the transcript labels built from it) coherent instead of failing the
+ * turn or leaking a bare seat number into the audience description.
+ */
+export const observerName = "Observer";
+
+/**
  * Generic base envoy agent that can chat with the user.
  * Accepts and returns EnvoyThread for maintaining conversation context.
  * Subclasses specialize for specific parameter types (e.g., LiveEnvoy for StrategistParameters).
@@ -228,14 +241,16 @@ export abstract class Envoy<TParameters extends AgentParameters = AgentParameter
   // Utilities
   /**
    * Builds the display label of the seat speaking a row: `{civ}, the {role}` when both are on
-   * the thread (e.g. "Brazil, the diplomat"), the civ alone when the role is missing, and
-   * `Player {seat}` when even the identity is missing (observer seats). Unlike
-   * {@link formatUserDescription} this never throws, so it is safe for observer threads. The
-   * prompt renderers AND the echo-strip both build labels here, so they can never disagree.
+   * the thread (e.g. "Brazil, the diplomat"), the civ alone when the role is missing, and — when
+   * even the identity is missing — {@link observerName} for the audience seat (the human caller,
+   * whose civ is absent by design) or `Player {seat}` for the voiced seat (a civ by construction,
+   * so a gap there is a data gap, not an observer). Labels the same way
+   * {@link formatUserDescription} describes the audience, and never throws. The prompt renderers
+   * AND the echo-strip both build labels here, so they can never disagree.
    */
   protected speakerLabel(input: EnvoyThread, seat: number): string {
     const civ = identityOf(input, seat)?.name?.trim();
-    if (!civ) return `Player ${seat}`;
+    if (!civ) return seat === input.agent ? `Player ${seat}` : observerName;
     const role = roleOf(input, seat)?.trim();
     if (!role) return civ;
     return /^the\s/i.test(role) ? `${civ}, ${role}` : `${civ}, the ${role}`;
@@ -400,16 +415,19 @@ export abstract class Envoy<TParameters extends AgentParameters = AgentParameter
   /**
    * Describes the audience — the participant the agent is speaking to (the non-voiced
    * endpoint) — combining its free-form role descriptor with its civ identity, both stored on
-   * the thread at open time (e.g. "the leader of Rome"). The civ identity is resolved once at
-   * thread-open time and is a hard invariant: its absence means corrupted thread state, so we
-   * throw rather than silently emit a roleless ("the leader") or generic descriptor. The role
-   * is free-form and may legitimately be absent, in which case we fall back to the civ alone.
+   * the thread at open time (e.g. "the leader of Rome"). The role is free-form and may
+   * legitimately be absent, in which case we fall back to the civ alone.
+   *
+   * A seat with NO civ identity is the human observer ({@link observerName}), so we render the
+   * fixed observer descriptor rather than failing the turn. The free-form role is dropped with it:
+   * without a civ, a bare "the leader" would claim a civ the thread does not have, and the observer
+   * is who is speaking regardless of how the seat was labelled at open time.
    */
   protected formatUserDescription(input: EnvoyThread): string {
     const id = audienceID(input);
     const role = roleOf(input, id)?.trim();
     const civ = identityOf(input, id)?.name?.trim();
-    if (!civ) throw new Error(`Audience seat ${id} on thread ${input.id} has no civ identity`);
+    if (!civ) return `the ${observerName}`;
     return role ? `${role} of ${civ}` : `a representative of ${civ}`;
   }
 

@@ -211,14 +211,18 @@ describe('LiveEnvoy.getInitialMessages past/ongoing split (cache-aware record)',
 });
 
 describe('Envoy.speakerLabel', () => {
-  it('labels civ + role, falls back to civ alone, then to Player N', () => {
+  it('labels civ + role, falls back to civ alone, then to the observer', () => {
     const t = thread();
     expect(spokesperson.speakerLabel(t, 3)).toBe('Germany, the spokesperson');
     expect(spokesperson.speakerLabel(t, 1)).toBe('Rome, the leader'); // role already phrased with "the"
     const bare = thread({ player1Role: undefined });
     expect(spokesperson.speakerLabel(bare, 1)).toBe('Rome');
+    // Audience seat with no civ identity: the human caller, labelled like the audience description.
     const anon = thread({ player1Identity: undefined, player1Role: undefined });
-    expect(spokesperson.speakerLabel(anon, 1)).toBe('Player 1');
+    expect(spokesperson.speakerLabel(anon, 1)).toBe('Observer');
+    // The voiced seat is a civ by construction, so a gap there stays a bare seat number.
+    const voiceless = thread({ player2Identity: undefined, player2Role: undefined });
+    expect(spokesperson.speakerLabel(voiceless, 3)).toBe('Player 3');
   });
 });
 
