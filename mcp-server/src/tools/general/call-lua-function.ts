@@ -35,7 +35,12 @@ class CallLuaFunctionTool extends ToolBase {
   /** Call BridgeManager and preserve its success, result, and error contract exactly. */
   async execute(args: z.infer<typeof this.inputSchema>): Promise<z.infer<typeof this.outputSchema>> {
     assertExpectedGame(this.name, args.ExpectedGameID);
-    return await bridgeManager.callLuaFunction(args.Name, args.Args);
+    const { success, result, error } = await bridgeManager.callLuaFunction(args.Name, args.Args);
+    // Strip the transport frame here rather than passing the reply through. What
+    // BridgeManager hands back is the DLL's whole `lua_response`, `type` and `id`
+    // included, and this value is published as the tool's structured output — internal
+    // wire framing has no business in a caller-facing contract.
+    return { success, result, error };
   }
 }
 
