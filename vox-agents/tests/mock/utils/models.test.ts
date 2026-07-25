@@ -845,7 +845,13 @@ describe('claude-code provider', () => {
         const doStream = async () => ({ stream: streamFrom(chunks) });
         const { stream }: any = await (mw.wrapStream as any)({ doStream, params: await transformed(mw, gameTools) });
         const out = await drain(stream);
-        expect(out.filter((c: any) => c.type === 'tool-call')).toHaveLength(2);
+        const calls = out.filter((c: any) => c.type === 'tool-call');
+        expect(calls).toHaveLength(2);
+        // Free-text mode also streams each block's arguments, and each block's stream must be bound
+        // to its OWN call — a shared or unbound id is what re-speaks a message as a second bubble.
+        const starts = out.filter((c: any) => c.type === 'tool-input-start');
+        expect(starts).toHaveLength(2);
+        expect(calls.map((c: any) => c.toolCallId)).toEqual(starts.map((c: any) => c.id));
       });
 
       it('wrapGenerate keeps identical actions from separate text parts in free-text (non-structured) mode', async () => {
@@ -916,6 +922,210 @@ describe('claude-code provider', () => {
         });
         const result: any = await (mw.wrapGenerate as any)({ doGenerate, params });
         expect(result.content.some((c: any) => /structuredoutput/i.test(c.toolName ?? ''))).toBe(true);
+      });
+    });
+
+    // A prompt-mode model writes its tool call as JSON text, so without this the spoken reply is
+    // invisible until the JSON closes and then lands in one piece. wrapStream forwards a
+    // whitelisted tool's arguments as synthetic tool-input chunks while they accumulate.
+    describe('synthetic tool-input streaming', () => {
+      const streamTools = [
+        {
+          type: 'function',
+          name: 'send-message',
+          description: 'Speak to the counterpart',
+          inputSchema: { type: 'object', properties: { Message: { type: 'string' } }, additionalProperties: false },
+        },
+        {
+          type: 'function',
+          name: 'get-briefing',
+          description: 'Read a briefing',
+          inputSchema: { type: 'object', properties: { Turn: { type: 'number' } }, additionalProperties: false },
+        },
+      ];
+
+      /** Same transformParams round-trip as the carrier suite, for a middleware under test. */
+      async function transformedFor(mw: any) {
+        return await (mw.transformParams as any)({
+          params: { tools: streamTools, toolChoice: { type: 'required' }, prompt: [{ role: 'user', content: [{ type: 'text', text: 'hi' }] }] },
+        });
+      }
+
+      /** Feed text deltas for one block through wrapStream and return every emitted chunk. */
+      async function runBlock(mw: any, deltas: string[], options?: { endBlock?: boolean }) {
+        const chunks: any[] = [
+          { type: 'stream-start', warnings: [] },
+          { type: 'text-start', id: 't1' },
+          ...deltas.map((delta) => ({ type: 'text-delta', id: 't1', delta })),
+        ];
+        if (options?.endBlock !== false) chunks.push({ type: 'text-end', id: 't1' });
+        chunks.push({ type: 'finish', finishReason: { unified: 'stop', raw: 'stop' }, usage: { inputTokens: 1, outputTokens: 1 } });
+        const doStream = async () => ({ stream: streamFrom(chunks) });
+        const { stream }: any = await (mw.wrapStream as any)({ doStream, params: await transformedFor(mw) });
+        return await drain(stream);
+      }
+
+      const byType = (out: any[], type: string) => out.filter((c: any) => c.type === type);
+
+      // `"Hello there"` split so the name, the arguments brace, and the value all straddle deltas.
+      const splitCall = ['[{"tool":"send-', 'message","arguments":{"Mes', 'sage":"Hello ', 'there"}', '}]'];
+
+      it('streams a whitelisted tool argument as it accumulates', async () => {
+        const mw = toolRescueMiddleware({ prompt: true });
+        const out = await runBlock(mw, splitCall);
+
+        const starts = byType(out, 'tool-input-start');
+        const deltas = byType(out, 'tool-input-delta');
+        const ends = byType(out, 'tool-input-end');
+        const calls = byType(out, 'tool-call');
+        expect(starts).toHaveLength(1);
+        expect(starts[0].toolName).toBe('send-message');
+        expect(deltas.length).toBeGreaterThanOrEqual(2);
+        expect(ends).toHaveLength(1);
+        expect(calls).toHaveLength(1);
+
+        // The deltas are the tool's own input verbatim, so they reconstruct what was committed.
+        const streamed = deltas.map((c: any) => c.delta).join('');
+        expect(JSON.parse(streamed)).toEqual(JSON.parse(calls[0].input));
+        expect(JSON.parse(calls[0].input)).toEqual({ Message: 'Hello there' });
+      });
+
+      it('binds the committed call to the id its arguments streamed under', async () => {
+        // The load-bearing invariant: downstream matches the terminal call back to its open delta
+        // stream by this id, and on a miss re-speaks the whole message as a second bubble.
+        const mw = toolRescueMiddleware({ prompt: true });
+        const out = await runBlock(mw, splitCall);
+        const start = byType(out, 'tool-input-start')[0];
+        const call = byType(out, 'tool-call')[0];
+        expect(call.toolCallId).toBe(start.id);
+        for (const delta of byType(out, 'tool-input-delta')) expect(delta.id).toBe(start.id);
+        expect(byType(out, 'tool-input-end')[0].id).toBe(start.id);
+      });
+
+      it('closes the input stream before the call it belongs to', async () => {
+        // A delta emitted after its own tool-call would find no open stream downstream and leak
+        // the raw JSON fragment onward as an unknown chunk.
+        const mw = toolRescueMiddleware({ prompt: true });
+        const out = await runBlock(mw, splitCall);
+        const types = out.map((c: any) => c.type);
+        expect(types.lastIndexOf('tool-input-delta')).toBeLessThan(types.indexOf('tool-input-end'));
+        expect(types.indexOf('tool-input-end')).toBeLessThan(types.indexOf('tool-call'));
+      });
+
+      it('normalizes a miscased argument key on the committed call while still streaming it', async () => {
+        const mw = toolRescueMiddleware({ prompt: true });
+        const out = await runBlock(mw, ['[{"tool":"send-message","arguments":{"mess', 'age":"lowercase"}}]']);
+        expect(byType(out, 'tool-input-start')).toHaveLength(1);
+        const calls = byType(out, 'tool-call');
+        expect(calls).toHaveLength(1);
+        expect(JSON.parse(calls[0].input)).toEqual({ Message: 'lowercase' });
+      });
+
+      it('stays off under structuredToolCalls, where a text block may be a rejected attempt', async () => {
+        const mw = toolRescueMiddleware({ prompt: true, framing: 'action', structuredToolCalls: true });
+        const out = await runBlock(mw, splitCall);
+        expect(byType(out, 'tool-input-start')).toHaveLength(0);
+        expect(byType(out, 'tool-input-delta')).toHaveLength(0);
+        expect(byType(out, 'tool-call')).toHaveLength(1);
+      });
+
+      it('stays off for a native tool-calling model, which streams its own tool input', async () => {
+        const mw = toolRescueMiddleware();
+        const out = await runBlock(mw, splitCall);
+        expect(byType(out, 'tool-input-start')).toHaveLength(0);
+        expect(byType(out, 'tool-input-delta')).toHaveLength(0);
+        expect(byType(out, 'tool-call')).toHaveLength(1);
+      });
+
+      it('leaves a tool outside the whitelist unstreamed', async () => {
+        const mw = toolRescueMiddleware({ prompt: true });
+        const out = await runBlock(mw, ['[{"tool":"get-brie', 'fing","arguments":{"Turn":4}}]']);
+        expect(byType(out, 'tool-input-start')).toHaveLength(0);
+        expect(byType(out, 'tool-input-delta')).toHaveLength(0);
+        expect(byType(out, 'tool-call')).toHaveLength(1);
+      });
+
+      it('closes an opened stream when the response ends without committing a call', async () => {
+        // Truncated response: the block never ends, so its buffer is never rescued. The stream must
+        // still be closed rather than left open past the response that opened it.
+        const mw = toolRescueMiddleware({ prompt: true });
+        const out = await runBlock(mw, ['[{"tool":"send-message","arguments":{"Message":"Hal'], { endBlock: false });
+        expect(byType(out, 'tool-input-start')).toHaveLength(1);
+        expect(byType(out, 'tool-input-delta').length).toBeGreaterThanOrEqual(1);
+        expect(byType(out, 'tool-input-end')).toHaveLength(1);
+        expect(byType(out, 'tool-call')).toHaveLength(0);
+      });
+
+      it('streams a fenced contour, whose call only commits at text-end', async () => {
+        const mw = toolRescueMiddleware({ prompt: true });
+        const out = await runBlock(mw, [
+          '```json\n[{"tool":"send-message","arguments":{"Mes',
+          'sage":"Fenced"}}]\n```',
+        ]);
+        expect(byType(out, 'tool-input-start')).toHaveLength(1);
+        const calls = byType(out, 'tool-call');
+        expect(calls).toHaveLength(1);
+        expect(JSON.parse(calls[0].input)).toEqual({ Message: 'Fenced' });
+        expect(calls[0].toolCallId).toBe(byType(out, 'tool-input-start')[0].id);
+      });
+
+      it('gives each streamed call in one array its own id, never a shared one', async () => {
+        const mw = toolRescueMiddleware({ prompt: true });
+        const out = await runBlock(mw, [
+          '[{"tool":"send-message","arguments":{"Message":"one"}},',
+          '{"tool":"send-message","arguments":{"Message":"two"}}]',
+        ]);
+        const starts = byType(out, 'tool-input-start');
+        const calls = byType(out, 'tool-call');
+        expect(calls).toHaveLength(2);
+        expect(new Set(starts.map((c: any) => c.id)).size).toBe(starts.length);
+        // Every stream that opened was claimed by a call, so nothing is left to re-speak whole.
+        const callIds = new Set(calls.map((c: any) => c.toolCallId));
+        for (const start of starts) expect(callIds.has(start.id)).toBe(true);
+      });
+
+      it('binds the streamed id to the call it streamed, not an earlier flattened one', async () => {
+        // The flattened contour has no arguments object, so only the SECOND call can stream — but
+        // the rescue commits both, in source order. Pairing the halves by tool name alone would
+        // hand the streamed "second" text to the "first" call: the live bubble would drop "first"
+        // entirely and speak "second" twice, while the persisted reply held both.
+        const mw = toolRescueMiddleware({ prompt: true });
+        const out = await runBlock(mw, [
+          '```json\n[{"action":"send-message","Message":"first"},'
+            + '{"action":"send-message","arguments":{"Mes',
+          'sage":"second"}}]\n```',
+        ]);
+        const starts = byType(out, 'tool-input-start');
+        const calls = byType(out, 'tool-call');
+        expect(starts).toHaveLength(1);
+        expect(calls.map((c: any) => JSON.parse(c.input).Message)).toEqual(['first', 'second']);
+
+        // What streamed was "second", so the call wearing that id must be "second".
+        const streamed = byType(out, 'tool-input-delta').map((c: any) => c.delta).join('');
+        expect(JSON.parse(streamed)).toEqual({ Message: 'second' });
+        const bound = calls.filter((c: any) => c.toolCallId === starts[0].id);
+        expect(bound).toHaveLength(1);
+        expect(JSON.parse(bound[0].input)).toEqual({ Message: 'second' });
+      });
+
+      it('re-counts the calls ahead of it when a mid-stream rescue consumes them', async () => {
+        // Same shape, unfenced: the strict mid-stream parse commits "first" out of the buffer while
+        // "second" is still streaming. The parked stream must then expect ONE fewer call ahead of
+        // it, or the text-end rescue — which sees only "second" — would leave it unbound and the
+        // message would be spoken a second time as its own bubble.
+        const mw = toolRescueMiddleware({ prompt: true });
+        const out = await runBlock(mw, [
+          '[{"action":"send-message","Message":"first"},'
+            + '{"action":"send-message","arguments":{"Mes',
+          'sage":"second"}}]',
+        ]);
+        const starts = byType(out, 'tool-input-start');
+        const calls = byType(out, 'tool-call');
+        expect(starts).toHaveLength(1);
+        expect(calls.map((c: any) => JSON.parse(c.input).Message)).toEqual(['first', 'second']);
+        const bound = calls.filter((c: any) => c.toolCallId === starts[0].id);
+        expect(bound).toHaveLength(1);
+        expect(JSON.parse(bound[0].input)).toEqual({ Message: 'second' });
       });
     });
 

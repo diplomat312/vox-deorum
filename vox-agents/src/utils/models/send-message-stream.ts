@@ -69,25 +69,76 @@ interface OpenStream {
 }
 
 /**
+ * Index just past the `:` of the object's own `"<field>"` key, or -1 when the buffer does not (yet)
+ * hold that key.
+ *
+ * A structural scan of the JSON, not a substring search. The text being scanned is unvalidated
+ * model output, so the field's name can appear inside some OTHER field's value — a substring hit
+ * there, followed by a skip to the next colon, would stream a neighboring field's value as the
+ * spoken reply. Only a string token that is really a KEY (a `:` follows it directly) directly
+ * inside the arguments object counts; a same-named key nested in another field's object value is a
+ * different field and is passed over too.
+ *
+ * Exact casing is preferred, so text that spells the field canonically behaves exactly as it always
+ * has. The case-insensitive fallback exists for a tool call rescued out of model TEXT (see
+ * `utils/models/tool-rescue`), where the model routinely writes the schema's key in its own casing
+ * — `message` for `Message`. The final tool call has those keys realigned by `normalizeKeysToSchema`,
+ * but the raw text streamed on the way there does not, and without this the whole reply would decode
+ * to nothing and arrive in one piece.
+ */
+function findFieldValueIndex(raw: string, field: string): number {
+  const foldedField = field.toLowerCase();
+  let exact = -1;
+  let folded = -1;
+  let depth = 0;
+  let i = 0;
+
+  while (i < raw.length) {
+    const char = raw[i];
+    if (char === "{" || char === "[") { depth++; i++; continue; }
+    if (char === "}" || char === "]") { depth--; i++; continue; }
+    if (char !== '"') { i++; continue; }
+
+    // Consume the whole string literal, so an escaped quote inside it never ends it early. Escapes
+    // are skipped rather than decoded: the token is only ever compared against the field name.
+    let end = i + 1;
+    while (end < raw.length && raw[end] !== '"') end += raw[end] === "\\" ? 2 : 1;
+    if (end >= raw.length) break; // literal still streaming; nothing past it is readable yet
+    const token = raw.slice(i + 1, end);
+    i = end + 1;
+
+    // A token is a key only when the next non-whitespace character is its colon; otherwise it was a
+    // value, and skipping it is exactly what keeps a quoted field name inside one from matching.
+    let afterKey = i;
+    while (afterKey < raw.length && isJsonWhitespace(raw[afterKey])) afterKey++;
+    if (afterKey >= raw.length || raw[afterKey] !== ":") continue;
+    afterKey++;
+    // Depth 1 is the arguments object's own key set.
+    if (depth === 1) {
+      if (exact < 0 && token === field) exact = afterKey;
+      if (folded < 0 && token.toLowerCase() === foldedField) folded = afterKey;
+    }
+    i = afterKey;
+  }
+
+  return exact >= 0 ? exact : folded;
+}
+
+/**
  * Decode the value of a JSON string field from a raw (possibly incomplete) JSON object text.
  *
- * Locates `"<field>"`, then its `:` and the value's opening quote, then decodes the string body
- * honoring JSON escapes. When the buffer ends mid-token it **backs off**, returning only the
- * safely-decoded prefix: a trailing lone `\` or a partial `\uXXXX` are left undecoded until the
- * rest streams in. Because only fully-resolved characters are ever returned, the output grows
- * monotonically as `raw` grows, so a caller emitting the new suffix never has to revise a character
- * it already emitted. Returns "" until the field's opening quote is present.
+ * Locates the `"<field>"` key and its `:` (see {@link findFieldValueIndex}), then the value's
+ * opening quote, then decodes the string body honoring JSON escapes. When the buffer ends mid-token
+ * it **backs off**, returning only the safely-decoded prefix: a trailing lone `\` or a partial
+ * `\uXXXX` are left undecoded until the rest streams in. Because only fully-resolved characters are
+ * ever returned, the output grows monotonically as `raw` grows, so a caller emitting the new suffix
+ * never has to revise a character it already emitted. Returns "" until the field's opening quote is
+ * present.
  */
 export function decodeJsonStringField(raw: string, field: string): string {
-  const keyToken = `"${field}"`;
-  const keyIdx = raw.indexOf(keyToken);
-  if (keyIdx < 0) return "";
+  let i = findFieldValueIndex(raw, field);
+  if (i < 0) return ""; // key (or its colon) not streamed yet
 
-  // Advance past the key to its colon, tolerating whitespace around it.
-  let i = keyIdx + keyToken.length;
-  while (i < raw.length && raw[i] !== ":") i++;
-  if (i >= raw.length) return ""; // colon not streamed yet
-  i++; // past the colon
   while (i < raw.length && isJsonWhitespace(raw[i])) i++;
   if (i >= raw.length || raw[i] !== '"') return ""; // opening quote not streamed yet
   i++; // past the opening quote

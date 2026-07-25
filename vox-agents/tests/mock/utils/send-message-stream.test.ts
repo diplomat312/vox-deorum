@@ -78,6 +78,46 @@ describe('decodeJsonStringField', () => {
   it('returns "" when the field is absent', () => {
     expect(decodeJsonStringField('{"Other":"x"}', 'Message')).toBe('');
   });
+
+  // A call rescued out of model TEXT keeps whatever casing the model wrote; only the committed
+  // tool call gets its keys realigned to the schema. Without the fallback the whole streamed
+  // reply would decode to nothing and arrive in one piece.
+  it('falls back to a case-insensitive key match (message for Message)', () => {
+    expect(decodeJsonStringField('{"message":"Hi there"}', 'Message')).toBe('Hi there');
+    expect(decodeJsonStringField('{"MESSAGE":"shouting"}', 'Message')).toBe('shouting');
+    expect(decodeJsonStringField('{"message":"partial wor', 'Message')).toBe('partial wor');
+  });
+
+  it('prefers the exactly-cased key when both spellings are present', () => {
+    expect(decodeJsonStringField('{"message":"wrong","Message":"right"}', 'Message')).toBe('right');
+  });
+
+  it('does not invent a match from an unrelated field', () => {
+    expect(decodeJsonStringField('{"Messages":"x"}', 'Message')).toBe('');
+    expect(decodeJsonStringField('{"messenger":"x"}', 'Message')).toBe('');
+  });
+
+  // The scan is structural: the field name spelled inside another field's VALUE is not a key, so it
+  // must not anchor the decode onto whatever colon happens to come next.
+  it('ignores the field name quoted inside another field\'s value', () => {
+    expect(decodeJsonStringField('{"note":"MESSAGE","status":"wrong","message":"right"}', 'Message'))
+      .toBe('right');
+    expect(decodeJsonStringField('{"note":"Message","status":"wrong"}', 'Message')).toBe('');
+    // Same, with the decoy inside an escaped quote rather than plain.
+    expect(decodeJsonStringField('{"note":"say \\"Message\\"","Message":"right"}', 'Message'))
+      .toBe('right');
+  });
+
+  it('ignores a same-named key nested inside another field\'s object value', () => {
+    expect(decodeJsonStringField('{"meta":{"Message":"inner"},"Message":"outer"}', 'Message'))
+      .toBe('outer');
+    expect(decodeJsonStringField('{"meta":{"Message":"inner"}}', 'Message')).toBe('');
+  });
+
+  it('requires the colon to follow the key, not merely appear later', () => {
+    // A bare string element that spells the field is a value in an array, never this object's key.
+    expect(decodeJsonStringField('{"tags":["Message"],"other":"nope"}', 'Message')).toBe('');
+  });
 });
 
 describe('createSendMessageStreamer', () => {

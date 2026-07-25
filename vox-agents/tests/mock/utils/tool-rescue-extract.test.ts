@@ -2,9 +2,157 @@
  * Tests for rescuing JSON tool calls embedded in free-form model text.
  */
 import { describe, it, expect } from 'vitest';
-import { rescueToolCallsFromText, isStructuredOutputToolName } from '../../../src/utils/models/tool-rescue/extract.js';
+import {
+  findStreamableToolCallStart,
+  rescueToolCallsFromText,
+  isStructuredOutputToolName,
+} from '../../../src/utils/models/tool-rescue/extract.js';
 
 const tools = new Set(['get-data', 'set-strategy', 'end-turn']);
+
+describe('findStreamableToolCallStart', () => {
+  const available = new Set(['send-message', 'get-briefing']);
+  const streamable = new Set(['send-message']);
+  const find = (buffer: string) => findStreamableToolCallStart(buffer, available, streamable);
+
+  /** Assert a hit and that argsStart really points at the arguments brace. */
+  const expectArgsAt = (buffer: string, marker: string) => {
+    const hit = find(buffer);
+    expect(hit).toBeDefined();
+    expect(hit!.toolName).toBe('send-message');
+    expect(buffer[hit!.argsStart]).toBe('{');
+    expect(buffer.slice(hit!.argsStart)).toBe(marker);
+    return hit!;
+  };
+
+  it('resolves the taught array contour once the arguments brace arrives', () => {
+    expectArgsAt('[{"tool":"send-message","arguments":{"Message":"Hi', '{"Message":"Hi');
+  });
+
+  it('waits while the tool name value is still truncated', () => {
+    expect(find('[{"tool":"send-mes')).toBeUndefined();
+  });
+
+  it('waits while the parameters key has arrived but its brace has not', () => {
+    expect(find('[{"tool":"send-message","arguments":')).toBeUndefined();
+    expectArgsAt('[{"tool":"send-message","arguments":{', '{');
+  });
+
+  it('accepts every name/parameters pair the full rescue accepts', () => {
+    expectArgsAt('{"name":"send-message","parameters":{"Message":"a"', '{"Message":"a"');
+    expectArgsAt('{"toolName":"send-message","input":{"Message":"a"', '{"Message":"a"');
+    expectArgsAt('{"tool":"send-message","arguments":{"Message":"a"', '{"Message":"a"');
+    expectArgsAt('{"action":"send-message","arguments":{"Message":"a"', '{"Message":"a"');
+  });
+
+  it('refuses a cross pair the full rescue would not read as that call', () => {
+    // `name` pairs with `parameters`; with `arguments` the rescue takes its flattened fallback
+    // and builds `{arguments: {...}}` as the input, so streaming it would speak a phantom call.
+    expect(find('{"name":"send-message","arguments":{"Message":"a"')).toBeUndefined();
+  });
+
+  it('skips a non-streamable first call and resolves the second in the array', () => {
+    const buffer = '[{"tool":"get-briefing","arguments":{"Turn":4}},{"tool":"send-message","arguments":{"Message":"Hi';
+    expectArgsAt(buffer, '{"Message":"Hi');
+  });
+
+  it('ignores a name that resolves to no available tool', () => {
+    expect(find('{"tool":"not-a-tool","arguments":{"Message":"a"')).toBeUndefined();
+  });
+
+  it('never starts on a tool name quoted inside some other value', () => {
+    const buffer = '[{"tool":"get-briefing","arguments":{"Note":"use \\"tool\\":\\"send-message\\" next","Extra":{"a":1}';
+    expect(find(buffer)).toBeUndefined();
+  });
+
+  it('resolves an underscored name through the hyphenated fallback', () => {
+    expectArgsAt('[{"tool":"send_message","arguments":{"Message":"Hi', '{"Message":"Hi');
+  });
+
+  it('resolves inside a markdown json fence', () => {
+    expectArgsAt('```json\n[{"tool":"send-message","arguments":{"Message":"Hi', '{"Message":"Hi');
+  });
+
+  it('pairs an arguments key that arrived before its name key', () => {
+    expectArgsAt('{"arguments":{"Message":"Hi"},"tool":"send-message"', '{"Message":"Hi"},"tool":"send-message"');
+  });
+
+  it('resolves the delimiter contour before its closing marker arrives', () => {
+    const buffer = '<|tool_call_begin|> functions.send-message:0 <|tool_call_argument_begin|> {"Message":"Hi';
+    expectArgsAt(buffer, '{"Message":"Hi');
+  });
+
+  it('waits on a delimiter contour whose arguments brace has not arrived', () => {
+    expect(find('<|tool_call_begin|> functions.send-mess')).toBeUndefined();
+  });
+
+  it('ignores the flattened contour, which has no arguments object to anchor on', () => {
+    expect(find('{"action":"send-message","Message":"Hi')).toBeUndefined();
+  });
+
+  // The ordinal is how a caller pairs the streamed half with the committed call. Streaming reports
+  // the first call it CAN stream; the rescue commits flattened calls this scan passed over, so the
+  // two only line up when the calls ahead of the streamed one are counted.
+  describe('ordinal', () => {
+    it('is 0 for the first call of its name', () => {
+      expect(expectArgsAt('[{"tool":"send-message","arguments":{"Message":"Hi', '{"Message":"Hi').ordinal).toBe(0);
+    });
+
+    it('counts a preceding FLATTENED call of the same name, which the rescue still commits', () => {
+      const buffer = '[{"action":"send-message","Message":"first"},'
+        + '{"action":"send-message","arguments":{"Message":"second"';
+      expect(expectArgsAt(buffer, '{"Message":"second"').ordinal).toBe(1);
+    });
+
+    it('counts a preceding cross-paired call, which the rescue commits flattened', () => {
+      // `name` with `arguments` is refused for streaming (see above) but still rescued, so it too
+      // sits ahead of the streamed call.
+      const buffer = '[{"name":"send-message","arguments":{"Message":"first"}},'
+        + '{"tool":"send-message","arguments":{"Message":"second"';
+      expect(expectArgsAt(buffer, '{"Message":"second"').ordinal).toBe(1);
+    });
+
+    it('reports the FIRST streamable call, so a later sibling never shifts it', () => {
+      const buffer = '[{"tool":"send-message","arguments":{"Message":"first"}},'
+        + '{"tool":"send-message","arguments":{"Message":"second"';
+      const hit = find(buffer);
+      expect(hit!.ordinal).toBe(0);
+      expect(buffer.slice(hit!.argsStart)).toBe(
+        '{"Message":"first"}},{"tool":"send-message","arguments":{"Message":"second"');
+    });
+
+    it('does not count a preceding call of a different tool', () => {
+      const buffer = '[{"tool":"get-briefing","arguments":{"Turn":4}},'
+        + '{"tool":"send-message","arguments":{"Message":"Hi';
+      expect(expectArgsAt(buffer, '{"Message":"Hi').ordinal).toBe(0);
+    });
+
+    it('does not count a preceding name the rescue cannot resolve to a tool', () => {
+      const buffer = '[{"action":"send-massage","Message":"typo"},'
+        + '{"action":"send-message","arguments":{"Message":"Hi';
+      expect(expectArgsAt(buffer, '{"Message":"Hi').ordinal).toBe(0);
+    });
+
+    it('does not count a same-named object nested inside another call\'s arguments', () => {
+      // Depth, not text order: an object buried in an earlier call's arguments is never an element
+      // of the array the rescue walks, so it commits no call of its own.
+      const buffer = '[{"tool":"get-briefing","arguments":{"Echo":{"tool":"send-message"}}},'
+        + '{"tool":"send-message","arguments":{"Message":"Hi';
+      expect(expectArgsAt(buffer, '{"Message":"Hi').ordinal).toBe(0);
+    });
+
+    it('counts siblings inside a constrained-decoding wrapper the same way', () => {
+      const buffer = '{"actions":[{"action":"send-message","Message":"first"},'
+        + '{"action":"send-message","arguments":{"Message":"second"';
+      expect(expectArgsAt(buffer, '{"Message":"second"').ordinal).toBe(1);
+    });
+
+    it('is 0 for the delimiter contour, which always matches its first block', () => {
+      const buffer = '<|tool_call_begin|> functions.send-message:0 <|tool_call_argument_begin|> {"Message":"Hi';
+      expect(expectArgsAt(buffer, '{"Message":"Hi').ordinal).toBe(0);
+    });
+  });
+});
 
 describe('isStructuredOutputToolName', () => {
   it('matches the claude-code constrained-decoding carrier (any prefix)', () => {
