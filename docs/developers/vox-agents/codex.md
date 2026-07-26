@@ -2,7 +2,7 @@
 
 This guide is for developers updating the managed `codex-openai-proxy` release used by vox-agents. Vox Deorum launches an exact version through `npx` on the first Codex request. The proxy is not a workspace dependency, so an update changes the source pin and its version-specific tests and documentation without running `npm install`.
 
-The current pin is `codex-openai-proxy@0.1.0-rc.5`, which bundles `@openai/codex@0.145.0`.
+The current pin is `codex-openai-proxy@0.1.0-rc.6`, which bundles `@openai/codex@0.145.0`.
 
 ## Check the release
 
@@ -30,8 +30,7 @@ These are integration contracts. A compatible dependency update needs only the v
 2. Update the exact default-command assertion in `vox-agents/tests/mock/utils/providers/codex-proxy.test.ts`.
 3. If the activity contract changed, update `codex.ts`, `codex-response.ts`, and their tests under `vox-agents/tests/mock/utils/providers/`.
 4. Update the pinned proxy and bundled Codex CLI versions in the player configuration and troubleshooting guides.
-5. Update version-specific descriptions in the vox-agents developer overview and source comments.
-6. Search for the old release to catch remaining operational references:
+5. Search for the old release to catch remaining operational references:
 
 ```bash
 rg "codex-openai-proxy@|Codex rc\.|Proxy rc\.|proxy.*rc\." vox-agents docs

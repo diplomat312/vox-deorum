@@ -318,6 +318,30 @@ describe('Codex compatible adapter requests', () => {
     expect(body).not.toHaveProperty('unknown');
   });
 
+  it('serializes replayed assistant reasoning as reasoning_content', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(completion(
+      { role: 'assistant', content: 'Ready.' },
+      'stop',
+    ));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await buildCodexModel({ provider: 'codex', name: 'gpt-5.4-mini' }).doGenerate({
+      prompt: [
+        { role: 'user', content: [{ type: 'text', text: 'Choose a city.' }] },
+        { role: 'assistant', content: [{ type: 'reasoning', text: 'Rome has the strongest opening.' }] },
+        { role: 'user', content: [{ type: 'text', text: 'Commit to that opening.' }] },
+      ],
+      providerOptions: buildCodexProviderOptions({ provider: 'codex', name: 'gpt-5.4-mini' }),
+    });
+
+    const [body] = capturedBodies(fetchMock);
+    expect(body.messages).toEqual([
+      { role: 'user', content: 'Choose a city.' },
+      { role: 'assistant', content: null, reasoning_content: 'Rome has the strongest opening.' },
+      { role: 'user', content: 'Commit to that opening.' },
+    ]);
+  });
+
   it('continues a standard native function-tool turn with assistant and tool messages', async () => {
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(completion({
@@ -501,6 +525,40 @@ describe('Codex reasoning token diagnostics', () => {
       providerOptions: buildCodexProviderOptions({ provider: 'codex', name: 'gpt-5.4-mini' }),
     });
 
+    expect(loggerMocks.warn).not.toHaveBeenCalled();
+  });
+
+  it('consumes post-finish streamed usage with reasoning token details', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(streamingCompletion(
+      {
+        id: 'chatcmpl-test', object: 'chat.completion.chunk', created: 1, model: 'gpt-5.4-mini',
+        choices: [{ index: 0, delta: {}, finish_reason: 'stop' }],
+      },
+      {
+        id: 'chatcmpl-test', object: 'chat.completion.chunk', created: 1, model: 'gpt-5.4-mini',
+        choices: [],
+        usage: {
+          prompt_tokens: 11,
+          completion_tokens: 7,
+          total_tokens: 18,
+          completion_tokens_details: { reasoning_tokens: 5 },
+        },
+      },
+    )));
+
+    const parts = await streamParts(buildCodexModel({ provider: 'codex', name: 'gpt-5.4-mini' }), {
+      prompt: [{ role: 'user', content: [{ type: 'text', text: 'Hello.' }] }],
+      providerOptions: buildCodexProviderOptions({ provider: 'codex', name: 'gpt-5.4-mini' }),
+    });
+    const finish = parts.find((part) => part.type === 'finish');
+
+    expect(finish).toMatchObject({
+      usage: {
+        inputTokens: { total: 11 },
+        outputTokens: { total: 7, text: 2, reasoning: 5 },
+        raw: { completion_tokens_details: { reasoning_tokens: 5 } },
+      },
+    });
     expect(loggerMocks.warn).not.toHaveBeenCalled();
   });
 });
