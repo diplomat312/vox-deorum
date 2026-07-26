@@ -1006,14 +1006,19 @@ local function nativeEventSuppressed()
 	return not mounted or mountingInProgress or nativeRedrawInProgress or rebuilding
 end
 
--- Reclaim native footer state only after a genuine native ordinary-term edit.
+-- Reclaim native footer state after every native redraw, re-reading the scratch draft only for
+-- a genuine native ordinary-term edit. DoUpdateButtons disables both footer buttons and unhides
+-- one AI conversation prompt every time it runs, and a single native edit runs it three times
+-- (ResetDisplay, DisplayDeal, then DoUIDealChangedByHuman), so only the first pass observes a
+-- changed signature: refreshing solely on that pass leaves the native state as the last word.
 local function onTradeLogicUpdate()
 	if nativeEventSuppressed() then return end
 	local items = decodeScratch()
 	local signature = scratchSignature(items)
-	if signature == expectedSignature then return end
-	markManualEdit()
-	draftItems, expectedSignature = items, signature
+	if signature ~= expectedSignature then
+		markManualEdit()
+		draftItems, expectedSignature = items, signature
+	end
 	refresh()
 end
 
