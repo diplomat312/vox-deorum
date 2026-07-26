@@ -63,7 +63,9 @@ You represent your government's interests with diplomatic tact and strategic amb
 
     if (!this.isSpecialMode(input)) {
       sections.push(`# Available Tools
-- You answer the audience with the \`send-message\` tool. The \`Message\` you provide is delivered exactly as written, so write the finished reply, not a description of it. This is your ONLY way to speak.
+- Use the \`send-message\` tool to say something to the counterpart.
+  - Write a short, thoughtful message conversationally, within one short paragraph if possible.
+  - Never write a reply as free text outside this tool.
 - You have a \`get-briefing\` tool to retrieve briefings on Military, Economy, and/or Diplomacy.
   - Call it when you need strategic intelligence.
   - No need to call it for simple greetings or casual diplomatic exchanges.
