@@ -53,13 +53,18 @@ class ProcessManager {
 
   /**
    * Execute all registered hooks in order, then exit.
-   * Safe to call multiple times — only the first invocation runs hooks.
+   * A second signal skips the remaining hooks and exits at once.
    */
   async shutdown(signal: string): Promise<void> {
-    if (this.shuttingDown) return;
+    if (this.shuttingDown) {
+      // Registering a SIGINT listener suppresses Node's default terminate-on-Ctrl+C, so this
+      // is the only way out while a slow or stuck hook is still running.
+      logger.warn(`Received ${signal} during shutdown; exiting now.`);
+      process.exit(130); // 128 + SIGINT
+    }
     this.shuttingDown = true;
 
-    logger.info(`Received ${signal}, shutting down gracefully...`);
+    logger.info(`Received ${signal}, shutting down gracefully... (press Ctrl+C again to force-quit)`);
 
     for (const [name, hook] of this.hooks) {
       try {

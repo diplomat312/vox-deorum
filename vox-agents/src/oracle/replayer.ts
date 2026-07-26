@@ -10,6 +10,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import pLimit from 'p-limit';
 import { VoxContext } from '../infra/vox-context.js';
+import { processManager } from '../infra/process-manager.js';
 import type { ExecuteTokenOutput } from '../infra/vox-run.js';
 import { VoxSpanExporter } from '../utils/telemetry/vox-exporter.js';
 import { mcpClient } from '../utils/models/mcp-client.js';
@@ -31,6 +32,9 @@ import type {
 import type { Model } from '../types/index.js';
 
 const logger = createLogger('OracleReplayer');
+
+/** Marker on a task that shutdown dropped before it ran, rather than a real replay failure. */
+const INTERRUPTED_ERROR = 'Interrupted by shutdown';
 
 /**
  * Replay phase: run retrieved rows through the LLM.
@@ -158,6 +162,20 @@ export async function runReplay(config: OracleConfig, rows?: RetrievedRow[]): Pr
     const results = await Promise.all(
       tasks.map(({ retrieved, resolvedModel, suffix, repetition }, i) =>
         limit(async (): Promise<ReplayResult> => {
+          const failed = (error: string): ReplayResult => ({
+            row: retrieved.row,
+            model: `${resolvedModel.provider}/${resolvedModel.name}`,
+            decisions: [],
+            tokens: { inputTokens: 0, reasoningTokens: 0, outputTokens: 0 },
+            messages: [],
+            error,
+            ...(repetition !== undefined ? { repetition } : {}),
+          });
+
+          // Ctrl+C: drop tasks still queued rather than starting work against telemetry and
+          // MCP state the shutdown hooks are concurrently tearing down.
+          if (processManager.isShuttingDown) return failed(INTERRUPTED_ERROR);
+
           const { game_id: gameId, player_id: playerId, turn } = retrieved.row;
           logger.info(`Replaying task ${i + 1}/${tasks.length}: game=${gameId}, player=${playerId}, turn=${turn}${suffix}`);
           try {
@@ -167,19 +185,19 @@ export async function runReplay(config: OracleConfig, rows?: RetrievedRow[]): Pr
           } catch (error) {
             const errorMsg = error instanceof Error ? error.message : String(error);
             logger.error(`Error replaying task ${i + 1}: ${errorMsg}`);
-            return {
-              row: retrieved.row,
-              model: `${resolvedModel.provider}/${resolvedModel.name}`,
-              decisions: [],
-              tokens: { inputTokens: 0, reasoningTokens: 0, outputTokens: 0 },
-              messages: [],
-              error: errorMsg,
-              ...(repetition !== undefined ? { repetition } : {}),
-            };
+            return failed(errorMsg);
           }
         })
       )
     );
+
+    // An interrupted run must not publish its results: each trail is written as its task
+    // completes, so completed work survives on disk and is reused as cache next time, but
+    // overwriting a full results CSV with a mostly-interrupted one would lose real data.
+    if (processManager.isShuttingDown) {
+      logger.warn(`Replay interrupted; ${config.experimentName}-results.csv left untouched. Completed trails are kept and reused as cache.`);
+      return results;
+    }
 
     // Write output CSV
     const outputCsvPath = path.join(outputDir, `${config.experimentName}-results.csv`);

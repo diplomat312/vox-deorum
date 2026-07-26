@@ -23,8 +23,12 @@ const mocks = vi.hoisted(() => {
   // reads the active run's parameters from here. Each mock captures it into a local const as its
   // first synchronous statement, before any await, so concurrent tasks never read each other's.
   const runState: { parameters: any } = { parameters: undefined };
+  // Stands in for the process manager's shutdown flag. runReplay reads it per call rather than
+  // capturing it at import, so flipping this mid-run is enough to simulate Ctrl+C.
+  const shuttingDown = { value: false };
   return {
     connect: vi.fn(),
+    shuttingDown,
     createContext: vi.fn(),
     disconnect: vi.fn(),
     execute: vi.fn(),
@@ -59,6 +63,13 @@ vi.mock('../../../src/infra/vox-context.js', () => ({
   })),
 }));
 
+vi.mock('../../../src/infra/process-manager.js', () => ({
+  processManager: {
+    get isShuttingDown() { return mocks.shuttingDown.value; },
+    register: vi.fn(),
+  },
+}));
+
 vi.mock('../../../src/oracle/utils/schema-tools.js', () => ({
   loadToolSchemaCache: mocks.loadToolSchemaCache,
   replaceToolsWithSchemaOnly: mocks.replaceToolsWithSchemaOnly,
@@ -91,6 +102,7 @@ const tempDirs: string[] = [];
 
 afterEach(() => {
   vi.clearAllMocks();
+  mocks.shuttingDown.value = false;
   for (const dir of tempDirs.splice(0)) {
     fs.rmSync(dir, { recursive: true, force: true });
   }
@@ -574,6 +586,62 @@ describe('oracle replayer (non-cache paths)', () => {
       // Cached schemas loaded -> never touches MCP connect/disconnect.
       expect(mocks.connect).not.toHaveBeenCalled();
       expect(mocks.disconnect).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('shutdown (Ctrl+C)', () => {
+    /** Four distinct models expand one source row into four tasks, run one at a time. */
+    const FOUR_MODELS = ['oracle-test/m-a@low', 'oracle-test/m-b@low', 'oracle-test/m-c@low', 'oracle-test/m-d@low'];
+
+    /** Execute mock that raises the shutdown flag while the first task is running. */
+    function mockShutdownDuringFirstTask(): void {
+      mocks.execute.mockImplementation(async (_agentName, input, _callback, tokenOutput) => {
+        const parameters = mocks.runState.parameters;
+        mocks.shuttingDown.value = true;
+        tokenOutput.inputTokens = 10;
+        return {
+          row: input.row,
+          model: `${parameters.resolvedModel.provider}/${parameters.resolvedModel.name}`,
+          decisions: [],
+          tokens: { inputTokens: 0, reasoningTokens: 0, outputTokens: 0 },
+          messages: [],
+        };
+      });
+    }
+
+    it('drops queued tasks instead of dispatching them once shutdown starts', async () => {
+      const outputDir = makeTempDir();
+      mockShutdownDuringFirstTask();
+
+      const results = await runReplay(
+        baseConfig(outputDir, 'interrupt-queue', () => ({}), { modelOverride: () => FOUR_MODELS }),
+        [retrieved()]
+      );
+
+      // Every task still settles (Promise.all must not hang), but only the first one ran.
+      expect(results).toHaveLength(FOUR_MODELS.length);
+      expect(mocks.execute).toHaveBeenCalledTimes(1);
+      const interrupted = results.filter(r => r.error === 'Interrupted by shutdown');
+      expect(interrupted).toHaveLength(FOUR_MODELS.length - 1);
+      // Dropped tasks are marked interrupted, never reported as replay failures.
+      expect(results.some(r => r.error && r.error !== 'Interrupted by shutdown')).toBe(false);
+    });
+
+    it('leaves an existing results CSV untouched when interrupted', async () => {
+      const outputDir = makeTempDir();
+      const csvPath = path.join(outputDir, 'interrupt-csv-results.csv');
+      fs.writeFileSync(csvPath, 'PREVIOUS_COMPLETE_RUN', 'utf-8');
+      mockShutdownDuringFirstTask();
+
+      await runReplay(
+        baseConfig(outputDir, 'interrupt-csv', () => ({}), { modelOverride: () => FOUR_MODELS }),
+        [retrieved()]
+      );
+
+      expect(fs.readFileSync(csvPath, 'utf-8')).toBe('PREVIOUS_COMPLETE_RUN');
+      // The completed task's trail still landed, so the next run can reuse it as cache.
+      const trails = fs.readdirSync(path.join(outputDir, 'interrupt-csv')).filter(f => f.endsWith('.json'));
+      expect(trails).toEqual(['game-1-p2-t3-m-a.json']);
     });
   });
 });
