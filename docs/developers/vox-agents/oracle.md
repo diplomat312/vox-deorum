@@ -54,4 +54,6 @@ Outputs default under `temp/oracle/`: the per-experiment results CSV next to a d
 
 CLI flags override the output and telemetry directories and the target agent. Bare experiment filenames resolve to `experiments/`.
 
+Ctrl+C stops dispatching new replays and leaves the results CSV untouched, so an interrupted run cannot overwrite a complete one; the trails already written are kept and reused as cache on the next run. Press Ctrl+C again to force-quit.
+
 The Oracle reads the same telemetry the [telepathist](telepathist.md) reads. One explains what happened; the other explores what could have happened instead.
