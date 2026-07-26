@@ -386,7 +386,6 @@
 		<Row Tag="TXT_KEY_VD_DIPLO_ENVOY_UNAVAILABLE"><Text>[COLOR_NEGATIVE_TEXT]The envoy seems unavailable.[ENDCOLOR]</Text></Row>
 		<Row Tag="TXT_KEY_VD_DIPLO_CLOSED"><Text>Conversation closed this turn.</Text></Row>
 		<Row Tag="TXT_KEY_VD_DIPLO_NO_ENVOY"><Text>This leader has no envoy available.</Text></Row>
-		<Row Tag="TXT_KEY_VD_DIPLO_DECLARE_WAR_CONFIRM"><Text>Are you sure you want to declare war? This uses the native game action and takes effect immediately.</Text></Row>
 		<Row Tag="TXT_KEY_VD_DIPLO_NOTIFICATION_SUMMARY"><Text>Diplomatic message</Text></Row>
 		<Row Tag="TXT_KEY_VD_DIPLO_NOTIFICATION_MESSAGE"><Text>Your envoy has opened a correspondence. Click to return to the conversation.</Text></Row>
 		<Row Tag="TXT_KEY_VD_DIPLO_SPEAKER_TITLE"><Text>{1_Leader} of {2_Civ}</Text></Row>

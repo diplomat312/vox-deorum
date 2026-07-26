@@ -6,6 +6,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   deriveActiveProposal,
+  deriveProposalOutcomes,
   activeProposalDeal,
   isAgreed,
 } from '../../../src/utils/diplomacy/deal-reduce.js';
@@ -104,5 +105,81 @@ describe('activeProposalDeal / isAgreed', () => {
     expect(isAgreed(deriveActiveProposal([proposal]))).toBe(false);
     const accept = msg('deal-accept', { ProposalMessageID: proposal.ID });
     expect(isAgreed(deriveActiveProposal([proposal, accept]))).toBe(true);
+  });
+});
+
+describe('deriveProposalOutcomes', () => {
+  it('is empty when there are no proposals', () => {
+    expect(deriveProposalOutcomes([msg('text'), msg('close')]).size).toBe(0);
+  });
+
+  it('reports the only proposal as open and not superseded', () => {
+    const proposal = msg('deal-proposal', { Deal: deal });
+    const outcome = deriveProposalOutcomes([proposal]).get(proposal.ID);
+    expect(outcome).toMatchObject({ status: 'open', superseded: false });
+    expect(outcome?.responses).toHaveLength(0);
+  });
+
+  it('keeps a rejected proposal rejected after a new proposal supersedes it', () => {
+    const first = msg('deal-proposal', { Deal: deal });
+    const reject = msg('deal-reject', { ProposalMessageID: first.ID }, { SpeakerID: 3 });
+    const second = msg('deal-proposal', { Deal: deal });
+    const outcomes = deriveProposalOutcomes([first, reject, second]);
+    expect(outcomes.get(first.ID)).toMatchObject({ status: 'rejected', superseded: true });
+    expect(outcomes.get(second.ID)).toMatchObject({ status: 'open', superseded: false });
+  });
+
+  it('keeps an enacted proposal enacted after a new proposal supersedes it', () => {
+    // The reported bug: reading status off the active reduction demoted this card to "superseded",
+    // so the acceptance survived only in the standalone outcome rows.
+    const first = msg('deal-proposal', { Deal: deal });
+    const accept = msg('deal-accept', { ProposalMessageID: first.ID }, { SpeakerID: 3 });
+    const enacted = msg('deal-enacted', { ProposalMessageID: first.ID }, { SpeakerID: 3 });
+    const second = msg('deal-counter', { Deal: deal });
+    const outcomes = deriveProposalOutcomes([first, accept, enacted, second]);
+    expect(outcomes.get(first.ID)).toMatchObject({ status: 'enacted', superseded: true });
+    expect(outcomes.get(first.ID)?.responses.map((r) => r.ID)).toEqual([accept.ID, enacted.ID]);
+  });
+
+  it('leaves an unanswered superseded proposal open, so callers can render it as expired', () => {
+    const first = msg('deal-proposal', { Deal: deal });
+    const second = msg('deal-counter', { Deal: deal });
+    expect(deriveProposalOutcomes([first, second]).get(first.ID)).toMatchObject({
+      status: 'open',
+      superseded: true,
+    });
+  });
+
+  it('keeps acceptance sticky against a later reject of the same proposal', () => {
+    const proposal = msg('deal-proposal', { Deal: deal });
+    const accept = msg('deal-accept', { ProposalMessageID: proposal.ID }, { SpeakerID: 3 });
+    const reject = msg('deal-reject', { ProposalMessageID: proposal.ID }, { SpeakerID: 3 });
+    expect(deriveProposalOutcomes([proposal, accept, reject]).get(proposal.ID)?.status).toBe('accepted');
+  });
+
+  it('does not let a reject demote an enacted proposal', () => {
+    const proposal = msg('deal-proposal', { Deal: deal });
+    const enacted = msg('deal-enacted', { ProposalMessageID: proposal.ID }, { SpeakerID: 3 });
+    const reject = msg('deal-reject', { ProposalMessageID: proposal.ID }, { SpeakerID: 3 });
+    expect(deriveProposalOutcomes([proposal, enacted, reject]).get(proposal.ID)?.status).toBe('enacted');
+  });
+
+  it('routes each response to the proposal it answers', () => {
+    const first = msg('deal-proposal', { Deal: deal });
+    const second = msg('deal-counter', { Deal: deal });
+    const rejectFirst = msg('deal-reject', { ProposalMessageID: first.ID }, { SpeakerID: 3 });
+    const acceptSecond = msg('deal-accept', { ProposalMessageID: second.ID }, { SpeakerID: 3 });
+    const outcomes = deriveProposalOutcomes([first, second, rejectFirst, acceptSecond]);
+    expect(outcomes.get(first.ID)?.status).toBe('rejected');
+    expect(outcomes.get(second.ID)?.status).toBe('accepted');
+    expect(outcomes.get(first.ID)?.responses.map((r) => r.ID)).toEqual([rejectFirst.ID]);
+  });
+
+  it('ignores responses pointing at an unknown proposal', () => {
+    const proposal = msg('deal-proposal', { Deal: deal });
+    const orphan = msg('deal-reject', { ProposalMessageID: 9999 }, { SpeakerID: 3 });
+    const outcomes = deriveProposalOutcomes([proposal, orphan]);
+    expect(outcomes.size).toBe(1);
+    expect(outcomes.get(proposal.ID)?.status).toBe('open');
   });
 });

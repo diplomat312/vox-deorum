@@ -62,8 +62,7 @@ Purpose: Main chat interface for interacting with agents
         :agent-label="agentLabel"
         :you-i-d="audiencePlayerID"
         :them-i-d="thread.agent"
-        :active-deal-i-d="activeDealID"
-        :deal-status="dealStatus"
+        :deal-outcomes="dealOutcomes"
         :deal-locked="closedThisTurn"
         :deal-action-busy="dealBlocked"
         @deal-accept="onDealAccept"
@@ -152,7 +151,7 @@ import type { EnvoyThread, DealPayload } from '../utils/types';
 import ChatMessages from '../components/chat/ChatMessages.vue';
 import DeleteSessionDialog from '../components/chat/DeleteSessionDialog.vue';
 import DealScreen from '../components/deal/DealScreen.vue';
-import { deriveActiveProposal } from '../utils/deal/deal-reduce';
+import { deriveActiveProposal, deriveProposalOutcomes } from '../utils/deal/deal-reduce';
 // Pure transcript helpers shared with the backend (via @vox) so labels and the close-lock
 // comparison can never drift from the server's `isClosedThisTurn` / role derivation.
 import { roleOf, agentName as agentNameOf, audienceID, isClosedThisTurn } from '@vox/utils/diplomacy/transcript-utils';
@@ -230,10 +229,9 @@ const dealMessages = computed(() =>
 );
 /** The reduced deal state (latest active proposal + status) from the conversation's deal messages. */
 const dealReduction = computed(() => deriveActiveProposal(dealMessages.value));
-/** The latest proposal's message ID — its card carries the live status (actions only when open). */
-const activeDealID = computed(() => dealReduction.value.active?.ID);
-/** Status of the latest proposal, so its inline card can show open actions vs. rejected/enacted. */
-const dealStatus = computed(() => dealReduction.value.status);
+/** Per-proposal outcomes for rendering: every card reads its own resolved status here rather than
+ *  borrowing the active proposal's, so an accepted deal keeps saying so after being superseded. */
+const dealOutcomes = computed(() => deriveProposalOutcomes(dealMessages.value));
 
 // Use the thread messages composable
 const { sendMessage: sendThreadMessage, requestGreeting, proposeDeal } = useThreadMessages({

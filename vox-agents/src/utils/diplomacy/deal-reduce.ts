@@ -79,6 +79,68 @@ export function deriveActiveProposal<M extends TranscriptMessage>(messages: M[])
   return { active, status: enacted ? "enacted" : status, proposals };
 }
 
+/** One proposal's resolved lifecycle, for rendering. */
+export interface ProposalOutcome<M extends TranscriptMessage = TranscriptMessage> {
+  /** Status of this specific proposal (never `none` -- the proposal itself exists). */
+  status: Exclude<DealStatus, "none">;
+  /** The `deal-accept` / `deal-reject` / `deal-enacted` rows answering it, in append order. */
+  responses: M[];
+  /** True when a later proposal/counter has replaced it on the table. */
+  superseded: boolean;
+}
+
+/**
+ * Reduce the same messages into a per-proposal outcome map, keyed by proposal ID.
+ *
+ * `deriveActiveProposal` deliberately answers only for the latest proposal, because that is the one
+ * question the negotiation control flow asks. Rendering needs a different answer: every card in the
+ * transcript has its own resolved fate, and it keeps that fate after a newer proposal supersedes it.
+ * Reading status off the active reduction instead made an accepted card silently revert to
+ * "superseded" the moment the conversation moved on, which left its acceptance visible only in the
+ * standalone outcome rows.
+ *
+ * Status rules are identical to `deriveActiveProposal`: `enacted` is terminal, and acceptance is
+ * sticky against a later reject of the same proposal. Supersession is reported alongside the status
+ * rather than replacing it, so callers can prefer a real outcome and fall back to "superseded" only
+ * for a proposal that was never answered.
+ *
+ * This is display-only. Nothing in the accept/reject/enact write path should branch on it.
+ */
+export function deriveProposalOutcomes<M extends TranscriptMessage>(
+  messages: M[],
+): Map<number, ProposalOutcome<M>> {
+  const outcomes = new Map<number, ProposalOutcome<M>>();
+  const proposals = messages.filter((m) => PROPOSAL_TYPES.has(m.MessageType));
+  const latestID = proposals.length > 0 ? proposals[proposals.length - 1]!.ID : undefined;
+
+  for (const proposal of proposals) {
+    outcomes.set(proposal.ID, {
+      status: "open",
+      responses: [],
+      superseded: proposal.ID !== latestID,
+    });
+  }
+
+  for (const m of messages) {
+    const answered = answeredProposalID(m);
+    if (answered === undefined) continue;
+    const outcome = outcomes.get(answered);
+    if (!outcome) continue;
+    if (m.MessageType === "deal-enacted") {
+      outcome.responses.push(m);
+      outcome.status = "enacted";
+    } else if (m.MessageType === "deal-accept") {
+      outcome.responses.push(m);
+      if (outcome.status !== "enacted") outcome.status = "accepted";
+    } else if (m.MessageType === "deal-reject") {
+      outcome.responses.push(m);
+      if (outcome.status === "open") outcome.status = "rejected";
+    }
+  }
+
+  return outcomes;
+}
+
 /** The active proposal's stored deal terms, or undefined when none is on the table. */
 export function activeProposalDeal(reduction: DealReduction): DealPayload | undefined {
   const deal = (reduction.active?.Payload as Record<string, unknown> | undefined)?.Deal;

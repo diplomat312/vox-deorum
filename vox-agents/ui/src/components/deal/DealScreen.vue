@@ -67,6 +67,9 @@
       <div class="deal-status">
         <Tag v-if="reduction.status === 'open'" value="Active proposal" severity="info" />
         <Tag v-else-if="reduction.status === 'rejected'" value="Last proposal rejected" severity="warn" />
+        <!-- Acceptance normally lands together with enactment, but a deal-accept that arrived without
+             its deal-enacted row would otherwise show no tag at all. -->
+        <Tag v-else-if="reduction.status === 'accepted'" value="Accepted" severity="success" />
         <Tag v-else-if="reduction.status === 'enacted'" value="Enacted" severity="success" />
         <span v-if="inspecting" class="deal-muted"><i class="pi pi-spin pi-spinner" /> evaluating...</span>
         <Button

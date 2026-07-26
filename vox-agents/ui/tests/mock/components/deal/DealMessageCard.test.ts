@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { mount } from '@vue/test-utils';
 import DealMessageCard from '@/components/deal/DealMessageCard.vue';
 import type { DealTranscriptMessage } from '@/utils/types';
+import type { ProposalOutcome } from '@/utils/deal/deal-reduce';
 
 const Button = {
   props: ['label', 'icon', 'severity', 'disabled'],
@@ -37,6 +38,15 @@ function dealMsg(over: Partial<DealTranscriptMessage> = {}): DealTranscriptMessa
   };
 }
 
+function outcomeMsg(over: Partial<DealTranscriptMessage> = {}): DealTranscriptMessage {
+  return { ...dealMsg(), ID: 90, MessageType: 'deal-reject', SpeakerID: 1, Content: '', Payload: {}, ...over };
+}
+
+/** The per-proposal outcome the parent derives with `deriveProposalOutcomes`. */
+function outcome(over: Partial<ProposalOutcome> = {}): ProposalOutcome {
+  return { status: 'open', responses: [], superseded: false, ...over };
+}
+
 function mountCard(props: Record<string, unknown> = {}) {
   return mount(DealMessageCard, {
     props: {
@@ -45,8 +55,7 @@ function mountCard(props: Record<string, unknown> = {}) {
       themID: 1,
       youLabel: 'You',
       themLabel: 'Germany',
-      isActive: true,
-      status: 'open',
+      outcome: outcome(),
       ...props,
     },
     global: { stubs: { Button }, directives: { tooltip: {} } },
@@ -80,31 +89,55 @@ describe('DealMessageCard', () => {
     expect(wrapper.emitted('accept')?.[0]).toEqual([5]);
   });
 
-  it('shows superseded and no actions when not active', () => {
-    const wrapper = mountCard({ isActive: false });
+  it('shows superseded and no actions for a proposal that was never answered', () => {
+    const wrapper = mountCard({ outcome: outcome({ superseded: true }) });
     expect(wrapper.text()).toContain('superseded');
     expect(wrapper.findAll('button')).toHaveLength(0);
   });
 
-  it('flips the active proposal to the Rejected status note (no actions) when it was rejected', () => {
-    // The proposal card flips to "Rejected" (mirroring the Accepted/Enacted flip); the reject's own
-    // outward line rides on its standalone reject card, not on this note.
-    const wrapper = mountCard({ deal: dealMsg({ SpeakerID: 1 }), status: 'rejected' });
+  it('shows the Rejected status note and no actions when the proposal was rejected', () => {
+    const wrapper = mountCard({
+      deal: dealMsg({ SpeakerID: 1 }),
+      outcome: outcome({ status: 'rejected' }),
+    });
     expect(wrapper.text()).toContain('Rejected');
     expect(wrapper.findAll('button')).toHaveLength(0);
   });
 
-  it('renders a deal-reject row as its own outcome card carrying its message', () => {
-    // A reject is an answering move, so it renders as a standalone card like an accept/enacted row:
-    // its header names the rejecter and its Content is the voiced line. It is never "active", so it
-    // shows neither actions nor the "superseded" note.
+  it('absorbs the rejection line into the proposal card instead of a separate card', () => {
+    // The reject row is filtered out of the stream upstream; its voiced line arrives here as one of
+    // this proposal's responses, so the whole exchange reads as a single card.
     const wrapper = mountCard({
-      deal: dealMsg({ ID: 8, MessageType: 'deal-reject', SpeakerID: 1, Content: 'We must decline this.' }),
-      isActive: false,
+      deal: dealMsg({ SpeakerID: 1 }),
+      outcome: outcome({
+        status: 'rejected',
+        responses: [outcomeMsg({ Content: 'We must decline this.' })],
+      }),
     });
-    expect(wrapper.text()).toContain('Germany rejected the deal');
+    expect(wrapper.text()).toContain('Germany proposed a deal');
     expect(wrapper.text()).toContain('We must decline this.');
-    expect(wrapper.text()).not.toContain('superseded');
+    expect(wrapper.text()).toContain('Rejected');
     expect(wrapper.findAll('button')).toHaveLength(0);
+  });
+
+  it('keeps its outcome after a newer proposal supersedes it', () => {
+    // Regression: this card used to fall back to "superseded", so the acceptance survived only in
+    // the standalone outcome rows the card now absorbs.
+    const wrapper = mountCard({
+      deal: dealMsg({ SpeakerID: 1 }),
+      outcome: outcome({
+        status: 'enacted',
+        superseded: true,
+        responses: [
+          outcomeMsg({ ID: 91, MessageType: 'deal-accept', Content: 'We accept your terms.' }),
+          outcomeMsg({ ID: 92, MessageType: 'deal-enacted', Content: 'The deal was enacted.' }),
+        ],
+      }),
+    });
+    expect(wrapper.text()).toContain('Enacted');
+    expect(wrapper.text()).not.toContain('superseded');
+    // The accept line is the agent's own words; the enacted line is boilerplate the label covers.
+    expect(wrapper.text()).toContain('We accept your terms.');
+    expect(wrapper.text()).not.toContain('The deal was enacted.');
   });
 });

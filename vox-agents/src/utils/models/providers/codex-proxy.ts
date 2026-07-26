@@ -16,14 +16,11 @@ import { createLogger } from '../../logger.js';
 import { executionTimeoutDefault } from '../../retry.js';
 import { processManager } from '../../../infra/process-manager.js';
 
-/** The published rc.6 proxy contract accepted by this integration. */
-export const codexProxyVersion = '0.1.0-rc.6';
+/** The published rc.7 proxy contract accepted by this integration. */
+export const codexProxyVersion = '0.1.0-rc.7';
 
 /** The proxy request deadline, aligned with the shared model execution budget. */
 export const codexProxyRequestTimeoutDefault = executionTimeoutDefault;
-
-/** The login and suspended-tool deadline accepted by the proxy CLI. */
-export const codexProxyToolTimeoutDefault = 300_000;
 
 /** The bounded time spent waiting for an authenticated proxy to become ready. */
 export const codexProxyStartupTimeoutDefault = 300_000;
@@ -65,7 +62,6 @@ export interface CodexProxyConfig {
   command: string;
   root: string;
   requestTimeoutMs: number;
-  toolTimeoutMs: number;
   startupTimeoutMs: number;
   shutdownTimeoutMs: number;
   shutdownGracePeriodMs: number;
@@ -133,7 +129,6 @@ export function getCodexProxyConfig(env: NodeJS.ProcessEnv = process.env): Codex
     command: optionalEnvironmentValue(env.CODEX_PROXY_COMMAND) ?? codexProxyCommandDefault,
     root,
     requestTimeoutMs: parseDuration('CODEX_PROXY_REQUEST_TIMEOUT', optionalEnvironmentValue(env.CODEX_PROXY_REQUEST_TIMEOUT), codexProxyRequestTimeoutDefault),
-    toolTimeoutMs: parseDuration('CODEX_PROXY_TOOL_TIMEOUT', optionalEnvironmentValue(env.CODEX_PROXY_TOOL_TIMEOUT), codexProxyToolTimeoutDefault),
     startupTimeoutMs: parseDuration('CODEX_PROXY_STARTUP_TIMEOUT', optionalEnvironmentValue(env.CODEX_PROXY_STARTUP_TIMEOUT), codexProxyStartupTimeoutDefault),
     shutdownTimeoutMs: codexProxyShutdownTimeoutDefault,
     shutdownGracePeriodMs: codexProxyShutdownGracePeriod,
@@ -184,7 +179,6 @@ export function buildCodexProxyCommand(config: CodexProxyConfig): { command: str
       // Debug logging enables the proxy's redacted app-server diagnostics.
       '--log-level', 'debug',
       '--request-timeout', `${config.requestTimeoutMs}ms`,
-      '--tool-timeout', `${config.toolTimeoutMs}ms`,
       '--shutdown-timeout', `${config.shutdownTimeoutMs}ms`,
     ],
   };

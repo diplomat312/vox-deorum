@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { deriveActiveProposal } from '@/utils/deal/deal-reduce';
+import { deriveActiveProposal, deriveProposalOutcomes } from '@/utils/deal/deal-reduce';
 import type { DealTranscriptMessage } from '@/utils/types';
 
 let nextId = 1;
@@ -72,5 +72,44 @@ describe('deriveActiveProposal', () => {
     const r = deriveActiveProposal([p, accept, enacted]);
     expect(r.active).toBe(p);
     expect(r.status).toBe('enacted');
+  });
+});
+
+describe('deriveProposalOutcomes', () => {
+  it('gives each proposal its own outcome, keyed by proposal ID', () => {
+    const first = msg('deal-proposal', { Deal: emptyDeal });
+    const rejectFirst = msg('deal-reject', { ProposalMessageID: first.ID });
+    const second = msg('deal-counter', { Deal: emptyDeal });
+    const acceptSecond = msg('deal-accept', { ProposalMessageID: second.ID });
+    const enactSecond = msg('deal-enacted', { ProposalMessageID: second.ID });
+
+    const outcomes = deriveProposalOutcomes([first, rejectFirst, second, acceptSecond, enactSecond]);
+    expect(outcomes.get(first.ID)).toMatchObject({ status: 'rejected', superseded: true });
+    expect(outcomes.get(second.ID)).toMatchObject({ status: 'enacted', superseded: false });
+  });
+
+  it('an enacted card keeps its outcome once a newer proposal arrives', () => {
+    // Regression: the card used to revert to "superseded" here, leaving the acceptance visible only
+    // in the standalone outcome rows the card is now supposed to absorb.
+    const p = msg('deal-proposal', { Deal: emptyDeal });
+    const accept = msg('deal-accept', { ProposalMessageID: p.ID });
+    const enacted = msg('deal-enacted', { ProposalMessageID: p.ID });
+    const next = msg('deal-proposal', { Deal: emptyDeal });
+    expect(deriveProposalOutcomes([p, accept, enacted, next]).get(p.ID)?.status).toBe('enacted');
+  });
+
+  it('collects the answering rows so the card can show their text', () => {
+    const p = msg('deal-proposal', { Deal: emptyDeal });
+    const reject = msg('deal-reject', { ProposalMessageID: p.ID });
+    expect(deriveProposalOutcomes([p, reject]).get(p.ID)?.responses).toEqual([reject]);
+  });
+
+  it('leaves an unanswered superseded proposal open', () => {
+    const p = msg('deal-proposal', { Deal: emptyDeal });
+    const next = msg('deal-counter', { Deal: emptyDeal });
+    expect(deriveProposalOutcomes([p, next]).get(p.ID)).toMatchObject({
+      status: 'open',
+      superseded: true,
+    });
   });
 });

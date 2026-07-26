@@ -31,7 +31,6 @@ local m_hasMore, m_loadingEarlier = false, false
 local m_dotSeconds, m_dotCount, m_animated = 0, 1, {}
 local m_tail = { sending = {}, streaming = {}, status = {} }
 local m_notificationIDs, m_notificationOwner, m_notificationMessages = {}, {}, {}
-local m_warPromptOpen = false
 local m_isPureObserver = false
 local PENDING_POKE_TIMEOUT = 3.0
 local m_presentation = nil -- nil | "pending" | "leader" | "static"
@@ -75,7 +74,7 @@ local function layoutPanel()
 		inputStatusWidth = inputStatusW, dealColumnWidth = dealColumnW,
 		dealYouX = 42 + dealColumnW + 20, dealDividerX = 42 + dealColumnW + 10,
 	}
-	Controls.MainGrid:SetSizeVal(screenW, targetH); Controls.ContentColumn:SetSizeVal(columnW, targetH); Controls.ContentColumn:SetOffsetVal(columnX, 0); Controls.WarDim:SetSizeVal(screenW, targetH)
+	Controls.MainGrid:SetSizeVal(screenW, targetH); Controls.ContentColumn:SetSizeVal(columnW, targetH); Controls.ContentColumn:SetOffsetVal(columnX, 0)
 	Controls.TranscriptScroll:SetSizeVal(transcriptW, transcriptH); Controls.TranscriptBar:SetSizeY(math.max(200, transcriptH - 42))
 	Controls.TranscriptStack:SetSizeX(rowW); Controls.TailStack:SetSizeX(rowW); Controls.FooterDivider:SetSizeX(transcriptW)
 	Controls.HeaderBar:SetSizeX(transcriptW); Controls.HeaderRule:SetSizeX(transcriptW)
@@ -139,6 +138,43 @@ local function deriveActiveProposal(rows)
 	end
 	if enacted then status = "enacted" end
 	return { active = active, status = status, proposals = proposals }
+end
+
+-- Port the Web per-proposal outcome reducer (deriveProposalOutcomes). Every proposal keeps its own
+-- resolved fate plus the rows that answered it, so a card that was accepted still says so once a
+-- later proposal supersedes it -- reading status off the active reduction alone silently demoted it
+-- to "Expired" and left the acceptance visible only in the standalone outcome rows.
+local function deriveProposalOutcomes(rows)
+	local outcomes, latestID = {}, nil
+	for _, row in ipairs(rows) do
+		if row.MessageType == "deal-proposal" or row.MessageType == "deal-counter" then
+			outcomes[row.ID] = { status = "open", responses = {}, superseded = false }
+			latestID = row.ID
+		end
+	end
+	for id, outcome in pairs(outcomes) do outcome.superseded = id ~= latestID end
+	for _, row in ipairs(rows) do
+		local outcome = outcomes[answeredProposalID(row) or -1]
+		if outcome ~= nil then
+			if row.MessageType == "deal-enacted" then
+				table.insert(outcome.responses, row); outcome.status = "enacted"
+			elseif row.MessageType == "deal-accept" then
+				table.insert(outcome.responses, row)
+				if outcome.status ~= "enacted" then outcome.status = "accepted" end
+			elseif row.MessageType == "deal-reject" then
+				table.insert(outcome.responses, row)
+				if outcome.status == "open" then outcome.status = "rejected" end
+			end
+		end
+	end
+	return outcomes
+end
+
+-- Return whether a row is a deal outcome, which belongs inside the proposal card it answers rather
+-- than in a bubble of its own.
+local function isDealOutcomeRow(row)
+	local t = row and row.MessageType
+	return t == "deal-accept" or t == "deal-enacted" or t == "deal-reject"
 end
 
 -- Port the Web close-row input derivation.
@@ -312,7 +348,14 @@ local function resizeDealBubble(instance, pending)
 	instance.TheyGive:SetOffsetY(dealTop + 24); instance.YouGive:SetOffsetY(dealTop + 24); instance.DealDivider:SetOffsetY(dealTop - 2)
 	local termsHeight = math.max(instance.TheyGive:GetSizeY(), instance.YouGive:GetSizeY())
 	instance.DealDivider:SetSizeY(termsHeight + 28)
-	sizeBubble(instance, dealTop + 24 + termsHeight + (pending and 30 or 14))
+	-- The outcome line sits under the terms, above the pending strip.
+	local termsBottom = dealTop + 24 + termsHeight
+	local outcomeHeight = 0
+	if not instance.Outcome:IsHidden() then
+		instance.Outcome:SetOffsetY(termsBottom + 6)
+		outcomeHeight = instance.Outcome:GetSizeY() + 8
+	end
+	sizeBubble(instance, termsBottom + outcomeHeight + (pending and 30 or 14))
 end
 
 -- Bind all bubble details that do not depend on later rows.
@@ -328,7 +371,7 @@ local function bindStaticRow(row, instance)
 	local textControl = own and instance.RightText or instance.LeftText
 	textControl:SetText(content); hookSpeaker(row.SpeakerID, instance, own)
 	instance.TheyHeader:SetHide(not isDeal); instance.YouHeader:SetHide(not isDeal); instance.TheyGive:SetHide(not isDeal); instance.YouGive:SetHide(not isDeal)
-	instance.DealDivider:SetHide(not isDeal); instance.Pending:SetHide(true)
+	instance.DealDivider:SetHide(not isDeal); instance.Pending:SetHide(true); instance.Outcome:SetHide(true)
 	local measuredTextHeight = hasContent and textControl:GetSizeY() or 0
 	local height = 10 + math.max(24, measuredTextHeight) + 12
 	if isDeal then
@@ -347,9 +390,10 @@ local function bindStaticRow(row, instance)
 	return isDeal
 end
 
--- Build one durable row and at most one turn separator.
+-- Build one durable row and at most one turn separator. Outcome rows are skipped the same way
+-- hidden trigger tokens are: refreshDealRow folds their text into the proposal card instead.
 local function buildRowInstance(row)
-	if isSpecialRow(row.Content) then return end
+	if isSpecialRow(row.Content) or isDealOutcomeRow(row) then return end
 	if m_lastBuiltTurn ~= row.Turn then
 		local turn = {}; ContextPtr:BuildInstanceForControl("TurnInstance", turn, Controls.TranscriptStack); turn.Row:SetSizeX(m_geometry.rowWidth); turn.Text:SetText(turnLabel(row.Turn))
 	end
@@ -377,18 +421,41 @@ local function pendingLabelKey()
 	return type(m_phaseArg) == "table" and m_phaseArg.labelKey or "TXT_KEY_VD_DIPLO_PROPOSING"
 end
 
--- Refresh one proposal card in place.
-local function refreshDealRow(row, reduction)
+-- Collect the answering side's own words for one proposal. A deal-enacted row carries fixed
+-- boilerplate the status label already states, so only accept/reject lines are surfaced.
+local function outcomeText(outcome)
+	local lines = {}
+	for _, response in ipairs(outcome.responses) do
+		if response.MessageType ~= "deal-enacted" then
+			local text = sanitizeText(response.Content)
+			if string.match(text, "^%s*$") == nil then table.insert(lines, text) end
+		end
+	end
+	if #lines == 0 then return nil end
+	return table.concat(lines, "[NEWLINE]")
+end
+
+-- Refresh one proposal card in place, including the outcome that resolved it.
+local function refreshDealRow(row, reduction, outcomes)
 	local record = m_rowInstances[row.ID]
 	if record == nil then return end
-	local instance, active = record.controls, reduction.active ~= nil and reduction.active.ID == row.ID
-	local status = active and reduction.status or "superseded"
+	local instance = record.controls
+	local outcome = outcomes[row.ID] or { status = "open", responses = {}, superseded = false }
+	-- A resolved proposal keeps its own outcome; only one that was never answered reads as expired.
+	local status = outcome.status
+	if status == "open" and outcome.superseded then status = "superseded" end
 	local pending = pendingProposalID(reduction) == row.ID
 	local textControl = row.SpeakerID == m_activePlayerID and instance.RightText or instance.LeftText
-	textControl:SetText(dealSummary(row, status)); resizeDealBubble(instance, pending)
+	textControl:SetText(dealSummary(row, status))
+	local outcomeLine = outcomeText(outcome)
+	instance.Outcome:SetHide(outcomeLine == nil)
+	if outcomeLine ~= nil then
+		instance.Outcome:SetWrapWidth(m_geometry.textWrapWidth); instance.Outcome:SetText(outcomeLine)
+	end
+	resizeDealBubble(instance, pending)
 	instance.Pending:SetHide(not pending)
 	if pending then addAnimated(instance.Pending, Locale.ConvertTextKey(pendingLabelKey()) .. " ") end
-	local canRespond = active and reduction.status == "open" and not pending and isBoundActorCurrent() and not inputIsLocked()
+	local canRespond = not outcome.superseded and outcome.status == "open" and not pending and isBoundActorCurrent() and not inputIsLocked()
 	record.mode = canRespond and (row.SpeakerID == m_activePlayerID and "own" or "incoming") or nil
 	instance.CardButton:SetDisabled(pending or not canRespond); instance.CardButton:SetAlpha((pending or row.Pending) and 0.55 or 1)
 	if canRespond then instance.CardButton:RegisterCallback(Mouse.eLClick, function() openDeal(record.row, record.mode) end) end
@@ -396,7 +463,8 @@ end
 
 -- Refresh every proposal after a row or phase change.
 local function refreshDealRows(reduction)
-	for _, row in ipairs(reduction.proposals) do refreshDealRow(row, reduction) end
+	local outcomes = deriveProposalOutcomes(m_rows)
+	for _, row in ipairs(reduction.proposals) do refreshDealRow(row, reduction, outcomes) end
 end
 
 -- Size a transient bubble after changing wrapped text.
@@ -481,20 +549,41 @@ local function refreshInput()
 	reflowActionStack()
 end
 
--- Return whether the effective seat may declare war on the counterpart right now.
-local function canDeclareWarNow()
-	if VoxDeorumSeat.IsPureObserver() or not isBoundActorCurrent() then return false end
+-- Return whether the war action is offered at all. Declaring routes through the native
+-- BUTTONPOPUP_DECLAREWARMOVE popup, whose Yes handler acts for Game.GetActivePlayer() -- so the
+-- pinned-observer strategist seat, which would declare for the wrong player, is not offered it.
+local function warActionAvailable()
+	if VoxDeorumSeat.IsPureObserver() or isHumanStrategist() or not isBoundActorCurrent() then return false end
 	local active, other = Players[m_activePlayerID], Players[m_counterpartID]
 	if active == nil or other == nil then return false end
-	local activeTeam, otherTeamID = Teams[active:GetTeam()], other:GetTeam()
-	if activeTeam:IsAtWar(otherTeamID) then return false end
-	if isHumanStrategist() then return activeTeam:CanDeclareWar(otherTeamID, m_activePlayerID) end
-	return activeTeam:CanDeclareWar(otherTeamID)
+	return not Teams[active:GetTeam()]:IsAtWar(other:GetTeam())
 end
 
--- Update native war-action visibility.
-local function refreshWarButton() 
-	Controls.WarButton:SetHide(not canDeclareWarNow())
+-- Update the war action on the native model: visible whenever the action applies, disabled with the
+-- blocking reason when it is illegal. Mirrors LeaderHeadRoot's peace-branch gating. Note a
+-- Declaration of Friendship never blocks war in VP -- the native popup surfaces it as a backstab
+-- warning instead, which is one reason we defer to that popup rather than confirming inline.
+local function refreshWarButton()
+	local available = warActionAvailable()
+	Controls.WarButton:SetHide(not available)
+	if available then
+		local activeTeam, otherTeamID = Teams[Players[m_activePlayerID]:GetTeam()], Players[m_counterpartID]:GetTeam()
+		-- Always pass the originating player: the two-argument Lua wrapper reads both stack slots, so
+		-- omitting it would send player 0 rather than NO_PLAYER.
+		local canDeclare = activeTeam:CanDeclareWar(otherTeamID, m_activePlayerID)
+		Controls.WarButton:SetDisabled(not canDeclare)
+		local tooltip = "TXT_KEY_DIPLO_DECLARES_WAR_TT"
+		if not canDeclare then
+			if activeTeam:IsVassalOfSomeone() then
+				-- IsVassal takes a team, not a player; native LeaderHeadRoot passes a player ID here and
+				-- only gets away with it while the two IDs happen to coincide.
+				tooltip = activeTeam:IsVassal(otherTeamID) and "TXT_KEY_DIPLO_DECLARE_WAR_VASSAL_BLOCKED_MASTER_TT" or "TXT_KEY_DIPLO_DECLARE_WAR_VASSAL_BLOCKED_TT"
+			elseif activeTeam:IsForcePeace(otherTeamID) then tooltip = "TXT_KEY_DIPLO_MAY_NOT_ATTACK"
+			elseif activeTeam:IsWarBlockedByPeaceTreaty(otherTeamID) then tooltip = "TXT_KEY_DIPLO_MAY_NOT_ATTACK_DP"
+			else tooltip = "TXT_KEY_DIPLO_MAY_NOT_ATTACK_MOD" end
+		end
+		Controls.WarButton:SetToolTipString(Locale.ConvertTextKey(tooltip))
+	end
 	reflowActionStack()
 end
 
@@ -721,11 +810,11 @@ local function presentPanel(counterpartID, mode)
 	end
 	cancelPending()
 	local wasQueued = m_presentation == "leader"
-	m_activePlayerID, m_counterpartID, m_currentTurn, m_warPromptOpen = VoxDeorumSeat.EffectiveSeat(), counterpartID, Game.GetGameTurn(), false
+	m_activePlayerID, m_counterpartID, m_currentTurn = VoxDeorumSeat.EffectiveSeat(), counterpartID, Game.GetGameTurn()
 	m_isPureObserver = VoxDeorumSeat.IsPureObserver()
 	populateHeader()
 	m_presentation = mode
-	Controls.WarDim:SetHide(true); Controls.MainGrid:SetHide(false)
+	Controls.MainGrid:SetHide(false)
 	reset(nil)
 	-- Keep at most one popup-stack entry across re-opens and mode switches.
 	if mode == "leader" then
@@ -745,10 +834,10 @@ local function hidePanel()
 	if m_presentation == "pending" then cancelPending(); return end
 	if m_presentation == nil then return end
 	local wasLeader = m_presentation == "leader"
-	m_presentation, m_warPromptOpen, m_inlineError = nil, false, nil
+	m_presentation, m_inlineError = nil, nil
 	local driver = VoxDeorumDiploUI.driver
 	if driver ~= nil and driver.onHide ~= nil then driver.onHide() end
-	Controls.WarDim:SetHide(true); ContextPtr:ClearUpdate()
+	ContextPtr:ClearUpdate()
 	if wasLeader then UIManager:DequeuePopup(ContextPtr) end
 	ContextPtr:SetHide(true)
 end
@@ -837,6 +926,24 @@ local function onPanelLeavingLeaderView()
 	if m_presentation == "leader" then demoteToStatic() end
 end
 
+-- The native declare-war popup reports no result, so this is how a declaration reaches us.
+-- Over the live scene the audience is over once war is declared: close and leave it. Otherwise
+-- just re-gate the button, which the new war state now hides.
+local function onWarStateChanged(teamID, otherTeamID, atWar)
+	if m_presentation == nil or m_counterpartID < 0 or m_activePlayerID < 0 then return end
+	local active, other = Players[m_activePlayerID], Players[m_counterpartID]
+	if active == nil or other == nil then return end
+	local activeTeamID, counterpartTeamID = active:GetTeam(), other:GetTeam()
+	-- Only react to the pair this panel is about.
+	if not ((teamID == activeTeamID and otherTeamID == counterpartTeamID) or (teamID == counterpartTeamID and otherTeamID == activeTeamID)) then return end
+	if atWar and m_presentation == "leader" then
+		hidePanel()
+		pcall(function() UI.SetLeaderHeadRootUp(false); UI.RequestLeaveLeader() end)
+	else
+		refreshWarButton()
+	end
+end
+
 -- A valid counterpart opens the conversation and dismisses its pair notifications;
 -- a counterpart-less notification shows its cached message in a text dialog. The
 -- message is read before removal, since UI.RemoveNotification prunes the cache.
@@ -882,32 +989,15 @@ local function onProposeDeal()
 	end
 end
 
--- Show the native-war confirmation overlay.
+-- Hand the declaration to the native popup, the way every other VP surface does. It carries the
+-- consequence dossier our inline confirmation could not (friendship and denouncement counters,
+-- defensive pacts, deals and trade routes that will be severed) and its Yes handler raises
+-- FROM_UI_DIPLO_EVENT_HUMAN_DECLARES_WAR, so the leaderhead mood no longer goes stale on us.
+-- There is no callback, so the outcome arrives through onWarStateChanged below.
 local function onDeclareWar()
-	if not canDeclareWarNow() then return end
-	m_warPromptOpen = true; Controls.WarDim:SetHide(false)
-end
-
--- Cancel native-war confirmation.
-local function cancelDeclareWar() m_warPromptOpen = false; Controls.WarDim:SetHide(true) end
-
--- Confirm native war against current team state. Our declare path bypasses
--- FROM_UI_DIPLO_EVENT_HUMAN_DECLARES_WAR, so the leaderhead would keep a stale
--- mood; after declaring over the live scene, close and leave the audience.
-local function confirmDeclareWar()
-	local declared = canDeclareWarNow()
-	if declared then
-		local counterpartTeamID = Players[m_counterpartID]:GetTeam()
-		if isHumanStrategist() then Teams[Players[m_activePlayerID]:GetTeam()]:DeclareWar(counterpartTeamID, false, m_activePlayerID)
-		else Network.SendChangeWar(counterpartTeamID, true) end
-	end
-	cancelDeclareWar()
-	if declared and m_presentation == "leader" then
-		hidePanel()
-		pcall(function() UI.SetLeaderHeadRootUp(false); UI.RequestLeaveLeader() end)
-	else
-		refreshWarButton()
-	end
+	if not warActionAvailable() then return end
+	if not Teams[Players[m_activePlayerID]:GetTeam()]:CanDeclareWar(Players[m_counterpartID]:GetTeam(), m_activePlayerID) then return end
+	UI.AddPopup{ Type = ButtonPopupTypes.BUTTONPOPUP_DECLAREWARMOVE, Data1 = Players[m_counterpartID]:GetTeam(), Option1 = true }
 end
 
 -- Show the loading-earlier tail and ask the driver for a page.
@@ -921,7 +1011,7 @@ end
 -- Handle Escape locally.
 local function inputHandler(uiMsg, wParam)
 	if uiMsg == KeyEvents.KeyDown and wParam == Keys.VK_ESCAPE and not ContextPtr:IsHidden() then
-		if m_warPromptOpen then cancelDeclareWar() else hidePanel() end
+		hidePanel()
 		return true
 	end
 	return false
@@ -974,6 +1064,7 @@ VoxDeorumDiploUI = { reset = reset, setRows = setRows, appendRow = appendRow, pr
 buildTailPool()
 Events.NotificationAdded.Add(onNotificationAdded); Events.NotificationRemoved.Add(onNotificationRemoved)
 Events.AILeaderMessage.Add(onPanelAILeaderMessage); Events.LeavingLeaderViewMode.Add(onPanelLeavingLeaderView)
+Events.WarStateChanged.Add(onWarStateChanged)
 LuaEvents.VoxDeorumDiploOpen.Add(onConverseOpen); LuaEvents.VoxDeorumDiplomacyNotificationActivated.Add(onNotificationActivated)
 -- One shared toggle moves this context and the deal screen together.
 LuaEvents.VoxDeorumUseMockDrivers.Add(setMockDrivers)
@@ -985,7 +1076,6 @@ Controls.InputRetryButton:RegisterCallback(Mouse.eLClick, function()
 	if VoxDeorumDiploUI.driver ~= nil and VoxDeorumDiploUI.driver.onRetry ~= nil then VoxDeorumDiploUI.driver.onRetry() end
 end)
 Controls.ProposeButton:RegisterCallback(Mouse.eLClick, onProposeDeal); Controls.WarButton:RegisterCallback(Mouse.eLClick, onDeclareWar)
-Controls.WarYesButton:RegisterCallback(Mouse.eLClick, confirmDeclareWar); Controls.WarNoButton:RegisterCallback(Mouse.eLClick, cancelDeclareWar)
 ContextPtr:SetInputHandler(inputHandler); ContextPtr:SetShowHideHandler(showHideHandler)
 layoutPanel(); Events.SystemUpdateUI.Add(onSystemUpdateUI)
 

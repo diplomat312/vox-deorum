@@ -9,10 +9,16 @@
  */
 
 import type { DealTranscriptMessage } from '@/utils/types';
-import type { DealReduction as DealReductionOf } from '@vox/utils/diplomacy/deal-reduce';
+import type {
+  DealReduction as DealReductionOf,
+  ProposalOutcome as ProposalOutcomeOf,
+} from '@vox/utils/diplomacy/deal-reduce';
 
-export { deriveActiveProposal } from '@vox/utils/diplomacy/deal-reduce';
+export { deriveActiveProposal, deriveProposalOutcomes } from '@vox/utils/diplomacy/deal-reduce';
 export type { DealStatus } from '@vox/utils/diplomacy/deal-reduce';
 
 /** Deal reduction specialized to the UI's typed transcript message. */
 export type DealReduction = DealReductionOf<DealTranscriptMessage>;
+
+/** Per-proposal outcome specialized to the UI's typed transcript message. */
+export type ProposalOutcome = ProposalOutcomeOf<DealTranscriptMessage>;

@@ -8,7 +8,7 @@
     <VList
       v-else
       ref="virtualScroller"
-      :data="messages"
+      :data="visibleMessages"
       :overscan="3"
       class="virtual-list"
       @scroll="handleScroll"
@@ -22,8 +22,7 @@
           :them-i-d="themID ?? -1"
           :you-label="userLabel ?? 'You'"
           :them-label="agentLabel ?? 'Them'"
-          :is-active="item.deal.ID === activeDealID"
-          :status="dealStatus"
+          :outcome="dealOutcomes?.get(item.deal.ID)"
           :locked="dealLocked"
           :busy="dealActionBusy"
           @accept="$emit('deal-accept', $event)"
@@ -44,12 +43,12 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, nextTick, onMounted } from 'vue';
+import { ref, computed, watch, nextTick, onMounted } from 'vue';
 import { VList } from 'virtua/vue';
 import ChatMessage from './ChatMessage.vue';
 import DealMessageCard from '../deal/DealMessageCard.vue';
 import type { MessageWithMetadata } from '@/utils/types';
-import type { DealStatus } from '@/utils/deal/deal-reduce';
+import type { ProposalOutcome } from '@/utils/deal/deal-reduce';
 
 interface Props {
   /** Rendered stream items: ordinary chat messages plus inline deal cards (a row's `deal`). */
@@ -61,10 +60,9 @@ interface Props {
   /** Deal-card context: the viewer ("you") and the voiced ("them") endpoint IDs. */
   youID?: number;
   themID?: number;
-  /** The latest proposal's message ID — its card shows the live status / actions. */
-  activeDealID?: number;
-  /** Status of the latest proposal: `open` offers actions, else it renders rejected/enacted. */
-  dealStatus?: DealStatus;
+  /** Per-proposal outcomes keyed by proposal ID, from `deriveProposalOutcomes`. Each card reads its
+   *  own status here, so a resolved proposal keeps showing its outcome after being superseded. */
+  dealOutcomes?: Map<number, ProposalOutcome>;
   /** Closed-this-turn lock disables deal-card actions. */
   dealLocked?: boolean;
   /** A deal action is currently in flight from the parent view. */
@@ -81,6 +79,19 @@ defineEmits<{
   (e: 'deal-reject', id: number): void;
   (e: 'deal-counter', id: number): void;
 }>();
+
+/** `deal-accept` / `deal-reject` / `deal-enacted` rows are dropped from the stream: they belong to
+ *  the proposal they answer and are rendered inside its card, so one deal reads as one card. They
+ *  must be filtered out of the list data rather than skipped in the template — the `v-else` branch
+ *  would otherwise render them as ordinary chat bubbles, which is the split we are removing. */
+const visibleMessages = computed(() =>
+  props.messages.filter(
+    (item) =>
+      !item.deal ||
+      item.deal.MessageType === 'deal-proposal' ||
+      item.deal.MessageType === 'deal-counter'
+  )
+);
 
 // Template refs
 const virtualScroller = ref<InstanceType<typeof VList>>();

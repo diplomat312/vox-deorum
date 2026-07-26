@@ -27,6 +27,7 @@
 					<Label ID="TheyGive" Anchor="L,T" Offset="42,64" WrapWidth="316" LeadingOffset="-5" Font="TwCenMT16"/>
 					<Label ID="YouGive" Anchor="L,T" Offset="378,64" WrapWidth="316" LeadingOffset="-5" Font="TwCenMT16"/>
 					<Box ID="DealDivider" Anchor="L,T" Offset="368,38" Size="1,80" Color="204,170,90,140"/>
+					<Label ID="Outcome" Hidden="1" Anchor="L,T" Offset="42,64" WrapWidth="666" LeadingOffset="-5" Font="TwCenMT16"/>
 					<Label ID="Pending" Anchor="L,B" Offset="42,10" Font="TwCenMT16" Color="128,128,128,255"/>
 				</Grid>
 				<Image ID="LeftHeadFrame" Anchor="L,T" Offset="-32,-18" Texture="IconFrame64.dds" Size="64,64">
@@ -104,16 +105,5 @@
 			<GridButton ID="MockDealIncomingButton" Hidden="1" Style="FrameButton200" Offset="0,0" String="TXT_KEY_VD_DIPLO_MOCK_DEAL_INCOMING"/>
 			<GridButton ID="MockDealAuthorButton" Hidden="1" Style="FrameButton200" Offset="0,0" String="TXT_KEY_VD_DIPLO_MOCK_DEAL_AUTHOR"/>
 		</Stack>
-		<Box ID="WarDim" Hidden="1" Anchor="C,C" Size="1050,620" Color="0,0,0,210" ConsumeMouse="1">
-			<Grid ID="WarConfirm" Anchor="C,C" Size="620,210" Style="Grid9DetailFive140">
-				<Label Anchor="C,T" Offset="0,34" String="TXT_KEY_VD_DIPLO_DECLARE_WAR_CONFIRM" WrapWidth="540" Font="TwCenMT22"/>
-				<GridButton ID="WarYesButton" Anchor="L,B" Offset="60,34" Size="200,34" Style="SmallButton" StateOffsetIncrement="0,0">
-					<Label Anchor="C,C" String="TXT_KEY_YES" Font="TwCenMT18"/>
-				</GridButton>
-				<GridButton ID="WarNoButton" Anchor="R,B" Offset="60,34" Size="200,34" Style="SmallButton" StateOffsetIncrement="0,0">
-					<Label Anchor="C,C" String="TXT_KEY_NO" Font="TwCenMT18"/>
-				</GridButton>
-			</Grid>
-		</Box>
 	</Box>
 </Context>

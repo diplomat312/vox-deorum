@@ -54,7 +54,6 @@ describe('codex proxy command configuration', () => {
       CODEX_PROXY_ROOT: 'C:\\Temp & Files\\vox',
       CODEX_PROXY_PORT: '9123',
       CODEX_PROXY_REQUEST_TIMEOUT: '31s',
-      CODEX_PROXY_TOOL_TIMEOUT: '2m',
       CODEX_PROXY_STARTUP_TIMEOUT: '4m',
     });
     expect(splitCodexProxyCommand(config.command)).toEqual(['C:\\Program Files\\node\\npx.cmd', '--yes', 'proxy']);
@@ -63,7 +62,7 @@ describe('codex proxy command configuration', () => {
       args: [
         '--yes', 'proxy', 'serve', '--root', 'C:\\Temp & Files\\vox', '--port', '9123',
         '--log-level', 'debug',
-        '--request-timeout', '31000ms', '--tool-timeout', '120000ms', '--shutdown-timeout', '10000ms',
+        '--request-timeout', '31000ms', '--shutdown-timeout', '10000ms',
       ],
     });
   });
@@ -243,7 +242,7 @@ describe('CodexProxyManager startup', () => {
     expect(command).toBe('C:\\Program Files\\nodejs\\node.exe');
     expect(args.slice(0, 4)).toEqual([
       'C:\\Program Files\\nodejs\\node_modules\\npm\\bin\\npx-cli.js',
-      '--yes', `codex-openai-proxy@0.1.0-rc.6`, 'serve',
+      '--yes', `codex-openai-proxy@0.1.0-rc.7`, 'serve',
     ]);
   });
 
