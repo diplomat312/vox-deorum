@@ -61,6 +61,23 @@ export function civIdentity(
   };
 }
 
+/**
+ * Fill any missing seat identity on a diplomacy thread from the seat context's cached game state.
+ *
+ * Identities are snapshotted onto the thread at open time, but a thread opened before the voiced
+ * seat's first `ensureGameState` (fresh launch, load, crash recovery) freezes `undefined` for both
+ * seats. The chat turn runner calls this right after it has ensured the game state, so the same
+ * turn that would otherwise run without identities repairs the thread with a pure cache read.
+ * Already-present identities are never overwritten.
+ */
+export function backfillThreadIdentities(
+  thread: EnvoyThread,
+  context: VoxContext<StrategistParameters> | undefined,
+): void {
+  if (!thread.player1Identity) thread.player1Identity = civIdentity(context, thread.player1ID);
+  if (!thread.player2Identity) thread.player2Identity = civIdentity(context, thread.player2ID);
+}
+
 /** Format a participant identity for display. */
 export function displayIdentity(identity: ParticipantIdentity | undefined): string | undefined {
   if (!identity) return undefined;

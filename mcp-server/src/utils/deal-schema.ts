@@ -112,13 +112,24 @@ export const PromiseTermSchema = z.object({
 export type PromiseTerm = z.infer<typeof PromiseTermSchema>;
 
 /**
+ * Coerce the DLL's encoding of an empty Lua table. `ConvertLuaToJsonValue` only emits a JSON
+ * array for a dense table with `maxIndex > 0`, so an empty `items`/`promises` list authored in
+ * Lua (the in-game deal screen) arrives as `{}` rather than `[]`. Only a zero-key plain object
+ * is mapped; anything else passes through so genuinely malformed values still fail validation.
+ */
+const emptyLuaTableToArray = (value: unknown): unknown =>
+  value && typeof value === "object" && !Array.isArray(value) && Object.keys(value).length === 0
+    ? []
+    : value;
+
+/**
  * The pinned `Payload.Deal` shape (version 1). An empty deal (no items, no promises)
  * is valid and meaningful — `inspect-deal` returns the full tradable range for it.
  */
 export const DealPayloadSchema = z.object({
   version: z.literal(1).describe("Deal payload schema version"),
-  items: z.array(TradeItemSchema).default([]).describe("Ordinary trade terms"),
-  promises: z.array(PromiseTermSchema).default([]).describe("Promise commitment terms"),
+  items: z.preprocess(emptyLuaTableToArray, z.array(TradeItemSchema).default([])).describe("Ordinary trade terms"),
+  promises: z.preprocess(emptyLuaTableToArray, z.array(PromiseTermSchema).default([])).describe("Promise commitment terms"),
   rationale: z.string().optional().describe("Your internal reasoning for the proposing diplomat, not to be shown for the other side."),
   message: z.string().optional().describe("Your one-sentence diplomatic message for the other side."),
 });

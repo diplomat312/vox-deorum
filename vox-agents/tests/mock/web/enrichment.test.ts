@@ -10,6 +10,7 @@ import { contextRegistry } from '../../../src/infra/context-registry.js';
 import { sessionRegistry } from '../../../src/infra/session-registry.js';
 import type { EnvoyThread, PlayerAssignment } from '../../../src/types/index.js';
 import {
+  backfillThreadIdentities,
   civIdentity,
   currentTurnOf,
   displayIdentity,
@@ -97,6 +98,43 @@ describe('chat enrichment', () => {
     expect(civIdentity(context, -1)).toBeUndefined();
     expect(displayIdentity({ name: 'Germany', leader: 'Bismarck' })).toBe('Bismarck of Germany');
     expect(displayIdentity({ name: 'an observer', leader: '' })).toBe('an observer');
+  });
+
+  it('backfills only the missing seat identities from the cached game state', () => {
+    // A thread opened before the seat had any cached game state froze `undefined` identities.
+    const thread = makeThread();
+    const stored = thread.player1Identity;
+    thread.player2Identity = undefined;
+    const context = makeContext({
+      turn: 1,
+      hasSession: true,
+      sessionTurn: 5,
+      gameStates: {
+        5: {
+          players: {
+            '1': { Civilization: 'Fresh Rome', Leader: 'Fresh Caesar' },
+            '3': { Civilization: 'Germany', Leader: 'Bismarck' },
+          },
+        },
+      },
+    });
+
+    backfillThreadIdentities(thread, context);
+
+    // The missing seat is filled; the present one is never overwritten.
+    expect(thread.player2Identity).toEqual({ name: 'Germany', leader: 'Bismarck' });
+    expect(thread.player1Identity).toBe(stored);
+  });
+
+  it('leaves the thread unchanged when the cache still has nothing to offer', () => {
+    const thread = makeThread();
+    thread.player1Identity = undefined;
+    thread.player2Identity = undefined;
+
+    backfillThreadIdentities(thread, makeContext({ turn: 1, hasSession: true, sessionTurn: 5 }));
+
+    expect(thread.player1Identity).toBeUndefined();
+    expect(thread.player2Identity).toBeUndefined();
   });
 
   it('enriches from stored identities while reading only the current turn from context', () => {

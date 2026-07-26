@@ -57,6 +57,7 @@ import {
 import { DealPayloadSchema } from '../../../../mcp-server/dist/utils/deal-schema.js';
 import type { DealTranscriptMessage } from '../../../../mcp-server/dist/utils/deal-schema.js';
 import { chatThreadStore } from './store.js';
+import { backfillThreadIdentities } from './enrichment.js';
 
 const logger = createLogger('webui:chat-turn');
 
@@ -297,6 +298,10 @@ export async function runChatTurn(
       if (thread.contextType === 'live' && params.gameStates && !params.gameStates[params.turn]) {
         await ensureGameState(voxContext, params);
       }
+      // A thread opened before this seat had any cached game state (fresh launch, load, crash
+      // recovery) froze missing identities; repair it now that the state above is ensured, so
+      // this same turn's diplomacy background sees the pair's civ names.
+      if (thread.diplomacy) backfillThreadIdentities(thread, voxContext);
 
       const voice = agentName(thread);
       if (!voice) {

@@ -24,7 +24,7 @@ import type {
   TelepathistChatContext,
 } from '../../types/index.js';
 import { isThreadBusy } from '../../utils/diplomacy/chat-turn-commit.js';
-import { autoCompact, diplomacyThreadId } from '../../utils/diplomacy/transcript.js';
+import { autoCompact, diplomacyThreadId, identityOf } from '../../utils/diplomacy/transcript.js';
 import {
   parseContextIdentifier,
   parseDatabaseIdentifier,
@@ -137,16 +137,23 @@ export function createChatThreadFactory(
     }
 
     const audienceRole = callerRole?.trim() || 'the leader';
-    const targetIdentity = sentTargetIdentity ?? civIdentity(targetContext, targetPlayerID);
-    const initiatorIdentity = sentCallerIdentity ?? civIdentity(targetContext, initiatorID);
+    const id = dependencies.createDiplomacyThreadId(gameID, initiatorID, targetPlayerID);
+    const existing = dependencies.getThread(id);
+    // A reopen must never erase a known identity: live resolution fails whenever the seat context
+    // has no cached game state yet (fresh launch, load, crash recovery), so fall back to what the
+    // existing thread already holds (the deterministic ID guarantees it is the same ordered pair).
+    const targetIdentity = sentTargetIdentity
+      ?? civIdentity(targetContext, targetPlayerID)
+      ?? (existing && identityOf(existing, targetPlayerID));
+    const initiatorIdentity = sentCallerIdentity
+      ?? civIdentity(targetContext, initiatorID)
+      ?? (existing && identityOf(existing, initiatorID));
     const targetCiv = displayIdentity(targetIdentity);
     const initiatorCiv = displayIdentity(initiatorIdentity);
-    const id = dependencies.createDiplomacyThreadId(gameID, initiatorID, targetPlayerID);
     const ordered = orderParticipants(
       { id: targetPlayerID, role: voice, identity: targetIdentity },
       { id: initiatorID, role: audienceRole, identity: initiatorIdentity },
     );
-    const existing = dependencies.getThread(id);
 
     if (existing) {
       // A live turn owns this thread's message cache: it committed the caller row, captured the index

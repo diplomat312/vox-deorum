@@ -222,6 +222,43 @@ describe('chat thread factory', () => {
       expect(compactThread).toHaveBeenLastCalledWith(reopened);
     });
 
+    it('should keep stored identities and title when a reopen cannot resolve them live', async () => {
+      // Live resolution fails whenever the seat context has no cached game state yet (fresh launch,
+      // load, crash recovery). A reopen without dialog-sent identities must fall back to what the
+      // thread already holds instead of erasing it with `undefined`.
+      const emptyContext = {
+        getBaseParameters: () => undefined,
+      } as unknown as VoxContext<StrategistParameters>;
+      const { dependencies } = createDependencies({ getContext: () => emptyContext });
+      const factory = createChatThreadFactory(dependencies);
+      const india = { name: 'India', leader: 'Gandhi' };
+      const germany = { name: 'Germany', leader: 'Bismarck' };
+
+      const first = await factory.openDiplomacyChat({
+        mode: 'diplomacy',
+        contextId: 'game-7-player-2',
+        callerPlayerID: 1,
+        callerIdentity: india,
+        targetPlayerID: 2,
+        targetIdentity: germany,
+      });
+      expect(first.title).toBe('Gandhi of India ↔ Bismarck of Germany');
+
+      const reopened = await factory.openDiplomacyChat({
+        mode: 'diplomacy',
+        contextId: 'game-7-player-2',
+        callerPlayerID: 1,
+        targetPlayerID: 2,
+      });
+
+      expect(reopened).toBe(first);
+      expect(reopened).toMatchObject({
+        title: 'Gandhi of India ↔ Bismarck of Germany',
+        player1Identity: india,
+        player2Identity: germany,
+      });
+    });
+
     it('should return a busy thread untouched, with no dependency mutation or compaction', async () => {
       // A live turn owns the thread's cache: it committed the caller row and captured the index its
       // reply begins at. A reopen that reassigned the voice and re-synced `thread.messages` would

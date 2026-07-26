@@ -12,6 +12,7 @@ import {
   TARGETED_PROMISE_TYPES,
   PROMISE_METADATA,
   PROMISE_TYPES,
+  DealPayloadSchema,
   PromiseTermSchema,
   durationForPromiseType,
   type DealPayload,
@@ -21,6 +22,37 @@ import {
 
 const deal = (items: TradeItem[]): DealPayload => ({ version: 1, items, promises: [] });
 const promiseDeal = (promises: PromiseTerm[]): DealPayload => ({ version: 1, items: [], promises });
+
+describe('DealPayloadSchema wire-shape coercion', () => {
+  it('coerces the DLL empty-Lua-table encoding ({}) of items/promises to []', () => {
+    // ConvertLuaToJsonValue only emits a JSON array for a dense table with maxIndex > 0, so the
+    // in-game deal screen's empty list arrives as `{}` — e.g. a gold-only deal's `promises`.
+    const parsed = DealPayloadSchema.safeParse({
+      version: 1,
+      items: [{ fromPlayerID: 1, toPlayerID: 3, itemType: 'GOLD', amount: 50 }],
+      promises: {},
+    });
+    expect(parsed.success).toBe(true);
+    expect(parsed.data!.items).toHaveLength(1);
+    expect(parsed.data!.promises).toEqual([]);
+  });
+
+  it('coerces both lists when the deal is empty, and still defaults missing lists', () => {
+    const bothEmpty = DealPayloadSchema.safeParse({ version: 1, items: {}, promises: {} });
+    expect(bothEmpty.success).toBe(true);
+    expect(bothEmpty.data).toMatchObject({ items: [], promises: [] });
+
+    const omitted = DealPayloadSchema.safeParse({ version: 1 });
+    expect(omitted.success).toBe(true);
+    expect(omitted.data).toMatchObject({ items: [], promises: [] });
+  });
+
+  it('still rejects a non-empty object and other junk in the list fields', () => {
+    expect(DealPayloadSchema.safeParse({ version: 1, items: { a: 1 }, promises: [] }).success).toBe(false);
+    expect(DealPayloadSchema.safeParse({ version: 1, items: 'nope', promises: [] }).success).toBe(false);
+    expect(DealPayloadSchema.safeParse({ version: 1, items: [], promises: { promiserID: 1 } }).success).toBe(false);
+  });
+});
 
 describe('SYMMETRIC_TRADE_ITEM_TYPES', () => {
   it('contains exactly the four mutual agreements', () => {
