@@ -549,12 +549,17 @@ export class StrategistSession extends VoxSession<StrategistSessionConfig> {
     await setMetadata("experiment", this.config.name);
     await setTimeout(3000);
 
+    // For human control, pin the observer UI to the human's civ. The override is
+    // what every observer-aware UI surface keys off (EUI's top panel, the
+    // strategist screen bar, city banners, VoxDeorumSeat), so it must be present
+    // whenever a human seat is live — not only on a fresh start.
+    const humanID = this.humanPlayerID;
+    const overrideLine = humanID !== undefined ? `Game.SetObserverUIOverridePlayer(${humanID});\n` : "";
     if (this.config.autoPlay && params.turn === 0) {
-      // Autoplay. For human control, pin the observer UI to the human's civ
-      // *before* SetAIAutoPlay — the team-visibility copy happens only at
-      // autoplay activation, so ordering matters (human-control spec §2).
-      const humanID = this.humanPlayerID;
-      const overrideLine = humanID !== undefined ? `Game.SetObserverUIOverridePlayer(${humanID});\n` : "";
+      // Autoplay. The override must precede SetAIAutoPlay — the team-visibility
+      // copy happens only at autoplay activation, so ordering matters
+      // (human-control spec §2).
+      //
       // Pause the human seat *before* SetAIAutoPlay so its turn 0 (capital
       // founding + the engine's auto-pick doResearch) is held until the human
       // decides. The seat's execute() init resume-game already ran during player
@@ -568,7 +573,12 @@ Game.SetPausePlayer(-1);
 ${overrideLine}Game.SetAIAutoPlay(2000, -1);`
       });
     } else {
-      await mcpClient.callTool("lua-executor", { Script: `Events.LoadScreenClose(); Game.SetPausePlayer(-1);` });
+      // Resumed save (or non-autoplay). Set the override *before* firing
+      // LoadScreenClose: the mod's screen-bar gate re-evaluates on that event and
+      // bails when no override is set.
+      await mcpClient.callTool("lua-executor", {
+        Script: `${overrideLine}Events.LoadScreenClose(); Game.SetPausePlayer(-1);`
+      });
     }
     if (this.config.autoPlay && !isVisualMode(this.config.production)) {
       await setTimeout(3000);
