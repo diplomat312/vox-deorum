@@ -163,7 +163,10 @@ function formatIllegalDealError(error: IllegalDealError, agentID: number): strin
           return `- [${side}] ${label}: ${detail.reasons.join("; ") || "not possible"}`;
         }
         const side = detail.fromPlayerID === agentID ? "Give" : "Receive";
-        return `- [${side}] ${itemTypeLabel(detail.itemType)}: ${detail.reasons.join("; ") || "not tradeable"}`;
+        // Prefer the full label (amount/name included) `appendDealProposal` already formatted for its
+        // own reasons line; fall back to the bare item-type name only if that label is unavailable.
+        const label = detail.label ?? itemTypeLabel(detail.itemType);
+        return `- [${side}] ${label}: ${detail.reasons.join("; ") || "not tradeable"}`;
       })
     : error.reasons.map((r) => `- ${r}`);
   return ["This deal can't be made. Adjust these terms and try again:", ...lines].join("\n");

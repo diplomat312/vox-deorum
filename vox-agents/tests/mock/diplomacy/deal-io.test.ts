@@ -282,8 +282,18 @@ describe('appendDealProposal', () => {
     expect(err.message).not.toContain('RESOURCES');
     // Structured details let the negotiator reframe Give/Receive without parsing the message. The
     // `kind` discriminant tells an untradeable item from an impossible promise.
+    // `label` carries the same full display label (amount included) the message line just used,
+    // so a downstream reframe (the negotiator's Give/Receive feedback) never has to fall back to
+    // the bare item-type name.
     expect(err.details).toEqual([
-      { kind: 'item', itemType: 'RESOURCES', fromPlayerID: 1, toPlayerID: 3, reasons: ['Bonus resources cannot be traded.'] },
+      {
+        kind: 'item',
+        itemType: 'RESOURCES',
+        fromPlayerID: 1,
+        toPlayerID: 3,
+        reasons: ['Bonus resources cannot be traded.'],
+        label: 'Resource #9 ×1',
+      },
     ]);
     expect(mcp.calls('append-message')).toHaveLength(0);
   });

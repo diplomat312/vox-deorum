@@ -256,11 +256,17 @@ describe("IngameBridge runtime transport", () => {
     });
   });
 
-  it("pushes the caller row, the terminal rows, and then notifies the successful outcome", async () => {
+  it("pushes the caller row, the terminal rows, the terminal idle status, and then notifies", async () => {
     const bridge = bridgeFor();
     mocks.notify.mockImplementation(async () => {
-      // Captured at call time: the notification must follow the rows it announces.
-      expect(pushedNames()).toEqual(["VoxDeorumDiploMessages", "VoxDeorumDiploMessages"]);
+      // Captured at call time: the notification must follow both the rows AND the terminal
+      // status it announces — every action ends with exactly one terminal status before
+      // anything downstream of the turn (the outcome notification) runs.
+      expect(pushedNames()).toEqual([
+        "VoxDeorumDiploMessages",
+        "VoxDeorumDiploMessages",
+        "VoxDeorumDiploStatus",
+      ]);
       return true;
     });
 
@@ -269,11 +275,70 @@ describe("IngameBridge runtime transport", () => {
     await vi.waitFor(() => expect(mocks.notify).toHaveBeenCalledOnce());
     expect((pushedArg(0) as { messages: { ID: number }[] }).messages.map((m) => m.ID)).toEqual([90]);
     expect((pushedArg(1) as { messages: { ID: number }[] }).messages.map((m) => m.ID)).toEqual([91]);
+    expect(pushedArg(2)).toEqual({ state: "idle" });
     expect(mocks.notify).toHaveBeenCalledWith(expect.objectContaining({
       playerID: 1,
       counterpartID: 3,
       rows: [row(91, "Greetings.")],
     }));
+  });
+
+  it("queues a terminal error Status, and never notifies, when a turn settles done with no rows", async () => {
+    const bridge = bridgeFor();
+    mocks.runChatTurn.mockImplementation(async (_body: unknown, sink: ChatStreamSink) => {
+      sink.connected({ sessionId: "s", rows: [row(90, "hello", 1)] });
+      // The negotiator's terminal tool ran but persisted nothing, so `done` carries no rows at
+      // all — settled, but nothing durable to show for it.
+      sink.done({ sessionId: "s", messageCount: 1, deals: [], rows: [] });
+      return undefined;
+    });
+
+    bridge.handleNotification(event("DiplomacyChatMessage", 10, { PlayerID: 1, CounterpartID: 3, Text: "hello" }));
+
+    await vi.waitFor(() => expect(pushedNames()).toEqual([
+      "VoxDeorumDiploMessages",
+      "VoxDeorumDiploStatus",
+    ]));
+    expect(pushedArg(1)).toEqual({
+      state: "error",
+      detail: "The envoy could not settle on a response. Please try again.",
+    });
+    expect(mocks.notify).not.toHaveBeenCalled();
+    // Quiescence: the error must be this action's only terminal status — no trailing idle.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const statuses = mocks.callTool.mock.calls
+      .filter((call) => call[1].Name === "VoxDeorumDiploStatus")
+      .map((call) => (call[1].Args[2] as { state: string }).state);
+    expect(statuses).toEqual(["error"]);
+  });
+
+  it("queues the same terminal error Status when the turn reneges on ever reporting one", async () => {
+    const bridge = bridgeFor();
+    mocks.runChatTurn.mockImplementation(async (_body: unknown, sink: ChatStreamSink) => {
+      // Neither `done` nor `error` fires — the shape a throw inside `turn.ts`'s own terminal emitter
+      // leaves behind (see the invariant on `runTurn`): `sink.terminal` stays `undefined` even though
+      // the turn has genuinely ended.
+      sink.connected({ sessionId: "s", rows: [row(90, "hello", 1)] });
+      return undefined;
+    });
+
+    bridge.handleNotification(event("DiplomacyChatMessage", 18, { PlayerID: 1, CounterpartID: 3, Text: "hello" }));
+
+    await vi.waitFor(() => expect(pushedNames()).toEqual([
+      "VoxDeorumDiploMessages",
+      "VoxDeorumDiploStatus",
+    ]));
+    expect(pushedArg(1)).toEqual({
+      state: "error",
+      detail: "The envoy could not settle on a response. Please try again.",
+    });
+    expect(mocks.notify).not.toHaveBeenCalled();
+    // Quiescence: the error must be this action's only terminal status — no trailing idle.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const statuses = mocks.callTool.mock.calls
+      .filter((call) => call[1].Name === "VoxDeorumDiploStatus")
+      .map((call) => (call[1].Args[2] as { state: string }).state);
+    expect(statuses).toEqual(["error"]);
   });
 
   it("turns a pre-stream chat rejection into an error Status without notifying", async () => {
@@ -305,6 +370,13 @@ describe("IngameBridge runtime transport", () => {
     expect((pushedArg(1) as { messages: { ID: number }[] }).messages.map((m) => m.ID)).toEqual([92]);
     expect(pushedArg(2)).toEqual({ state: "error", detail: "Failed to execute agent: boom" });
     expect(mocks.notify).not.toHaveBeenCalled();
+    // Quiescence: `sink.terminal === "error"` must return outright, never falling into the shared
+    // post-settle branch that appends `idle` for a genuine outcome.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const statuses = mocks.callTool.mock.calls
+      .filter((call) => call[1].Name === "VoxDeorumDiploStatus")
+      .map((call) => (call[1].Args[2] as { state: string }).state);
+    expect(statuses).toEqual(["error"]);
   });
 
   it("rejects an empty chat message before it can open a thread", async () => {
@@ -443,6 +515,33 @@ describe("IngameBridge deal actions", () => {
     });
   });
 
+  it("pushes a countered deal's row then exactly one idle status, and notifies", async () => {
+    const bridge = bridgeFor();
+    // The motivating case for the `idle`-vs-`error` split: the turn's only terminal row is the
+    // `deal-counter` itself (no free-text reply alongside it), so `terminalRows` is non-empty even
+    // though it holds a single structured row.
+    mocks.runChatTurn.mockImplementation(async (_body: unknown, sink: ChatStreamSink) => {
+      sink.connected({ sessionId: "s", rows: [dealRow(80, "deal-proposal")] });
+      sink.done({ sessionId: "s", messageCount: 2, deals: [], rows: [dealRow(93, "deal-counter")] });
+      return undefined;
+    });
+
+    bridge.handleNotification(dealEvent(29, {
+      Action: "counter",
+      Deal: { version: 1, items: [] },
+      ProposalMessageID: 7,
+    }));
+
+    await vi.waitFor(() => expect(mocks.notify).toHaveBeenCalledOnce());
+    expect(pushedNames()).toEqual([
+      "VoxDeorumDiploMessages",
+      "VoxDeorumDiploMessages",
+      "VoxDeorumDiploStatus",
+    ]);
+    expect((pushedArg(1) as { messages: { ID: number }[] }).messages.map((m) => m.ID)).toEqual([93]);
+    expect(pushedArg(2)).toEqual({ state: "idle" });
+  });
+
   it("opens the pair before dispatching a direct action, since a panel open caches no thread", async () => {
     const bridge = bridgeFor();
     mocks.accept.mockResolvedValue({ rows: [dealRow(30, "deal-accept"), dealRow(31, "deal-enacted")], changed: true });
@@ -467,6 +566,7 @@ describe("IngameBridge deal actions", () => {
     await vi.waitFor(() => expect(mocks.notify).toHaveBeenCalledOnce());
     expect(mocks.accept).toHaveBeenCalledWith(expect.objectContaining({ id: "dipl:game-a:1:3" }), 7);
     expect((pushedArg(0) as { messages: { ID: number }[] }).messages.map((m) => m.ID)).toEqual([30, 31]);
+    expect(pushedArg(1)).toEqual({ state: "idle" });
     expect(mocks.notify).toHaveBeenCalledWith(expect.objectContaining({ changed: true }));
   });
 
@@ -489,7 +589,7 @@ describe("IngameBridge deal actions", () => {
     expect((pushedArg(0) as { messages: { ID: number }[] }).messages.map((m) => m.ID)).toEqual([40]);
   });
 
-  it("re-pushes an idempotent rejection's existing row while reporting no state change", async () => {
+  it("re-pushes an idempotent rejection's existing row, then idle, while reporting no state change", async () => {
     const bridge = bridgeFor();
     mocks.reject.mockResolvedValue({ rows: [dealRow(40, "deal-reject")], changed: false });
 
@@ -498,8 +598,11 @@ describe("IngameBridge deal actions", () => {
     await vi.waitFor(() => expect(mocks.notify).toHaveBeenCalledOnce());
     // The panel dedupes the repeated row by ID, but the deal screen's resolver needs it to release
     // the mounted editor, so the acknowledgement is pushed exactly as a fresh rejection would be.
-    expect(pushedNames()).toEqual(["VoxDeorumDiploMessages"]);
+    // A direct transactional action never runs the sink, so it queues its own terminal `idle`
+    // status right after its rows (same invariant `runTurn` upholds for a streamed turn).
+    expect(pushedNames()).toEqual(["VoxDeorumDiploMessages", "VoxDeorumDiploStatus"]);
     expect((pushedArg(0) as { messages: { ID: number }[] }).messages.map((m) => m.ID)).toEqual([40]);
+    expect(pushedArg(1)).toEqual({ state: "idle" });
     expect(mocks.notify).toHaveBeenCalledWith(expect.objectContaining({ changed: false }));
   });
 

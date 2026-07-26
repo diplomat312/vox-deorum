@@ -230,21 +230,13 @@ local function trackRowIDs(rows)
 	end
 end
 
--- Move the phase after a live append batch. The batch's newest row decides: our
--- own committed row replaces the optimistic "sending" bubble, and a counterpart
--- reply or close row ends the turn. A reflush's history cannot end a busy turn,
--- because the newest row of a busy pair is that turn's own caller row.
+-- Retire the optimistic "sending" bubble once the player's own committed row
+-- echoes back in a batch. Turn-end is decided solely by the terminal status
+-- pushed behind the rows (see onStatus).
 local function applyBatchPhase(rows)
-	if m_state == "idle" then return end
-	local newest = nil
+	if m_uiPhase ~= "sending" then return end
 	for _, row in ipairs(rows) do
-		if type(row.ID) == "number" and (newest == nil or row.ID > newest.ID) then newest = row end
-	end
-	if newest == nil then return end
-	if newest.SpeakerID == m_counterpartID and (newest.MessageType == "text" or newest.MessageType == "close") then
-		m_state = "idle"; setPhase("normal")
-	elseif m_uiPhase == "sending" and newest.SpeakerID == m_playerID then
-		setPhase("thinking")
+		if row.SpeakerID == m_playerID then setPhase("thinking"); return end
 	end
 end
 
@@ -278,13 +270,7 @@ local function onMessages(playerID, counterpartID, batch)
 		return
 	end
 	if batch.hasMore ~= nil then VoxDeorumDiploUI.setHasMore(batch.hasMore) end
-	local appended = false
-	for _, row in ipairs(rows) do
-		if VoxDeorumDiploUI.appendRow(row) then appended = true end
-	end
-	-- The panel retires a streaming draft on its own append; mirror that here so a
-	-- later delta cannot address a phase the panel has already left.
-	if appended and m_uiPhase == "streaming" then m_uiPhase = "normal" end
+	for _, row in ipairs(rows) do VoxDeorumDiploUI.appendRow(row) end
 	trackRowIDs(rows)
 	applyBatchPhase(rows)
 end
@@ -294,10 +280,10 @@ local function onStatus(playerID, counterpartID, status)
 	if not isOpenPair(playerID, counterpartID) then return end
 	status = type(status) == "table" and status or {}
 	noteInbound()
-	if status.state == "error" then
-		-- An error ends whatever was pending and reports its reason inline.
+	if status.state == "idle" or status.state == "error" then
+		-- The turn's terminal status: the single authority that a turn has ended.
 		m_state = "idle"
-		VoxDeorumDiploUI.setInlineError(status.detail)
+		if status.state == "error" then VoxDeorumDiploUI.setInlineError(status.detail) end
 		setPhase("normal")
 		return
 	end
@@ -320,6 +306,17 @@ local function onDelta(playerID, counterpartID, text)
 	VoxDeorumDiploUI.setStreamingText(text)
 end
 
+-- A deal action dispatched from the deal screen runs a turn on this pair's
+-- thread just like a panel send; arm the same acknowledgement tiers for it.
+local function onDealDispatched(payload)
+	if type(payload) ~= "table" or not isOpenPair(payload.playerID, payload.counterpartID) then return end
+	-- m_lastText must not survive into this action: an ack-timeout Retry here must
+	-- reflush, never resend a chat message that was already committed.
+	m_state, m_ackSeconds, m_silenceSeconds, m_lastText = "sending", 0, 0, nil
+	VoxDeorumDiploUI.setInlineError(nil)
+	setPhase("thinking")
+end
+
 VoxDeorumDiploTransport.Driver = {
 	onOpen = onOpen, onSend = onSend, onRetry = onRetry, onLoadEarlier = onLoadEarlier,
 	onUpdate = onUpdate, onHide = onHide, setActive = setActive,
@@ -330,3 +327,4 @@ LuaEvents.VoxDeorumDiploBegin.Add(onBegin)
 LuaEvents.VoxDeorumDiploMessages.Add(onMessages)
 LuaEvents.VoxDeorumDiploStatus.Add(onStatus)
 LuaEvents.VoxDeorumDiploDelta.Add(onDelta)
+LuaEvents.VoxDeorumDealActionDispatched.Add(onDealDispatched)

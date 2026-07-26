@@ -312,7 +312,9 @@ describe('propose-deal', () => {
       Receive: [],
     });
 
-    expect(msg).toContain('[Give] Gold');
+    // The full item label (amount included) rides along on the structured detail now, so the
+    // model sees exactly what it authored rather than the bare item-type name.
+    expect(msg).toContain('[Give] Gold: 50');
     expect(msg).toContain('You have no gold.');
     expect(input.outcome).toBeUndefined();
     expect(mcp.calls('append-message')).toHaveLength(0);

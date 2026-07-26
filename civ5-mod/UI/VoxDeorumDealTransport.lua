@@ -76,6 +76,9 @@ local function onAction(packet)
 	-- generateId is mandatory: an id-less event crashes the mcp-server handler.
 	local ok, errorMessage = pcall(Game.BroadcastEvent, "DiplomacyDealAction", payload, true)
 	if not ok then m_pending = nil; error(tostring(errorMessage), 0) end
+	-- A deal action runs a turn on the pair's thread just like a panel send; the
+	-- panel transport arms its acknowledgement tiers off this announcement.
+	LuaEvents.VoxDeorumDealActionDispatched({ playerID = seat, counterpartID = m_counterpartID })
 end
 
 -- Adopt the mounted pair and drop any earlier pending action.

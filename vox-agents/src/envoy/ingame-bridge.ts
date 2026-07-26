@@ -343,7 +343,7 @@ export function packMessageBatches(messages: TranscriptPushMessage[], mode: "app
 }
 
 /** The generic agent-activity states the panel renders (specs: `VoxDeorumDiploStatus`). */
-export type GameStatusState = "composing" | "reasoning" | "tool" | "error";
+export type GameStatusState = "composing" | "reasoning" | "tool" | "idle" | "error";
 
 /**
  * The push-side seam a {@link IngameChatSink} is given: append-only access to one pair's push FIFO,
@@ -851,6 +851,9 @@ export class IngameBridge {
       // acknowledgement it needs to release the mounted editor.
       const port = this.sinkPort(event, caller, guard);
       port.queueRows(result.rows);
+      // A direct transactional action never runs the sink, so it is the one that must queue its own
+      // terminal status: see the invariant documented on `runTurn`.
+      port.queueStatus("idle");
       await port.settle();
       await this.notifyOutcome(event, caller, guard, result.rows, result.changed);
     } catch (error) {
@@ -867,6 +870,15 @@ export class IngameBridge {
    * A returned rejection is always pre-stream — nothing committed, nothing streamed — so it becomes a
    * plain `Status{error}`. Once the turn connects, every outcome (including a post-commit failure)
    * arrives through the sink instead, which is why there is no second error path here.
+   *
+   * Every action the panel drives ends with exactly one terminal status — `idle` on a genuine outcome,
+   * `error` otherwise — so the panel is never left showing a stale "composing"/"reasoning"/"tool" state
+   * once the turn has actually finished. The sink's own `error()` already queues its `Status{error}` for
+   * a failed turn, so this only has to cover what the sink cannot: `done` with rows is the one genuine
+   * outcome and gets `idle`; everything else collapses to the same `error` — a `done` with zero rows (a
+   * terminal tool was called, so no retry line was archived, but it persisted nothing, e.g. every
+   * candidate deal failed validation) or no terminal event at all (the turn returned without the sink
+   * ever recording `done`/`error`).
    */
   private async runTurn(
     event: DiplomacyEvent,
@@ -874,15 +886,23 @@ export class IngameBridge {
     guard: TransportGeneration,
     body: Record<string, unknown>,
   ): Promise<void> {
-    const sink = new IngameChatSink(this.sinkPort(event, caller, guard));
+    const port = this.sinkPort(event, caller, guard);
+    const sink = new IngameChatSink(port);
     const rejection = await runChatTurn(body, sink);
     if (rejection) {
       await this.enqueueStatus(event.PlayerID, event.CounterpartID, rejection.error, guard);
       return;
     }
     await sink.settle();
-    if (sink.terminal !== "done") return;
-    await this.notifyOutcome(event, caller, guard, sink.terminalRows);
+    if (sink.terminal === "error") return;
+    if (sink.terminal === "done" && sink.terminalRows.length > 0) {
+      port.queueStatus("idle");
+      await port.settle();
+      await this.notifyOutcome(event, caller, guard, sink.terminalRows);
+      return;
+    }
+    port.queueStatus("error", "The envoy could not settle on a response. Please try again.");
+    await port.settle();
   }
 
   /**

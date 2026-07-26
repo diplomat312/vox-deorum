@@ -65,6 +65,8 @@ export interface IllegalTradeItemTerm {
   fromPlayerID: number;
   toPlayerID: number;
   reasons: string[];
+  /** Display label with the authored amount/name, e.g. "Gold: 59". */
+  label?: string;
 }
 
 /** One impossible promise commitment, in the same structured shape as an illegal trade item. */
@@ -308,17 +310,21 @@ export async function appendDealProposal(
   const civName = (id: number): string => identityOf(thread, id)?.name ?? `Player ${id}`;
   const illegalItems = inspection.items
     .map((it, index) => ({ it, index }))
-    .filter(({ it }) => !it.legality);
+    .filter(({ it }) => !it.legality)
+    // Resolved once per term: the authored item (index-aligned with `symmetricDeal`) for a friendly,
+    // data-bearing label, falling back to the bare item-type name only when it's missing.
+    .map(({ it, index }) => {
+      const item = symmetricDeal.items[index];
+      return { it, label: item ? formatItemLabel(item) : itemTypeLabel(it.itemType) };
+    });
   const illegalPromises = inspection.promises
     .map((promise, index) => ({ promise, index }))
     .filter(({ promise }) => !promise.legality);
   if (illegalItems.length > 0 || illegalPromises.length > 0) {
     const reasons = [
-      ...illegalItems.map(({ it, index }) => {
-        const item = symmetricDeal.items[index];
-        const label = item ? formatItemLabel(item) : itemTypeLabel(it.itemType);
-        return `${label} (${civName(it.fromPlayerID)} → ${civName(it.toPlayerID)}): ${it.reasons.join("; ") || "not tradeable"}`;
-      }),
+      ...illegalItems.map(({ it, label }) =>
+        `${label} (${civName(it.fromPlayerID)} → ${civName(it.toPlayerID)}): ${it.reasons.join("; ") || "not tradeable"}`
+      ),
       ...illegalPromises.map(({ promise, index }) => {
         // The authored promise carries the target the label needs; the inspected term is the fallback
         // when (defensively) the two arrays ever disagree in length.
@@ -328,12 +334,15 @@ export async function appendDealProposal(
       }),
     ];
     throw new IllegalDealError(reasons, [
-      ...illegalItems.map(({ it }): IllegalDealTerm => ({
+      // The same label the `reasons` line above formats, so the negotiator's Give/Receive
+      // reframe (`formatIllegalDealError`) shows the full item, amount included.
+      ...illegalItems.map(({ it, label }): IllegalDealTerm => ({
         kind: "item",
         itemType: it.itemType,
         fromPlayerID: it.fromPlayerID,
         toPlayerID: it.toPlayerID,
         reasons: it.reasons,
+        label,
       })),
       ...illegalPromises.map(({ promise }): IllegalDealTerm => ({
         kind: "promise",

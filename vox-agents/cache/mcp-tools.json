@@ -560,8 +560,8 @@
               "description": "Deal payload schema version"
             },
             "items": {
-              "default": [],
               "description": "Ordinary trade terms",
+              "default": [],
               "type": "array",
               "items": {
                 "type": "object",
@@ -678,8 +678,8 @@
               }
             },
             "promises": {
-              "default": [],
               "description": "Promise commitment terms",
+              "default": [],
               "type": "array",
               "items": {
                 "type": "object",
@@ -737,7 +737,9 @@
             }
           },
           "required": [
-            "version"
+            "version",
+            "items",
+            "promises"
           ]
         }
       },
@@ -1562,8 +1564,8 @@
               "description": "Deal payload schema version"
             },
             "items": {
-              "default": [],
               "description": "Ordinary trade terms",
+              "default": [],
               "type": "array",
               "items": {
                 "type": "object",
@@ -1680,8 +1682,8 @@
               }
             },
             "promises": {
-              "default": [],
               "description": "Promise commitment terms",
+              "default": [],
               "type": "array",
               "items": {
                 "type": "object",
@@ -1739,7 +1741,9 @@
             }
           },
           "required": [
-            "version"
+            "version",
+            "items",
+            "promises"
           ]
         },
         "AccepterID": {

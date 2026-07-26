@@ -359,6 +359,11 @@ local function buildRowInstance(row)
 	m_rowInstances[row.ID] = record
 end
 
+-- Return whether text and deal input are currently locked.
+local function inputIsLocked()
+	return isClosedThisTurn(m_rows, m_currentTurn) or m_phase ~= "normal"
+end
+
 -- Resolve the proposal targeted by a pending phase.
 local function pendingProposalID(reduction)
 	if m_phase ~= "deal-pending" then return nil end
@@ -383,7 +388,7 @@ local function refreshDealRow(row, reduction)
 	textControl:SetText(dealSummary(row, status)); resizeDealBubble(instance, pending)
 	instance.Pending:SetHide(not pending)
 	if pending then addAnimated(instance.Pending, Locale.ConvertTextKey(pendingLabelKey()) .. " ") end
-	local canRespond = active and reduction.status == "open" and not pending and not isClosedThisTurn(m_rows, m_currentTurn) and isBoundActorCurrent()
+	local canRespond = active and reduction.status == "open" and not pending and isBoundActorCurrent() and not inputIsLocked()
 	record.mode = canRespond and (row.SpeakerID == m_activePlayerID and "own" or "incoming") or nil
 	instance.CardButton:SetDisabled(pending or not canRespond); instance.CardButton:SetAlpha((pending or row.Pending) and 0.55 or 1)
 	if canRespond then instance.CardButton:RegisterCallback(Mouse.eLClick, function() openDeal(record.row, record.mode) end) end
@@ -426,7 +431,7 @@ local function refreshTail(reduction)
 		m_tail.sending.Pending:SetHide(false)
 		addAnimated(m_tail.sending.Pending, Locale.ConvertTextKey("TXT_KEY_VD_DIPLO_SENDING") .. " ")
 		resizeTailMessage(m_tail.sending, 22)
-	elseif m_phase == "streaming" then
+	elseif m_phase == "streaming" and m_streamingText ~= "" then
 		bindTailMessage(m_tail.streaming, m_counterpartID, m_streamingText); m_tail.streaming.Row:SetHide(false)
 	end
 	if m_inlineError ~= nil then
@@ -445,11 +450,6 @@ local function reflowTranscript(stickToBottom)
 	Controls.TailStack:SetOffsetY(Controls.TranscriptStack:GetSizeY()); Controls.TailStack:CalculateSize(); Controls.TailStack:ReprocessAnchoring()
 	Controls.TranscriptScroll:CalculateInternalSize()
 	if stickToBottom then Controls.TranscriptScroll:SetScrollValue(1) end
-end
-
--- Return whether text and deal input are currently locked.
-local function inputIsLocked()
-	return isClosedThisTurn(m_rows, m_currentTurn) or m_phase ~= "normal"
 end
 
 -- Reflow the native-aligned action stack after changing child visibility.
@@ -583,7 +583,9 @@ end
 local function appendRow(row)
 	if row == nil or row.ID == nil or m_rowByID[row.ID] ~= nil then return false end
 	local stick = isAtBottom(); m_rowByID[row.ID] = row; table.insert(m_rows, row); buildRowInstance(row)
-	if m_phase == "streaming" then m_phase, m_phaseArg, m_streamingText = "normal", nil, "" end
+	-- The durable row supersedes the streamed draft; the phase itself ends only on
+	-- the turn's terminal status.
+	if m_phase == "streaming" then m_streamingText = "" end
 	refreshState(stick); return true
 end
 
@@ -611,7 +613,7 @@ end
 -- Update streaming text and reflow only when the bubble height changes.
 local function setStreamingText(text)
 	local oldHeight, stick = m_tail.streaming.Row:GetSizeY(), isAtBottom(); m_streamingText = sanitizeText(text)
-	if m_phase == "streaming" then
+	if m_phase == "streaming" and m_streamingText ~= "" then
 		bindTailMessage(m_tail.streaming, m_counterpartID, m_streamingText); m_tail.streaming.Row:SetHide(false)
 		if oldHeight ~= m_tail.streaming.Row:GetSizeY() then reflowTranscript(stick) end
 	end
