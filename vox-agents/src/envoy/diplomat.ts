@@ -193,7 +193,7 @@ You represent your government's interests and gather intelligence through diplom
     if (!this.isSpecialMode(input)) {
       sections.push(`# Your Resources
 - Use the \`send-message\` tool to say something to the counterpart.
-  - The \`Message\` you provide is delivered exactly as written, so write the finished reply, not a description of it.
+  - Write a short, thoughtful message conversationally, within one short paragraph if possible.
   - Never write a reply as free text outside this tool.
 - Use the \`get-briefing\` tool to retrieve briefings on Military, Economy, and/or Diplomacy.
   - Call it when you need strategic intelligence to inform your conversations.

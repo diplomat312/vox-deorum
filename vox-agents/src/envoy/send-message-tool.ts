@@ -37,7 +37,7 @@ export function createSendMessageTool(context: VoxContext<StrategistParameters>)
         Message: z
           .string()
           .describe(
-            "What you say to the counterpart, in your own diplomatic voice. Delivered exactly as written, so write the finished reply, not a description of it."
+            "What you say to the counterpart, in your own diplomatic voice."
           ),
       }),
       execute: async () => "Message delivered.",
