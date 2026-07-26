@@ -161,7 +161,7 @@ export interface OracleInput {
 export interface ReplayResult {
   /** The CSV row that was replayed */
   row: OracleRow;
-  /** Model used for replay */
+  /** Model used for replay, as `{provider}/{name}@{reasoningEffort}` (effort omitted when unset) */
   model: string;
   /** Tool call decisions from the LLM (with extracted rationale for strategist tools) */
   decisions: ReplayDecision[];
@@ -189,7 +189,7 @@ export interface ExtractionContext {
   replayPrompts: string[];
   /** Tool call decisions from the replay */
   decisions: ReplayDecision[];
-  /** Model used for the replay */
+  /** Model used for the replay, as `{provider}/{name}@{reasoningEffort}` (effort omitted when unset) */
   model: string;
   /** The CSV row being processed */
   row: OracleRow;

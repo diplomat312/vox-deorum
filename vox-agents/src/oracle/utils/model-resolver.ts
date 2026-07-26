@@ -60,6 +60,23 @@ function parseModelString(modelString: string): {
 }
 
 /**
+ * Render a resolved Model back into the telemetry model string
+ * (`{provider}/{name}@{reasoningEffort}`), the same shape {@link resolveModel} parses.
+ *
+ * The effort recorded is the one the replay actually ran with — an explicit `@effort` from
+ * the experiment's model override, or the default carried by the config.llms entry. It is
+ * omitted entirely when the model has none, so the provider's own default is not misreported
+ * as a chosen effort.
+ *
+ * @param model - Resolved model configuration
+ * @returns Model string, e.g. `google/gemini-3.5-flash@high`
+ */
+export function formatModelString(model: Model): string {
+  const reasoningEffort = model.options?.reasoningEffort;
+  return `${model.provider}/${model.name}${reasoningEffort ? `@${reasoningEffort}` : ''}`;
+}
+
+/**
  * Resolve a model input into a full Model configuration.
  * If given a Model object, returns it directly.
  * If given a string, parses it and looks up in config.llms.

@@ -10,6 +10,7 @@ import { Tool, StepResult, ModelMessage } from 'ai';
 import { VoxAgent } from '../infra/vox-agent.js';
 import type { VoxContext } from '../infra/vox-context.js';
 import type { Model } from '../types/index.js';
+import { formatModelString } from './utils/model-resolver.js';
 import type { OracleParameters, OracleInput, ReplayResult, ReplayDecision } from './types.js';
 
 /**
@@ -114,7 +115,9 @@ export class OracleAgent extends VoxAgent<OracleParameters, OracleInput, ReplayR
 
     return {
       row: input.row,
-      model: `${parameters.resolvedModel.provider}/${parameters.resolvedModel.name}`,
+      // Carries the reasoning effort the replay actually ran with, matching the shape of the
+      // recorded `originalModel` so the two are directly comparable in the trail and CSV.
+      model: formatModelString(parameters.resolvedModel),
       decisions,
       // Placeholder — replayRow() overrides with VoxContext's nuanced token counts
       tokens: { inputTokens: 0, reasoningTokens: 0, outputTokens: 0 },
