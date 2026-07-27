@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { useRouter, useRoute } from 'vue-router'
+import { ref, onMounted, onUnmounted } from 'vue'
+import { useRouter } from 'vue-router'
 import Button from 'primevue/button'
 import Drawer from 'primevue/drawer'
 import Menu from 'primevue/menu'
@@ -11,7 +11,6 @@ import Toast from 'primevue/toast'
 import { healthStatus, startHealthPolling } from './stores/health'
 
 const router = useRouter()
-const route = useRoute()
 
 // Drawer visibility state
 const drawerVisible = ref(true)
@@ -48,7 +47,7 @@ onUnmounted(() => {
 })
 
 // Navigation menu items formatted for PrimeVue Menu component
-const menuItems = computed(() => [
+const menuItems = [
   {
     label: 'System',
     items: [
@@ -102,7 +101,7 @@ const menuItems = computed(() => [
       }
     ]
   }
-])
+]
 
 const toggleDrawer = () => {
   drawerVisible.value = !drawerVisible.value

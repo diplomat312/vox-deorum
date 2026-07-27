@@ -67,23 +67,19 @@ export function getLevelEmoji(level: string): string {
  * @returns Formatted time string with milliseconds
  */
 export function formatTimestamp(timestamp: string): string {
-  try {
-    const date = new Date(timestamp);
-    const time = date.toLocaleTimeString('en-US', {
-      hour12: false,
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit'
-    });
-    const ms = date.getMilliseconds().toString().padStart(3, '0');
-    return `${time}.${ms}`;
-  } catch {
-    return timestamp;
-  }
+  const date = new Date(timestamp);
+  const time = date.toLocaleTimeString('en-US', {
+    hour12: false,
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit'
+  });
+  const ms = date.getMilliseconds().toString().padStart(3, '0');
+  return `${time}.${ms}`;
 }
 
 /** Log level hierarchy for filtering */
-export const levelHierarchy: Record<string, number> = {
+export const levelHierarchy: Record<LogEntry['level'], number> = {
   debug: 0,
   info: 1,
   warn: 2,
@@ -99,13 +95,13 @@ export const levelHierarchy: Record<string, number> = {
  */
 export function filterLogs(
   logs: LogEntry[],
-  minLevel: string,
+  minLevel: LogEntry['level'],
   selectedSources: string[]
 ): LogEntry[] {
   return logs.filter(log => {
     // Filter by level hierarchy
-    const logLevel = levelHierarchy[log.level] ?? 0;
-    const minLevelValue = levelHierarchy[minLevel] ?? 0;
+    const logLevel = levelHierarchy[log.level];
+    const minLevelValue = levelHierarchy[minLevel];
     if (logLevel < minLevelValue) return false;
 
     // Filter by source if specific sources are selected

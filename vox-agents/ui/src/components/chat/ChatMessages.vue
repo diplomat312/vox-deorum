@@ -18,10 +18,10 @@
           v-if="item.deal"
           :key="`deal-${item.deal.ID}`"
           :deal="item.deal"
-          :you-i-d="youID ?? -1"
-          :them-i-d="themID ?? -1"
-          :you-label="userLabel ?? 'You'"
-          :them-label="agentLabel ?? 'Them'"
+          :you-i-d="youID"
+          :them-i-d="themID"
+          :you-label="userLabel"
+          :them-label="agentLabel"
           :outcome="dealOutcomes?.get(item.deal.ID)"
           :locked="dealLocked"
           :busy="dealActionBusy"
@@ -53,13 +53,12 @@ import type { ProposalOutcome } from '@/utils/deal/deal-reduce';
 interface Props {
   /** Rendered stream items: ordinary chat messages plus inline deal cards (a row's `deal`). */
   messages: MessageWithMetadata[];
-  autoScroll?: boolean;
   scrollTrigger?: number;
-  userLabel?: string;
-  agentLabel?: string;
+  userLabel: string;
+  agentLabel: string;
   /** Deal-card context: the viewer ("you") and the voiced ("them") endpoint IDs. */
-  youID?: number;
-  themID?: number;
+  youID: number;
+  themID: number;
   /** Per-proposal outcomes keyed by proposal ID, from `deriveProposalOutcomes`. Each card reads its
    *  own status here, so a resolved proposal keeps showing its outcome after being superseded. */
   dealOutcomes?: Map<number, ProposalOutcome>;
@@ -70,7 +69,6 @@ interface Props {
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  autoScroll: true,
   scrollTrigger: 0
 });
 
@@ -132,7 +130,7 @@ const handleScroll = () => {
 // bump scrollTrigger, so a proposal turn would otherwise never scroll. scrollToBottom() is idempotent
 // and respects the user-scrolled-away pause.
 watch([() => props.scrollTrigger, () => props.messages.length], () => {
-  if (props.autoScroll && !userScrolledAway.value && virtualScroller.value) {
+  if (!userScrolledAway.value && virtualScroller.value) {
     nextTick(() => {
       scrollToBottom();
     });

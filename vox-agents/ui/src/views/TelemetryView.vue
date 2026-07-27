@@ -93,8 +93,7 @@ onUnmounted(() => {
       <!-- Active Sessions Section -->
       <GameSessionsList
         :sessions="activeSessions"
-        @session-selected="viewActiveSession"
-        @view-session="viewActiveSession" />
+        @session-selected="viewActiveSession" />
 
       <!-- Existing Databases Section -->
       <div class="panel-container">

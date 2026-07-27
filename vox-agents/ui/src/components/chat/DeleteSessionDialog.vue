@@ -8,7 +8,6 @@ Purpose: Reusable delete confirmation dialog for chat sessions
     header="Confirm Delete"
     :style="{ width: '450px' }"
     modal
-    @update:visible="handleVisibilityChange"
   >
     <p>{{ message }}</p>
     <template #footer>
@@ -41,17 +40,14 @@ const props = withDefaults(defineProps<{
   modelValue: boolean;
   session: EnvoyThread | null;
   redirectAfterDelete?: boolean;
-  redirectPath?: string;
 }>(), {
-  redirectAfterDelete: false,
-  redirectPath: '/chat'
+  redirectAfterDelete: false
 });
 
 // Emits
 const emit = defineEmits<{
   'update:modelValue': [value: boolean];
   'deleted': [sessionId: string];
-  'error': [error: Error];
 }>();
 
 // Composables
@@ -73,12 +69,6 @@ const message = computed(() => {
 });
 
 // Methods
-const handleVisibilityChange = (value: boolean) => {
-  if (!value && !isDeleting.value) {
-    emit('update:modelValue', false);
-  }
-};
-
 const handleCancel = () => {
   visible.value = false;
 };
@@ -104,7 +94,7 @@ const handleDelete = async () => {
     visible.value = false;
 
     if (props.redirectAfterDelete) {
-      router.push(props.redirectPath);
+      router.push('/chat');
     }
   } catch (error) {
     console.error('Failed to delete session:', error);
@@ -115,8 +105,6 @@ const handleDelete = async () => {
       detail: error instanceof Error ? error.message : 'Failed to delete session',
       life: 3000
     });
-
-    emit('error', error instanceof Error ? error : new Error('Failed to delete session'));
   } finally {
     isDeleting.value = false;
   }

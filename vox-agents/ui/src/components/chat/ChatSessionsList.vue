@@ -11,13 +11,11 @@ interface Props {
   sessions: EnvoyThread[];
   title?: string;
   emptyMessage?: string;
-  showActions?: boolean;
 }
 
 const props = withDefaults(defineProps<Props>(), {
   title: 'Active Chat Sessions',
-  emptyMessage: 'No active chat sessions',
-  showActions: true
+  emptyMessage: 'No active chat sessions'
 });
 
 /**
@@ -88,7 +86,7 @@ function getSessionTitle(session: EnvoyThread): string {
         <div class="col-fixed-120">Agent</div>
         <div class="col-fixed-250">Game</div>
         <div class="col-fixed-60">Player</div>
-        <div v-if="showActions" class="col-fixed-150">Actions</div>
+        <div class="col-fixed-150">Actions</div>
     </template>
 
     <div v-for="session in sessions" :key="session.id"
@@ -106,7 +104,7 @@ function getSessionTitle(session: EnvoyThread): string {
       <div class="col-fixed-60">
         {{ session.agent }}
       </div>
-      <div v-if="showActions" class="col-fixed-150">
+      <div class="col-fixed-150">
         <Button label="Resume" icon="pi pi-play" text size="small"
                 @click.stop="handleResumeClick(session.id)" />
         <Button icon="pi pi-trash" text size="small"

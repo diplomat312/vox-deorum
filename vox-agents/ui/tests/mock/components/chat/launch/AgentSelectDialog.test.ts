@@ -176,6 +176,59 @@ describe('AgentSelectDialog', () => {
     )
   })
 
+  it('uses the span attributes turn for both context and chat creation', async () => {
+    const wrapper = mount(AgentSelectDialog, {
+      props: {
+        visible: false,
+        contextId: CONTEXT_ID,
+        span: { name: 'conflicting-turns', turn: 12, attributes: { turn: 0 } } as never,
+      },
+      global: { stubs },
+    })
+    await wrapper.setProps({ visible: true })
+    await flushPromises()
+
+    const tagText = wrapper.findAll('.p-tag').map(tag => tag.text())
+    expect(tagText).toContain('Turn 0')
+    expect(tagText).not.toContain('Turn 12')
+
+    const diplomacyToggle = wrapper.findAll('.mode-opt').find(button => button.text().includes('Diplomacy'))!
+    await diplomacyToggle.trigger('click')
+    await flushPromises()
+    await clickButton(wrapper, 'Start Conversation')
+    await flushPromises()
+
+    expect(api.createAgentChat).toHaveBeenCalledWith(
+      expect.objectContaining({ turn: 0 })
+    )
+  })
+
+  it('omits a missing span turn from both context and chat creation', async () => {
+    const wrapper = mount(AgentSelectDialog, {
+      props: {
+        visible: false,
+        contextId: CONTEXT_ID,
+        span: { name: 'unturned-span', turn: null, attributes: {} } as never,
+      },
+      global: { stubs },
+    })
+    await wrapper.setProps({ visible: true })
+    await flushPromises()
+
+    const tagText = wrapper.findAll('.p-tag').map(tag => tag.text())
+    expect(tagText).not.toContain('Turn null')
+
+    const diplomacyToggle = wrapper.findAll('.mode-opt').find(button => button.text().includes('Diplomacy'))!
+    await diplomacyToggle.trigger('click')
+    await flushPromises()
+    await clickButton(wrapper, 'Start Conversation')
+    await flushPromises()
+
+    expect(api.createAgentChat).toHaveBeenCalledWith(
+      expect.not.objectContaining({ turn: expect.anything() })
+    )
+  })
+
   it('sends the hardcoded observer identity for an observer chat', async () => {
     const wrapper = await openDialog()
 

@@ -17,7 +17,6 @@ import type {
   PromiseTargetInfo,
 } from '@/utils/types';
 import {
-  PROMISE_TYPES,
   PROMISE_METADATA,
   TARGETED_PROMISE_TYPES,
   AGREEMENT_METADATA,
@@ -27,23 +26,12 @@ import {
 } from '../../../../../mcp-server/dist/utils/deal-metadata.js';
 
 /**
- * The tradable range one side could put on the table, as `inspect-deal` returns it. This is
- * now the tool-owned normalized shape (display names, resource category, per-candidate
- * legality + reason lines); re-exported here so component/test imports have one canonical name.
- */
-export type { NormalizedSideRange } from '@/utils/types';
-
-/**
  * The deal vocabulary is DERIVED from the canonical, zod-free metadata in
  * `mcp-server/src/utils/deal-metadata.ts` (imported from its compiled `dist`, the same way the
  * type chain reaches mcp-server). That module carries no zod, so importing it adds nothing to the
- * browser bundle, and there are no hand-maintained copies left to drift. The contract holds only the
- * promises the tactical AI honors, so every `PROMISE_TYPES` entry is authorable — there is no separate
- * "offered" subset to track. `PROMISE_METADATA[t].label` is the single label used everywhere.
+ * browser bundle, and there are no hand-maintained copies left to drift. `PROMISE_METADATA[t].label`
+ * is the single label used everywhere.
  */
-
-/** The authorable promise vocabulary (specs §3) — every entry is honored by the tactical AI. */
-export { PROMISE_TYPES, PROMISE_METADATA };
 
 /** Promise types that require a third-party target (Coop War). */
 export const PROMISE_NEEDS_TARGET = TARGETED_PROMISE_TYPES;

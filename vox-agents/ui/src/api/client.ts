@@ -45,8 +45,7 @@ import type {
   DealRejectRequest,
   DealAcceptRequest,
   DealMessagesResponse,
-  DealTranscriptMessage,
-  MessageWithMetadata
+  DealTranscriptMessage
 } from '../utils/types';
 import type { TextStreamPart, ToolSet } from 'ai';
 
@@ -91,10 +90,23 @@ function streamErrorMessage(event: any): string {
   if (typeof body !== 'string' || !body) return 'The connection to the server was lost.';
   try {
     const parsed = JSON.parse(body);
-    if (typeof parsed === 'string') return parsed;
     return parsed?.message || parsed?.error || body;
   } catch {
     return body; // not JSON — surface the raw text
+  }
+}
+
+/** Parse one SSE event and retain each handler's existing parse-error reporting. */
+function parseEvent<T>(
+  event: MessageEvent,
+  parser: (data: string) => T,
+  parseLabel: string
+): T | undefined {
+  try {
+    return parser(event.data);
+  } catch (error) {
+    console.error(`Failed to parse ${parseLabel}:`, error);
+    return undefined;
   }
 }
 
@@ -453,13 +465,10 @@ class ApiClient {
    * payload and every other field are preserved via the spread).
    */
   private reviveThreadDates(thread: GetChatResponse): GetChatResponse {
-    if (Array.isArray(thread?.messages)) {
-      thread.messages = thread.messages.map((m: MessageWithMetadata) =>
-        m.metadata?.datetime instanceof Date
-          ? m
-          : { ...m, metadata: { ...m.metadata, datetime: new Date(m.metadata.datetime) } }
-      );
-    }
+    thread.messages = thread.messages.map((message) => ({
+      ...message,
+      metadata: { ...message.metadata, datetime: new Date(message.metadata.datetime) }
+    }));
     return thread;
   }
 
@@ -586,36 +595,28 @@ class ApiClient {
     });
 
     // Listen for 'message' events (streaming chunks)
-    eventSource.addEventListener('message', (event: any) => {
-      try {
-        const data = JSON.parse(event.data);
+    eventSource.addEventListener('message', (event: MessageEvent) => {
+      const data = parseEvent(event, (value) => JSON.parse(value) as TextStreamPart<ToolSet>, 'agent message chunk');
+      if (data !== undefined) {
         // The backend sends just the chunk string for message events
         onMessage(data);
-      } catch (error) {
-        console.error('Failed to parse agent message chunk:', error);
       }
     });
 
     // 'connected' fires once the server has COMMITTED the turn (post-commit), before the reply streams.
     // For a deal turn it carries the authoritative committed row; the caller inserts it and closes the
     // deal dialog here. A pre-stream rejection never reaches this, so the dialog stays open.
-    eventSource.addEventListener('connected', (event: any) => {
-      try {
-        onConnected?.(JSON.parse(event.data));
-      } catch (error) {
-        console.error('Failed to parse connected event:', error);
-      }
+    eventSource.addEventListener('connected', (event: MessageEvent) => {
+      const data = parseEvent(event, (value) => JSON.parse(value) as ConnectedData, 'connected event');
+      if (data !== undefined) onConnected?.(data);
     });
 
     // Listen for 'done' events. The terminal payload carries any deal rows the diplomat's tools wrote
     // mid-run (reconciled server-side); parse it so the caller can splice them in without a reload.
-    eventSource.addEventListener('done', (event: any) => {
-      let data: DoneData = {};
-      try {
-        if (event?.data) data = JSON.parse(event.data);
-      } catch (error) {
-        console.error('Failed to parse done event:', error);
-      }
+    eventSource.addEventListener('done', (event: MessageEvent) => {
+      const data = event.data
+        ? parseEvent(event, (value) => JSON.parse(value) as DoneData, 'done event') ?? {}
+        : {};
       onDone(data);
     });
 
@@ -668,11 +669,8 @@ class ApiClient {
     this.closeSseConnection(key);
     const eventSource = new EventSource(`${this.baseUrl}${path}`);
     eventSource.addEventListener(eventName, (event: MessageEvent) => {
-      try {
-        onMessage(parse(event.data));
-      } catch (error) {
-        console.error(`Failed to parse ${parseLabel}:`, error);
-      }
+      const data = parseEvent(event, parse, parseLabel);
+      if (data !== undefined) onMessage(data);
     });
     eventSource.addEventListener('heartbeat', () => onHeartbeat?.());
     eventSource.onerror = (error) => onError?.(error);

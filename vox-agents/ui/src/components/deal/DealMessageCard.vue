@@ -118,10 +118,10 @@ const headline = computed(() => {
 });
 
 /** The one-sentence outward line carried on the draft deal. */
-const dealMessage = computed(() => props.deal.Payload?.Deal?.message ?? '');
+const dealMessage = computed(() => props.deal.Payload.Deal?.message ?? '');
 
-const items = computed<TradeItem[]>(() => props.deal.Payload?.Deal?.items ?? []);
-const promises = computed<PromiseTerm[]>(() => props.deal.Payload?.Deal?.promises ?? []);
+const items = computed<TradeItem[]>(() => props.deal.Payload.Deal?.items ?? []);
+const promises = computed<PromiseTerm[]>(() => props.deal.Payload.Deal?.promises ?? []);
 
 /** The two giver columns ("You give" | "They give"), each carrying the side's item labels then
  *  its pledged-promise labels — the compact, read-only mirror of the deal screen's central offer
@@ -141,8 +141,8 @@ const columns = computed(() =>
 const valueText = computed(() => {
   const balance = storedBalanceToSide(
     items.value,
-    props.deal.Payload?.Value1,
-    props.deal.Payload?.Value2,
+    props.deal.Payload.Value1,
+    props.deal.Payload.Value2,
     props.deal.Player1ID,
     props.deal.Player2ID,
     props.youID
@@ -166,7 +166,6 @@ const valueText = computed(() => {
 .deal-card-head { display: flex; align-items: center; gap: 0.4rem; margin-bottom: 0.3rem; }
 .deal-card-title { font-weight: 600; }
 .deal-card-turn { margin-left: auto; font-size: 0.75rem; color: var(--p-text-muted-color); }
-.deal-card-terms { flex: 1; }
 /* You give | They give — the compact two-column mirror of the deal screen's central offer. */
 .deal-card-columns { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin: 0.2rem 0; }
 .deal-card-col { min-width: 0; }

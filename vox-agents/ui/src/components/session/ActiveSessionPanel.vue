@@ -31,7 +31,6 @@ const stateSeverity = computed(() => {
     case 'running': return 'success';
     case 'recovering': return 'warning';
     case 'stopping': return 'warning';
-    case 'stopped': return undefined;
     case 'error': return 'danger';
     default: return undefined;
   }

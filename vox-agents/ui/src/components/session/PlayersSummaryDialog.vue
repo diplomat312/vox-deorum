@@ -71,7 +71,6 @@ async function loadPlayers() {
 }
 
 function closeDialog() {
-  dialogVisible.value = false;
   error.value = null;
 }
 

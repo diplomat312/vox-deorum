@@ -49,7 +49,6 @@ function closeDialog() {
       <div class="mode-options">
         <Button
           label="Start New Game"
-          icon="pi pi-plus"
           severity="primary"
           class="mode-button"
           @click="selectMode('start')"
@@ -66,7 +65,6 @@ function closeDialog() {
 
         <Button
           label="Load Game"
-          icon="pi pi-folder-open"
           severity="secondary"
           class="mode-button"
           @click="selectMode('load')"
@@ -83,7 +81,6 @@ function closeDialog() {
 
         <Button
           label="Wait for Game"
-          icon="pi pi-clock"
           severity="info"
           class="mode-button"
           @click="selectMode('wait')"

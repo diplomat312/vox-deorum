@@ -39,7 +39,13 @@ function makeMessage(content: string, turn = 1) {
 
 function mountMessages(props: Record<string, unknown>) {
   return mount(ChatMessages, {
-    props: props as never,
+    props: {
+      userLabel: 'You',
+      agentLabel: 'Agent',
+      youID: -1,
+      themID: 0,
+      ...props,
+    } as never,
     global: { stubs: { ChatMessage: ChatMessageStub } },
   })
 }
@@ -99,14 +105,4 @@ describe('ChatMessages', () => {
     expect(scrollToSpy).toHaveBeenCalledWith(1000)
   })
 
-  it('does not auto-scroll on trigger when autoScroll is disabled', async () => {
-    const wrapper = mountMessages({ messages: [makeMessage('one')], autoScroll: false, scrollTrigger: 0 })
-    await flushPromises()
-    scrollToSpy.mockClear()
-
-    await wrapper.setProps({ scrollTrigger: 1 })
-    await flushPromises()
-
-    expect(scrollToSpy).not.toHaveBeenCalled()
-  })
 })

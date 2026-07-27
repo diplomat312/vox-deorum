@@ -31,14 +31,6 @@ export function formatTimestamp(nanos: number): string {
 }
 
 /**
- * Format date from nanosecond timestamp
- */
-export function formatDate(nanos: number): string {
-  const date = new Date(nanos / 1000000);
-  return date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
-}
-
-/**
  * Format ISO date string for display
  */
 export function formatISODate(isoString: string): string {
@@ -81,22 +73,6 @@ export function getStatusText(statusCode: number): string {
 }
 
 /**
- * Get status emoji for inline display
- * Based on OpenTelemetry StatusCode enum:
- * 0 = UNSET, 1 = OK, 2 = ERROR
- */
-export function getStatusEmoji(statusCode: number): string {
-  switch (statusCode) {
-    case 1: // OK
-      return '✅';
-    case 2: // ERROR
-      return '❌';
-    default: // UNSET (0) or unknown
-      return '⚪';
-  }
-}
-
-/**
  * Format file size in bytes for display
  */
 export function formatFileSize(bytes: number): string {
@@ -105,65 +81,6 @@ export function formatFileSize(bytes: number): string {
   if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
   if (bytes < 1024 * 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
   return (bytes / (1024 * 1024 * 1024)).toFixed(2) + ' GB';
-}
-
-/**
- * Get service name from span attributes
- */
-export function getServiceName(span: Span): string {
-  return span.attributes?.service_name || span.attributes?.['service.name'] || 'unknown';
-}
-
-/**
- * Extract key attributes for display (limited list)
- */
-export function getDisplayAttributes(span: Span, maxAttrs: number = 4): Array<{key: string, value: string}> {
-  const attrs: Array<{key: string, value: string}> = [];
-
-  // Priority attributes to show
-  const priorityKeys = [
-    'service_name',
-    'service.name',
-    'agent_name',
-    'operation',
-    'phase',
-    'player_id',
-    'turn',
-    'http.method',
-    'http.url',
-    'db.statement'
-  ];
-
-  // Add service name first if exists
-  const serviceName = getServiceName(span);
-  if (serviceName !== 'unknown') {
-    attrs.push({ key: 'Service', value: serviceName });
-  }
-
-  // Add turn if present
-  if (span.turn !== null && span.turn !== undefined) {
-    attrs.push({ key: 'Turn', value: span.turn.toString() });
-  }
-
-  // Add other priority attributes
-  for (const key of priorityKeys) {
-    if (attrs.length >= maxAttrs) break;
-
-    if (span.attributes?.[key] && !['service_name', 'service.name'].includes(key)) {
-      const displayKey = key
-        .replace(/_/g, ' ')
-        .replace(/\./g, ' ')
-        .replace(/\b\w/g, c => c.toUpperCase());
-      const value = String(span.attributes[key]);
-
-      // Skip if we already have this value
-      if (!attrs.some(a => a.value === value)) {
-        attrs.push({ key: displayKey, value });
-      }
-    }
-  }
-
-  return attrs.slice(0, maxAttrs);
 }
 
 /**
@@ -240,39 +157,9 @@ export function flattenSpanTree(roots: SpanNode[], expandedSpans: Set<string>): 
 }
 
 /**
- * Format span for console-style display
- */
-export function formatSpanLine(span: Span): string {
-  const time = formatTimestamp(span.startTime);
-  const service = getServiceName(span);
-  const duration = formatDuration(span.durationMs);
-  const status = getStatusEmoji(span.statusCode);
-
-  return `[${time}] [${service}] ${span.name} (${duration}) ${status}`;
-}
-
-/**
- * Get CSS class for span row styling
- */
-export function getSpanRowClass(span: Span): string {
-  const classes = ['span-row'];
-
-  // OpenTelemetry StatusCode: 0 = UNSET, 1 = OK, 2 = ERROR
-  if (span.statusCode === 2) {
-    classes.push('span-error');
-  }
-
-  if (span.parentSpanId) {
-    classes.push('span-child');
-  }
-
-  return classes.join(' ');
-}
-
-/**
  * Format token count with thousands separator
  */
 export function formatTokenCount(count: number | undefined): string {
-  if (count === undefined || count === null) return '-';
+  if (count === undefined) return '-';
   return count.toLocaleString('en-US');
 }

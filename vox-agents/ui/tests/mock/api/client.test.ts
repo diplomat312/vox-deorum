@@ -214,7 +214,7 @@ describe('ApiClient SSE streams', () => {
 
     // A bare 'error' event (no responseCode) lands after the stream opened → the message may be committed.
     sse.emit('error', JSON.stringify('server failed'))
-    expect(onError).toHaveBeenCalledWith('server failed', 'committed')
+    expect(onError).toHaveBeenCalledWith(JSON.stringify('server failed'), 'committed')
 
     cleanup()
     expect(sse.closed).toBe(true)

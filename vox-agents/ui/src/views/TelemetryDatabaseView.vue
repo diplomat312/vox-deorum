@@ -20,8 +20,7 @@ import {
   formatTimestamp,
   formatTokenCount,
   getStatusSeverity,
-  getStatusText,
-  getDisplayAttributes
+  getStatusText
 } from '@/api/telemetry-utils';
 
 const route = useRoute();
@@ -60,17 +59,7 @@ const filteredTraces = computed(() => {
     // Search in name
     if (trace.name.toLowerCase().includes(query)) return true;
 
-    // Search in service name attribute
-    if (typeof trace.attributes === 'object' && trace.attributes) {
-      const serviceName = trace.attributes['service_name'] || trace.attributes['service.name'];
-      if (serviceName && String(serviceName).toLowerCase().includes(query)) return true;
-
-      // Search in all attributes
-      const attrStr = JSON.stringify(trace.attributes).toLowerCase();
-      return attrStr.includes(query);
-    }
-
-    return false;
+    return JSON.stringify(trace.attributes).toLowerCase().includes(query);
   });
 });
 
@@ -81,14 +70,6 @@ const paginatedTraces = computed(() => {
   const end = first.value + rows.value;
   return filteredTraces.value.slice(first.value, end);
 });
-
-/**
- * Handle page change event from Paginator
- */
-function onPageChange(event: any) {
-  first.value = event.first;
-  rows.value = event.rows;
-}
 
 /**
  * Navigate to trace detail view
@@ -265,13 +246,13 @@ onMounted(() => {
                 {{ formatDuration(trace.durationMs) }}
               </div>
               <div class="col-fixed-80">
-                {{ formatTokenCount(trace.attributes?.['tokens.input']) }}
+                {{ formatTokenCount(trace.attributes['tokens.input']) }}
               </div>
               <div class="col-fixed-80">
-                {{ formatTokenCount(trace.attributes?.['tokens.reasoning']) }}
+                {{ formatTokenCount(trace.attributes['tokens.reasoning']) }}
               </div>
               <div class="col-fixed-80">
-                {{ formatTokenCount(trace.attributes?.['tokens.output']) }}
+                {{ formatTokenCount(trace.attributes['tokens.output']) }}
               </div>
               <div class="col-fixed-80">
                 <Button
@@ -301,7 +282,6 @@ onMounted(() => {
           v-model:first="first"
           v-model:rows="rows"
           :totalRecords="filteredTraces.length"
-          @page="onPageChange"
           :rowsPerPageOptions="[10, 20, 50]"
           class="traces-paginator"
         />
@@ -312,7 +292,6 @@ onMounted(() => {
     <AgentSelectDialog
       v-model:visible="showAgentDialog"
       :databasePath="`telemetry/${filename}`"
-      :turn="selectedTrace?.attributes?.turn || selectedTrace?.turn"
       :span="selectedTrace || undefined"
     />
   </div>

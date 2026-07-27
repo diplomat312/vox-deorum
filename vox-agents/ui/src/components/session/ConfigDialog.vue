@@ -102,9 +102,6 @@ watch(() => props.visible, async (newVal) => {
       );
       runControlState.value = hydrateRunControls(localConfig.value);
       localName.value = props.configName || props.config.name;
-      if (props.mode === 'duplicate') {
-        localConfig.value.name = localName.value;
-      }
     }
   }
 });

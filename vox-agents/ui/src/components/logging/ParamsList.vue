@@ -16,7 +16,7 @@ interface Props {
   params: DisplayValue;
 }
 
-const props = defineProps<Props>();
+defineProps<Props>();
 
 /** Render a log parameter value recursively with syntax-aware styling. */
 const renderValue = (value: DisplayValue): VNode => {

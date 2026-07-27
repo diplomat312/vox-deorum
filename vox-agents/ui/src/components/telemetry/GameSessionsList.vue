@@ -25,7 +25,6 @@ const props = withDefaults(defineProps<Props>(), {
  */
 const emit = defineEmits<{
   'session-selected': [sessionId: string];
-  'view-session': [sessionId: string];
 }>();
 
 /**
@@ -33,13 +32,6 @@ const emit = defineEmits<{
  */
 function handleSessionClick(sessionId: string) {
   emit('session-selected', sessionId);
-}
-
-/**
- * Handle view button click
- */
-function handleViewClick(sessionId: string) {
-  emit('view-session', sessionId);
 }
 
 /**
@@ -76,7 +68,7 @@ const sessionCount = computed(() => props.sessions.length);
       </div>
       <div v-if="showViewButton" class="col-fixed-100">
         <Button label="View" icon="pi pi-chart-line" text size="small"
-                @click.stop="handleViewClick(session.sessionId)" />
+                @click.stop="handleSessionClick(session.sessionId)" />
       </div>
     </div>
   </SessionListPanel>

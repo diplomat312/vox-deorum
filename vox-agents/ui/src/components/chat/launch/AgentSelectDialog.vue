@@ -25,7 +25,6 @@ interface Props {
   visible: boolean;
   contextId?: string;
   databasePath?: string;
-  turn?: number;
   span?: Span;  // Optional span for more precise context
 }
 
@@ -131,9 +130,10 @@ const contextName = computed(() => {
   return '';
 });
 
-const contextTurn = computed(() => {
-  return props.span?.attributes?.turn || props.turn;
-});
+/** Resolve the span turn once for both the displayed context and created chat request. */
+const resolvedTurn = computed<number | undefined>(
+  () => props.span?.attributes?.turn ?? props.span?.turn ?? undefined
+);
 
 const contextSpanName = computed(() => {
   return props.span?.name || '';
@@ -286,8 +286,7 @@ async function confirmDiplomacy() {
     callerRole: initiatorRole.value.trim() || undefined,
   };
   if (voiceOverride.value) request.agentName = voiceOverride.value.name;
-  const turn = props.span?.attributes?.turn || props.span?.turn || props.turn;
-  if (turn !== undefined) request.turn = turn;
+  if (resolvedTurn.value !== undefined) request.turn = resolvedTurn.value;
   await launchChat(request, 'Failed to open conversation');
 }
 
@@ -367,8 +366,7 @@ async function confirmSelection(): Promise<void> {
     request.databasePath = props.databasePath.includes('/') ? props.databasePath : `telemetry/${props.databasePath}`;
   }
 
-  const turn = props.span?.attributes?.turn || props.span?.turn || props.turn;
-  if (turn !== undefined) request.turn = turn;
+  if (resolvedTurn.value !== undefined) request.turn = resolvedTurn.value;
 
   request.callerRole = userRole.value.trim();
   if (selectedPlayerOption.value && selectedPlayerOption.value.value !== 'observer') {
@@ -414,7 +412,7 @@ watch(
       <div class="context-tags">
         <Tag :value="contextType" severity="info" />
         <Tag v-if="!props.contextId && contextName" :value="contextName" />
-        <Tag v-if="contextTurn !== undefined" :value="`Turn ${contextTurn}`" severity="secondary" />
+        <Tag v-if="resolvedTurn !== undefined" :value="`Turn ${resolvedTurn}`" severity="secondary" />
         <Tag v-if="contextSpanName" :value="contextSpanName" severity="contrast" />
       </div>
     </template>

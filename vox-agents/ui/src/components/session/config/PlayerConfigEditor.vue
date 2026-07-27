@@ -25,8 +25,7 @@ const emit = defineEmits<{
 const selectedPlayerId = ref<number | null>(null);
 const sortedPlayerIds = computed(() => Object.keys(props.players).map(Number).sort((a, b) => a - b));
 const playerListEntries = computed<PlayerListEntry[]>(() => sortedPlayerIds.value
-  .map(id => ({ id, player: props.players[id] }))
-  .filter((entry): entry is PlayerListEntry => entry.player !== undefined));
+  .map(id => ({ id, player: props.players[id]! })));
 const selectedPlayer = computed(() => selectedPlayerId.value === null ? null : props.players[selectedPlayerId.value] ?? null);
 const selectedPlayerTitle = computed(() => selectedPlayerId.value === null ? 'No Player Selected' : `Player ${selectedPlayerId.value}`);
 

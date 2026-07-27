@@ -6,7 +6,7 @@ import Dropdown from 'primevue/dropdown';
 import InputNumber from 'primevue/inputnumber';
 import InputText from 'primevue/inputtext';
 import type { StrategistSessionConfig } from '@/utils/types';
-import { type ProductionOption, type RunControlFormState, uint32Max, validateControlledSeedInputs, validateRunControls } from '@/utils/config-dialog-utils';
+import { type ProductionOption, type RunControlFormState, uint32Max, validateRunControls } from '@/utils/config-dialog-utils';
 
 type SelectOption<T> = { label: string; value: T };
 
@@ -37,13 +37,6 @@ const seatingCycleSeed = stateField('seatingCycleSeed');
 const mapSeedsInput = stateField('mapSeedsInput');
 const gameSeedsInput = stateField('gameSeedsInput');
 const validationError = computed(() => validateRunControls(props.modelValue));
-const seatingCycleSeedError = computed(() => {
-  const value = props.modelValue.seatingCycleSeed;
-  return value == null || !Number.isInteger(value) || value < -1 || value > uint32Max
-    ? 'Seating cycle seed must be -1 or a uint32 integer.'
-    : null;
-});
-const seedValidationError = computed(() => validateControlledSeedInputs(props.modelValue.mapSeedsInput, props.modelValue.gameSeedsInput));
 const seatingCycleSeedSuffix = computed(() => seatingCycleSeed.value === -1 ? ' (disabled)' : ' (enabled)');
 const isRepetitionAuto = computed<boolean>({
   get: () => props.repetition === 'auto',
@@ -101,8 +94,7 @@ function toggleExpanded(): void {
           <label for="gameSeeds">Game seeds</label>
           <InputText id="gameSeeds" v-model="gameSeedsInput" placeholder="1, 2, 3" class="detail-input" />
         </div>
-        <small v-if="seatingCycleSeedError" class="field-error run-control-error">{{ seatingCycleSeedError }}</small>
-        <small v-else-if="seedValidationError" class="field-error run-control-error">{{ seedValidationError }}</small>
+        <small v-if="validationError" class="field-error run-control-error">{{ validationError }}</small>
       </div>
     </template>
   </Card>

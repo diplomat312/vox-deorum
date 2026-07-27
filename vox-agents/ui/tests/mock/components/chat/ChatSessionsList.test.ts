@@ -80,10 +80,10 @@ describe('ChatSessionsList', () => {
     expect(wrapper.emitted('session-selected')).toBeUndefined()
   })
 
-  it('hides the actions column when showActions is false', () => {
-    const wrapper = mountList({ sessions: [makeSession()], showActions: false })
-    expect(wrapper.find('.col-fixed-150').exists()).toBe(false)
-    expect(wrapper.findAll('.p-btn')).toHaveLength(0)
+  it('always renders the actions column', () => {
+    const wrapper = mountList({ sessions: [makeSession()] })
+    expect(wrapper.find('.col-fixed-150').exists()).toBe(true)
+    expect(wrapper.findAll('.p-btn')).toHaveLength(2)
   })
 
   it('shows the empty state and its action slot when there are no sessions', () => {

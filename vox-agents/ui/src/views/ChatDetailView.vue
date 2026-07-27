@@ -88,7 +88,7 @@ Purpose: Main chat interface for interacting with agents
       :draggable="false"
     >
       <DealScreen
-        v-if="showDeal && audiencePlayerID !== undefined"
+        v-if="showDeal"
         :chatId="sessionId"
         :leftID="audiencePlayerID"
         :rightID="thread.agent"
@@ -132,7 +132,6 @@ Purpose: Main chat interface for interacting with agents
       v-model="showDeleteDialog"
       :session="thread"
       :redirect-after-delete="true"
-      redirect-path="/chat"
     />
   </div>
 </template>
@@ -151,7 +150,7 @@ import type { EnvoyThread, DealPayload } from '../utils/types';
 import ChatMessages from '../components/chat/ChatMessages.vue';
 import DeleteSessionDialog from '../components/chat/DeleteSessionDialog.vue';
 import DealScreen from '../components/deal/DealScreen.vue';
-import { deriveActiveProposal, deriveProposalOutcomes } from '../utils/deal/deal-reduce';
+import { deriveProposalOutcomes } from '../utils/deal/deal-reduce';
 // Pure transcript helpers shared with the backend (via @vox) so labels and the close-lock
 // comparison can never drift from the server's `isClosedThisTurn` / role derivation.
 import { roleOf, agentName as agentNameOf, audienceID, isClosedThisTurn } from '@vox/utils/diplomacy/transcript-utils';
@@ -183,11 +182,11 @@ const capitalize = (s?: string) => (s ? s.charAt(0).toUpperCase() + s.slice(1) :
 /** The agent-voiced seat's role IS the executable agent name. */
 const agentName = computed(() => (thread.value ? agentNameOf(thread.value) : undefined));
 /** The audience endpoint's playerID = the non-voiced seat (the human/caller in preview). */
-const audiencePlayerID = computed(() => (thread.value ? audienceID(thread.value) : undefined));
+const audiencePlayerID = computed<number>(() => audienceID(thread.value!));
 /** The audience = the other endpoint. */
 const audienceRole = computed(() => {
   const t = thread.value;
-  if (!t || audiencePlayerID.value === undefined) return undefined;
+  if (!t) return undefined;
   return roleOf(t, audiencePlayerID.value);
 });
 /** Label for the caller / audience. */
@@ -227,8 +226,6 @@ const visibleMessages = computed(() => {
 const dealMessages = computed(() =>
   (thread.value?.messages ?? []).flatMap((m) => (m.deal ? [m.deal] : []))
 );
-/** The reduced deal state (latest active proposal + status) from the conversation's deal messages. */
-const dealReduction = computed(() => deriveActiveProposal(dealMessages.value));
 /** Per-proposal outcomes for rendering: every card reads its own resolved status here rather than
  *  borrowing the active proposal's, so an accepted deal keeps saying so after being superseded. */
 const dealOutcomes = computed(() => deriveProposalOutcomes(dealMessages.value));

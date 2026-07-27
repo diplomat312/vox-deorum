@@ -124,7 +124,6 @@ onUnmounted(() => {
       :sessions="chatSessions"
       title="Active Chat Sessions"
       emptyMessage="No active chat sessions."
-      :show-actions="true"
       @session-selected="handleChatSessionSelected"
       @session-resume="handleChatResume"
       @session-delete="handleChatDelete"

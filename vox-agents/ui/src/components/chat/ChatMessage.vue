@@ -99,25 +99,23 @@ const toolOutcomesByCallId = computed(() => {
     failed: boolean;
     preliminary: boolean;
   }>();
-  if (Array.isArray(props.message.content)) {
-    for (const part of displayParts()) {
-      if (part.type === 'tool-result') {
-        const status = classifyProviderActivityStatus(part.output);
-        const preliminary = part.preliminary === true || status === 'preliminary';
-        map.set(part.toolCallId, {
-          value: part.output,
-          completed: !preliminary,
-          failed: status === 'failed',
-          preliminary,
-        });
-      } else if (part.type === 'tool-error') {
-        map.set(part.toolCallId, {
-          value: part.error,
-          completed: true,
-          failed: true,
-          preliminary: false,
-        });
-      }
+  for (const part of displayParts()) {
+    if (part.type === 'tool-result') {
+      const status = classifyProviderActivityStatus(part.output);
+      const preliminary = part.preliminary === true || status === 'preliminary';
+      map.set(part.toolCallId, {
+        value: part.output,
+        completed: !preliminary,
+        failed: status === 'failed',
+        preliminary,
+      });
+    } else if (part.type === 'tool-error') {
+      map.set(part.toolCallId, {
+        value: part.error,
+        completed: true,
+        failed: true,
+        preliminary: false,
+      });
     }
   }
   return map;

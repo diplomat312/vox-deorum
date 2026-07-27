@@ -198,7 +198,7 @@ export function useDealEditor(options: UseDealEditorOptions) {
     try {
       const response = await api.getDealMessages(toValue(options.chatId));
       reduction.value = deriveActiveProposal(response.messages);
-      if (loadActiveIntoEditor && reduction.value.active?.Payload?.Deal) {
+      if (loadActiveIntoEditor && reduction.value.active?.Payload.Deal) {
         loadDraft(reduction.value.active.Payload.Deal);
       }
       return await runInspect();
@@ -215,7 +215,7 @@ export function useDealEditor(options: UseDealEditorOptions) {
 
   /** Restore the current active proposal and discard local edits. */
   const resetToActiveProposal = (): void => {
-    const deal = reduction.value.active?.Payload?.Deal;
+    const deal = reduction.value.active?.Payload.Deal;
     if (deal) loadDraft(deal);
   };
 
@@ -291,7 +291,7 @@ export function useDealEditor(options: UseDealEditorOptions) {
       () => mayCounter.value,
       'Cannot counter yet',
       async () => {
-        if (targetID !== undefined) options.onSend({ deal: draftToSend(), expectedProposalID: targetID });
+        options.onSend({ deal: draftToSend(), expectedProposalID: targetID! });
       },
       (caught) => retryableError(caught, 'Could not send counter'),
       targetID,
@@ -305,9 +305,8 @@ export function useDealEditor(options: UseDealEditorOptions) {
       () => mayReject.value,
       activeAuthoredByViewer.value ? 'Cannot retract yet' : 'Cannot refuse yet',
       async () => {
-        if (!reduction.value.active) return;
         const updated = await api.rejectDeal(toValue(options.chatId), {
-          proposalMessageID: reduction.value.active.ID,
+          proposalMessageID: targetID!,
         });
         toast.add({
           severity: 'info',
@@ -328,9 +327,8 @@ export function useDealEditor(options: UseDealEditorOptions) {
       () => mayAccept.value,
       'Cannot accept yet',
       async () => {
-        if (!reduction.value.active) return;
         const updated = await api.acceptDeal(toValue(options.chatId), {
-          proposalMessageID: reduction.value.active.ID,
+          proposalMessageID: targetID!,
         });
         options.onChanged(updated);
       },

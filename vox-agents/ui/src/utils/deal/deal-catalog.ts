@@ -31,10 +31,8 @@ import {
 /**
  * The fixed, game-set durations bundle and the per-item-type duration lookup come from the canonical,
  * zod-free `deal-metadata.ts` (single source of truth, shared with the server and inspect-deal.lua).
- * Re-exported under the names this module's consumers/tests already use.
+ * Imported directly by consumers that need the canonical metadata symbols.
  */
-export type { DealDurations };
-export const durationFor = durationForItemType;
 
 /** The inventory categories, in the in-game display order. */
 export type CategoryKind =
@@ -136,7 +134,7 @@ function withDuration(
   itemType: TradeItem['itemType'],
   durations: DealDurations | undefined
 ): TradeItem {
-  const duration = durations ? durationFor(itemType, durations) : undefined;
+  const duration = durations ? durationForItemType(itemType, durations) : undefined;
   return duration === undefined ? item : { ...item, duration };
 }
 
@@ -168,8 +166,6 @@ export function defaultItemFor(
       return withDuration({ ...base, thirdPartyTeamID: ctx.thirdPartyTeamID }, itemType, ctx.durations);
     case 'THIRD_PARTY_WAR':
       return { ...base, thirdPartyTeamID: ctx.thirdPartyTeamID };
-    case 'VOTE_COMMITMENT':
-      return { ...base, resolutionID: 0, voteChoice: 0, numVotes: 1, repeal: false };
     case 'OPEN_BORDERS':
     case 'DEFENSIVE_PACT':
     case 'RESEARCH_AGREEMENT':
@@ -228,7 +224,7 @@ export function offerColumnsFor(
  * option carries the fully-targeted promise to add and its `(type,target)` selected-state. (The
  * city-state promises are not offered; the tactical AI does not honor them.)
  */
-export function promiseTargetsFor(
+function promiseTargetsFor(
   promiseType: PromiseTerm['promiseType'],
   ownerID: number,
   otherID: number,

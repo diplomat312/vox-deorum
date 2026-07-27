@@ -31,7 +31,7 @@ const displayRole = computed(() => ({
   assistant: props.agentLabel,
   system: 'System',
   tool: 'Tool'
-}[props.role] || props.role));
+}[props.role]));
 
 const renderedContent = computed(() => {
   // Configure marked options for better rendering

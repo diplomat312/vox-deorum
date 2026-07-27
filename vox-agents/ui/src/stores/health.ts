@@ -11,7 +11,7 @@ let pollInterval: number | null = null;
 let pollingConsumers = 0;
 
 /** Fetch service health, reusing a request already in progress. */
-export function fetchHealth(): Promise<void> {
+function fetchHealth(): Promise<void> {
   if (healthRequest) return healthRequest;
 
   healthRequest = api.getHealth().then((status) => {

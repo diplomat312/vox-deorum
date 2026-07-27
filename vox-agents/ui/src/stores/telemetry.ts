@@ -25,7 +25,7 @@ let chatRevision = 0;
 function fetchSessions(): Promise<void> {
   if (sessionsRequest) return sessionsRequest;
   sessionsRequest = api.getTelemetrySessions().then((response) => {
-    activeSessions.value = response.sessions || [];
+    activeSessions.value = response.sessions;
   }).catch((error) => {
     console.error('Failed to fetch telemetry sessions:', error);
   }).finally(() => {
@@ -38,7 +38,7 @@ function fetchSessions(): Promise<void> {
 function fetchDatabases(): Promise<void> {
   if (databasesRequest) return databasesRequest;
   databasesRequest = api.getTelemetryDatabases().then((response) => {
-    databases.value = (response.databases || []).sort((a, b) => {
+    databases.value = response.databases.sort((a, b) => {
       const dateA = new Date(a.lastModified).getTime();
       const dateB = new Date(b.lastModified).getTime();
       return dateB - dateA;
@@ -57,7 +57,7 @@ function fetchChatSessions(): Promise<void> {
   const requestRevision = chatRevision;
   chatsRequest = api.getAgentChats().then((response) => {
     if (requestRevision === chatRevision) {
-      chatSessions.value = response.chats || [];
+      chatSessions.value = response.chats;
     }
   }).catch((error) => {
     console.error('Failed to fetch chat threads:', error);

@@ -2,13 +2,12 @@ import { describe, it, expect } from 'vitest';
 import {
   buildSideCatalog,
   defaultItemFor,
-  durationFor,
   isSingletonSelected,
   offerPromisesForSide,
   type InventoryCategory,
 } from '@/utils/deal/deal-catalog';
-import type { NormalizedSideRange } from '@/utils/deal/deal-helpers';
-import type { TradeItem, PromiseTerm, PromiseTargetInfo } from '@/utils/types';
+import { durationForItemType, type DealDurations } from '../../../../../../mcp-server/dist/utils/deal-metadata.js';
+import type { NormalizedSideRange, TradeItem, PromiseTerm, PromiseTargetInfo } from '@/utils/types';
 import { range } from './deal-test-fixtures';
 
 const build = (over: Partial<Parameters<typeof buildSideCatalog>[0]> = {}): InventoryCategory[] =>
@@ -26,7 +25,7 @@ const build = (over: Partial<Parameters<typeof buildSideCatalog>[0]> = {}): Inve
   });
 
 const cat = (cats: InventoryCategory[], kind: string) => cats.find((c) => c.kind === kind)!;
-const durations = { defaultDuration: 30, peaceDuration: 10, relationshipDuration: 25 };
+const durations: DealDurations = { defaultDuration: 30, peaceDuration: 10, relationshipDuration: 25 };
 
 describe('deal-catalog', () => {
   it('returns the categories in the in-game order (no bonus bucket — bonus resources are never tradeable)', () => {
@@ -340,24 +339,24 @@ describe('deal-catalog', () => {
     expect(highGold.addPayload).toMatchObject({ item: { itemType: 'GOLD', amount: 100 } });
   });
 
-  it('durationFor maps each item type to its fixed game duration (deal / peace / relationship / none)', () => {
+  it('durationForItemType maps each item type to its fixed game duration (deal / peace / relationship / none)', () => {
     // Deal duration: tribute (gold-per-turn / resources) + Open Borders / Defensive Pact / Research Agreement.
-    expect(durationFor('GOLD_PER_TURN', durations)).toBe(30);
-    expect(durationFor('RESOURCES', durations)).toBe(30);
-    expect(durationFor('OPEN_BORDERS', durations)).toBe(30);
-    expect(durationFor('DEFENSIVE_PACT', durations)).toBe(30);
-    expect(durationFor('RESEARCH_AGREEMENT', durations)).toBe(30);
+    expect(durationForItemType('GOLD_PER_TURN', durations)).toBe(30);
+    expect(durationForItemType('RESOURCES', durations)).toBe(30);
+    expect(durationForItemType('OPEN_BORDERS', durations)).toBe(30);
+    expect(durationForItemType('DEFENSIVE_PACT', durations)).toBe(30);
+    expect(durationForItemType('RESEARCH_AGREEMENT', durations)).toBe(30);
     // Peace duration: peace treaty + third-party peace. Relationship duration: declaration of friendship.
-    expect(durationFor('PEACE_TREATY', durations)).toBe(10);
-    expect(durationFor('THIRD_PARTY_PEACE', durations)).toBe(10);
-    expect(durationFor('DECLARATION_OF_FRIENDSHIP', durations)).toBe(25);
+    expect(durationForItemType('PEACE_TREATY', durations)).toBe(10);
+    expect(durationForItemType('THIRD_PARTY_PEACE', durations)).toBe(10);
+    expect(durationForItemType('DECLARATION_OF_FRIENDSHIP', durations)).toBe(25);
     // No-duration types.
-    expect(durationFor('GOLD', durations)).toBeUndefined();
-    expect(durationFor('MAPS', durations)).toBeUndefined();
-    expect(durationFor('ALLOW_EMBASSY', durations)).toBeUndefined();
+    expect(durationForItemType('GOLD', durations)).toBeUndefined();
+    expect(durationForItemType('MAPS', durations)).toBeUndefined();
+    expect(durationForItemType('ALLOW_EMBASSY', durations)).toBeUndefined();
     // Peace / relationship fall back to the deal duration when their game-speed value is unavailable.
-    expect(durationFor('PEACE_TREATY', { defaultDuration: 30, peaceDuration: undefined, relationshipDuration: undefined })).toBe(30);
-    expect(durationFor('DECLARATION_OF_FRIENDSHIP', { defaultDuration: 30, peaceDuration: undefined, relationshipDuration: undefined })).toBe(30);
+    expect(durationForItemType('PEACE_TREATY', { defaultDuration: 30, peaceDuration: undefined, relationshipDuration: undefined })).toBe(30);
+    expect(durationForItemType('DECLARATION_OF_FRIENDSHIP', { defaultDuration: 30, peaceDuration: undefined, relationshipDuration: undefined })).toBe(30);
   });
 
   it('seeds each agreement toggle with its fixed game duration (deal / peace / relationship)', () => {

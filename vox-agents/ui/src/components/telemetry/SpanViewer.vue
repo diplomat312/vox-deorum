@@ -47,7 +47,7 @@
         <p class="text-small text-muted">Spans will appear here as they are collected</p>
       </div>
 
-      <div v-else class="data-table span-container" ref="spanContainer">
+      <div v-else class="data-table span-container">
         <!-- Header row -->
         <div class="table-header">
           <div class="col-expand">Name</div>
@@ -189,7 +189,6 @@ const spanDetailEntries = computed<DetailEntry[]>(() => {
   return entries;
 });
 const virtualScroller = ref<any>();
-const spanContainer = ref<HTMLElement>();
 const scrollerHeight = ref('600px');
 const autoscroll = ref(true); // Local autoscroll state, default to true
 
@@ -364,16 +363,5 @@ onUnmounted(() => {
 .spans-content {
   flex: 1;
   overflow: hidden;
-}
-
-.autoscroll-indicator {
-  display: inline-flex;
-  align-items: center;
-  color: var(--p-primary-500);
-  font-size: 0.875rem;
-  padding: 0.25rem 0.5rem;
-  background: var(--p-primary-50);
-  border-radius: var(--p-border-radius);
-  animation: pulse 2s infinite;
 }
 </style>

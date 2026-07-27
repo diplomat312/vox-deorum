@@ -88,7 +88,6 @@ onMounted(() => {
     <AgentSelectDialog
       v-model:visible="showAgentDialog"
       :databasePath="`telemetry/${filename}`"
-      :turn="rootSpan?.attributes?.turn || rootSpan?.turn"
       :span="rootSpan || undefined"
     />
   </div>

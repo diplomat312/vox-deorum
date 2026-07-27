@@ -11,7 +11,7 @@ import type { LogEntry } from '@/utils/types';
 // Reactive state
 export const logs = shallowRef<LogEntry[]>([]);
 export const isConnected = ref(false);
-export const lastHeartbeat = ref<Date | null>(null);
+const lastHeartbeat = ref<Date | null>(null);
 
 // Configuration
 const MAX_LOGS = 1000;
@@ -78,7 +78,7 @@ function connect() {
 /**
  * Disconnect from the log stream
  */
-export function disconnect() {
+function disconnect() {
   if (cleanupSse) {
     cleanupSse();
     cleanupSse = null;

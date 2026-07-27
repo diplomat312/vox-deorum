@@ -60,7 +60,7 @@
       <p class="text-small text-muted">Logs will appear here as the application runs</p>
     </div>
 
-    <div v-else class="log-content data-table" ref="logContainer">
+    <div v-else class="log-content data-table">
       <!-- Header row -->
       <div class="table-header">
         <div class="col-fixed-100">Time</div>
@@ -97,7 +97,8 @@
 <script setup lang="ts">
 import { ref, computed, nextTick, watch } from 'vue';
 import { logs, isConnected, clearLogs as clearLogsStore } from '@/stores/logs';
-import { getLevelEmoji, formatTimestamp, levelHierarchy } from '@/api/log-utils';
+import { filterLogs, getLevelEmoji, formatTimestamp } from '@/api/log-utils';
+import type { LogEntry } from '@/utils/types';
 import { VList } from 'virtua/vue';
 import Button from 'primevue/button';
 import Tag from 'primevue/tag';
@@ -109,7 +110,7 @@ import ParamsList from './ParamsList.vue';
 // State
 const autoscroll = ref(true);
 const selectedSources = ref<string[]>(['agents', 'webui']); // Show all sources by default
-const selectedLevel = ref('info');
+const selectedLevel = ref<LogEntry['level']>('info');
 
 // Source options for the multi-select
 const sourceOptions = [
@@ -117,7 +118,6 @@ const sourceOptions = [
   { label: 'WebUI', value: 'webui' }
 ];
 const virtualScroller = ref<InstanceType<typeof VList>>();
-const logContainer = ref<HTMLElement>();
 
 // Get appropriate row class based on log level
 const getLogRowClass = (level: string) => {
@@ -135,20 +135,7 @@ const getLogRowClass = (level: string) => {
 
 // Filtered logs based on level and source
 const filteredLogs = computed(() => {
-  return logs.value.filter(log => {
-    // Filter by level hierarchy
-    const logLevel = levelHierarchy[log.level] ?? 0;
-    const minLevel = levelHierarchy[selectedLevel.value] ?? 0;
-    if (logLevel < minLevel) return false;
-
-    // Filter by source if specific sources are selected
-    if (selectedSources.value.length > 0) {
-      const logSource = log.source || 'agents'; // Default to 'agents' if no source
-      if (!selectedSources.value.includes(logSource)) return false;
-    }
-
-    return true;
-  });
+  return filterLogs(logs.value, selectedLevel.value, selectedSources.value);
 });
 
 // Watch for new logs to handle autoscroll
@@ -172,12 +159,6 @@ const clearLogs = () => clearLogsStore();
 </script>
 
 <style scoped>
-.logs-view {
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-}
-
 .log-content {
   flex: 1;
   overflow: hidden;

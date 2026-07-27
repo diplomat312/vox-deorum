@@ -41,15 +41,14 @@ describe('GameSessionsList', () => {
     expect(wrapper.get('.p-tag').text()).toBe('2');
   });
 
-  it('emits row selection and an independent view action', async () => {
+  it('emits session selection from both the row and view button', async () => {
     const wrapper = mountList([makeSession()]);
 
     await wrapper.get('.table-row').trigger('click');
     expect(wrapper.emitted('session-selected')?.[0]).toEqual(['session-1']);
 
     await wrapper.get('.p-btn').trigger('click');
-    expect(wrapper.emitted('view-session')?.[0]).toEqual(['session-1']);
-    expect(wrapper.emitted('session-selected')).toHaveLength(1);
+    expect(wrapper.emitted('session-selected')?.[1]).toEqual(['session-1']);
   });
 
   it('preserves the empty action slot and optional actions column', () => {

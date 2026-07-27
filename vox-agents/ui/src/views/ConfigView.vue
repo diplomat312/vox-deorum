@@ -153,9 +153,8 @@ function confirmDeleteModel(modelIndex: number): void {
 /** Remove the selected row and clear mappings only when its model ID no longer exists. */
 function deleteModel(modelIndex: number): void {
   const modelId = modelDefinitions.value[modelIndex]?.id;
-  if (modelId === undefined) return;
   modelDefinitions.value = modelDefinitions.value.filter((_, index) => index !== modelIndex);
-  if (modelId && !modelDefinitions.value.some(model => model.id === modelId)) {
+  if (!modelDefinitions.value.some(model => model.id === modelId)) {
     agentMappings.value = agentMappings.value.filter(mapping => mapping.model !== modelId);
   }
 }
