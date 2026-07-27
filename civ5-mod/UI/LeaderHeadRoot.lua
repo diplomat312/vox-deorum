@@ -15,6 +15,10 @@ local GameplayUtilities = GameplayUtilities
 
 include( "EUI_utilities" )
 include( "InfoTooltipInclude" )
+-- VD: seat helpers, so every panel below reads the civilization the human strategist owns
+-- instead of the observer slot the camera sits in. Included here rather than relying on the
+-- transitive include from VoxDeorumConverse at the end of this file.
+include( "VoxDeorumSeat" )
 local IconHookup = EUI.IconHookup
 local CivIconHookup = EUI.CivIconHookup
 local GetMoodInfo = EUI.GetMoodInfo
@@ -56,7 +60,11 @@ function LeaderMessageHandler( iPlayer, iDiploUIState, szLeaderMessage, iAnimati
 	g_iAIPlayer = iPlayer;
 	g_iAITeam = Players[g_iAIPlayer]:GetTeam();
 
-	local pActivePlayer = Players[Game.GetActivePlayer()];
+	-- VD: the pinned civilization seat, so the mood and war-score panels read as if the human
+	-- were playing that civ. Also supplies the iActivePlayer the resurrection check below
+	-- already assumed existed (it was an undefined global, silently coerced to player 0).
+	local iActivePlayer = VoxDeorumSeat.EffectiveSeat();
+	local pActivePlayer = Players[iActivePlayer];
 	local pActiveTeam = Teams[pActivePlayer:GetTeam()];
 	if civ5_mode then
 		CivIconHookup( iPlayer, 64, Controls.ThemSymbolShadow, Controls.CivIconBG, Controls.CivIconShadow, false, true );
@@ -165,7 +173,7 @@ function LeaderMessageHandler( iPlayer, iDiploUIState, szLeaderMessage, iAnimati
 		else
 			if (pActiveTeam:IsAtWar(g_iAITeam)) then
 				strMoodText = Locale.ConvertTextKey( "TXT_KEY_DIPLO_MAJOR_CIV_DIPLO_STATE_WAR" );
-			elseif (Players[g_iAIPlayer]:IsDenouncingPlayer(Game.GetActivePlayer())) then
+			elseif (Players[g_iAIPlayer]:IsDenouncingPlayer(iActivePlayer)) then
 				strMoodText = Locale.ConvertTextKey( "TXT_KEY_DIPLO_MAJOR_CIV_DIPLO_STATE_DENOUNCING" );
 			elseif (Players[g_iAIPlayer]:WasResurrectedThisTurnBy(iActivePlayer)) then
 				strMoodText = Locale.ConvertTextKey( "TXT_KEY_DIPLO_MAJOR_CIV_DIPLO_STATE_LIBERATED" );
@@ -201,8 +209,8 @@ function LeaderMessageHandler( iPlayer, iDiploUIState, szLeaderMessage, iAnimati
 	
 		local strWarInfo = Locale.ConvertTextKey("TXT_KEY_WAR_SCORE_EXPLANATION");
 
-		if(Players[g_iAIPlayer]:IsWantsPeaceWithPlayer(Game.GetActivePlayer())) then
-			local iPeaceValue = Players[g_iAIPlayer]:GetTreatyWillingToOffer(Game.GetActivePlayer());
+		if(Players[g_iAIPlayer]:IsWantsPeaceWithPlayer(iActivePlayer)) then
+			local iPeaceValue = Players[g_iAIPlayer]:GetTreatyWillingToOffer(iActivePlayer);
 			if(iPeaceValue >  PeaceTreatyTypes.PEACE_TREATY_WHITE_PEACE) then
 				if( iPeaceValue == PeaceTreatyTypes.PEACE_TREATY_ARMISTICE ) then
 					strWarInfo = strWarInfo .. '[NEWLINE]' .. Locale.ConvertTextKey( "TXT_KEY_OFFER_PEACE_TREATY_ARMISTICE" );
@@ -261,7 +269,7 @@ function LeaderMessageHandler( iPlayer, iDiploUIState, szLeaderMessage, iAnimati
 		end
 
 		local iOurWarDamage = pActivePlayer:GetWarDamageValue(g_iAIPlayer);
-		local iTheirWarDamage = Players[g_iAIPlayer]:GetWarDamageValue(Game.GetActivePlayer());
+		local iTheirWarDamage = Players[g_iAIPlayer]:GetWarDamageValue(iActivePlayer);
 		local iTotal = iTheirWarDamage - iOurWarDamage;
 
 		if (iTotal > 0) then
@@ -379,13 +387,42 @@ Events.LeavingLeaderViewMode.Add( OnLeavingLeader );
 
 
 -- ===========================================================================
+-- VD: Return whether this UI is a human strategist -- an observer seat pinned to a civ. The
+-- native diplomacy actions below all enact for Game.GetActivePlayer(), the observer, so they
+-- cannot be performed for the civ on screen. Mirrors VoxDeorumDiploPanel.lua's isHumanStrategist.
+local function isHumanStrategist()
+	local activePlayer = Players[Game.GetActivePlayer()];
+	return activePlayer ~= nil and activePlayer:IsObserver() and not VoxDeorumSeat.IsPureObserver();
+end
+
+-- VD: Grey out the actions that cannot work under the strategist freeze, with the reason. We
+-- disable rather than hide because VoxDeorumConverse owns this stack's geometry (it reflows
+-- VoxDeorumDiploStack on its own schedule), and a greyed button with a tooltip points the player
+-- at Converse, the path that does work. BackButton stays enabled as the only exit.
+local function disableFrozenActions()
+	if not isHumanStrategist() then return end
+	local strFrozen = Locale.ConvertTextKey("TXT_KEY_VD_ACTION_UNAVAILABLE_STRATEGIST_TT");
+	for _, control in ipairs{ Controls.DiscussButton, Controls.TradeButton,
+	                          Controls.DemandButton, Controls.WarButton } do
+		control:SetDisabled(true);
+		control:SetToolTipString(strFrozen);
+	end
+end
+
+
+-- ===========================================================================
 function UpdateDisplay()
 
-	local pActivePlayer = Players[Game.GetActivePlayer()];
-	local pActiveTeam = Teams[Game.GetActiveTeam()];
+	-- VD: describe the pinned civilization's diplomatic position (Negotiate Peace vs Declare War,
+	-- Request Help vs Demand, and the vassal/force-peace/locked-war blocking reasons). This block
+	-- only sets text, tooltips and disabled state, so seat-swapping it stays display-only.
+	local iActivePlayer = VoxDeorumSeat.EffectiveSeat();
+	local pActivePlayer = Players[iActivePlayer];
+	local iActiveTeam = pActivePlayer:GetTeam();
+	local pActiveTeam = Teams[iActiveTeam];
 
 	-- Hide or show war/peace and demand buttons
-	if (Game.GetActiveTeam() == g_iAITeam) then
+	if (iActiveTeam == g_iAITeam) then
 		Controls.WarButton:SetHide(true);
 		Controls.DemandButton:SetHide(true);
 	elseif (not pActivePlayer:IsAlive()) then
@@ -410,14 +447,14 @@ function UpdateDisplay()
 			Controls.DemandButton:SetText( Locale.ConvertTextKey( "TXT_KEY_DIPLO_DEMAND_BUTTON" ));
 			Controls.DemandButton:SetToolTipString(nil);
 
-			if (pActiveTeam:CanChangeWarPeace(g_iAITeam) and not Teams[g_iAITeam]:IsVassalLockedIntoWar(Game.GetActiveTeam())) then
+			if (pActiveTeam:CanChangeWarPeace(g_iAITeam) and not Teams[g_iAITeam]:IsVassalLockedIntoWar(iActiveTeam)) then
 				Controls.WarButton:SetDisabled(false);
 			else
 				Controls.WarButton:SetDisabled(true);
 
 				if (pActiveTeam:IsVassalLockedIntoWar(g_iAITeam)) then
 					Controls.WarButton:SetToolTipString( Locale.ConvertTextKey( "TXT_KEY_DIPLO_NEGOTIATE_PEACE_VASSAL_BLOCKED_TT" ));
-				elseif (Teams[g_iAITeam]:IsVassalLockedIntoWar(Game.GetActiveTeam())) then
+				elseif (Teams[g_iAITeam]:IsVassalLockedIntoWar(iActiveTeam)) then
 					local iMaster = Teams[g_iAITeam]:GetMaster();
 					if (iMaster ~= -1) then
 						local pMaster = Teams[iMaster];
@@ -425,7 +462,7 @@ function UpdateDisplay()
 					end
 				else
 					local iLockedTurnsUs = pActiveTeam:GetNumTurnsLockedIntoWar(g_iAITeam);
-					local iLockedTurnsThem = Teams[g_iAITeam]:GetNumTurnsLockedIntoWar(Game.GetActiveTeam());
+					local iLockedTurnsThem = Teams[g_iAITeam]:GetNumTurnsLockedIntoWar(iActiveTeam);
 
 					if (iLockedTurnsUs ~= 0) then
 						Controls.WarButton:SetToolTipString( Locale.ConvertTextKey( "TXT_KEY_DIPLO_NEGOTIATE_PEACE_BLOCKED_TT", iLockedTurnsUs ));
@@ -472,6 +509,8 @@ function UpdateDisplay()
 
 		end
 	end
+	-- VD: last, so it wins over every SetDisabled(false) above.
+	disableFrozenActions();
 	if civBE_mode then
 		Controls.TalkOptionStack:CalculateSize();
 		Controls.TalkOptionStack:ReprocessAnchoring();
@@ -584,6 +623,10 @@ Controls.WarButton:RegisterCallback( Mouse.eLClick, OnWarOrPeace );
 
 -- ===========================================================================
 function WarStateChangedHandler( iTeam1, iTeam2, bWar )
+
+	-- VD: this handler runs AFTER UpdateDisplay and calls SetDisabled(false) on Trade/Demand/
+	-- Discuss, which would silently re-enable them mid-leaderhead. Bail out under the freeze.
+	if isHumanStrategist() then return end
 
 	-- Active player changed war state with this AI
 	if (iTeam1 == Game.GetActiveTeam() and iTeam2 == g_iAITeam) then

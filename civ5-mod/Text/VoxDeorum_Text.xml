@@ -357,6 +357,7 @@
 		<Row Tag="TXT_KEY_VD_CONVERSE_TT"><Text>Continue this conversation through your Vox Deorum envoy.</Text></Row>
 		<Row Tag="TXT_KEY_VD_CONVERSE_MOCK"><Text>Converse (Mock)</Text></Row>
 		<Row Tag="TXT_KEY_VD_CONVERSE_MOCK_TT"><Text>Debug: open the offline conversation sandbox. Scripted rows replace the live transcript and no diplomacy event reaches the server until you return through Converse.</Text></Row>
+		<Row Tag="TXT_KEY_VD_ACTION_UNAVAILABLE_STRATEGIST_TT"><Text>Your envoy conducts diplomacy while you advise. Use Converse to negotiate with this leader.</Text></Row>
 		<Row Tag="TXT_KEY_VD_DIPLO_LOAD_EARLIER"><Text>(Load earlier)</Text></Row>
 		<Row Tag="TXT_KEY_VD_DIPLO_SEND"><Text>Send</Text></Row>
 		<Row Tag="TXT_KEY_VD_DIPLO_PROPOSE_DEAL"><Text>Propose Deal</Text></Row>

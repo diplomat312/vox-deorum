@@ -41,6 +41,8 @@ Then wire the file up:
 - Write a one-line `--` intent comment above each function ("Return whether...", "Build a...")
 - Guard engine bindings defensively: nil/type-check API functions and wrap risky calls in `pcall` (see `VoxDeorumDealUtils.DefaultDealDuration`)
 - Be observer-aware: use `VoxDeorumSeat.EffectiveSeat()` / `VoxDeorumSeat.IsPureObserver()` instead of assuming `Game.GetActivePlayer()` is a playing civ
+- That rule is for files **in this mod only**. Files under `civ5-dll/` also ship to plain VP + EUI users, so they must never `include("VoxDeorumSeat")` — inline a file-local `GetUIActivePlayerID()` helper instead, marked `-- Vox Deorum:` (see `(3a) …/LUA/NotificationPanel.lua`, `EUI_tooltip_library.lua`)
+- When seat-swapping, only **civ identity** follows the override. **Network identity** (chat targets, MP kick, turn-slice "local player") and **notification receivers** stay on the real `Game.GetActivePlayer()`; the DLL files observer-mode notifications against the active player and the engine surfaces only that list
 
 ### API Usage
 
