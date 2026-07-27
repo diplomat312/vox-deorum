@@ -150,3 +150,18 @@ describe('recoverGame', () => {
     expect(luaScripts()).toHaveLength(0);
   });
 });
+
+describe('handleDLLConnected', () => {
+  it('should reset event dedup only once per disconnected-to-connected transition', async () => {
+    const s = session(false);
+    const resetEventDedup = vi.spyOn((s as any).ingameBridge, 'resetEventDedup');
+
+    await (s as any).handleDLLConnected({});
+    await (s as any).handleDLLConnected({});
+    expect(resetEventDedup).toHaveBeenCalledOnce();
+
+    (s as any).dllConnected = false;
+    await (s as any).handleDLLConnected({});
+    expect(resetEventDedup).toHaveBeenCalledTimes(2);
+  });
+});

@@ -229,7 +229,6 @@ export class StrategistSession extends VoxSession<StrategistSessionConfig> {
             this.ingameBridge.handleNotification(params);
             break;
           case "DLLConnected":
-            this.dllConnected = true;
             // Transition to running state when DLL connects (game is initialized)
             await this.handleDLLConnected(params);
             break;
@@ -640,6 +639,14 @@ ${overrideLine}Game.SetAIAutoPlay(${autoPlayTurnLimit}, -1);`
    * handled by `handleGameSwitched`.
    */
   private async handleDLLConnected(_params: GameEventNotification): Promise<void> {
+    const wasConnected = this.dllConnected;
+    this.dllConnected = true;
+    if (!wasConnected) {
+      // A reconnected DLL restores its event-ID sequence from the save, so a same-game reload
+      // (crash recovery, manual reload) re-issues IDs this session already consumed. Clear only
+      // on the connection-state transition because pipe and SSE can report the same connection.
+      this.ingameBridge.resetEventDedup();
+    }
     await this.recoverGame();
   }
 

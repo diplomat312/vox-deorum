@@ -501,6 +501,28 @@ export class IngameBridge {
     this.invalidate(gameID);
   }
 
+  /**
+   * Forget every seen event ID because the DLL (re)connected.
+   *
+   * Stored event IDs are `turn * 1e6 + sequence`, and the DLL restores the sequence counter from
+   * the save file — so reloading a save re-issues IDs the previous run of the same game already
+   * consumed. Only a *changed* gameID triggers {@link resetForGame}; a crash-recovery relaunch or a
+   * manual reload of the same game keeps the cache, and the first post-reload diplomacy event would
+   * be swallowed as a pipe/SSE duplicate. The session calls this on `DLLConnected` instead: the
+   * dedup cache is the one thing that must not outlive a game process, while the queues and the
+   * generation stay valid (pending game-bound calls already fail fast on a dead DLL).
+   */
+  resetEventDedup(): void {
+    if (this.disposed) return;
+    if (this.seenEvents.size === 0) return;
+    logger.info("Clearing the in-game diplomacy event dedup cache for a DLL reconnect", {
+      forgottenEvents: this.seenEvents.size,
+      gameID: this.activeGameID,
+    });
+    this.seenEvents.clear();
+    this.seenEventOrder.length = 0;
+  }
+
   /** Invalidate every task owned by a session that is shutting down. */
   dispose(): void {
     this.disposed = true;
@@ -600,7 +622,15 @@ export class IngameBridge {
   private isDuplicate(params: GameEventNotification): boolean {
     if (!Number.isInteger(params.latestID)) return false;
     const key = `${this.activeGameID ?? "unbound"}:${params.event}:${params.latestID}`;
-    if (this.seenEvents.has(key)) return true;
+    if (this.seenEvents.has(key)) {
+      // Named because a dropped event produces no other trace: a request the game keeps waiting
+      // on would otherwise look like a bridge that simply never answered.
+      logger.info("Dropping a duplicate in-game diplomacy event", {
+        event: params.event,
+        latestID: params.latestID,
+      });
+      return true;
+    }
     this.seenEvents.add(key);
     this.seenEventOrder.push(key);
     if (this.seenEventOrder.length > seenEventLimit) {

@@ -234,6 +234,32 @@ describe("IngameBridge runtime transport", () => {
     await vi.waitFor(() => expect(pushedNames()).toEqual(["VoxDeorumDiploStatus"]));
   });
 
+  it("re-admits a reused event ID after the dedup reset for a DLL reconnect", async () => {
+    // A reloaded save restores the DLL's event-ID sequence, so a same-game relaunch re-issues IDs
+    // this bridge already consumed; resetEventDedup is what lets the first post-reload request through.
+    const bridge = bridgeFor();
+
+    bridge.handleNotification(event("DiplomacyPanelOpened", 71, { PlayerID: 1, CounterpartID: 3 }));
+    await vi.waitFor(() => expect(mocks.readPage).toHaveBeenCalledOnce());
+    bridge.resetEventDedup();
+    bridge.handleNotification(event("DiplomacyPanelOpened", 71, { PlayerID: 1, CounterpartID: 3 }));
+
+    await vi.waitFor(() => expect(mocks.readPage).toHaveBeenCalledTimes(2));
+  });
+
+  it("keeps an in-flight action live across the dedup reset, unlike a game switch", async () => {
+    const bridge = bridgeFor("game-a");
+    const opening = deferred<unknown>();
+    mocks.openChat.mockReturnValue(opening.promise);
+
+    bridge.handleNotification(event("DiplomacyChatMessage", 72, { PlayerID: 1, CounterpartID: 3, Text: "hello" }));
+    await vi.waitFor(() => expect(mocks.openChat).toHaveBeenCalledOnce());
+    bridge.resetEventDedup();
+    opening.resolve({ id: "dipl:game-a:1:3", player1ID: 1, player2ID: 3 });
+
+    await vi.waitFor(() => expect(mocks.runChatTurn).toHaveBeenCalledOnce());
+  });
+
   it("preserves a real observer identity through the shared chat turn", async () => {
     const bridge = bridgeFor();
     bridge.handleNotification(event("DiplomacyChatMessage", 9, {
