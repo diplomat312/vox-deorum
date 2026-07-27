@@ -6,20 +6,7 @@ import {
   refreshChatDataAfterDelete
 } from '@/stores/telemetry';
 import type { EnvoyThread, ListChatsResponse } from '@/utils/types';
-
-interface Deferred<T> {
-  promise: Promise<T>;
-  resolve: (value: T) => void;
-}
-
-/** Create a promise whose successful settlement is controlled by the test. */
-function createDeferred<T>(): Deferred<T> {
-  let resolve!: (value: T) => void;
-  const promise = new Promise<T>((resolvePromise) => {
-    resolve = resolvePromise;
-  });
-  return { promise, resolve };
-}
+import { deferred } from '../../helpers/async.js';
 
 /** Build a minimal chat thread fixture. */
 function createThread(id: string): EnvoyThread {
@@ -41,8 +28,8 @@ afterEach(() => {
 
 describe('chat refresh', () => {
   it('ignores a pre-delete response and fetches a new list', async () => {
-    const staleResponse = createDeferred<ListChatsResponse>();
-    const freshResponse = createDeferred<ListChatsResponse>();
+    const staleResponse = deferred<ListChatsResponse>();
+    const freshResponse = deferred<ListChatsResponse>();
     const deleted = createThread('deleted');
     const retained = createThread('retained');
     const request = vi.spyOn(api, 'getAgentChats')

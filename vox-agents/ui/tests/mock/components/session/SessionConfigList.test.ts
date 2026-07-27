@@ -2,20 +2,12 @@ import { describe, expect, it } from 'vitest';
 import { mount } from '@vue/test-utils';
 import SessionConfigList from '@/components/session/SessionConfigList.vue';
 import type { StrategistSessionConfig } from '@/utils/types';
+import { ButtonStub, TagStub, ToolbarStub } from '../../../helpers/stubs.js';
 
 const stubs = {
-  Toolbar: {
-    template: '<section><slot name="start" /><slot name="end" /></section>',
-  },
-  Tag: {
-    props: ['value'],
-    template: '<span class="p-tag">{{ value }}</span>',
-  },
-  Button: {
-    props: ['label', 'icon', 'disabled', 'loading'],
-    emits: ['click'],
-    template: '<button :data-icon="icon" :disabled="disabled" @click="$emit(\'click\')">{{ label }}</button>',
-  },
+  Toolbar: ToolbarStub,
+  Tag: TagStub,
+  Button: ButtonStub,
   Message: {
     template: '<div class="p-message"><slot /></div>',
   },

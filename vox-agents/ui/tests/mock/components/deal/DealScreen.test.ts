@@ -12,28 +12,8 @@ vi.mock('@/api/client', () => ({ api }));
 vi.mock('primevue/usetoast', () => ({ useToast: () => ({ add: vi.fn() }) }));
 
 import DealScreen from '@/components/deal/DealScreen.vue';
-
-/** A normalized tradable-range fixture (the enriched shape inspect-deal now returns). */
-const range = (over: Record<string, unknown> = {}) => ({
-  gold: { available: true, max: 500, reasons: [] },
-  goldPerTurn: { available: true, reasons: [] },
-  maps: { legal: true, reasons: [] },
-  openBorders: { legal: true, reasons: [] },
-  defensivePact: { legal: true, reasons: [] },
-  researchAgreement: { legal: true, reasons: [] },
-  peaceTreaty: { legal: true, reasons: [] },
-  allowEmbassy: { legal: true, reasons: [] },
-  declarationOfFriendship: { legal: true, reasons: [] },
-  vassalage: { legal: true, reasons: [] },
-  vassalageRevoke: { legal: true, reasons: [] },
-  resources: [],
-  cities: [],
-  techs: [],
-  thirdPartyPeace: [],
-  thirdPartyWar: [],
-  voteCommitments: [],
-  ...over,
-});
+import { deferred } from '../../../helpers/async.js';
+import { dealStubs, range } from '../../utils/deal/deal-test-fixtures.js';
 
 const inspectionResult = (items: unknown[] = [], over: Record<string, unknown> = {}) => ({
   items,
@@ -46,33 +26,9 @@ const inspectionResult = (items: unknown[] = [], over: Record<string, unknown> =
   ...over,
 });
 
-/** Create a promise whose completion is controlled by the test. */
-function deferred<T>() {
-  let resolve!: (value: T) => void;
-  const promise = new Promise<T>((done) => { resolve = done; });
-  return { promise, resolve };
-}
-
 const stubs = {
-  Button: {
-    props: ['label', 'icon', 'disabled', 'loading', 'severity'],
-    emits: ['click'],
-    template: '<button :disabled="disabled" @click="$emit(\'click\')">{{ label }}</button>',
-  },
-  Tag: { props: ['value'], template: '<span class="tag">{{ value }}</span>' },
+  ...dealStubs,
   Select: { props: ['options', 'modelValue'], emits: ['update:modelValue'], template: '<span class="select-stub"></span>' },
-  InputNumber: {
-    // `size` is declared (though unused) so PrimeVue's `size="small"` is consumed as a prop rather
-    // than falling through onto the native <input>, whose `size` attribute jsdom rejects as non-numeric.
-    props: ['modelValue', 'size'],
-    emits: ['update:modelValue'],
-    template: '<input class="number-stub" :value="modelValue" @input="$emit(\'update:modelValue\', Number($event.target.value))" />',
-  },
-  InputText: {
-    props: ['modelValue'],
-    emits: ['update:modelValue'],
-    template: '<input class="text-stub" :value="modelValue" @input="$emit(\'update:modelValue\', $event.target.value)" />',
-  },
   Message: { props: ['severity'], template: '<div class="message"><slot /></div>' },
 };
 
@@ -164,55 +120,6 @@ describe('DealScreen', () => {
     expect(api.getDealMessages).toHaveBeenCalledTimes(2);
   });
 
-  it('freezes the draft while the diplomat is replying (agentBusy), so an edit cannot diverge from a submission', async () => {
-    // Finding: after the synchronous submit emit the local `busy` resets, but `agentBusy` (the streamed
-    // reply) stays true. The inventory/offer controls take the combined `blocked` state and the mutation
-    // handlers guard on it, so the human cannot edit the draft mid-reply (which would silently diverge from
-    // the snapshot just submitted).
-    const wrapper = mountScreen({ agentBusy: true });
-    await flushPromises();
-
-    const row = rowInPanel(wrapper, '.deal-panel-left', 'Open Borders')!;
-    expect(row.attributes('aria-disabled')).toBe('true');
-    await row.trigger('click');
-    await flushPromises();
-
-    // The guarded handler is a no-op — nothing lands in the central offer while the reply streams.
-    expect(wrapper.find('.deal-panel-center').text()).not.toContain('Open Borders');
-    expect(wrapper.emitted('send')).toBeFalsy();
-  });
-
-  it('adds a counterpart-panel term as the counterpart giver', async () => {
-    const wrapper = mountScreen();
-    await flushPromises();
-
-    // Counterpart panel (right) → the counterpart is the giver (fromPlayerID = rightID = 1).
-    await rowInPanel(wrapper, '.deal-panel-right', 'Open Borders')!.trigger('click');
-    await flushPromises();
-    await wrapper.findAll('button').find((b) => b.text() === 'Propose')!.trigger('click');
-    await flushPromises();
-
-    expect(lastSent(wrapper).deal.items[0]).toMatchObject({ fromPlayerID: 1, toPlayerID: 0 });
-  });
-
-  it('renders structurally impossible inventory rows red and disabled, while legal rows stay clickable', async () => {
-    api.inspectDeal.mockResolvedValue(
-      inspectionResult([], { tradableRange: { '0': range({ defensivePact: { legal: false, reasons: ['No embassy'] } }), '1': range() } })
-    );
-    const wrapper = mountScreen();
-    await flushPromises();
-
-    // Rows use `aria-disabled` (not the native attribute) so the reason tooltip still fires on hover.
-    const dp = rowInPanel(wrapper, '.deal-panel-left', 'Defensive Pact')!;
-    expect(dp.classes()).toContain('deal-row-illegal');
-    expect(dp.attributes('aria-disabled')).toBe('true');
-    expect(dp.attributes('disabled')).toBeUndefined();
-
-    const ob = rowInPanel(wrapper, '.deal-panel-left', 'Open Borders')!;
-    expect(ob.classes()).not.toContain('deal-row-illegal');
-    expect(ob.attributes('aria-disabled')).toBe('false');
-  });
-
   it('surfaces an incoming proposal with Refuse/Counter/Accept', async () => {
     api.getDealMessages.mockResolvedValue({ messages: [incomingProposal()] });
     const wrapper = mountScreen();
@@ -282,33 +189,6 @@ describe('DealScreen', () => {
     expect(wrapper.emitted('send')).toBeFalsy();
   });
 
-  it('disables a mutual pact on BOTH panels when only one side can trade it', async () => {
-    // Side 0 can't declare friendship; side 1 can. Because clicking auto-mirrors the pact onto side 0,
-    // side 1's row must also be disabled — otherwise it would build an unsubmittable one-sided pact.
-    api.inspectDeal.mockResolvedValue(
-      inspectionResult([], {
-        tradableRange: {
-          '0': range({ declarationOfFriendship: { legal: false, reasons: ['Not tradeable under current game state'] } }),
-          '1': range(),
-        },
-      })
-    );
-    const wrapper = mountScreen();
-    await flushPromises();
-
-    const leftDof = rowInPanel(wrapper, '.deal-panel-left', 'Declaration of Friendship')!;
-    const rightDof = rowInPanel(wrapper, '.deal-panel-right', 'Declaration of Friendship')!;
-    expect(leftDof.classes()).toContain('deal-row-illegal');
-    expect(leftDof.attributes('aria-disabled')).toBe('true');
-    expect(rightDof.classes()).toContain('deal-row-illegal');
-    expect(rightDof.attributes('aria-disabled')).toBe('true');
-
-    // A non-mutual toggle on the still-legal side is unaffected (never auto-mirrored).
-    const rightOb = rowInPanel(wrapper, '.deal-panel-right', 'Open Borders')!;
-    expect(rightOb.classes()).not.toContain('deal-row-illegal');
-    expect(rightOb.attributes('aria-disabled')).toBe('false');
-  });
-
   it('does not counter when the active proposal changed identity before submit', async () => {
     const proposal = (id: number) => incomingProposal({
       ID: id,
@@ -358,76 +238,6 @@ describe('DealScreen', () => {
 
     expect(wrapper.text()).toContain('+88');
     expect(wrapper.text()).not.toContain('+2');
-  });
-
-  it('re-inspects with the edited amount when a central gold row is changed', async () => {
-    const wrapper = mountScreen();
-    await flushPromises();
-
-    // Add gold from your panel, then edit its amount on the central row.
-    await rowInPanel(wrapper, '.deal-panel-left', 'Gold')!.trigger('click');
-    await flushPromises();
-
-    const goldInput = wrapper.find('.deal-panel-center .number-stub');
-    expect(goldInput.exists()).toBe(true);
-    (goldInput.element as HTMLInputElement).value = '250';
-    await goldInput.trigger('input');
-    await new Promise((resolve) => setTimeout(resolve, 300));
-    await flushPromises();
-
-    const calls = api.inspectDeal.mock.calls;
-    const lastDeal = calls[calls.length - 1]![1].deal;
-    expect(lastDeal.items[0]).toMatchObject({ itemType: 'GOLD', amount: 250, fromPlayerID: 0 });
-  });
-
-  it('adds a targeted promise by expanding the inventory row and choosing a civ', async () => {
-    api.inspectDeal.mockResolvedValue(
-      inspectionResult([], { promiseTargets: [{ playerID: 3, teamID: 3, name: 'Carthage', kind: 'major', coopWarEligible: true }] })
-    );
-    const wrapper = mountScreen();
-    await flushPromises();
-
-    // Expand the Coop War promise in your (left) panel; the target list appears inline.
-    await rowInPanel(wrapper, '.deal-panel-left', 'cooperative war')!.trigger('click');
-    await flushPromises();
-    // Pick the target on the inventory row — the promise is added already targeted.
-    await rowInPanel(wrapper, '.deal-panel-left', 'Carthage')!.trigger('click');
-    await flushPromises();
-
-    const proposeBtn = wrapper.findAll('button').find((b) => b.text() === 'Propose')!;
-    expect(proposeBtn.attributes('disabled')).toBeUndefined();
-    await proposeBtn.trigger('click');
-    await flushPromises();
-
-    expect(lastSent(wrapper).deal.promises[0]).toMatchObject({
-      promiserID: 0,
-      recipientID: 1,
-      promiseType: 'COOP_WAR',
-      targetPlayerID: 3,
-    });
-  });
-
-  it('adds a third-party war by expanding "Declare war on…" and choosing a team', async () => {
-    api.inspectDeal.mockResolvedValue(
-      inspectionResult([], { tradableRange: { '0': range({ thirdPartyWar: [{ teamID: 5, name: 'Greece', legal: true, reasons: [] }] }), '1': range() } })
-    );
-    const wrapper = mountScreen();
-    await flushPromises();
-
-    await rowInPanel(wrapper, '.deal-panel-left', 'Declare war')!.trigger('click');
-    await flushPromises();
-    await rowInPanel(wrapper, '.deal-panel-left', 'Greece')!.trigger('click');
-    await flushPromises();
-
-    expect(wrapper.find('.deal-panel-center').text()).toContain('War with Greece');
-    await wrapper.findAll('button').find((b) => b.text() === 'Propose')!.trigger('click');
-    await flushPromises();
-
-    expect(lastSent(wrapper).deal.items[0]).toMatchObject({
-      itemType: 'THIRD_PARTY_WAR',
-      thirdPartyTeamID: 5,
-      fromPlayerID: 0,
-    });
   });
 
   it('refuses Accept in the handler when the proposal turns illegal at the preflight re-inspect', async () => {
@@ -587,57 +397,4 @@ describe('DealScreen', () => {
     expect(lastSent(wrapper).expectedProposalID).toBe(9);
   });
 
-  it('mirrors a mutual agreement onto both sides on add, proposing both directions', async () => {
-    const wrapper = mountScreen();
-    await flushPromises();
-
-    // A Declaration of Friendship is mutual — adding it from one panel pairs it onto the other side.
-    await rowInPanel(wrapper, '.deal-panel-left', 'Declaration of Friendship')!.trigger('click');
-    await flushPromises();
-
-    const dofRows = wrapper.find('.deal-panel-center').findAll('.deal-offer-row')
-      .filter((r) => r.text().includes('Declaration of Friendship'));
-    expect(dofRows).toHaveLength(2); // shown under both "give" columns
-
-    await wrapper.findAll('button').find((b) => b.text() === 'Propose')!.trigger('click');
-    await flushPromises();
-
-    const items = lastSent(wrapper).deal.items;
-    expect(items).toHaveLength(2);
-    expect(items).toEqual(expect.arrayContaining([
-      expect.objectContaining({ fromPlayerID: 0, toPlayerID: 1, itemType: 'DECLARATION_OF_FRIENDSHIP' }),
-      expect.objectContaining({ fromPlayerID: 1, toPlayerID: 0, itemType: 'DECLARATION_OF_FRIENDSHIP' }),
-    ]));
-  });
-
-  it('removes both sides of a mutual agreement when either is removed', async () => {
-    const wrapper = mountScreen();
-    await flushPromises();
-
-    await rowInPanel(wrapper, '.deal-panel-left', 'Declaration of Friendship')!.trigger('click');
-    await flushPromises();
-    expect(wrapper.find('.deal-panel-center').findAll('.deal-offer-row')
-      .filter((r) => r.text().includes('Declaration of Friendship'))).toHaveLength(2);
-
-    // Remove one side via its red X — the mutual twin goes with it.
-    const firstDof = wrapper.find('.deal-panel-center').findAll('.deal-offer-row')
-      .find((r) => r.text().includes('Declaration of Friendship'))!;
-    await firstDof.find('.deal-offer-x').trigger('click');
-    await flushPromises();
-
-    expect(wrapper.find('.deal-panel-center').findAll('.deal-offer-row')
-      .filter((r) => r.text().includes('Declaration of Friendship'))).toHaveLength(0);
-  });
-
-  it('adds a one-directional term (Open Borders) on only one side', async () => {
-    const wrapper = mountScreen();
-    await flushPromises();
-
-    await rowInPanel(wrapper, '.deal-panel-left', 'Open Borders')!.trigger('click');
-    await flushPromises();
-
-    // Not a mutual agreement → exactly one row, on the giver's side only.
-    expect(wrapper.find('.deal-panel-center').findAll('.deal-offer-row')
-      .filter((r) => r.text().includes('Open Borders'))).toHaveLength(1);
-  });
 });

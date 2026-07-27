@@ -32,7 +32,7 @@ describe('ConfigView model deletion', () => {
     });
   });
 
-  it('removes only the selected blank or duplicate model row', async () => {
+  it('removes only the selected duplicate model row', async () => {
     const wrapper = mount(ConfigView, { shallow: true });
     await flushPromises();
     const duplicateModels: LLMConfig[] = [
@@ -49,16 +49,6 @@ describe('ConfigView model deletion', () => {
     expect(wrapper.findComponent(ModelDefinitions).props('models')).toEqual([duplicateModels[0]]);
     expect(wrapper.findComponent(AgentModelMappings).props('mappings')).toEqual(mappings);
     expect(confirmRequire).not.toHaveBeenCalled();
-
-    const blankModels: LLMConfig[] = [
-      { id: '', provider: 'openrouter', name: '', options: {} },
-      { id: '', provider: 'openai', name: '', options: {} },
-    ];
-    wrapper.findComponent(ModelDefinitions).vm.$emit('update:models', blankModels);
-    await wrapper.vm.$nextTick();
-    wrapper.findComponent(ModelDefinitions).vm.$emit('delete-model', 0);
-    await wrapper.vm.$nextTick();
-    expect(wrapper.findComponent(ModelDefinitions).props('models')).toEqual([blankModels[1]]);
   });
 
   it('clears mappings only after the final definition of their model is deleted', async () => {

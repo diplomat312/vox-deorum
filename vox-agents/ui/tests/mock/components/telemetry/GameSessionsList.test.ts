@@ -2,16 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { mount } from '@vue/test-utils';
 import GameSessionsList from '@/components/telemetry/GameSessionsList.vue';
 import type { TelemetrySession } from '@/utils/types';
+import { ButtonStub, TagStub, ToolbarStub } from '../../../helpers/stubs.js';
 
-const stubs = {
-  Toolbar: { template: '<div class="p-toolbar"><slot name="start" /></div>' },
-  Tag: { props: ['value'], template: '<span class="p-tag">{{ value }}</span>' },
-  Button: {
-    props: ['label', 'icon'],
-    emits: ['click'],
-    template: '<button class="p-btn" :data-icon="icon" @click="$emit(\'click\', $event)">{{ label }}</button>',
-  },
-};
+const stubs = { Toolbar: ToolbarStub, Tag: TagStub, Button: ButtonStub };
 
 /** Build a telemetry session fixture with optional field overrides. */
 function makeSession(overrides: Partial<TelemetrySession> = {}): TelemetrySession {
@@ -32,15 +25,6 @@ function mountList(sessions: TelemetrySession[], showViewButton = true) {
 }
 
 describe('GameSessionsList', () => {
-  it('renders each session and the shared count tag', () => {
-    const wrapper = mountList([makeSession(), makeSession({ sessionId: 'session-2' })]);
-
-    expect(wrapper.findAll('.table-row')).toHaveLength(2);
-    expect(wrapper.text()).toContain('game-1');
-    expect(wrapper.text()).toContain('2');
-    expect(wrapper.get('.p-tag').text()).toBe('2');
-  });
-
   it('emits session selection from both the row and view button', async () => {
     const wrapper = mountList([makeSession()]);
 

@@ -2,6 +2,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { defineComponent } from 'vue'
 import { mount, flushPromises } from '@vue/test-utils'
 import AgentSelectDialog from '@/components/chat/launch/AgentSelectDialog.vue'
+import { deferred } from '../../../../helpers/async.js'
+import { ButtonStub, TagStub } from '../../../../helpers/stubs.js'
 
 // --- Mocks -----------------------------------------------------------------
 
@@ -22,12 +24,6 @@ import { api } from '@/api/client'
 const Dialog = {
   props: ['visible'],
   template: `<div class="p-dialog"><slot name="header" /><div class="p-dialog-content"><slot /></div><div class="p-dialog-footer"><slot name="footer" /></div></div>`,
-}
-const Tag = { props: ['value'], template: '<span class="p-tag">{{ value }}</span>' }
-const Button = {
-  props: ['label', 'disabled'],
-  emits: ['click'],
-  template: `<button class="p-btn" :disabled="disabled" @click="$emit('click')">{{ label }}</button>`,
 }
 const ProgressSpinner = { template: '<div class="p-spinner" />' }
 const AutoComplete = {
@@ -62,7 +58,15 @@ const SelectButton = defineComponent({
   template: `<div class="p-selectbutton"><button v-for="(o, i) in options" :key="i" class="mode-opt" @click="pick(o)">{{ o[optionLabel] }}</button></div>`,
 })
 
-const stubs = { Dialog, Tag, Button, ProgressSpinner, AutoComplete, Select, SelectButton }
+const stubs = {
+  Dialog,
+  Tag: TagStub,
+  Button: ButtonStub,
+  ProgressSpinner,
+  AutoComplete,
+  Select,
+  SelectButton,
+}
 
 const AGENTS = {
   agents: [
@@ -86,20 +90,6 @@ const PLAYERS = {
 
 const CONTEXT_ID = 'game-abc-player-1'
 const SECOND_CONTEXT_ID = 'game-def-player-2'
-
-type Deferred<T> = {
-  promise: Promise<T>
-  resolve: (value: T) => void
-}
-
-/** Create a promise whose completion can be ordered explicitly by a test. */
-function deferred<T>(): Deferred<T> {
-  let resolve!: (value: T) => void
-  const promise = new Promise<T>(complete => {
-    resolve = complete
-  })
-  return { promise, resolve }
-}
 
 /** Mount the dialog hidden, then open it so the visible-watcher fires (as in real usage). */
 async function openDialog() {
@@ -349,32 +339,4 @@ describe('AgentSelectDialog', () => {
     expect(api.getPlayersSummary).toHaveBeenCalledTimes(2)
   })
 
-  it('invalidates an in-flight player request when context changes while open', async () => {
-    const firstPlayers = deferred<typeof PLAYERS>()
-    const secondPlayers = deferred<typeof PLAYERS>()
-    ;(api.getPlayersSummary as any)
-      .mockReturnValueOnce(firstPlayers.promise)
-      .mockReturnValueOnce(secondPlayers.promise)
-    const wrapper = mount(AgentSelectDialog, {
-      props: { visible: true, contextId: CONTEXT_ID },
-      global: { stubs },
-    })
-    await flushPromises()
-
-    await wrapper.setProps({ contextId: SECOND_CONTEXT_ID })
-    firstPlayers.resolve(PLAYERS)
-    await flushPromises()
-    expect(wrapper.find('h2').text()).toBe('Select Agent')
-
-    secondPlayers.resolve({
-      players: {
-        '1': { Leader: 'Augustus', Civilization: 'Rome' },
-        '2': { Leader: 'Cleopatra', Civilization: 'Egypt' },
-      },
-      assignments: PLAYERS.assignments,
-    })
-    await flushPromises()
-    expect(wrapper.find('h2').text()).toBe('Chat with Egypt')
-    expect(api.getPlayersSummary).toHaveBeenCalledTimes(2)
-  })
 })

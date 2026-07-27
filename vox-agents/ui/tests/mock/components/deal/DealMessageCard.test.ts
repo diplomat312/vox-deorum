@@ -3,12 +3,7 @@ import { mount } from '@vue/test-utils';
 import DealMessageCard from '@/components/deal/DealMessageCard.vue';
 import type { DealTranscriptMessage } from '@/utils/types';
 import type { ProposalOutcome } from '@/utils/deal/deal-reduce';
-
-const Button = {
-  props: ['label', 'icon', 'severity', 'disabled'],
-  emits: ['click'],
-  template: '<button @click="$emit(\'click\')">{{ label }}</button>',
-};
+import { ButtonStub } from '../../../helpers/stubs.js';
 
 function dealMsg(over: Partial<DealTranscriptMessage> = {}): DealTranscriptMessage {
   return {
@@ -58,7 +53,7 @@ function mountCard(props: Record<string, unknown> = {}) {
       outcome: outcome(),
       ...props,
     },
-    global: { stubs: { Button }, directives: { tooltip: {} } },
+    global: { stubs: { Button: ButtonStub }, directives: { tooltip: {} } },
   });
 }
 

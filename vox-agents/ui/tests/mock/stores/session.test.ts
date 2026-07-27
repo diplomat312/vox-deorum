@@ -7,23 +7,7 @@ import {
   startSessionPolling
 } from '@/stores/session';
 import type { SessionStatusResponse, StrategistSessionConfig } from '@/utils/types';
-
-interface Deferred<T> {
-  promise: Promise<T>;
-  resolve: (value: T) => void;
-  reject: (reason: Error) => void;
-}
-
-/** Create a promise whose settlement is controlled by the test. */
-function createDeferred<T>(): Deferred<T> {
-  let resolve!: (value: T) => void;
-  let reject!: (reason: Error) => void;
-  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
-    resolve = resolvePromise;
-    reject = rejectPromise;
-  });
-  return { promise, resolve, reject };
-}
+import { deferred } from '../../helpers/async.js';
 
 /** Build a session response in the requested active state. */
 function createStatus(active: boolean): SessionStatusResponse {
@@ -58,7 +42,7 @@ beforeEach(() => {
 
 describe('session polling', () => {
   it('issues a new status read after a mutation instead of reusing an older poll', async () => {
-    const beforePause = createDeferred<SessionStatusResponse>();
+    const beforePause = deferred<SessionStatusResponse>();
     const afterPause = createStatus(true);
     if (afterPause.session) afterPause.session.paused = true;
     const request = vi.spyOn(api, 'getSessionStatus')
@@ -85,13 +69,13 @@ describe('session polling', () => {
   });
 
   it('does not start an interval when the initial request resolves after release', async () => {
-    const deferred = createDeferred<SessionStatusResponse>();
-    const request = vi.spyOn(api, 'getSessionStatus').mockReturnValue(deferred.promise);
+    const pendingStatus = deferred<SessionStatusResponse>();
+    const request = vi.spyOn(api, 'getSessionStatus').mockReturnValue(pendingStatus.promise);
 
     const release = startSessionPolling();
     release();
-    deferred.resolve(createStatus(true));
-    await deferred.promise;
+    pendingStatus.resolve(createStatus(true));
+    await pendingStatus.promise;
     await Promise.resolve();
     await vi.advanceTimersByTimeAsync(10_000);
 
@@ -99,8 +83,8 @@ describe('session polling', () => {
   });
 
   it('deduplicates overlapping ticks and stops after the inactive response', async () => {
-    const initial = createDeferred<SessionStatusResponse>();
-    const poll = createDeferred<SessionStatusResponse>();
+    const initial = deferred<SessionStatusResponse>();
+    const poll = deferred<SessionStatusResponse>();
     const request = vi.spyOn(api, 'getSessionStatus')
       .mockReturnValueOnce(initial.promise)
       .mockReturnValueOnce(poll.promise);

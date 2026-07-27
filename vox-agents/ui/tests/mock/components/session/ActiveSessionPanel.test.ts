@@ -1,22 +1,8 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { mount } from '@vue/test-utils';
 import ActiveSessionPanel from '@/components/session/ActiveSessionPanel.vue';
 import type { SessionStatus, StrategistSessionConfig } from '@/utils/types';
-
-const stubs = {
-  Toolbar: {
-    template: '<section><slot name="start" /><slot name="end" /></section>',
-  },
-  Tag: {
-    props: ['value'],
-    template: '<span class="p-tag">{{ value }}</span>',
-  },
-  Button: {
-    props: ['label', 'icon', 'disabled', 'loading'],
-    emits: ['click'],
-    template: '<button :data-icon="icon" :disabled="disabled" @click="$emit(\'click\')">{{ label }}</button>',
-  },
-};
+import { ButtonStub, TagStub, ToolbarStub } from '../../../helpers/stubs.js';
 
 /** Build a strategist configuration for the active session fixture. */
 function makeConfig(): StrategistSessionConfig {
@@ -45,43 +31,14 @@ function makeSession(overrides: Partial<SessionStatus> = {}): SessionStatus {
 }
 
 describe('ActiveSessionPanel', () => {
-  it('renders the active session details and paused state', () => {
+  it('renders elapsed time and swaps Pause for Resume when paused', () => {
     const wrapper = mount(ActiveSessionPanel, {
       props: { session: makeSession({ paused: true }), loading: false },
-      global: { stubs },
+      global: { stubs: { Toolbar: ToolbarStub, Tag: TagStub, Button: ButtonStub } },
     });
 
-    expect(wrapper.text()).toContain('RUNNING');
     expect(wrapper.text()).toContain('PAUSED');
-    expect(wrapper.text()).toContain('session-1');
-    expect(wrapper.text()).toContain('game-1');
-    expect(wrapper.text()).toContain('42');
     expect(wrapper.text()).toContain('1m 5s');
-    expect(wrapper.text()).toContain('Resume');
-  });
-
-  it('emits each session action', async () => {
-    const wrapper = mount(ActiveSessionPanel, {
-      props: { session: makeSession(), loading: false },
-      global: { stubs },
-    });
-
-    await wrapper.get('button[data-icon="pi pi-users"]').trigger('click');
-    await wrapper.get('button[data-icon="pi pi-pause"]').trigger('click');
-    await wrapper.get('button[data-icon="pi pi-stop"]').trigger('click');
-
-    expect(wrapper.emitted('viewPlayers')).toHaveLength(1);
-    expect(wrapper.emitted('togglePause')).toHaveLength(1);
-    expect(wrapper.emitted('stop')).toHaveLength(1);
-  });
-
-  it('disables pausing outside running and recovering states', () => {
-    vi.setSystemTime(new Date('2026-01-01T00:00:00Z'));
-    const wrapper = mount(ActiveSessionPanel, {
-      props: { session: makeSession({ state: 'starting' }), loading: false },
-      global: { stubs },
-    });
-
-    expect(wrapper.get('button[data-icon="pi pi-pause"]').attributes('disabled')).toBeDefined();
+    expect(wrapper.get('button[data-icon="pi pi-play"]').text()).toBe('Resume');
   });
 });

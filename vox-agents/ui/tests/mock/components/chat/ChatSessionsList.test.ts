@@ -2,17 +2,9 @@ import { describe, it, expect } from 'vitest'
 import { mount } from '@vue/test-utils'
 import ChatSessionsList from '@/components/chat/ChatSessionsList.vue'
 import type { EnvoyThread } from '@/utils/types'
+import { ButtonStub, TagStub, ToolbarStub } from '../../../helpers/stubs.js'
 
-// Lightweight stand-ins for the PrimeVue chrome so we don't need the PrimeVue plugin.
-const stubs = {
-  Toolbar: { template: '<div class="p-toolbar"><slot name="start" /></div>' },
-  Tag: { props: ['value'], template: '<span class="p-tag">{{ value }}</span>' },
-  Button: {
-    props: ['label', 'icon'],
-    emits: ['click'],
-    template: '<button class="p-btn" :data-icon="icon" @click="$emit(\'click\', $event)">{{ label }}</button>',
-  },
-}
+const stubs = { Toolbar: ToolbarStub, Tag: TagStub, Button: ButtonStub }
 
 function makeSession(overrides: Partial<EnvoyThread> = {}): EnvoyThread {
   return {

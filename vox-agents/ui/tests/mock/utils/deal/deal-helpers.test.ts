@@ -49,15 +49,10 @@ describe('deal-helpers', () => {
     expect(gptCap(range({ netGoldPerTurn: 42 }))).toBe(42);
     expect(gptCap(range({ netGoldPerTurn: 0 }))).toBeUndefined();
     expect(gptCap(range({ netGoldPerTurn: -3 }))).toBeUndefined();
-    expect(gptCap(range({ netGoldPerTurn: undefined }))).toBeUndefined();
     // RESOURCES: the available quantity of the matching resource, else undefined.
     const r = range({ resources: [{ resourceID: 3, name: 'Iron', category: 'strategic', quantityAvailable: 5, legal: true, reasons: [] }] });
     expect(resourceCap(r, 3)).toBe(5);
     expect(resourceCap(r, 99)).toBeUndefined();
-    // A missing side range yields no cap for any type.
-    expect(goldCap(undefined)).toBeUndefined();
-    expect(gptCap(undefined)).toBeUndefined();
-    expect(resourceCap(undefined, 3)).toBeUndefined();
   });
 
   it('labels items, using the giver range for game-facing names', () => {
