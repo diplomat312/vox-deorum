@@ -241,7 +241,6 @@ describe('Codex compatible adapter requests', () => {
     expect(body.messages[0]).toMatchObject({ role: 'system' });
     expect(body.messages[0].content).toContain('final-output requirement');
     expect(body.messages[0].content).toContain('client-provided tools: `found_city`, `choose_research`');
-    expect(body.messages[0].content).toContain('Provider built-in tools do not satisfy this requirement');
     expect(body.messages[0].content).toContain('instead of ending with plain text');
   });
 

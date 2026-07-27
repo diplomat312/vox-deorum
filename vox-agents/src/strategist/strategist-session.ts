@@ -23,6 +23,12 @@ import { SessionStatus, PlayerAssignment } from "../types/api.js";
 import { SeatingStateManager } from "../utils/game/seating/state.js";
 import type { ObservedSeating, SeatingClaim } from "../utils/game/seating/types.js";
 import { getMetadata, setMetadata } from "../utils/game/metadata.js";
+import {
+  autoPlayTurnLimit,
+  buildNonFreshTransitionLua,
+  buildObserverOverrideLua,
+  buildStrategicViewLua,
+} from "../utils/game/control-lua.js";
 
 const logger = createLogger('StrategistSession');
 
@@ -149,11 +155,16 @@ export class StrategistSession extends VoxSession<StrategistSessionConfig> {
         this.config.production = 'test';
       }
 
-      // Configure animation skipping based on mode (skip in interactive mode)
+      // Configure animation skipping based on mode (skip in full-auto mode)
       if (isVisualMode(this.config.production)) {
         await voxCivilization.updateSkipAnimations(false);   // animations play for viewers
       } else if (!this.isInteractiveMode) {
         await voxCivilization.updateSkipAnimations(true);    // skip animations in full-auto mode
+      } else {
+        // Interactive non-visual: a human is playing — undo the quick-combat/
+        // quick-movement flags a previous observe session wrote. The ini is only
+        // read at launch, so a live-takeover keeps old values until Civ restarts.
+        await voxCivilization.updateSkipAnimations(false);
       }
 
       // Initialize OBS for recording/livestreaming (before game launch so scenes are ready)
@@ -425,6 +436,23 @@ export class StrategistSession extends VoxSession<StrategistSessionConfig> {
   }
 
   /**
+   * Resolve the two player-seat policies used by transition Lua. A
+   * human-strategist seat pins the observer UI and is the natural autoplay
+   * return target. Ordinary interactive sessions have no override and reserve
+   * player 0 for direct human control.
+   */
+  private resolveControlSeats(): {
+    observerOverridePlayerID: number | undefined;
+    autoPlayReturnPlayerID: number;
+  } {
+    const observerOverridePlayerID = this.humanPlayerID;
+    return {
+      observerOverridePlayerID,
+      autoPlayReturnPlayerID: observerOverridePlayerID ?? 0,
+    };
+  }
+
+  /**
    * Wrap an OBS-side call so the strategist can stay agnostic of whether OBS
    * is configured. Returns `undefined` (and logs a non-fatal warning) when
    * OBS isn't active or the underlying call throws — the session must keep
@@ -552,9 +580,11 @@ export class StrategistSession extends VoxSession<StrategistSessionConfig> {
     // For human control, pin the observer UI to the human's civ. The override is
     // what every observer-aware UI surface keys off (EUI's top panel, the
     // strategist screen bar, city banners, VoxDeorumSeat), so it must be present
-    // whenever a human seat is live — not only on a fresh start.
-    const humanID = this.humanPlayerID;
-    const overrideLine = humanID !== undefined ? `Game.SetObserverUIOverridePlayer(${humanID});\n` : "";
+    // whenever a human seat is live — not only on a fresh start. With no human
+    // seat it is explicitly cleared, since a loaded save may carry one.
+    const controlSeats = this.resolveControlSeats();
+    const humanID = controlSeats.observerOverridePlayerID;
+    const overrideLine = buildObserverOverrideLua(humanID);
     if (this.config.autoPlay && params.turn === 0) {
       // Autoplay. The override must precede SetAIAutoPlay — the team-visibility
       // copy happens only at autoplay activation, so ordering matters
@@ -570,19 +600,26 @@ export class StrategistSession extends VoxSession<StrategistSessionConfig> {
         Script: `
 Events.LoadScreenClose();
 Game.SetPausePlayer(-1);
-${overrideLine}Game.SetAIAutoPlay(2000, -1);`
+${overrideLine}Game.SetAIAutoPlay(${autoPlayTurnLimit}, -1);`
       });
     } else {
-      // Resumed save (or non-autoplay). Set the override *before* firing
-      // LoadScreenClose: the mod's screen-bar gate re-evaluates on that event and
-      // bails when no override is set.
+      // Resumed save, live-game takeover, or non-autoplay. The shared builder
+      // orders the override before LoadScreenClose and the autoplay reconcile
+      // last — Civ serializes the autoplay counter and slot statuses into
+      // saves, so a loaded or taken-over game may still be auto-playing when
+      // this session wants a human on seat 0 (or idle when it wants autoplay).
       await mcpClient.callTool("lua-executor", {
-        Script: `${overrideLine}Events.LoadScreenClose(); Game.SetPausePlayer(-1);`
+        Script: buildNonFreshTransitionLua(
+          this.config.autoPlay,
+          controlSeats.observerOverridePlayerID,
+          controlSeats.autoPlayReturnPlayerID,
+        )
       });
     }
     if (this.config.autoPlay && !isVisualMode(this.config.production)) {
       await setTimeout(3000);
-      await mcpClient.callTool("lua-executor", { Script: `ToggleStrategicView();` });
+      const isFreshGame = this.config.gameMode === 'start' && params.turn === 0;
+      await mcpClient.callTool("lua-executor", { Script: buildStrategicViewLua(isFreshGame) });
     }
 
     // Start production controller (recording waits for render events)
@@ -724,8 +761,9 @@ ${overrideLine}Game.SetAIAutoPlay(2000, -1);`
    * Finalize crash recovery once the relaunched game has reconnected: flip
    * state back to `running`, resume any paused OBS production, reset model
    * identity on existing VoxPlayers so they re-send it to the fresh game,
-   * and re-issue the autoplay/strategic-view Lua. No-op when not in
-   * `recovering` state.
+   * re-pin (or clear) the observer UI override, and reconcile the reloaded
+   * save's autoplay state with the config. No-op when not in `recovering`
+   * state.
    */
   private async recoverGame(): Promise<void> {
     if (this.state === 'recovering') {
@@ -736,17 +774,24 @@ ${overrideLine}Game.SetAIAutoPlay(2000, -1);`
       for (const player of this.activePlayers.values()) {
         player.context.resetModelIdentity();
       }
-      await mcpClient.callTool("lua-executor", { Script: `Events.LoadScreenClose(); Game.SetPausePlayer(-1);` });
-      // Re-pin the observer UI to the human's civ. Defensive: the override —
-      // like autoplay itself, which recovery also doesn't re-issue — is
-      // serialized in saves, so a recovered human game already has it.
-      const humanID = this.humanPlayerID;
-      if (humanID !== undefined) {
-        await mcpClient.callTool("lua-executor", { Script: `Game.SetObserverUIOverridePlayer(${humanID});` });
-      }
+      // Recovery relaunches with LoadGame.lua, which reloads the most recent
+      // save — and that save can predate this session's control decisions
+      // (e.g. an autosave written while a previous autoplay run was driving).
+      // Enforce the config with the same composed script handleGameSwitched
+      // uses, so the ordering invariant (override before LoadScreenClose,
+      // reconcile last) cannot drift; it is an idempotent no-op when the save
+      // already matches.
+      const controlSeats = this.resolveControlSeats();
+      await mcpClient.callTool("lua-executor", {
+        Script: buildNonFreshTransitionLua(
+          this.config.autoPlay,
+          controlSeats.observerOverridePlayerID,
+          controlSeats.autoPlayReturnPlayerID,
+        )
+      });
       if (this.config.autoPlay && !isVisualMode(this.config.production)) {
         await setTimeout(3000);
-        await mcpClient.callTool("lua-executor", { Script: `ToggleStrategicView();` });
+        await mcpClient.callTool("lua-executor", { Script: buildStrategicViewLua(false) });
       }
     }
   }
