@@ -147,9 +147,9 @@ const toggleDrawer = () => {
       <template #footer>
         <div class="flex flex-column gap-2">
           <div class="flex align-items-center justify-content-between mb-2">
-            <Tag :severity="healthStatus?.status === 'error' ? 'danger' : 'success'" class="text-xs">
+            <Tag :severity="healthStatus ? 'success' : 'danger'" class="text-xs">
               <i class="pi pi-circle-fill mr-1" style="font-size: 0.5rem;"></i>
-              {{ healthStatus?.status === 'error' ? 'Disconnected' : 'Connected' }}
+              {{ healthStatus ? 'Connected' : 'Disconnected' }}
             </Tag>
             <span class="text-sm text-500">v{{ healthStatus?.version || 'Unknown' }}</span>
           </div>

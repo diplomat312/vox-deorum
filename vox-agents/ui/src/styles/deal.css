@@ -1,8 +1,7 @@
 /*
  * Deal board layout (interactive-diplomacy stage 4): the three-panel in-game trade-screen
- * replica — your inventory | deal on the table | counterpart inventory. Uses PrimeVue `--p-*`
- * design tokens throughout; no copied Civilization V artwork. Imported by the deal components
- * via `@import '@/styles/deal.css'` (matching the existing `@import '@/styles/chat.css'`).
+ * replica: your inventory | deal on the table | counterpart inventory. Uses PrimeVue `--p-*`
+ * design tokens throughout; no copied Civilization V artwork.
  */
 
 /* Horizontal-scroll wrapper: on narrow viewports the board scrolls sideways; panels never stack. */
@@ -10,7 +9,7 @@
   overflow-x: auto;
 }
 
-/* you | center offer | counterpart — center is widest, sides hold the categorized inventories. */
+/* You | center offer | counterpart: center is widest, sides hold the categorized inventories. */
 .deal-board {
   display: grid;
   grid-template-columns: minmax(280px, 1fr) minmax(360px, 1.4fr) minmax(280px, 1fr);
@@ -56,12 +55,6 @@
   color: var(--p-text-muted-color);
   padding: 0.2rem 0.25rem;
 }
-.deal-category-empty {
-  font-size: 0.78rem;
-  color: var(--p-text-muted-color);
-  padding: 0.1rem 0.35rem;
-}
-
 /* An inventory row is the primary control: a click adds the term. */
 .deal-row {
   display: flex;
@@ -146,7 +139,7 @@
   width: 100%;
 }
 
-/* You give (you) | They give (counterpart) — aligned columns mirroring the two inventories. */
+/* You give (you) | They give (counterpart): aligned columns mirroring the two inventories. */
 .deal-offer-columns {
   display: grid;
   grid-template-columns: 1fr 1fr;

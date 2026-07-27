@@ -6,11 +6,9 @@
 import { ref } from 'vue';
 import { api } from '../api/client';
 import type {
-  PauseSessionResponse,
-  ResumeSessionResponse,
-  SessionStatusResponse,
-  StopSessionResponse
+  SessionStatusResponse
 } from '@/utils/types';
+import { createPoller } from '@/utils/polling';
 
 // Session status state
 export const sessionStatus = ref<SessionStatusResponse | null>(null);
@@ -18,12 +16,8 @@ export const loading = ref(false);
 export const error = ref<string | null>(null);
 
 // Polling interval reference
-let pollInterval: number | null = null;
 let statusRequest: Promise<SessionStatusResponse> | null = null;
-let pollingConsumers = 0;
 const activeSessionStates = new Set(['starting', 'running', 'recovering', 'stopping']);
-
-type SessionActionResponse = StopSessionResponse | PauseSessionResponse | ResumeSessionResponse;
 
 /** Return whether a status response still needs active polling. */
 function isActiveSession(response: SessionStatusResponse): boolean {
@@ -32,10 +26,10 @@ function isActiveSession(response: SessionStatusResponse): boolean {
 
 /** Keep the interval aligned with current status and mounted polling owners. */
 function syncPolling(response: SessionStatusResponse): void {
-  if (pollingConsumers > 0 && isActiveSession(response)) {
-    startPolling();
+  if (isActiveSession(response)) {
+    sessionPoller.start();
   } else {
-    stopPolling();
+    sessionPoller.stop();
   }
 }
 
@@ -72,47 +66,26 @@ export async function fetchFreshSessionStatus(): Promise<SessionStatusResponse> 
   return requestSessionStatus();
 }
 
-/**
- * Start polling for session status updates
- */
-function startPolling(): void {
-  if (pollInterval !== null || pollingConsumers === 0) return;
-
-  pollInterval = window.setInterval(() => {
-    void fetchSessionStatus().catch(() => undefined);
-  }, 2000);
-}
-
-/**
- * Stop polling for session status
- */
-function stopPolling(): void {
-  if (pollInterval !== null) {
-    window.clearInterval(pollInterval);
-    pollInterval = null;
-  }
-}
+const sessionPoller = createPoller(() => {
+  void fetchSessionStatus().catch(() => undefined);
+}, 2000);
 
 /** Start status loading for one mounted consumer and return its cleanup handle. */
 export function startSessionPolling(): () => void {
-  pollingConsumers++;
+  const release = sessionPoller.acquire();
+  // The first response decides whether this session needs an interval at all. This stop() assumes a
+  // single consumer (SessionView): with concurrent consumers it would halt a live interval, and a
+  // failed fetch below would leave nothing to restart it.
+  sessionPoller.stop();
   void fetchSessionStatus().catch(() => undefined);
-
-  let released = false;
-  return () => {
-    if (released) return;
-    released = true;
-    pollingConsumers = Math.max(0, pollingConsumers - 1);
-    if (pollingConsumers === 0) stopPolling();
-  };
+  return release;
 }
 
 /**
  * Stop the current session
  */
-async function runSessionAction(
-  action: () => Promise<SessionActionResponse>,
-  fallbackMessage: string
+async function runSessionAction<T>(
+  action: () => Promise<T>
 ): Promise<void> {
   loading.value = true;
   error.value = null;
@@ -120,7 +93,7 @@ async function runSessionAction(
     await action();
     await fetchFreshSessionStatus();
   } catch (caught) {
-    error.value = caught instanceof Error ? caught.message : fallbackMessage;
+    error.value = caught instanceof Error ? caught.message : 'Session action failed';
     throw caught;
   } finally {
     loading.value = false;
@@ -129,19 +102,19 @@ async function runSessionAction(
 
 /** Stop the current session. */
 export function stopSession(): Promise<void> {
-  return runSessionAction(() => api.stopSession(), 'Failed to stop session');
+  return runSessionAction(() => api.stopSession());
 }
 
 /**
  * Pause the current session (no new LLM runs; the game stalls in place)
  */
 export function pauseSession(): Promise<void> {
-  return runSessionAction(() => api.pauseSession(), 'Failed to pause session');
+  return runSessionAction(() => api.pauseSession());
 }
 
 /**
  * Resume a paused session
  */
 export function resumeSession(): Promise<void> {
-  return runSessionAction(() => api.resumeSession(), 'Failed to resume session');
+  return runSessionAction(() => api.resumeSession());
 }

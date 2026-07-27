@@ -4,10 +4,10 @@ import Message from 'primevue/message';
 import ProgressSpinner from 'primevue/progressspinner';
 import Tag from 'primevue/tag';
 import Toolbar from 'primevue/toolbar';
-import type { SessionConfig, StrategistSessionConfig } from '@/utils/types';
+import type { StrategistSessionConfig } from '@/utils/types';
 
 defineProps<{
-  configs: readonly SessionConfig[];
+  configs: readonly StrategistSessionConfig[];
   loading: boolean;
   error: string | null;
   sessionActive: boolean;
@@ -16,32 +16,29 @@ defineProps<{
 
 defineEmits<{
   create: [];
-  start: [config: SessionConfig];
-  edit: [config: SessionConfig];
-  duplicate: [config: SessionConfig];
-  delete: [config: SessionConfig];
+  start: [config: StrategistSessionConfig];
+  edit: [config: StrategistSessionConfig];
+  duplicate: [config: StrategistSessionConfig];
+  delete: [config: StrategistSessionConfig];
 }>();
 
 /** Calculate the total player count using the backend's even-seat rule. */
-function getPlayerCount(config: SessionConfig): number {
-  const strategistConfig = config as StrategistSessionConfig;
-  if (!strategistConfig.llmPlayers || Object.keys(strategistConfig.llmPlayers).length === 0) return 0;
+function getPlayerCount(config: StrategistSessionConfig): number {
+  if (Object.keys(config.llmPlayers).length === 0) return 0;
 
-  const playerIds = Object.keys(strategistConfig.llmPlayers).map(Number);
+  const playerIds = Object.keys(config.llmPlayers).map(Number);
   const rawCount = Math.max(...playerIds) + 1;
   return Math.ceil(rawCount / 2) * 2;
 }
 
 /** Count the players controlled by an LLM strategist. */
-function getLlmPlayerCount(config: SessionConfig): number {
-  const strategistConfig = config as StrategistSessionConfig;
-  if (!strategistConfig.llmPlayers) return 0;
-  return Object.values(strategistConfig.llmPlayers)
+function getLlmPlayerCount(config: StrategistSessionConfig): number {
+  return Object.values(config.llmPlayers)
     .filter(player => player.strategist !== 'none-strategist').length;
 }
 
 /** Estimate the map size from the configured player count. */
-function getMapSize(config: SessionConfig): string {
+function getMapSize(config: StrategistSessionConfig): string {
   const playerCount = getPlayerCount(config);
   if (playerCount <= 2) return 'Duel';
   if (playerCount <= 4) return 'Tiny';

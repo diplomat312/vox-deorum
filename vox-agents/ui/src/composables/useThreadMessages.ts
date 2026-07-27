@@ -264,7 +264,7 @@ export function useThreadMessages(options: UseThreadMessagesOptions) {
         // later full reload drops those ephemeral traces and re-syncs to the store's append order, which —
         // since a handoff turn has no separate reply row — matches this order exactly.
         done = true;
-        if (data?.deals?.length) mergeDealRows(data.deals);
+        if (data.deals.length > 0) mergeDealRows(data.deals);
         isStreaming.value = false;
       },
       (data) => {

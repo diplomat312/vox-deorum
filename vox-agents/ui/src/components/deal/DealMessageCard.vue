@@ -56,9 +56,8 @@ commitments, then records the agreement.
 <script setup lang="ts">
 import { computed } from 'vue';
 import Button from 'primevue/button';
-import type { DealTranscriptMessage, TradeItem, PromiseTerm } from '@/utils/types';
-import type { ProposalOutcome } from '@/utils/deal/deal-reduce';
-import { formatItemLabel, formatPromiseLabel, formatValue, storedBalanceToSide } from '@/utils/deal/deal-helpers';
+import type { DealTranscriptMessage, TradeItem, PromiseTerm, ProposalOutcome } from '@/utils/types';
+import { formatItemLabel, formatPromiseLabel, formatBalance, storedBalanceToSide } from '@/utils/deal/deal-helpers';
 import { offerColumnsFor } from '@/utils/deal/deal-catalog';
 
 const props = withDefaults(defineProps<{
@@ -148,7 +147,7 @@ const valueText = computed(() => {
     props.youID
   );
   if (!balance) return '';
-  return `${balance.net > 0 ? '+' : ''}${formatValue(balance.net)}${balance.hasSentinel ? ' (some have no usable estimate)' : ''}`;
+  return formatBalance(balance);
 });
 </script>
 

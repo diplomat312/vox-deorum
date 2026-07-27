@@ -20,16 +20,14 @@ import {
   resumeSession,
   startSessionPolling
 } from '../stores/session';
-import type { SessionConfig, StrategistSessionConfig } from '../utils/types';
-
-type ConfigDialogMode = 'add' | 'edit' | 'duplicate';
+import type { ConfigDialogMode, StrategistSessionConfig } from '../utils/types';
 
 /**
  * Session Control view for managing game sessions and configurations
  */
 
 // Local state
-const configs = ref<SessionConfig[]>([]);
+const configs = ref<StrategistSessionConfig[]>([]);
 const loadingConfigs = ref(false);
 const configError = ref<string | null>(null);
 
@@ -41,7 +39,7 @@ const editingConfigName = ref('');
 
 // Game mode dialog state
 const showGameModeDialog = ref(false);
-const pendingConfig = ref<SessionConfig | null>(null);
+const pendingConfig = ref<StrategistSessionConfig | null>(null);
 
 // Players summary dialog state
 const showPlayersDialog = ref(false);
@@ -53,11 +51,6 @@ let releaseSessionPolling: (() => void) | null = null;
 // Services
 const confirm = useConfirm();
 const toast = useToast();
-
-/**
- * Whether the active session is paused (orthogonal to state, which stays 'running')
- */
-const isPaused = computed(() => !!sessionStatus.value?.session?.paused);
 
 /**
  * Load configurations from server
@@ -79,7 +72,7 @@ async function loadConfigs() {
 /**
  * Show game mode dialog before starting session
  */
-function showGameModeSelection(config: SessionConfig) {
+function showGameModeSelection(config: StrategistSessionConfig) {
   pendingConfig.value = config;
   showGameModeDialog.value = true;
 }
@@ -124,7 +117,7 @@ async function startSessionWithGameMode(mode: GameMode) {
  * Toggle pause/resume on the active session. Pause is reversible, so no confirm.
  */
 async function togglePause() {
-  const wasPaused = isPaused.value;
+  const wasPaused = !!sessionStatus.value?.session?.paused;
   try {
     if (wasPaused) {
       await resumeSession();
@@ -182,7 +175,7 @@ function confirmStopSession() {
 /**
  * Delete a configuration with confirmation
  */
-function confirmDeleteConfig(config: SessionConfig) {
+function confirmDeleteConfig(config: StrategistSessionConfig) {
   // Use config name to derive filename
   const configFilename = `${config.name}.json`;
 
@@ -216,11 +209,11 @@ function confirmDeleteConfig(config: SessionConfig) {
 /**
  * Open the configuration dialog for adding or editing
  */
-function openConfigDialog(mode: ConfigDialogMode, config?: SessionConfig, configName?: string) {
+function openConfigDialog(mode: ConfigDialogMode, config?: StrategistSessionConfig, configName?: string) {
   configDialogMode.value = mode;
 
   if ((mode === 'edit' || mode === 'duplicate') && config) {
-    editingConfig.value = config as StrategistSessionConfig;
+    editingConfig.value = config;
     editingConfigName.value = configName || config.name;
   } else {
     editingConfig.value = undefined;
@@ -233,7 +226,7 @@ function openConfigDialog(mode: ConfigDialogMode, config?: SessionConfig, config
 /**
  * Open the configuration dialog with an unsaved copy of an existing config.
  */
-function duplicateConfig(config: SessionConfig) {
+function duplicateConfig(config: StrategistSessionConfig) {
   const duplicate = JSON.parse(JSON.stringify(config)) as StrategistSessionConfig;
   const duplicateName = getUniqueDuplicateName(config.name);
   duplicate.name = duplicateName;

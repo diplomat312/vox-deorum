@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   isSentinel,
   formatValue,
-  sideGives,
+  entriesForSide,
   formatItemLabel,
   formatPromiseLabel,
   computeSideBalance,
@@ -34,11 +34,17 @@ describe('deal-helpers', () => {
     expect(formatValue(42.6)).toBe('43');
   });
 
-  it('selects the items one side gives', () => {
+  it('selects indexed entries for one side', () => {
     const items = [item({ fromPlayerID: 0 }), item({ fromPlayerID: 1 }), item({ fromPlayerID: 0, itemType: 'MAPS' })];
-    const gives0 = sideGives(items, 0);
+    const gives0 = entriesForSide(items, 0, (entry) => entry.fromPlayerID);
     expect(gives0.map((g) => g.index)).toEqual([0, 2]);
-    expect(sideGives(items, 1).map((g) => g.index)).toEqual([1]);
+    expect(entriesForSide(items, 1, (entry) => entry.fromPlayerID).map((entry) => entry.index)).toEqual([1]);
+
+    const promises: PromiseTerm[] = [
+      { promiserID: 1, recipientID: 0, promiseType: 'MILITARY' },
+      { promiserID: 0, recipientID: 1, promiseType: 'EXPANSION' },
+    ];
+    expect(entriesForSide(promises, 0, (entry) => entry.promiserID).map((entry) => entry.index)).toEqual([1]);
   });
 
   it('derives the per-row editor caps from the giver range (gold treasury, GPT income, resource qty)', () => {

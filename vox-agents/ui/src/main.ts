@@ -12,11 +12,13 @@ import './styles/global.css'
 import './styles/states.css'
 import './styles/data-table.css'
 import './styles/panel.css'
+import './styles/chat.css'
+import './styles/deal.css'
 import './styles/chat-launch.css'
 import './styles/config.css'
 
-// Check if .env file exists before initializing the app
-async function initializeApp() {
+/** Configure and mount the application. */
+function initializeApp() {
   const app = createApp(App)
 
   // Configure PrimeVue with Civ5-inspired theme
@@ -38,5 +40,4 @@ async function initializeApp() {
   app.mount('#app')
 }
 
-// Initialize the app
 initializeApp()

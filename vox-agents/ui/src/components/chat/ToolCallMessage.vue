@@ -58,8 +58,6 @@ const detailEntries = computed<DetailEntry[]>(() => {
 </script>
 
 <style scoped>
-@import '@/styles/chat.css';
-
 .tool-status {
   cursor: pointer;
 }

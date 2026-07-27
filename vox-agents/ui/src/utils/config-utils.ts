@@ -19,19 +19,11 @@ export function parseLLMConfig(llms: Record<string, LLMConfig | string>): {
   const definitions: Record<string, LLMConfig> = {};
   let embedder: string | null = null;
 
-  // Collect all model definitions (objects with provider and name)
+  // Collect model definitions and mappings in configuration order.
   for (const [key, value] of Object.entries(llms)) {
     if (typeof value === 'object' && value.provider && value.name) {
-      definitions[key] = {
-        id: key,
-        ...value
-      };
-    }
-  }
-
-  // Collect all mappings, separating out the embedder
-  for (const [key, value] of Object.entries(llms)) {
-    if (typeof value === 'string') {
+      definitions[key] = { id: key, ...value };
+    } else if (typeof value === 'string') {
       if (key === 'embedder') {
         embedder = value;
       } else {
@@ -128,12 +120,12 @@ export function getAgentsUsingModel(
  *
  * @param mappings - Agent mappings to validate
  * @param definitions - Available model definitions
- * @returns Validation result with any errors
+ * @returns Validation errors, if any
  */
 export function validateMappings(
   mappings: AgentMapping[],
   definitions: LLMConfig[]
-): { valid: boolean; errors: string[] } {
+): string[] {
   const errors: string[] = [];
   const availableModels = new Set(definitions.map(d => d.id));
 
@@ -148,8 +140,5 @@ export function validateMappings(
     }
   }
 
-  return {
-    valid: errors.length === 0,
-    errors
-  };
+  return errors;
 }

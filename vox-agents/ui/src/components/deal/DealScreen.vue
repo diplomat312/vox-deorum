@@ -92,8 +92,8 @@ import { toRef } from 'vue';
 import Button from 'primevue/button';
 import Tag from 'primevue/tag';
 import Message from 'primevue/message';
-import type { DealPayload } from '@/utils/types';
-import { useDealEditor, type DealSubmission, type DealThreadResponse } from '@/composables/useDealEditor';
+import type { DealPayload, GetChatResponse } from '@/utils/types';
+import { useDealEditor } from '@/composables/useDealEditor';
 import InventoryPanel from './InventoryPanel.vue';
 import CentralOffer from './CentralOffer.vue';
 
@@ -108,17 +108,11 @@ const props = defineProps<{
 }>();
 
 const emit = defineEmits<{
-  (event: 'changed', thread: DealThreadResponse): void;
+  (event: 'changed', thread: GetChatResponse): void;
   (event: 'send', payload: { deal: DealPayload; expectedProposalID?: number }): void;
 }>();
 
 const busy = defineModel<boolean>('busy', { default: false });
-
-/** Forward a completed blocking write to the host. */
-const emitChanged = (thread: DealThreadResponse): void => emit('changed', thread);
-
-/** Forward a proposal or counter to the host streaming workflow. */
-const emitSend = (submission: DealSubmission): void => emit('send', submission);
 
 const editor = useDealEditor({
   chatId: toRef(props, 'chatId'),
@@ -129,8 +123,8 @@ const editor = useDealEditor({
   locked: toRef(props, 'locked'),
   agentBusy: toRef(props, 'agentBusy'),
   busy,
-  onChanged: emitChanged,
-  onSend: emitSend,
+  onChanged: (thread) => emit('changed', thread),
+  onSend: (submission) => emit('send', submission),
 });
 
 const {
@@ -143,7 +137,6 @@ const {
 </script>
 
 <style scoped>
-@import '@/styles/deal.css';
 .deal-screen {
   min-width: 0;
 }

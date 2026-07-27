@@ -4,9 +4,8 @@
  * Server-side reduction of a conversation's append-ordered deal messages into the latest
  * active proposal and its agreement status (interactive-diplomacy stage 5, work item 4).
  *
- * This is the single source of truth for deal-state reduction; the stage-4 UI reducer
- * (`ui/src/components/deal/deal-reduce.ts`) is a thin typed wrapper that delegates here (via the
- * `@vox` alias), so the two can never drift. The in-game panel carries a small Lua port in
+ * This is the single source of truth for deal-state reduction. The UI imports it through the
+ * `@vox` alias, while the in-game panel carries a small Lua port in
  * `civ5-mod/UI/VoxDeorumDiploPanel.lua`; keep its reducer semantics synchronized with this file.
  * The durable transcript is append-only and
  * status-free (specs §6), so the current deal state is *derived*, never stored. The diplomat (to

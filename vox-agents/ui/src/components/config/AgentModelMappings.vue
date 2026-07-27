@@ -2,9 +2,7 @@
 import Button from 'primevue/button';
 import Card from 'primevue/card';
 import Dropdown from 'primevue/dropdown';
-import type { AgentMapping } from '@/utils/types';
-
-type SelectOption = { label: string; value: string };
+import type { AgentMapping, SelectOption } from '@/utils/types';
 
 const props = defineProps<{
   mappings: AgentMapping[];

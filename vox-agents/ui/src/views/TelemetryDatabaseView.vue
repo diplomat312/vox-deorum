@@ -20,7 +20,8 @@ import {
   formatTimestamp,
   formatTokenCount,
   getStatusSeverity,
-  getStatusText
+  getStatusText,
+  parseSpanAttributes
 } from '@/api/telemetry-utils';
 
 const route = useRoute();
@@ -103,17 +104,7 @@ async function loadTraces() {
     // Using a high limit to get all traces for frontend filtering
     const response = await api.getDatabaseTraces(filename.value, 1000, 0);
 
-    // Parse attributes for all traces upfront
-    traces.value = response.traces.map(trace => {
-      if (typeof trace.attributes === 'string') {
-        try {
-          trace.attributes = JSON.parse(trace.attributes);
-        } catch {
-          // Keep as string if parsing fails
-        }
-      }
-      return trace;
-    });
+    traces.value = response.traces.map(parseSpanAttributes);
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Failed to load traces';
     console.error('Error loading traces:', err);

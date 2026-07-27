@@ -77,8 +77,8 @@ re-inspects live, keeping the per-row legality/value index-aligned).
          never block the deal; a maxed-out estimate reads "no usable estimate". -->
     <div class="deal-balance">
       <div class="deal-balance-caption">AI value estimate — advisory, doesn't block the deal</div>
-      <span class="deal-balance-item" :class="balanceClass(youID)">Value to {{ youLabel }}: {{ formatBalance(youID) }}</span>
-      <span class="deal-balance-item" :class="balanceClass(counterpartID)">Value to {{ counterpartLabel }}: {{ formatBalance(counterpartID) }}</span>
+      <span class="deal-balance-item" :class="balanceClass(youID)">Value to {{ youLabel }}: {{ formattedBalance(youID) }}</span>
+      <span class="deal-balance-item" :class="balanceClass(counterpartID)">Value to {{ counterpartLabel }}: {{ formattedBalance(counterpartID) }}</span>
     </div>
   </section>
 </template>
@@ -93,6 +93,7 @@ import {
   formatItemLabel,
   formatPromiseLabel,
   formatValue,
+  formatBalance,
   computeSideBalance,
   goldCap,
   gptCap,
@@ -138,7 +139,6 @@ const columns = computed(() =>
 );
 
 const rangeFor = (sideID: number): NormalizedSideRange | undefined => props.ranges[String(sideID)];
-const fmt = (v: number) => formatValue(v);
 /**
  * The item types whose amount/quantity is edited in an inline input on the row (so the label is a
  * bare prefix and any fixed duration shows as a trailing "× N turns"). Every other row carries its
@@ -160,11 +160,11 @@ const editorMin = (item: TradeItem): number => item.itemType === 'GOLD' ? 0 : 1;
 /** Maximum value for an editable item row, when the inspected range provides one. */
 const editorMax = (item: TradeItem): number | undefined =>
   item.itemType === 'GOLD'
-    ? goldMax(item)
+    ? goldCap(rangeFor(item.fromPlayerID))
     : item.itemType === 'GOLD_PER_TURN'
-      ? gptMax(item)
+      ? gptCap(rangeFor(item.fromPlayerID))
       : item.itemType === 'RESOURCES'
-        ? resourceMax(item)
+        ? resourceCap(rangeFor(item.fromPlayerID), item.resourceID)
         : undefined;
 /** Patch emitted for an editable item row's changed numeric value. */
 const editorPatch = (item: TradeItem, value: number): Partial<TradeItem> =>
@@ -186,29 +186,20 @@ const promiseNote = (index: number): string => props.inspectedPromises[index]?.a
 const itemTooltip = (index: number): string => {
   if (isIllegal(index)) return reasonText(index);
   const insp = props.inspectedItems[index];
-  return insp ? `To give: ${fmt(insp.valueIfIGive)} · to receive: ${fmt(insp.valueIfIReceive)}` : '';
+  return insp ? `To give: ${formatValue(insp.valueIfIGive)} · to receive: ${formatValue(insp.valueIfIReceive)}` : '';
 };
 
 // ---- value balance ----------------------------------------------------------------------
 const balanceFor = (sideID: number) => computeSideBalance(props.items, props.inspectedItems, sideID);
-const formatBalance = (sideID: number) => {
-  const b = balanceFor(sideID);
-  return `${b.net > 0 ? '+' : ''}${formatValue(b.net)}${b.hasSentinel ? ' (some have no usable estimate)' : ''}`;
-};
+const formattedBalance = (sideID: number) => formatBalance(balanceFor(sideID));
 const balanceClass = (sideID: number) => {
   const net = balanceFor(sideID).net;
   return net > 0 ? 'balance-positive' : net < 0 ? 'balance-negative' : '';
 };
 
-// ---- per-row editor caps (one derivation shared with the catalog hints — see deal-helpers) -------
-const goldMax = (item: TradeItem): number | undefined => goldCap(rangeFor(item.fromPlayerID));
-const gptMax = (item: TradeItem): number | undefined => gptCap(rangeFor(item.fromPlayerID));
-const resourceMax = (item: TradeItem): number | undefined =>
-  resourceCap(rangeFor(item.fromPlayerID), item.resourceID);
 </script>
 
 <style scoped>
-@import '@/styles/deal.css';
 .deal-offer-col { min-width: 0; }
 /* One-time advisory caption above the value balance (the values never gate the deal). */
 .deal-balance-caption { flex: 0 0 100%; font-size: 0.72rem; opacity: 0.7; margin-bottom: 0.15rem; }

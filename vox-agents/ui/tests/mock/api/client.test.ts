@@ -209,7 +209,7 @@ describe('ApiClient SSE streams', () => {
     sse.emit('message', JSON.stringify({ type: 'text-delta', text: 'hi' }))
     expect(onMessage).toHaveBeenCalledWith({ type: 'text-delta', text: 'hi' })
 
-    sse.emit('done')
+    sse.emit('done', JSON.stringify({ sessionId: 'c1', messageCount: 2, deals: [] }))
     expect(onDone).toHaveBeenCalled()
 
     // A bare 'error' event (no responseCode) lands after the stream opened → the message may be committed.
@@ -237,6 +237,22 @@ describe('ApiClient SSE streams', () => {
     expect(onConnected).toHaveBeenCalledTimes(1)
     expect(onConnected.mock.calls[0]![0]).toEqual({ sessionId: 'c1', deal: row })
   })
+
+  it.each(['not-json', '{}', 'null', '[]'])(
+    'reports malformed terminal event %s as a committed stream failure',
+    (payload) => {
+      const onError = vi.fn()
+      const onDone = vi.fn()
+      api.streamAgentMessage({ chatId: 'c1', message: 'hi' } as never, vi.fn(), onError, onDone)
+      const sse = sseInstances[0]
+
+      sse.emit('done', payload)
+
+      expect(onDone).not.toHaveBeenCalled()
+      expect(onError).toHaveBeenCalledTimes(1)
+      expect(onError).toHaveBeenCalledWith('The terminal response from the server was invalid.', 'committed')
+    },
+  )
 
   it('surfaces a non-2xx pre-stream rejection once, uncommitted, with the route’s JSON error message', () => {
     const onError = vi.fn()

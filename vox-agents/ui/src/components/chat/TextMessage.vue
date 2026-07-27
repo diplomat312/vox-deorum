@@ -13,6 +13,11 @@ import { computed } from 'vue';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
 
+marked.setOptions({
+  breaks: true,
+  gfm: true,
+});
+
 interface Props {
   role: 'user' | 'assistant' | 'system' | 'tool';
   content: string;
@@ -34,12 +39,6 @@ const displayRole = computed(() => ({
 }[props.role]));
 
 const renderedContent = computed(() => {
-  // Configure marked options for better rendering
-  marked.setOptions({
-    breaks: true, // Convert line breaks to <br>
-    gfm: true,    // GitHub Flavored Markdown
-  });
-
   // Strip LLM-echoed [Turn N] prefix and trailing horizontal rule
   const text = props.content
     .replace(/^\[Turn \d+\]\s*/, '')
@@ -50,7 +49,3 @@ const renderedContent = computed(() => {
   return DOMPurify.sanitize(html as string);
 });
 </script>
-
-<style scoped>
-@import '@/styles/chat.css';
-</style>

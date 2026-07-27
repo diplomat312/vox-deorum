@@ -1,6 +1,7 @@
 import { ref, shallowRef } from 'vue';
 import { api } from '../api/client';
 import type { TelemetryMetadata, TelemetrySession, EnvoyThread } from '@/utils/types';
+import { createPoller } from '@/utils/polling';
 
 const pollIntervalMs = 5000;
 
@@ -15,10 +16,6 @@ let databasesRequest: Promise<void> | null = null;
 let chatsRequest: Promise<void> | null = null;
 let telemetryDataRequest: Promise<void> | null = null;
 let chatDataRequest: Promise<void> | null = null;
-let sessionPollInterval: number | null = null;
-let chatPollInterval: number | null = null;
-let sessionPollingConsumers = 0;
-let chatPollingConsumers = 0;
 let chatRevision = 0;
 
 /** Fetch active telemetry sessions, reusing a request already in progress. */
@@ -101,68 +98,32 @@ export async function refreshChatDataAfterDelete(sessionId: string): Promise<voi
   await fetchChatSessions();
 }
 
-/** Run one active-session polling tick. */
-function pollSessions(): void {
+const sessionPoller = createPoller(() => {
   void fetchSessions();
-}
+}, pollIntervalMs);
 
-/** Run one chat-session polling tick. */
-function pollChats(): void {
+const chatPoller = createPoller(() => {
   void fetchChatSessions();
-}
-
-/** Acquire active-session polling and return a cleanup handle. */
-function acquireSessionPolling(): () => void {
-  sessionPollingConsumers++;
-  if (sessionPollInterval === null) {
-    sessionPollInterval = window.setInterval(pollSessions, pollIntervalMs);
-  }
-  let released = false;
-  return () => {
-    if (released) return;
-    released = true;
-    sessionPollingConsumers = Math.max(0, sessionPollingConsumers - 1);
-    if (sessionPollingConsumers > 0 || sessionPollInterval === null) return;
-    window.clearInterval(sessionPollInterval);
-    sessionPollInterval = null;
-  };
-}
-
-/** Acquire chat-session polling and return a cleanup handle. */
-function acquireChatPolling(): () => void {
-  chatPollingConsumers++;
-  if (chatPollInterval === null) {
-    chatPollInterval = window.setInterval(pollChats, pollIntervalMs);
-  }
-  let released = false;
-  return () => {
-    if (released) return;
-    released = true;
-    chatPollingConsumers = Math.max(0, chatPollingConsumers - 1);
-    if (chatPollingConsumers > 0 || chatPollInterval === null) return;
-    window.clearInterval(chatPollInterval);
-    chatPollInterval = null;
-  };
-}
+}, pollIntervalMs);
 
 /** Start telemetry-page loading and polling for one mounted consumer. */
 export function startTelemetryPolling(): () => void {
   void fetchTelemetryData();
-  return acquireSessionPolling();
+  return sessionPoller.acquire();
 }
 
 /** Start active-session loading and polling for one mounted consumer. */
 export function startActiveSessionPolling(): () => void {
   void fetchSessions();
-  return acquireSessionPolling();
+  return sessionPoller.acquire();
 }
 
 /** Start chat-page loading and polling for one mounted consumer. */
 export function startChatPolling(): () => void {
   void fetchTelemetryData();
   void fetchChatData();
-  const releaseSessions = acquireSessionPolling();
-  const releaseChats = acquireChatPolling();
+  const releaseSessions = sessionPoller.acquire();
+  const releaseChats = chatPoller.acquire();
   return () => {
     releaseSessions();
     releaseChats();

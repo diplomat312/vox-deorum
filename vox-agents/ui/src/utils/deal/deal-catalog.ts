@@ -17,7 +17,7 @@ import {
   PROMISE_NEEDS_TARGET,
   TOGGLE_ITEMS,
   SYMMETRIC_ITEM_TYPES,
-  sideGives,
+  entriesForSide,
   goldCap,
   gptCap,
 } from './deal-helpers';
@@ -181,25 +181,6 @@ export function defaultItemFor(
   }
 }
 
-/** True when a no-discriminator singleton (toggle / gold) from `ownerID` is already on the table. */
-export function isSingletonSelected(
-  itemType: TradeItem['itemType'],
-  ownerID: number,
-  currentItems: TradeItem[]
-): boolean {
-  return currentItems.some((i) => i.fromPlayerID === ownerID && i.itemType === itemType);
-}
-
-/** Promise terms one side promises (the side is the promiser), paired with their deal index. */
-export function offerPromisesForSide(
-  promises: PromiseTerm[],
-  sideID: number
-): Array<{ promise: PromiseTerm; index: number }> {
-  return promises
-    .map((promise, index) => ({ promise, index }))
-    .filter(({ promise }) => promise.promiserID === sideID);
-}
-
 /** Build giver columns for a deal offer, sharing the side partitioning across renderers. */
 export function offerColumnsFor(
   items: TradeItem[],
@@ -209,10 +190,12 @@ export function offerColumnsFor(
   return sides.map(({ sideID, label }) => ({
     sideID,
     label,
-    // sideGives pairs each item with its index in workingDeal.items, which is also the index into
+    // entriesForSide pairs each item with its index in workingDeal.items, which is also the index into
     // the index-aligned inspect-deal items[] (so the central row reads legality/value by index).
-    items: sideGives(items, sideID),
-    promises: offerPromisesForSide(promises, sideID),
+    items: entriesForSide(items, sideID, (item) => item.fromPlayerID)
+      .map(({ entry: item, index }) => ({ item, index })),
+    promises: entriesForSide(promises, sideID, (promise) => promise.promiserID)
+      .map(({ entry: promise, index }) => ({ promise, index })),
   }));
 }
 
@@ -271,16 +254,11 @@ export function buildSideCatalog(args: {
   otherRange?: NormalizedSideRange;
   currentItems: TradeItem[];
   currentPromises: PromiseTerm[];
-  defaultDuration: number | undefined;
-  /** Game-speed peace-deal duration; seeds peace / third-party-peace items. Falls back to `defaultDuration`. */
-  peaceDuration: number | undefined;
-  /** Game-speed relationship duration; seeds the Declaration of Friendship's fixed duration. Falls back to `defaultDuration`. */
-  relationshipDuration: number | undefined;
+  /** Fixed game durations reported by inspect-deal. */
+  durations: DealDurations;
   promiseTargets: PromiseTargetInfo[];
 }): InventoryCategory[] {
-  const { ownerID, otherID, range, otherRange, currentItems, currentPromises, defaultDuration, peaceDuration, relationshipDuration, promiseTargets } = args;
-  // The fixed, game-set durations bundle; default terms resolve their read-only duration by item type.
-  const durations: DealDurations = { defaultDuration, peaceDuration, relationshipDuration };
+  const { ownerID, otherID, range, otherRange, currentItems, currentPromises, durations, promiseTargets } = args;
   const ownerGives = (predicate: (i: TradeItem) => boolean): boolean =>
     currentItems.some((i) => i.fromPlayerID === ownerID && predicate(i));
 
@@ -305,32 +283,69 @@ export function buildSideCatalog(args: {
     targets,
   });
 
+  // Promises are independent of the inspected tradable range. Targeted promises only appear when
+  // at least one target remains available or selected.
+  const promises: InventoryRow[] = PROMISE_TYPES.flatMap((promiseType): InventoryRow[] => {
+    if (PROMISE_NEEDS_TARGET.has(promiseType)) {
+      const targets = promiseTargetsFor(promiseType, ownerID, otherID, promiseTargets, currentPromises);
+      return targets.length
+        ? [expandableRow(`PROMISE:${promiseType}`, PROMISE_METADATA[promiseType].label, targets)]
+        : [];
+    }
+    return [{
+      key: `PROMISE:${promiseType}`,
+      label: PROMISE_METADATA[promiseType].label,
+      legal: true,
+      reasons: [],
+      selected: currentPromises.some((promise) =>
+        promise.promiserID === ownerID && promise.promiseType === promiseType),
+      addPayload: {
+        kind: 'promise',
+        promise: { promiserID: ownerID, recipientID: otherID, promiseType },
+      },
+    }];
+  });
+
+  // Promises are independent of the inspected tradable range. All other categories are range-derived.
+  if (!range) {
+    return [
+      { kind: 'gold', title: 'Gold', rows: [] },
+      { kind: 'luxury', title: 'Luxury resources', rows: [] },
+      { kind: 'strategic', title: 'Strategic resources', rows: [] },
+      { kind: 'congress', title: 'World Congress', rows: [] },
+      { kind: 'toggles', title: 'Agreements', rows: [] },
+      { kind: 'cities', title: 'Cities', rows: [] },
+      { kind: 'techs', title: 'Technologies', rows: [] },
+      { kind: 'thirdParty', title: 'Third-party peace & war', rows: [] },
+      { kind: 'promises', title: 'Promises', rows: promises },
+    ];
+  }
+
   // 1. Gold + gold per turn. The "up to N" hints reuse the shared per-row caps (deal-helpers), so the
   //    inventory text and the offer editor's numeric max are one derivation. GPT is tagged "/turn" and
   //    is omitted when income is ≤0 (gptCap returns undefined there — the row is unavailable anyway).
-  const gold: InventoryRow[] = [];
-  if (range) {
-    const goldSeed = Math.min(GOLD_SEED, range.gold.max);
-    const treasuryCap = goldCap(range);
-    const incomeCap = gptCap(range);
-    gold.push(itemRow(
+  const goldSeed = Math.min(GOLD_SEED, range.gold.max);
+  const treasuryCap = goldCap(range);
+  const incomeCap = gptCap(range);
+  const gold: InventoryRow[] = [
+    itemRow(
       'GOLD', 'Gold', range.gold.available, range.gold.reasons,
-      isSingletonSelected('GOLD', ownerID, currentItems),
+      ownerGives((item) => item.itemType === 'GOLD'),
       defaultItemFor('GOLD', ownerID, otherID, { gold: goldSeed }),
       treasuryCap ? `up to ${treasuryCap}` : undefined
-    ));
-    gold.push(itemRow(
+    ),
+    itemRow(
       'GOLD_PER_TURN', 'Gold per turn', range.goldPerTurn.available, range.goldPerTurn.reasons,
-      isSingletonSelected('GOLD_PER_TURN', ownerID, currentItems),
+      ownerGives((item) => item.itemType === 'GOLD_PER_TURN'),
       defaultItemFor('GOLD_PER_TURN', ownerID, otherID, { durations }),
       incomeCap !== undefined ? `up to ${incomeCap}/turn` : undefined
-    ));
-  }
+    ),
+  ];
 
   // 2–3. Resources, bucketed by category. Bonus resources are never tradeable, so the inspect-deal
   // source omits them entirely — only luxury and strategic buckets exist here.
   const resourceRows = (category: 'luxury' | 'strategic'): InventoryRow[] =>
-    (range?.resources ?? [])
+    range.resources
       .filter((r) => r.category === category)
       .map((r) =>
         itemRow(
@@ -354,7 +369,7 @@ export function buildSideCatalog(args: {
   // see the draft's existing commitment — replicate the rule here: once this side has any vote
   // commitment on the table, the others are blocked (red, with a reason) until it's removed.
   const sideHasVoteCommitment = ownerGives((i) => i.itemType === 'VOTE_COMMITMENT');
-  const voteTargets: InventoryTarget[] = (range?.voteCommitments ?? []).map((v) => {
+  const voteTargets: InventoryTarget[] = range.voteCommitments.map((v) => {
     const selected = ownerGives(
       (i) =>
         i.itemType === 'VOTE_COMMITMENT' &&
@@ -396,8 +411,7 @@ export function buildSideCatalog(args: {
   // addable when both sides can trade it. AND the two ranges' legality and merge (deduped) their
   // reasons — a slot present on this side but absent from a known `otherRange` means the mirror
   // would be untradeable, so disable it. `otherRange` undefined ⇒ own-side legality only.
-  const toggles: InventoryRow[] = range
-    ? TOGGLE_ITEMS.flatMap((t) => {
+  const toggles: InventoryRow[] = TOGGLE_ITEMS.flatMap((t) => {
         const cand = range[t.rangeKey] as CandidateLegality | undefined;
         if (!cand) return [];
         const mirror = SYMMETRIC_ITEM_TYPES.has(t.itemType) && otherRange
@@ -408,14 +422,13 @@ export function buildSideCatalog(args: {
         const reasons = mirror ? [...new Set([...cand.reasons, ...mirror.reasons])] : cand.reasons;
         return [itemRow(
           t.itemType, t.label, legal, reasons,
-          isSingletonSelected(t.itemType, ownerID, currentItems),
+          ownerGives((item) => item.itemType === t.itemType),
           defaultItemFor(t.itemType, ownerID, otherID, { durations })
         )];
-      })
-    : [];
+      });
 
   // 7. Cities.
-  const cities: InventoryRow[] = (range?.cities ?? []).map((c) =>
+  const cities: InventoryRow[] = range.cities.map((c) =>
     itemRow(
       `CITY:${c.cityID}`,
       c.name || `City #${c.cityID}`,
@@ -427,7 +440,7 @@ export function buildSideCatalog(args: {
   );
 
   // 8. Technologies.
-  const techs: InventoryRow[] = (range?.techs ?? []).map((t) =>
+  const techs: InventoryRow[] = range.techs.map((t) =>
     itemRow(
       `TECH:${t.techID}`,
       t.name ? `Tech: ${t.name}` : `Tech #${t.techID}`,
@@ -442,7 +455,7 @@ export function buildSideCatalog(args: {
   // Illegal targets (not at war for peace / already at war for war) are HIDDEN, except one already on
   // the deal (kept visible so it can be deselected). An empty surviving list drops the whole row.
   const thirdParty: InventoryRow[] = [];
-  const peaceTargets: InventoryTarget[] = (range?.thirdPartyPeace ?? []).map((t): InventoryTarget => ({
+  const peaceTargets: InventoryTarget[] = range.thirdPartyPeace.map((t): InventoryTarget => ({
     key: `TPP:${t.teamID}`,
     label: t.name ?? `team ${t.teamID}`,
     legal: t.legal,
@@ -450,7 +463,7 @@ export function buildSideCatalog(args: {
     selected: ownerGives((i) => i.itemType === 'THIRD_PARTY_PEACE' && i.thirdPartyTeamID === t.teamID),
     addPayload: { kind: 'item', item: defaultItemFor('THIRD_PARTY_PEACE', ownerID, otherID, { thirdPartyTeamID: t.teamID, durations }) },
   })).filter((target) => target.legal || target.selected);
-  const warTargets: InventoryTarget[] = (range?.thirdPartyWar ?? []).map((t): InventoryTarget => ({
+  const warTargets: InventoryTarget[] = range.thirdPartyWar.map((t): InventoryTarget => ({
     key: `TPW:${t.teamID}`,
     label: t.name ?? `team ${t.teamID}`,
     legal: t.legal,
@@ -460,24 +473,6 @@ export function buildSideCatalog(args: {
   })).filter((target) => target.legal || target.selected);
   if (peaceTargets.length) thirdParty.push(expandableRow('TP_PEACE', 'Make peace with…', peaceTargets));
   if (warTargets.length) thirdParty.push(expandableRow('TP_WAR', 'Declare war on…', warTargets));
-
-  // 10. Promises — the contract holds only the ones the tactical AI honors, so the full PROMISE_TYPES
-  // is the offered set. A targeted promise (Coop War) expands to pick its third party (and never
-  // auto-selects at the header); a non-targeted promise is a direct singleton-by-type.
-  const promises: InventoryRow[] = PROMISE_TYPES.map((pt) => {
-    if (PROMISE_NEEDS_TARGET.has(pt)) {
-      return expandableRow(`PROMISE:${pt}`, PROMISE_METADATA[pt].label, promiseTargetsFor(pt, ownerID, otherID, promiseTargets, currentPromises));
-    }
-    return {
-      key: `PROMISE:${pt}`,
-      label: PROMISE_METADATA[pt].label,
-      // Promise structural legality is a light entrypoint check, not part of the range; show all.
-      legal: true,
-      reasons: [],
-      selected: currentPromises.some((p) => p.promiserID === ownerID && p.promiseType === pt),
-      addPayload: { kind: 'promise', promise: { promiserID: ownerID, recipientID: otherID, promiseType: pt } },
-    };
-  });
 
   return [
     { kind: 'gold', title: 'Gold', rows: gold },

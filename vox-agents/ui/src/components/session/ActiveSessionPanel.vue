@@ -16,9 +16,6 @@ defineEmits<{
   stop: [];
 }>();
 
-/** Whether the active session is paused. */
-const isPaused = computed(() => !!props.session.paused);
-
 /** Whether pause or resume is available for the current session state. */
 const canTogglePause = computed(() => {
   return props.session.state === 'running' || props.session.state === 'recovering';
@@ -58,7 +55,7 @@ const elapsedTime = computed(() => {
       <template #start>
         <h3>Active Session</h3>
         <Tag class="ml-2" :severity="stateSeverity" :value="session.state.toUpperCase()" />
-        <Tag v-if="isPaused" class="ml-2" severity="warning" value="PAUSED" />
+        <Tag v-if="session.paused" class="ml-2" severity="warning" value="PAUSED" />
       </template>
       <template #end>
         <Button
@@ -71,8 +68,8 @@ const elapsedTime = computed(() => {
           @click="$emit('viewPlayers')"
         />
         <Button
-          :label="isPaused ? 'Resume' : 'Pause'"
-          :icon="isPaused ? 'pi pi-play' : 'pi pi-pause'"
+          :label="session.paused ? 'Resume' : 'Pause'"
+          :icon="session.paused ? 'pi pi-play' : 'pi pi-pause'"
           severity="secondary"
           size="small"
           class="mr-2"

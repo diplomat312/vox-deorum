@@ -5,6 +5,23 @@
 import type { Span } from '../utils/types';
 
 /**
+ * Clone a span with an attributes bag that is safe for UI consumers to read.
+ * Telemetry HTTP responses can contain SQLite's JSON string representation.
+ */
+export function parseSpanAttributes(span: Span): Span {
+  if (!span.attributes) return { ...span, attributes: {} };
+  if (typeof span.attributes !== 'string') return { ...span };
+  try {
+    const attributes = JSON.parse(span.attributes);
+    return typeof attributes === 'object' && attributes !== null && !Array.isArray(attributes)
+      ? { ...span, attributes }
+      : { ...span, attributes: {} };
+  } catch {
+    return { ...span, attributes: {} };
+  }
+}
+
+/**
  * Format duration in milliseconds for display
  */
 export function formatDuration(ms: number): string {

@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { computed } from 'vue';
 import Button from 'primevue/button';
 import SessionListPanel from '../shared/SessionListPanel.vue';
 import type { EnvoyThread } from '@/utils/types';
+import { agentName } from '@vox/utils/diplomacy/transcript-utils';
 
 /**
  * Props for the ChatSessionsList component
@@ -28,52 +28,18 @@ const emit = defineEmits<{
 }>();
 
 /**
- * Handle session selection
- */
-function handleSessionClick(session: EnvoyThread) {
-  emit('session-selected', session);
-}
-
-/**
- * Handle resume button click
- */
-function handleResumeClick(sessionId: string) {
-  emit('session-resume', sessionId);
-}
-
-/**
- * Handle delete button click
- */
-function handleDeleteClick(sessionId: string) {
-  emit('session-delete', sessionId);
-}
-
-/**
- * Computed property for sessions count
- */
-const sessionCount = computed(() => props.sessions.length);
-
-/**
- * The agent name voicing this session = the agent seat's role descriptor.
- */
-function agentNameOf(session: EnvoyThread): string {
-  const role = session.agent === session.player1ID ? session.player1Role : session.player2Role;
-  return role ?? 'agent';
-}
-
-/**
  * Format session title or fallback
  */
 function getSessionTitle(session: EnvoyThread): string {
   if (session.title) return session.title;
-  return `Chat with ${agentNameOf(session)} - Game ${session.gameID}`;
+  return `Chat with ${agentName(session) ?? 'agent'} - Game ${session.gameID}`;
 }
 </script>
 
 <template>
   <SessionListPanel
     :title="title"
-    :count="sessionCount"
+    :count="sessions.length"
     :empty-message="emptyMessage"
     empty-icon="pi pi-comments"
     count-severity="info"
@@ -91,12 +57,12 @@ function getSessionTitle(session: EnvoyThread): string {
 
     <div v-for="session in sessions" :key="session.id"
          class="table-row clickable"
-         @click="handleSessionClick(session)">
+         @click="emit('session-selected', session)">
       <div class="col-expand">
         {{ getSessionTitle(session) }}
       </div>
       <div class="col-fixed-120">
-        {{ agentNameOf(session) }}
+        {{ agentName(session) ?? 'agent' }}
       </div>
       <div class="col-fixed-250">
         {{ session.gameID }}
@@ -106,10 +72,10 @@ function getSessionTitle(session: EnvoyThread): string {
       </div>
       <div class="col-fixed-150">
         <Button label="Resume" icon="pi pi-play" text size="small"
-                @click.stop="handleResumeClick(session.id)" />
+                @click.stop="emit('session-resume', session.id)" />
         <Button icon="pi pi-trash" text size="small"
                 severity="danger"
-                @click.stop="handleDeleteClick(session.id)" />
+                @click.stop="emit('session-delete', session.id)" />
       </div>
     </div>
   </SessionListPanel>

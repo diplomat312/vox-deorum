@@ -14,9 +14,7 @@ const cats = (over: Partial<NormalizedSideRange> = {}, promiseTargets: PromiseTa
     range: range(over),
     currentItems: [],
     currentPromises: [],
-    defaultDuration: 30,
-    peaceDuration: 10,
-    relationshipDuration: 25,
+    durations: { defaultDuration: 30, peaceDuration: 10, relationshipDuration: 25 },
     promiseTargets,
   });
 

@@ -1,14 +1,13 @@
 import { ref } from 'vue';
 import { api } from '../api/client';
 import type { HealthStatus } from '@/utils/types';
+import { createPoller } from '@/utils/polling';
 
 const pollIntervalMs = 5000;
 
 export const healthStatus = ref<HealthStatus | null>(null);
 
 let healthRequest: Promise<void> | null = null;
-let pollInterval: number | null = null;
-let pollingConsumers = 0;
 
 /** Fetch service health, reusing a request already in progress. */
 function fetchHealth(): Promise<void> {
@@ -17,12 +16,7 @@ function fetchHealth(): Promise<void> {
   healthRequest = api.getHealth().then((status) => {
     healthStatus.value = status;
   }).catch(() => {
-    healthStatus.value = {
-      status: 'error',
-      timestamp: new Date().toISOString(),
-      service: 'vox-agents',
-      version: 'Unknown'
-    };
+    healthStatus.value = null;
   }).finally(() => {
     healthRequest = null;
   });
@@ -30,29 +24,12 @@ function fetchHealth(): Promise<void> {
   return healthRequest;
 }
 
-/** Run one health polling tick. */
-function pollHealth(): void {
+const healthPoller = createPoller(() => {
   void fetchHealth();
-}
+}, pollIntervalMs);
 
 /** Start health polling for one mounted consumer and return its cleanup handle. */
 export function startHealthPolling(): () => void {
-  pollingConsumers++;
   void fetchHealth();
-
-  if (pollInterval === null) {
-    pollInterval = window.setInterval(pollHealth, pollIntervalMs);
-  }
-
-  let released = false;
-
-  /** Release this caller's health polling ownership once. */
-  return () => {
-    if (released) return;
-    released = true;
-    pollingConsumers = Math.max(0, pollingConsumers - 1);
-    if (pollingConsumers > 0 || pollInterval === null) return;
-    window.clearInterval(pollInterval);
-    pollInterval = null;
-  };
+  return healthPoller.acquire();
 }

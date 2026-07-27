@@ -97,7 +97,7 @@ describe('useThreadMessages', () => {
     const { sendMessage } = setup();
     await sendMessage('Hi');
     cb.onMessage({ type: 'text-delta', text: 'Hello there', id: 'a' });
-    cb.onDone();
+    cb.onDone({ sessionId: 'c1', messageCount: 2, deals: [] });
 
     // A stray error after the terminal done must not roll the now-committed exchange back.
     cb.onError('late error', 'committed');
@@ -292,7 +292,7 @@ describe('useThreadMessages', () => {
     await proposeDeal(emptyDeal(), vi.fn());
     cb.onConnected({ deal: dealRow() });
     cb.onMessage({ type: 'text-delta', text: 'Agreed', id: 'a' });
-    cb.onDone({});
+    cb.onDone({ sessionId: 'dipl:g:0:1', messageCount: 2, deals: [] });
 
     expect(thread.value!.messages).toHaveLength(2); // authoritative card + streamed reply
     expect(thread.value!.messages[0]!.deal!.ID).toBe(42);

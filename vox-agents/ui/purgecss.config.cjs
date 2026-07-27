@@ -1,7 +1,7 @@
 // PurgeCSS configuration for cleaning dead CSS out of the UI *source*.
 //
 // Targets our own source styles only:
-//   - src/styles/*.css          (shared stylesheets, @import-ed by components)
+//   - src/styles/*.css          (shared stylesheets imported globally)
 //   - <style> blocks in .vue     (inline component rules; @import lines ignored)
 // primeflex / primevue / primeicons (node_modules) are intentionally NOT touched.
 //
@@ -22,10 +22,11 @@ module.exports = {
   //   p-* / pi-*  PrimeVue + primeicons render these at runtime.
   //   msg-*       built dynamically, e.g. :class="`msg msg-${role}`".
   //   vjs-*       vue-json-pretty's runtime classes (targeted via :deep).
+  //   message-content descendants are emitted by marked() through v-html.
   //   h5 / h6     emitted by marked()-rendered markdown injected with v-html.
   safelist: {
     standard: [/^p-/, /^pi-/, /^pi$/, /^msg-/, /^vjs-/, 'h5', 'h6', 'html', 'body'],
-    deep: [/^p-/, /^pi-/, /^vjs-/],
+    deep: [/^p-/, /^pi-/, /^vjs-/, /^message-content$/],
     greedy: [/^p-/],
   },
 }

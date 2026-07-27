@@ -8,10 +8,9 @@ Pure-presentational: it renders a precomputed `InventoryCategory[]` (built by th
 `buildSideCatalog`) and emits `add-term` when a row is clicked. Direct rows add immediately with
 default parameters (edited later on the central offer). Rows that need a target (targeted promises,
 third-party peace/war) are EXPANDABLE: clicking reveals the eligible targets, and clicking a target
-adds the already-targeted term. Illegitimate third-party / coop-war targets are hidden outright (kept
-only when already on the deal, so they still show as "on the table"; the pledge is removed on the
-central offer, not here); other structurally impossible rows are red and not addable (their reason is
-a tooltip); singletons already on the table are shown selected.
+adds the already-targeted term. Ineligible third-party and Coop War targets are omitted unless already
+on the deal, so the central offer can still remove them. Other structurally impossible rows are red and
+not addable, with a reason tooltip. Singletons already on the table are shown selected.
 -->
 <template>
   <section class="deal-panel" :class="`deal-panel-${side}`">
@@ -50,7 +49,6 @@ a tooltip); singletons already on the table are shown selected.
                 <span class="deal-row-label">{{ t.label }}</span>
                 <span v-if="t.selected" class="deal-row-secondary">on the table</span>
               </button>
-              <div v-if="row.targets.length === 0" class="deal-category-empty">no eligible targets</div>
             </div>
           </template>
 
@@ -118,7 +116,3 @@ const onTarget = (t: InventoryTarget) => {
   expandedKey.value = null;
 };
 </script>
-
-<style scoped>
-@import '@/styles/deal.css';
-</style>

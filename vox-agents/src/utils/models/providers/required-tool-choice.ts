@@ -13,7 +13,7 @@ import type {
 
 /** Single provider-independent wording for the preserved requirement. */
 const requiredInstruction = (renderedNames: string): string =>
-  `IMPORTANT: This step has a final-output requirement: finish by calling at least one of these client-provided tools: ${renderedNames}. You can still call other tools if possible and as needed.s`;
+  `IMPORTANT: This step has a final-output requirement: finish by calling at least one of these client-provided tools: ${renderedNames}. You can still call other tools as needed, but call at least one of the named client-provided tools instead of ending with plain text.`;
 
 /** Return the declared client function tool names, deduplicated in declaration order. */
 export function clientFunctionToolNames(params: LanguageModelV3CallOptions): string[] {

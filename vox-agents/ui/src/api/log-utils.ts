@@ -29,7 +29,7 @@ export function extractLogParams(rawLog: any): LogEntry {
     context: rawLog.context
   };
 
-  // Extract all non-fixed fields as params, including context if present
+  // Extract all non-fixed fields as params.
   const params: Record<string, any> = {};
 
   for (const [key, value] of Object.entries(rawLog)) {

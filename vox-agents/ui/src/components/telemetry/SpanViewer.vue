@@ -149,6 +149,7 @@ import {
   formatTokenCount,
   getStatusSeverity,
   getStatusText,
+  parseSpanAttributes,
   buildSpanTree,
   flattenSpanTree,
   type SpanNode
@@ -192,18 +193,9 @@ const virtualScroller = ref<any>();
 const scrollerHeight = ref('600px');
 const autoscroll = ref(true); // Local autoscroll state, default to true
 
-// Parse attributes for all spans upfront
+// Parse attributes for all spans without mutating the incoming prop.
 const parsedSpans = computed(() => {
-  return props.spans.map(span => {
-    if (typeof span.attributes === 'string') {
-      try {
-        span.attributes = JSON.parse(span.attributes);
-      } catch {
-        // Keep as string if parsing fails
-      }
-    }
-    return span;
-  });
+  return props.spans.map(parseSpanAttributes);
 });
 
 // Build span tree using utility
@@ -219,17 +211,6 @@ watch(() => props.spans, (newSpans, oldSpans) => {
     toggleAllSpans(true);
   }
 
-  // Only autoscroll if streaming and enabled
-  if (props.isStreaming && autoscroll.value && virtualScroller.value && newSpans.length > (oldSpans?.length ?? 0)) {
-    nextTick(() => {
-      const targetIndex = flattenedSpans.value.length - 1;
-      if (targetIndex >= 0) {
-        requestAnimationFrame(() => {
-          virtualScroller.value.scrollToIndex(targetIndex, { align: 'end' });
-        });
-      }
-    });
-  }
 });
 
 // Watch for initial load and when autoscroll is enabled
@@ -338,18 +319,6 @@ onMounted(() => {
   calculateScrollerHeight();
   // Auto-expand all spans by default
   toggleAllSpans(true);
-
-  // Initial scroll to end if autoscroll is enabled
-  if (autoscroll.value && flattenedSpans.value.length > 0) {
-    nextTick(() => {
-      if (virtualScroller.value) {
-        const targetIndex = flattenedSpans.value.length - 1;
-        requestAnimationFrame(() => {
-          virtualScroller.value.scrollToIndex(targetIndex, { align: 'end' });
-        });
-      }
-    });
-  }
 
   window.addEventListener('resize', handleResize);
 });

@@ -5,14 +5,16 @@
  * auto-play settings, and player LLM assignments.
  */
 
-import { ref, computed, watch, onMounted, nextTick } from 'vue';
+import { ref, computed, watch, onMounted } from 'vue';
 import Dialog from 'primevue/dialog';
 import InputText from 'primevue/inputtext';
 import Checkbox from 'primevue/checkbox';
 import Button from 'primevue/button';
 import Card from 'primevue/card';
 import type {
+  ConfigDialogMode,
   PacingInterruption,
+  SelectOption,
   StrategistSessionConfig
 } from '@/utils/types';
 import { api } from '@/api/client';
@@ -26,11 +28,6 @@ import {
   type RunControlFormState,
   validateRunControls
 } from '@/utils/config-dialog-utils';
-
-type ConfigDialogMode = 'add' | 'edit' | 'duplicate';
-type SelectOption<T> = { label: string; value: T; description?: string };
-type PlayerEditorHandle = { addPlayer: () => void };
-
 // Props
 const props = defineProps<{
   visible: boolean;
@@ -55,7 +52,6 @@ const localConfig = ref<StrategistSessionConfig>({
 });
 
 const localName = ref('');
-const playerEditor = ref<PlayerEditorHandle | null>(null);
 const strategistOptions = ref<SelectOption<string>[]>([]);
 const loadingStrategists = ref(false);
 const interruptionOptions = ref<SelectOption<PacingInterruption>[]>([
@@ -77,7 +73,7 @@ const isEditMode = computed(() => props.mode === 'edit');
 const hasRunControlError = computed(() => validateRunControls(runControlState.value) !== null);
 
 // Watch for prop changes to update local state
-watch(() => props.visible, async (newVal) => {
+watch(() => props.visible, (newVal) => {
   if (newVal) {
     if (props.mode === 'add') {
       // Reset to default config for new
@@ -86,12 +82,16 @@ watch(() => props.visible, async (newVal) => {
         type: 'strategist',
         autoPlay: false,
         gameMode: 'wait',
-        llmPlayers: {}
+        llmPlayers: {
+          1: {
+            strategist: strategistOptions.value[0]?.value || '',
+            pacing: { everyTurns: 1, interruption: 'none' },
+            llms: {}
+          }
+        }
       };
       localName.value = localConfig.value.name;
       runControlState.value = hydrateRunControls(localConfig.value);
-      await nextTick();
-      playerEditor.value?.addPlayer();
     } else if (props.config) {
       // Copy config for editing
       localConfig.value = JSON.parse(JSON.stringify(props.config));
@@ -244,7 +244,6 @@ onMounted(() => {
       />
 
       <PlayerConfigEditor
-        ref="playerEditor"
         :players="localConfig.llmPlayers"
         :auto-play="localConfig.autoPlay"
         :strategist-options="strategistOptions"

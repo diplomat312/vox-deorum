@@ -117,11 +117,15 @@ export function formatValue(value: number): string {
   return Math.round(value).toString();
 }
 
-/** Items one side gives in a deal (the side is the `from` party), paired with their deal index. */
-export function sideGives(items: TradeItem[], sideID: number): Array<{ item: TradeItem; index: number }> {
-  return items
-    .map((item, index) => ({ item, index }))
-    .filter(({ item }) => item.fromPlayerID === sideID);
+/** Entries one side gives or promises, paired with their original deal index. */
+export function entriesForSide<T>(
+  entries: T[],
+  sideID: number,
+  giverID: (entry: T) => number,
+): Array<{ entry: T; index: number }> {
+  return entries
+    .map((entry, index) => ({ entry, index }))
+    .filter(({ entry }) => giverID(entry) === sideID);
 }
 
 /**
@@ -216,25 +220,40 @@ export function formatItemLabel(
  *
  * `inspected` is index-aligned with `items` (the server preserves order).
  */
-export function computeSideBalance(
+export interface SideBalance {
+  net: number;
+  hasSentinel: boolean;
+}
+
+/** Sum a side's signed item values while ignoring unusable sentinel estimates. */
+function sideBalance(
   items: TradeItem[],
-  inspected: InspectedTradeItem[],
-  sideID: number
-): { net: number; hasSentinel: boolean } {
+  sideID: number,
+  valueFor: (item: TradeItem, index: number, receives: boolean) => number | undefined,
+): SideBalance {
   let net = 0;
   let hasSentinel = false;
   items.forEach((item, index) => {
-    const insp = inspected[index];
-    if (!insp) return;
-    if (item.toPlayerID === sideID) {
-      if (isSentinel(insp.valueIfIReceive)) hasSentinel = true;
-      else net += insp.valueIfIReceive;
-    } else if (item.fromPlayerID === sideID) {
-      if (isSentinel(insp.valueIfIGive)) hasSentinel = true;
-      else net -= insp.valueIfIGive;
-    }
+    const receives = item.toPlayerID === sideID;
+    if (!receives && item.fromPlayerID !== sideID) return;
+    const value = valueFor(item, index, receives);
+    if (value === undefined) return;
+    if (isSentinel(value)) hasSentinel = true;
+    else net += receives ? value : -value;
   });
   return { net, hasSentinel };
+}
+
+/** Compute a side's live balance from the index-aligned inspection values. */
+export function computeSideBalance(
+  items: TradeItem[],
+  inspected: InspectedTradeItem[],
+  sideID: number,
+): SideBalance {
+  return sideBalance(items, sideID, (_item, index, receives) => {
+    const item = inspected[index];
+    return item ? (receives ? item.valueIfIReceive : item.valueIfIGive) : undefined;
+  });
 }
 
 /**
@@ -251,19 +270,15 @@ export function storedBalanceToSide(
   player1ID: number,
   player2ID: number,
   sideID: number
-): { net: number; hasSentinel: boolean } | undefined {
+): SideBalance | undefined {
   const valueMap = sideID === player1ID ? value1 : sideID === player2ID ? value2 : undefined;
   if (!valueMap) return undefined;
-  let net = 0;
-  let hasSentinel = false;
-  items.forEach((item, index) => {
-    const v = valueMap[String(index)];
-    if (v === undefined) return;
-    if (isSentinel(v)) { hasSentinel = true; return; }
-    if (item.toPlayerID === sideID) net += v;
-    else if (item.fromPlayerID === sideID) net -= v;
-  });
-  return { net, hasSentinel };
+  return sideBalance(items, sideID, (_item, index) => valueMap[String(index)]);
+}
+
+/** Format a signed side balance consistently across the editor and transcript card. */
+export function formatBalance(balance: SideBalance): string {
+  return `${balance.net > 0 ? '+' : ''}${formatValue(balance.net)}${balance.hasSentinel ? ' (some have no usable estimate)' : ''}`;
 }
 
 /**

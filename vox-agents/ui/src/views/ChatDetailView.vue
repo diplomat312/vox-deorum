@@ -146,11 +146,11 @@ import Dialog from 'primevue/dialog';
 import ProgressSpinner from 'primevue/progressspinner';
 import { useToast } from 'primevue/usetoast';
 import { api } from '../api/client';
-import type { EnvoyThread, DealPayload } from '../utils/types';
+import type { EnvoyThread, DealPayload, GetChatResponse } from '../utils/types';
 import ChatMessages from '../components/chat/ChatMessages.vue';
 import DeleteSessionDialog from '../components/chat/DeleteSessionDialog.vue';
 import DealScreen from '../components/deal/DealScreen.vue';
-import { deriveProposalOutcomes } from '../utils/deal/deal-reduce';
+import { deriveProposalOutcomes } from '@vox/utils/diplomacy/deal-reduce';
 // Pure transcript helpers shared with the backend (via @vox) so labels and the close-lock
 // comparison can never drift from the server's `isClosedThisTurn` / role derivation.
 import { roleOf, agentName as agentNameOf, audienceID, isClosedThisTurn } from '@vox/utils/diplomacy/transcript-utils';
@@ -274,7 +274,7 @@ const goBack = () => {
 };
 
 /** Adopt a server chat response (thread + label/turn enrichment) as the live view. */
-const applyThread = (updated: Awaited<ReturnType<typeof api.getAgentChat>>) => {
+const applyThread = (updated: GetChatResponse) => {
   thread.value = updated;
   currentTurn.value = updated.currentTurn;
   voicedCiv.value = updated.voicedCiv;
@@ -294,7 +294,7 @@ const refreshConversation = async () => {
  * tool-call traces survive — then close the dialog. (Propose/counter no longer come through here; they
  * stream via `onDealSend`.)
  */
-const onDealScreenChanged = (updated: Awaited<ReturnType<typeof api.getAgentChat>>) => {
+const onDealScreenChanged = (updated: GetChatResponse) => {
   applyThread(updated);
   showDeal.value = false;
 };
@@ -427,8 +427,6 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-@import '@/styles/chat.css';
-
 .closed-notice {
   padding: 0.5rem 1rem;
   margin: 0 1rem;

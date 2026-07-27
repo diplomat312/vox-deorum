@@ -40,7 +40,9 @@
 }
 
 /* List Layouts */
-:is(.config-card, .config-section, .model-options-content) :is(.mappings-list, .models-list, .settings-grid) {
+.mappings-list,
+.models-list,
+.settings-grid {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;

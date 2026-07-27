@@ -59,50 +59,50 @@
 }
 
 /** Message content styles **/
-.message-content :deep(p) {
+.message-content p {
   margin: 0 0 0.5rem;
 }
 
-.message-content :deep(ul),
-.message-content :deep(ol) {
+.message-content ul,
+.message-content ol {
   margin: 0.5rem 0;
   padding-left: 2rem;
 }
 
-.message-content :deep(h1),
-.message-content :deep(h2),
-.message-content :deep(h3) {
+.message-content h1,
+.message-content h2,
+.message-content h3 {
   margin-top: 0.5rem;
 }
 
-.message-content :deep(table) {
+.message-content table {
   font-size: 0.9rem;
 }
 
-.message-content :deep(th) {
+.message-content th {
   margin-bottom: 0.25rem;
   border-bottom: 1px solid var(--p-surface-700);
 }
 
-.message-content :deep(td),
-.message-content :deep(th) {
+.message-content td,
+.message-content th {
   padding-left: 0.5rem;
   padding-right: 0.5rem;
   padding-bottom: 0.25rem;
 }
 
-.message-content :deep(tr:nth-child(even)) {
+.message-content tr:nth-child(even) {
   background: var(--p-surface-800);
 
 }
 
-.message-content :deep(td) {
+.message-content td {
   padding-left: 0.5rem;
   padding-right: 0.5rem;
   padding-bottom: 0.25rem;
 }
 
-.message-content :deep(hr) {
+.message-content hr {
   margin: 1rem 0;
 }
 
@@ -119,31 +119,8 @@
   color: var(--p-text-color);
 }
 
-.tool-icon {
-  font-size: 1.2rem;
-}
-
 .tool-name {
   color: var(--p-primary-600);
-}
-
-/* Tool content areas */
-.tool-result-content {
-  margin-top: 0.5rem;
-  padding: 0.5rem;
-  border: 1px solid var(--p-content-border-color);
-  border-radius: var(--p-border-radius);
-  overflow-x: auto;
-}
-
-.tool-result-content {
-  max-height: 300px;
-  overflow-y: auto;
-}
-
-.text-result {
-  white-space: pre-wrap;
-  word-break: break-word;
 }
 
 .json-pretty {
@@ -210,7 +187,7 @@
 }
 
 /* Chat-specific empty state override (base in states.css) */
-.empty-state {
+.chat-messages-container > .empty-state {
   height: 100%;
   padding: 2rem;
 }

@@ -4,9 +4,8 @@ import Button from 'primevue/button';
 import Card from 'primevue/card';
 import Dropdown from 'primevue/dropdown';
 import InputNumber from 'primevue/inputnumber';
-import type { PacingInterruption, PlayerConfig } from '@/utils/types';
+import type { PacingInterruption, PlayerConfig, SelectOption } from '@/utils/types';
 
-type SelectOption<T> = { label: string; value: T; description?: string };
 type PlayerListEntry = { id: number; player: PlayerConfig };
 
 const props = defineProps<{
@@ -127,7 +126,6 @@ function pacingSummary(player: PlayerConfig): string {
   return interruption === 'none' ? `Every ${everyTurns} turn${everyTurns === 1 ? '' : 's'}` : `Every ${everyTurns}, ${label}`;
 }
 
-defineExpose({ addPlayer });
 </script>
 
 <template>

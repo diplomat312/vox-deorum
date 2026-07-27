@@ -145,7 +145,3 @@ const contentParts = computed(() => {
   return parts;
 });
 </script>
-
-<style scoped>
-@import '@/styles/chat.css';
-</style>

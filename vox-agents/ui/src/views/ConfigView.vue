@@ -182,9 +182,9 @@ async function saveConfig() {
 
   try {
     // Validate mappings before saving
-    const validation = validateMappings(agentMappings.value, modelDefinitions.value);
-    if (!validation.valid) {
-      error.value = validation.errors.join('. ');
+    const validationErrors = validateMappings(agentMappings.value, modelDefinitions.value);
+    if (validationErrors.length > 0) {
+      error.value = validationErrors.join('. ');
       saving.value = false;
       return;
     }

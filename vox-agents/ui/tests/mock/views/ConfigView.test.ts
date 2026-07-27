@@ -4,7 +4,7 @@ import ConfigView from '@/views/ConfigView.vue';
 import AgentModelMappings from '@/components/config/AgentModelMappings.vue';
 import ModelDefinitions from '@/components/config/ModelDefinitions.vue';
 import { api } from '@/api/client';
-import type { AgentMapping, LLMConfig } from '@/utils/types';
+import type { AgentMapping, LLMConfig, VoxAgentsConfig } from '@/utils/types';
 
 type ConfirmationRequest = { accept?: () => void };
 
@@ -28,7 +28,7 @@ describe('ConfigView model deletion', () => {
     vi.mocked(api.getAgents).mockResolvedValue({ agents: [] });
     vi.mocked(api.getCurrentConfig).mockResolvedValue({
       apiKeys: {},
-      config: { llms: {} },
+      config: { llms: {} } as VoxAgentsConfig,
     });
   });
 

@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { mount } from '@vue/test-utils';
 import DealMessageCard from '@/components/deal/DealMessageCard.vue';
 import type { DealTranscriptMessage } from '@/utils/types';
-import type { ProposalOutcome } from '@/utils/deal/deal-reduce';
+import type { ProposalOutcome } from '@/utils/types';
 import { ButtonStub } from '../../../helpers/stubs.js';
 
 function dealMsg(over: Partial<DealTranscriptMessage> = {}): DealTranscriptMessage {

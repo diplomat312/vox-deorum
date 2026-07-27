@@ -96,7 +96,7 @@
 
 <script setup lang="ts">
 import { ref, computed, nextTick, watch } from 'vue';
-import { logs, isConnected, clearLogs as clearLogsStore } from '@/stores/logs';
+import { logs, isConnected, clearLogs } from '@/stores/logs';
 import { filterLogs, getLevelEmoji, formatTimestamp } from '@/api/log-utils';
 import type { LogEntry } from '@/utils/types';
 import { VList } from 'virtua/vue';
@@ -154,8 +154,6 @@ watch(filteredLogs, (newLogs, oldLogs) => {
   }
 });
 
-// Use the store's clear function
-const clearLogs = () => clearLogsStore();
 </script>
 
 <style scoped>

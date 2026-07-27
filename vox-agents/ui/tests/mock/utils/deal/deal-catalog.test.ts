@@ -2,8 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   buildSideCatalog,
   defaultItemFor,
-  isSingletonSelected,
-  offerPromisesForSide,
+  offerColumnsFor,
   type InventoryCategory,
 } from '@/utils/deal/deal-catalog';
 import { durationForItemType, type DealDurations } from '../../../../../../mcp-server/dist/utils/deal-metadata.js';
@@ -17,9 +16,7 @@ const build = (over: Partial<Parameters<typeof buildSideCatalog>[0]> = {}): Inve
     range: range(),
     currentItems: [],
     currentPromises: [],
-    defaultDuration: 30,
-    peaceDuration: 10,
-    relationshipDuration: 25,
+    durations,
     promiseTargets: [],
     ...over,
   });
@@ -167,12 +164,6 @@ describe('deal-catalog', () => {
     expect(cat(cats, 'strategic').rows[0]!.selected).toBe(true);
   });
 
-  it('isSingletonSelected only matches the owner side', () => {
-    const items: TradeItem[] = [{ fromPlayerID: 1, toPlayerID: 0, itemType: 'MAPS' }];
-    expect(isSingletonSelected('MAPS', 0, items)).toBe(false);
-    expect(isSingletonSelected('MAPS', 1, items)).toBe(true);
-  });
-
   it('surfaces only the offered promises; non-targeted add directly, Coop War expands to eligible civs', () => {
     const promiseTargets: PromiseTargetInfo[] = [
       { playerID: 3, teamID: 3, name: 'Washington', kind: 'major', coopWarEligible: true },
@@ -211,6 +202,17 @@ describe('deal-catalog', () => {
     expect(wash.addPayload).toEqual({ kind: 'promise', promise: { promiserID: 0, recipientID: 1, promiseType: 'COOP_WAR', targetPlayerID: 3 } });
     // Napoleon (coopWarEligible === false, not on the deal) is hidden outright.
     expect(coop.targets!.find((t) => t.label === 'Napoleon')).toBeUndefined();
+  });
+
+  it('keeps promise rows when the inspected range is unavailable', () => {
+    const rows = cat(build({ range: undefined, promiseTargets: [] }), 'promises').rows;
+    expect(rows.map((row) => row.key)).toEqual([
+      'PROMISE:MILITARY',
+      'PROMISE:EXPANSION',
+      'PROMISE:BORDER',
+      'PROMISE:NO_DIGGING',
+    ]);
+    expect(cat(build({ range: undefined, promiseTargets: [] }), 'gold').rows).toHaveLength(0);
   });
 
   it('keeps an ineligible Coop War target visible when it is already on the deal (to allow removal)', () => {
@@ -380,13 +382,22 @@ describe('deal-catalog', () => {
     expect((tp.targets![0]!.addPayload as { item: TradeItem }).item.duration).toBe(10);
   });
 
-  it('maps offer promise rows back to their working-deal index per giver', () => {
-    // (Item-index mapping is `sideGives`, covered in deal-helpers.test.ts.)
+  it('maps offer rows back to their working-deal index per giver', () => {
+    const items: TradeItem[] = [
+      { fromPlayerID: 0, toPlayerID: 1, itemType: 'GOLD' },
+      { fromPlayerID: 1, toPlayerID: 0, itemType: 'MAPS' },
+    ];
     const promises: PromiseTerm[] = [
       { promiserID: 1, recipientID: 0, promiseType: 'MILITARY' },
       { promiserID: 0, recipientID: 1, promiseType: 'EXPANSION' },
     ];
-    expect(offerPromisesForSide(promises, 0).map((e) => e.index)).toEqual([1]);
-    expect(offerPromisesForSide(promises, 1).map((e) => e.index)).toEqual([0]);
+    const columns = offerColumnsFor(items, promises, [
+      { sideID: 0, label: 'You' },
+      { sideID: 1, label: 'Them' },
+    ]);
+    expect(columns[0]!.items.map((entry) => entry.index)).toEqual([0]);
+    expect(columns[0]!.promises.map((entry) => entry.index)).toEqual([1]);
+    expect(columns[1]!.items.map((entry) => entry.index)).toEqual([1]);
+    expect(columns[1]!.promises.map((entry) => entry.index)).toEqual([0]);
   });
 });

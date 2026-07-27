@@ -29,8 +29,6 @@ const isExpanded = ref(false);
 </script>
 
 <style scoped>
-@import '@/styles/chat.css';
-
 .collapsible-preview {
   flex: 1;
   overflow: hidden;

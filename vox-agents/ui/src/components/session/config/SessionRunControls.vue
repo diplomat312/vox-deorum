@@ -5,10 +5,8 @@ import Checkbox from 'primevue/checkbox';
 import Dropdown from 'primevue/dropdown';
 import InputNumber from 'primevue/inputnumber';
 import InputText from 'primevue/inputtext';
-import type { StrategistSessionConfig } from '@/utils/types';
+import type { SelectOption, StrategistSessionConfig } from '@/utils/types';
 import { type ProductionOption, type RunControlFormState, uint32Max, validateRunControls } from '@/utils/config-dialog-utils';
-
-type SelectOption<T> = { label: string; value: T };
 
 const props = defineProps<{ modelValue: RunControlFormState; repetition?: StrategistSessionConfig['repetition'] }>();
 const emit = defineEmits<{

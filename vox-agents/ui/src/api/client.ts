@@ -15,7 +15,7 @@ import type {
   TraceSpansResponse,
   // Session management types
   SessionStatusResponse,
-  SessionConfigsResponse,
+  StrategistSessionConfig,
   StartSessionRequest,
   StartSessionResponse,
   SaveSessionConfigRequest,
@@ -27,6 +27,7 @@ import type {
   PlayersSummaryResponse,
   SessionConfig,
   // Config types
+  ConfigResponse,
   ErrorResponse,
   UploadResponse,
   Span,
@@ -37,6 +38,8 @@ import type {
   CreateChatResponse,
   ListChatsResponse,
   GetChatResponse,
+  ChatConnectedEvent,
+  ChatDoneEvent,
   DeleteChatResponse,
   ChatMessageRequest,
   // Typed deal-action API (stage 4)
@@ -44,28 +47,23 @@ import type {
   InspectDealResponse,
   DealRejectRequest,
   DealAcceptRequest,
-  DealMessagesResponse,
-  DealTranscriptMessage
+  DealMessagesResponse
 } from '../utils/types';
 import type { TextStreamPart, ToolSet } from 'ai';
 
 /** The `connected` SSE event payload: fired post-commit; for a deal turn it carries the committed row. */
-interface ConnectedData {
-  sessionId?: string;
-  /** The authoritative committed deal row (deal turns only) — the UI inserts it and closes the dialog. */
-  deal?: DealTranscriptMessage;
-}
+type ConnectedData = Omit<ChatConnectedEvent, 'rows'>;
 
 /** The terminal `done` SSE event payload: the turn succeeded. */
-interface DoneData {
-  sessionId?: string;
-  messageCount?: number;
-  /**
-   * Deal rows the diplomat's negotiator tools wrote mid-run (counter/accept/reject/enacted), reconciled
-   * from the durable store so the board reflects the diplomat's outcome without a reload that would
-   * flatten the streamed reasoning/tool traces. Absent/empty when the diplomat wrote no deal rows.
-   */
-  deals?: DealTranscriptMessage[];
+type DoneData = Omit<ChatDoneEvent, 'rows'>;
+
+/** Check the fields the UI consumes before accepting a terminal stream payload. */
+function isDoneData(value: unknown): value is DoneData {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
+  const candidate = value as Partial<DoneData>;
+  return typeof candidate.sessionId === 'string'
+    && typeof candidate.messageCount === 'number'
+    && Array.isArray(candidate.deals);
 }
 
 /**
@@ -301,8 +299,8 @@ class ApiClient {
   /**
    * Get list of available session configuration files
    */
-  async getSessionConfigs(): Promise<SessionConfigsResponse> {
-    return this.fetchJson<SessionConfigsResponse>(`${this.baseUrl}/api/session/configs`);
+  async getSessionConfigs(): Promise<{ configs: StrategistSessionConfig[] }> {
+    return this.fetchJson<{ configs: StrategistSessionConfig[] }>(`${this.baseUrl}/api/session/configs`);
   }
 
   /**
@@ -383,8 +381,8 @@ class ApiClient {
    * Get current configuration (config.json and API keys)
    * @returns Current configuration and API keys
    */
-  async getCurrentConfig(): Promise<{ config: any; apiKeys: Record<string, string> }> {
-    return this.fetchJson<{ config: any; apiKeys: Record<string, string> }>(
+  async getCurrentConfig(): Promise<ConfigResponse> {
+    return this.fetchJson<ConfigResponse>(
       `${this.baseUrl}/api/config`
     );
   }
@@ -394,7 +392,7 @@ class ApiClient {
    * @param data Configuration data and API keys to update
    * @returns Success status
    */
-  async updateCurrentConfig(data: { config?: any; apiKeys?: Record<string, string> }): Promise<{ success: boolean }> {
+  async updateCurrentConfig(data: Partial<ConfigResponse>): Promise<{ success: boolean }> {
     return this.fetchJson<{ success: boolean }>(
       `${this.baseUrl}/api/config`,
       {
@@ -614,9 +612,15 @@ class ApiClient {
     // Listen for 'done' events. The terminal payload carries any deal rows the diplomat's tools wrote
     // mid-run (reconciled server-side); parse it so the caller can splice them in without a reload.
     eventSource.addEventListener('done', (event: MessageEvent) => {
-      const data = event.data
-        ? parseEvent(event, (value) => JSON.parse(value) as DoneData, 'done event') ?? {}
-        : {};
+      const data = parseEvent(event, (value) => {
+        const parsed: unknown = JSON.parse(value);
+        if (!isDoneData(parsed)) throw new Error('Invalid done event payload.');
+        return parsed;
+      }, 'done event');
+      if (data === undefined) {
+        fail({ data: JSON.stringify({ message: 'The terminal response from the server was invalid.' }) });
+        return;
+      }
       onDone(data);
     });
 

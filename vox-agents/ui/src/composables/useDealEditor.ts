@@ -3,17 +3,16 @@ import { useToast } from 'primevue/usetoast';
 import { api } from '@/api/client';
 import type {
   DealPayload,
+  GetChatResponse,
   InspectDealResponse,
   NormalizedSideRange,
   PromiseTargetInfo,
   TradeItem,
+  DealReduction,
 } from '@/utils/types';
 import { buildSideCatalog, type AddTermPayload } from '@/utils/deal/deal-catalog';
 import { addItemWithMirror, removeItemWithMirror } from '@/utils/deal/deal-helpers';
-import { deriveActiveProposal, type DealReduction } from '@/utils/deal/deal-reduce';
-
-/** The thread returned after a blocking accept or reject action. */
-export type DealThreadResponse = Awaited<ReturnType<typeof api.acceptDeal>>;
+import { deriveActiveProposal } from '@vox/utils/diplomacy/deal-reduce';
 
 /** A normalized deal submission emitted to the chat streaming workflow. */
 export interface DealSubmission {
@@ -31,7 +30,7 @@ interface UseDealEditorOptions {
   locked: MaybeRefOrGetter<boolean | undefined>;
   agentBusy: MaybeRefOrGetter<boolean | undefined>;
   busy: Ref<boolean>;
-  onChanged: (thread: DealThreadResponse) => void;
+  onChanged: (thread: GetChatResponse) => void;
   onSend: (submission: DealSubmission) => void;
 }
 
@@ -90,9 +89,11 @@ export function useDealEditor(options: UseDealEditorOptions) {
       otherRange: rangeFor(otherID),
       currentItems: workingDeal.value.items,
       currentPromises: workingDeal.value.promises,
-      defaultDuration: inspection.value?.defaultDuration,
-      peaceDuration: inspection.value?.peaceDuration,
-      relationshipDuration: inspection.value?.relationshipDuration,
+      durations: {
+        defaultDuration: inspection.value?.defaultDuration,
+        peaceDuration: inspection.value?.peaceDuration,
+        relationshipDuration: inspection.value?.relationshipDuration,
+      },
       promiseTargets: promiseTargets.value,
     });
 

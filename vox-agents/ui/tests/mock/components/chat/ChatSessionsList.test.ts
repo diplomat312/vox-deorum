@@ -49,6 +49,16 @@ describe('ChatSessionsList', () => {
     expect(wrapper.find('.table-row .col-fixed-120').text()).toBe('envoy')
   })
 
+  it('uses the generic agent label when an older session has no stored role', () => {
+    const wrapper = mountList({
+      sessions: [
+        makeSession({ title: undefined, agent: 1, player2Role: undefined }),
+      ],
+    })
+    expect(wrapper.find('.table-row .col-expand').text()).toBe('Chat with agent - Game game-1')
+    expect(wrapper.find('.table-row .col-fixed-120').text()).toBe('agent')
+  })
+
   it('emits session-selected when a row is clicked', async () => {
     const session = makeSession()
     const wrapper = mountList({ sessions: [session] })

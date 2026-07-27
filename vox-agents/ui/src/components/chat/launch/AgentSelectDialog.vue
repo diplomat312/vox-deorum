@@ -144,28 +144,18 @@ const canStartChat = computed(() => {
   return userRole.value.trim().length > 0 && selectedPlayerOption.value !== null;
 });
 
-// Filtered agents based on context
-const filteredAgents = computed(() => {
+// Agents offered for direct chat or as a diplomacy voice.
+const chattableAgents = computed(() => {
   return agents.value.filter(agent => {
     // If session has contextId (active game), filter agents with "active-game" tag
-    if (props.contextId && agent.tags.includes('active-game')) {
-      return true;
-    }
+    if (props.contextId && agent.tags.includes('active-game')) return agent.name !== 'negotiator';
 
     // If session has databasePath (telepathist mode), filter agents with "telepathist" tag
-    if (props.databasePath && agent.tags.includes('telepathist')) {
-      return true;
-    }
+    if (props.databasePath && agent.tags.includes('telepathist')) return agent.name !== 'negotiator';
 
     return false;
   });
 });
-
-/**
- * Agents offered for direct chat or as a diplomacy voice. Excludes behind-the-scenes
- * specialists like the negotiator, which work for the diplomat and never address you.
- */
-const chattableAgents = computed(() => filteredAgents.value.filter(a => a.name !== 'negotiator'));
 
 // Methods
 async function loadAgents(): Promise<void> {

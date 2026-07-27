@@ -1,21 +1,20 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { api } from '../api/client'
 
-let envExists = true
-
-try {
-  const { exists } = await api.checkEnvFile()
-  envExists = exists
-} catch {
-  // Keep the session page as the fallback when the environment check is unavailable.
-}
-
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
     {
       path: '/',
-      redirect: envExists ? '/session' : '/config'
+      component: () => import('../views/SessionView.vue'),
+      beforeEnter: async () => {
+        try {
+          const { exists } = await api.checkEnvFile();
+          return exists ? '/session' : '/config';
+        } catch {
+          return '/session';
+        }
+      }
     },
     {
       path: '/telemetry',
@@ -40,7 +39,7 @@ const router = createRouter({
     {
       path: '/logs',
       name: 'logs',
-      component: () => import('../views/LogsView.vue')
+      component: () => import('../components/logging/LogViewer.vue')
     },
     {
       path: '/session',

@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { computed } from 'vue';
 import Button from 'primevue/button';
 import SessionListPanel from '../shared/SessionListPanel.vue';
 import type { TelemetrySession } from '@/utils/types';
@@ -27,23 +26,12 @@ const emit = defineEmits<{
   'session-selected': [sessionId: string];
 }>();
 
-/**
- * Handle session selection
- */
-function handleSessionClick(sessionId: string) {
-  emit('session-selected', sessionId);
-}
-
-/**
- * Computed property for sessions count
- */
-const sessionCount = computed(() => props.sessions.length);
 </script>
 
 <template>
   <SessionListPanel
     :title="title"
-    :count="sessionCount"
+    :count="sessions.length"
     :empty-message="emptyMessage"
     empty-icon="pi pi-info-circle"
     count-severity="success"
@@ -59,7 +47,7 @@ const sessionCount = computed(() => props.sessions.length);
 
     <div v-for="session in sessions" :key="session.sessionId"
          class="table-row clickable"
-         @click="handleSessionClick(session.sessionId)">
+         @click="emit('session-selected', session.sessionId)">
       <div class="col-expand">
         {{ session.gameID || '-' }}
       </div>
@@ -68,7 +56,7 @@ const sessionCount = computed(() => props.sessions.length);
       </div>
       <div v-if="showViewButton" class="col-fixed-100">
         <Button label="View" icon="pi pi-chart-line" text size="small"
-                @click.stop="handleSessionClick(session.sessionId)" />
+                @click.stop="emit('session-selected', session.sessionId)" />
       </div>
     </div>
   </SessionListPanel>

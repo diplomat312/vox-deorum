@@ -47,8 +47,7 @@ import { ref, computed, watch, nextTick, onMounted } from 'vue';
 import { VList } from 'virtua/vue';
 import ChatMessage from './ChatMessage.vue';
 import DealMessageCard from '../deal/DealMessageCard.vue';
-import type { MessageWithMetadata } from '@/utils/types';
-import type { ProposalOutcome } from '@/utils/deal/deal-reduce';
+import type { MessageWithMetadata, ProposalOutcome } from '@/utils/types';
 
 interface Props {
   /** Rendered stream items: ordinary chat messages plus inline deal cards (a row's `deal`). */
@@ -143,7 +142,3 @@ onMounted(() => {
   });
 });
 </script>
-
-<style scoped>
-@import '@/styles/chat.css';
-</style>
