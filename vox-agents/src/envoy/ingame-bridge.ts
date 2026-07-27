@@ -391,6 +391,7 @@ export class IngameChatSink implements ChatStreamSink {
   failure?: string;
 
   private spoken = "";
+  private pushedLength = 0;
   private lastDeltaAt = 0;
   private lastState?: GameStatusState;
 
@@ -410,6 +411,7 @@ export class IngameChatSink implements ChatStreamSink {
       // The progress sentinel is the turn's own narration ("Fetching episodes for turn 42..."),
       // multiplexed onto the text channel. It is a status, never a spoken line.
       if (chunk.id === progressChunkID) {
+        this.flushSpoken();
         this.status("composing");
         return;
       }
@@ -421,15 +423,18 @@ export class IngameChatSink implements ChatStreamSink {
       this.lastState = undefined;
       const now = this.now();
       if (now - this.lastDeltaAt < deltaIntervalMs) return;
+      this.pushedLength = this.spoken.length;
       this.lastDeltaAt = now;
       this.port.queueDelta(this.spoken);
       return;
     }
     if (reasoningChunkTypes.has(chunk.type)) {
+      this.flushSpoken();
       this.status("reasoning");
       return;
     }
     if (toolChunkTypes.has(chunk.type)) {
+      this.flushSpoken();
       // A `send-message` chunk is the spoken reply in tool clothing; the streamer already converted
       // it to text-deltas, so re-announcing it as tool activity would be wrong twice over.
       if (chunk.toolName === sendMessageToolName) return;
@@ -473,6 +478,14 @@ export class IngameChatSink implements ChatStreamSink {
     if (rows.length === 0) return;
     into.push(...rows);
     this.port.queueRows(rows);
+  }
+
+  /** Push any spoken tail that the regular delta throttle has not emitted yet. */
+  private flushSpoken(): void {
+    if (this.spoken.length === this.pushedLength) return;
+    this.pushedLength = this.spoken.length;
+    this.lastDeltaAt = this.now();
+    this.port.queueDelta(this.spoken);
   }
 
   /** Queue one generic status, collapsing an unbroken run of the same state into a single push. */
