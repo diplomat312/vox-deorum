@@ -2,7 +2,7 @@
 
 > See [README.md](README.md) for shared context, conventions, and shared-fixture prerequisites.
 
-Two surfaces are under-tested here: the **vox-agents web backend** (`src/web/` — Express server, SSE manager, routes) and the **Vue UI**. There is already a small UI real-tier backend smoke test in [backend.test.ts](../../../vox-agents/ui/tests/real/backend.test.ts), but it only covers health/session basics. The Vue mock tier currently tests only `ParamsList` and `TextMessage`. The UI uses Vitest + jsdom + Vue Test Utils (see [setup.ts](../../../vox-agents/ui/tests/setup.ts) with its inert EventSource shim and fake timers).
+Two surfaces are under-tested here: the **vox-agents web backend** (`src/web/`, Express server, SSE manager, routes) and the **Vue UI**. The backend smoke coverage now lives in [server.test.ts](../../../vox-agents/tests/mock/web/server.test.ts), alongside the web mock suite. The UI runs one mock/jsdom Vitest tier with Vue Test Utils (see [setup.ts](../../../vox-agents/ui/tests/setup.ts) with its inert EventSource shim and fake timers).
 
 ## Web backend (vox-agents/src/web)
 

@@ -32,7 +32,7 @@ Before writing any proposed test, re-confirm the target is actually uncovered (s
 
 All new tests must match existing patterns:
 
-- **Framework**: Vitest, ESM, `*.test.ts`, placed under `tests/mock/<area>/` per package. Use each package's `test:mock` script; the UI uses `npm --prefix vox-agents/ui run test:mock`.
+- **Framework**: Vitest, ESM, `*.test.ts`, placed under `tests/mock/<area>/` per package. Use each package's `test:mock` script where available; the UI uses `npm --prefix vox-agents/ui run test`.
 - **vox-agents MCP mocking**: use the shared fixture [mock-mcp-client.ts](../../../vox-agents/tests/helpers/mock-mcp-client.ts) — `installMockMcpClient()`, `respondWith(tool, result)`, `mcp.calls(tool)`, `structuredResult(...)`, and `mockMcpClientModule()` via `vi.mock(.../src/utils/models/mcp-client.js, ...)` with the relative path adjusted from the test file. See [transcript-io.test.ts](../../../vox-agents/tests/mock/diplomacy/transcript-io.test.ts) for the canonical shape.
 - **mcp-server store mocking**: use the in-memory-SQLite fixture pattern in [helpers.ts](../../../mcp-server/tests/mock/helpers.ts) — `setupDiplomacyStore(turn)` builds a real `KnowledgeStore` on `:memory:` and redirects the `knowledgeManager` singleton; `seedPlayer(...)` seeds rows. This runs the *real* store path with no bridge/DLL. Generalize it into a shared `mcp-server/tests/mock/helpers.ts` for store/getter/action tests.
 - **bridge-service mocking**: use `tests/test-utils/` (`mock-dll-server.ts`, `isolated-mock.ts`, `helpers.ts`). Single-fork pool is required.
@@ -47,7 +47,7 @@ All new tests must match existing patterns:
 
 ## Cross-package verification
 
-- Per package: mock tests must stay green, preserving the configured single-fork pool. From the repo root, use `npm --workspace vox-agents run test:mock`, `npm --workspace mcp-server run test:mock`, `npm --workspace bridge-service run test:mock`, and `npm --prefix vox-agents/ui run test:mock` as applicable.
+- Per package: mock tests must stay green, preserving the configured single-fork pool. From the repo root, use `npm --workspace vox-agents run test:mock`, `npm --workspace mcp-server run test:mock`, `npm --workspace bridge-service run test:mock`, and `npm --prefix vox-agents/ui run test` as applicable.
 - Coverage deltas: run the touched package's `test:coverage` script and compare the v8 `text` summary before/after. The backend package Vitest configs already request `text`, `lcov`, and `html`; use the generated `coverage/` output when useful, but do not depend on a pre-existing coverage directory.
 - No test may reach a live game/OBS/DLL — every new test is mock-tier (in-memory store, mocked `node-ipc`, mocked MCP client, fake VoxContext). No `tests/real`/`tests/live` additions.
 - Run the relevant build/type-check script for touched TypeScript packages (`npm --workspace <pkg> run build` or `type-check`; UI uses `npm --prefix vox-agents/ui run type-check`). There is no repo-level lint script in package.json today, so rely on TypeScript plus focused test runs unless a lint script is added.

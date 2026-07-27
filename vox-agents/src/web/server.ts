@@ -148,6 +148,11 @@ app.post('/shutdown', (_req: Request, res: Response) => {
   });
 });
 
+// Return JSON for unknown API endpoints before the SPA fallback can serve index.html.
+app.use('/api', (_req: Request, res: Response<ErrorResponse>) => {
+  res.status(404).json({ error: 'API endpoint not found' });
+});
+
 // Catch-all route for SPA - must come AFTER all API routes
 app.get('*', (_req: Request, res: Response<ErrorResponse>) => {
   const indexPath = path.join(staticPath, 'index.html');

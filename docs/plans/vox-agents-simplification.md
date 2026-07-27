@@ -122,7 +122,7 @@ Targeted tests after each move; full component gates at each checkpoint.
 
 - Backend: `npm --workspace vox-agents run type-check` and `npm --workspace vox-agents test`
 - MCP (Stage 3): `npm --workspace mcp-server run type-check` and `npm --workspace mcp-server test`
-- UI: `npm --prefix vox-agents/ui run type-check` and `npm --prefix vox-agents/ui run test:mock`
+- UI: `npm --prefix vox-agents/ui run type-check` and `npm --prefix vox-agents/ui run test`
 - Final: `npm run build:all` and `npm run test:all`
 
 Game and OBS suites stay opt-in: `test:game` only for changes reaching `VoxCivilization`, player supervision, or live game sequencing; `test:obs` only for production/OBS changes.

@@ -23,7 +23,7 @@ The interesting differences are in *what each service's default run includes*, b
 The bridge talks to a named pipe, so its tests can run against either a **mock DLL server** that implements the full IPC protocol or the **real** game. The `USE_MOCK` environment variable chooses the mode:
 
 - `npm test` (`USE_MOCK=true`, the default) runs with mocks, so the suite is fast and needs no game.
-- `npm run test:real` (`USE_MOCK=false`) exercises the bridge against an actual DLL.
+- `npm run test:real` (`USE_MOCK=false`) targets `tests/real/**` against a live Civilization V DLL. It is live-only and is not CI-able by design.
 
 The mock implements the whole protocol — registering Lua functions dynamically, simulating game events, with adjustable response delays — so integration paths are covered without a running game.
 
@@ -31,18 +31,22 @@ The mock implements the whole protocol — registering Lua functions dynamically
 
 The MCP server supports stdio and HTTP transports, and the rule is that tests must pass on **both**. The `TEST_TRANSPORT` environment variable selects which (HTTP is the default; `npm run test:stdio` forces stdio).
 
-Tools are tested **through an MCP client**, not by invoking their methods directly. The test setup exports an `mcpClient` that connects to the server over the chosen transport, so a tool test validates input handling, errors, and output exactly as an agent would experience them. There is also a faster `npm run test:unit` for the pure-logic pieces.
+The default `npm test` and `npm run test:mock` run the in-process mock tier. Real-tier tool tests use an MCP client rather than invoking tool methods directly, so they validate input handling, errors, and output exactly as an agent would experience them.
 
-### Vox agents — unit, game, and OBS pathways
+`npm run test:real` is wired to `tests/real/**` and boots the real MCP Server against the real Bridge Service in mock-DLL mode through `tests/real.setup.ts`. The stack is intended to be CI-able without Civilization V, but the existing real-tier integration tests were written for a live game and still need adaptation before the tier passes reliably.
 
-The agent framework has tests at very different costs, split into pathways so the cheap ones run by default and the expensive ones are opt-in:
+### Vox agents test tiers
+
+The agent framework separates its cheap default tests from future real-stack and live-environment tiers:
 
 | Pathway | Command | Notes |
 |---|---|---|
-| **Unit** | `npm test` (alias `npm run test:unit`) | Pure functions and utilities, no external dependencies, fast. The default. |
-| **Telepathist** | — | Runs against recorded telemetry database records, with no live game or LLM; skips itself if the database is absent. |
-| **Game** | `npm run test:game` | Actually launches CivilizationV.exe, so it needs Windows and Civ V. Runs sequentially (single fork) with long timeouts, gated behind a guard. **Excluded** from the default suite. |
-| **OBS** | `npm run test:obs` | Needs OBS Studio running with its WebSocket server; skips gracefully if OBS is unreachable. **Excluded** from the default suite. |
+| **Mock** | `npm test` or `npm run test:mock` | The default in-process mock tier in `tests/mock/**`. Telepathist coverage lives under `tests/mock/telepathist` and can skip when recorded telemetry is unavailable. |
+| **Real** | `npm run test:real` | Reserved for a future out-of-process real MCP Server and mock Bridge bottom in `tests/real/**`. It currently passes with no tests. |
+| **Game** | `npm run test:game` | The live Civilization V tier in `tests/live/game/**`. It needs Windows and Civ V, runs sequentially with long timeouts, and is excluded from the default suite. |
+| **OBS** | `npm run test:obs` | The live OBS tier in `tests/live/obs/**`. It needs OBS Studio with its WebSocket server and is excluded from the default suite. |
+
+The package scripts are `npm test`, `test:mock`, `test:watch`, `test:real`, `test:game`, `test:obs`, `test:coverage`, and `test:ui`.
 
 Because the game and OBS suites are environment-heavy and slow, the convention is firm: **don't touch the OBS tests unless you're changing OBS code, and don't touch the game tests unless you're changing the game-launch/process code.**
 

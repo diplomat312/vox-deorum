@@ -18,19 +18,20 @@ Backend LLM agent framework. For UI development, see `ui/AGENTS.md`.
 ### Commands
 | Command | What it runs |
 |---------|-------------|
-| `npm test` | All tests except game and OBS |
-| `npm run test:watch` | Watch mode (excludes game and OBS) |
-| `npm run test:unit` | Same as `npm test` |
-| `npm run test:game` | Game tests only (requires Windows + Civ V) |
-| `npm run test:obs` | OBS tests only (requires running OBS Studio) |
-| `npm run test:coverage` | Coverage report (excludes game and OBS) |
+| `npm test` | Default in-process mock tier |
+| `npm run test:mock` | Default in-process mock tier |
+| `npm run test:watch` | Watch mode for the mock tier |
+| `npm run test:real` | Future real MCP Server and mock Bridge tier; currently passes with no tests |
+| `npm run test:game` | Live Civilization V tests |
+| `npm run test:obs` | Live OBS tests |
+| `npm run test:coverage` | Coverage report for the mock tier |
 | `npm run test:ui` | Vitest browser UI |
 
 ### Test Pathways
-- **Unit** (`tests/utils/`) — Pure functions, no external deps, fast
-- **Telepathist** (`tests/telepathist/`) — Real telemetry DB records (no live game/LLM). Skips if DB absent
-- **Game** (`tests/infra/`) — Launches CivilizationV.exe. 90-180s timeouts, sequential via `singleFork: true`. Includes Civ5 guard
-- **OBS** (`tests/obs/`) — Requires OBS Studio with WebSocket server. Skips gracefully if OBS unreachable
+- **Mock** (`tests/mock/**`): Default in-process mock tier. Telepathist coverage lives in `tests/mock/telepathist` and can skip when recorded telemetry is unavailable.
+- **Real** (`tests/real/**`): Reserved for a future out-of-process real MCP Server and mock Bridge bottom. `npm run test:real` currently passes with no tests.
+- **Game** (`tests/live/game/**`): Live Civilization V tier. Launches CivilizationV.exe with long timeouts and sequential execution through `singleFork: true`.
+- **OBS** (`tests/live/obs/**`): Live OBS tier. Requires OBS Studio with its WebSocket server and skips gracefully when OBS is unreachable.
 
 ### Test Rules
 - **Don't touch OBS tests** unless changing OBS-related code (`obs-manager.ts`, `ProductionMode`)
