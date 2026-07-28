@@ -21,7 +21,7 @@
  * `Message` string field makes the field unambiguous and first.
  */
 
-import { sendMessageToolName } from "../diplomacy/send-message-tool-name.js";
+import { sendMessageToolName } from "../diplomacy/constants.js";
 
 /**
  * The subset of an AI SDK streaming chunk the streamer reads. The `onChunk` callback receives a

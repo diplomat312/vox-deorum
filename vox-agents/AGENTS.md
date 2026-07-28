@@ -87,6 +87,28 @@ VoxAgent (Base)
 3. Implement lifecycle hooks: `getModel()`, `getSystem()`, `getActiveTools()`, `getExtraTools()`, `getInitialMessages()`, `prepareStep()`, `stopCheck()`, `getOutput()`, `postprocessOutput()`
 4. Register in `agentRegistry`
 
+### Diplomacy & Envoy Layout
+
+`src/envoy/` is everything about envoy *agents*; `src/utils/diplomacy/` is the chat-route and
+conversation plumbing. Keep new files on the correct side of that line.
+
+```
+src/envoy/          envoy.ts, live-envoy.ts (base classes)
+  agents/           diplomat, negotiator, spokesperson, resolve-negotiator
+  tools/            send-message-tool, close-conversation-tool
+  ledger/           deal-ledger, give-receive-menu, ledger-grammar, ledger-resolver
+  context/          diplomacy-context, diplomat-utils, negotiator-utils, envoy-prompts
+
+src/utils/diplomacy/  constants.ts (cross-cutting constants)
+  transcript/       transcript, transcript-utils
+  turn/             chat-turn-commit, active-turn-state, live-turn
+  deal/             deal, deal-reduce, deal-actions
+  ingame/           ingame-bridge, notify, civ5-markup
+```
+
+Dependency direction is `envoy/` → `utils/diplomacy/`; never the reverse. `tests/mock/{diplomacy,envoy,web}/`
+mirror these subfolders. No `index.ts` barrels — import the specific module.
+
 ## Dual Mode
 
 - **Standalone**: Entry via `console.ts`. Configure `StrategistSessionConfig` with `llmPlayers` array, `autoPlay`. Session loops with crash recovery

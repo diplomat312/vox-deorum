@@ -23,8 +23,8 @@ import type {
   ParticipantIdentity,
   TelepathistChatContext,
 } from '../../types/index.js';
-import { isThreadBusy } from '../../utils/diplomacy/chat-turn-commit.js';
-import { autoCompact, diplomacyThreadId, identityOf } from '../../utils/diplomacy/transcript.js';
+import { isThreadBusy } from '../../utils/diplomacy/turn/chat-turn-commit.js';
+import { autoCompact, diplomacyThreadId, identityOf } from '../../utils/diplomacy/transcript/transcript.js';
 import {
   parseContextIdentifier,
   parseDatabaseIdentifier,

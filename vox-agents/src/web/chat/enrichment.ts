@@ -17,11 +17,11 @@ import type {
   ParticipantIdentity,
   PlayerAssignment,
 } from '../../types/index.js';
-import { currentTurnOf } from '../../utils/diplomacy/live-turn.js';
-import { audienceID, identityOf } from '../../utils/diplomacy/transcript.js';
+import { currentTurnOf } from '../../utils/diplomacy/turn/live-turn.js';
+import { audienceID, identityOf } from '../../utils/diplomacy/transcript/transcript.js';
 
 // The live-turn resolver now lives beside the shared conversation guard that consumes it
-// (`utils/diplomacy/live-turn.ts`), so the chat turn runner and the deal actions cannot drift from
+// (`utils/diplomacy/turn/live-turn.ts`), so the chat turn runner and the deal actions cannot drift from
 // the Web enrichment view of "what turn is it?". Re-exported here for the Web's existing importers.
 export { currentTurnOf };
 

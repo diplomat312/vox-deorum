@@ -10,8 +10,8 @@ import { VoxAgent, AgentParameters } from "../infra/vox-agent.js";
 import { EnvoyThread, MessageWithMetadata, ParticipantIdentity } from "../types/index.js";
 import { VoxContext } from "../infra/vox-context.js";
 import { formatToolResultOutput, stripSpokenEcho } from "../utils/models/text-cleaning.js";
-import { audienceID, boundaryIndex, collectSpokenReply, identityOf, observerName, roleOf, speakerLabel, type DealRowRenderer } from "../utils/diplomacy/transcript-utils.js";
-import { sendMessageToolName } from "../utils/diplomacy/send-message-tool-name.js";
+import { audienceID, boundaryIndex, collectSpokenReply, identityOf, observerName, roleOf, speakerLabel, type DealRowRenderer } from "../utils/diplomacy/transcript/transcript-utils.js";
+import { sendMessageToolName } from "../utils/diplomacy/constants.js";
 
 /**
  * Prompt-cache breakpoint strategy (Anthropic providers only; a no-op elsewhere).
@@ -99,7 +99,7 @@ export const specialMessages: Record<string, string> = {
  * name keeps the prompt (and the transcript labels built from it) coherent instead of failing the
  * turn or leaking a bare seat number into the audience description.
  */
-export { observerName } from "../utils/diplomacy/transcript-utils.js";
+export { observerName } from "../utils/diplomacy/transcript/transcript-utils.js";
 
 /**
  * Generic base envoy agent that can chat with the user.

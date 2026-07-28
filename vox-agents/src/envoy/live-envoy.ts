@@ -13,9 +13,9 @@ import { StrategistParameters, buildGameContextMessages } from "../strategist/st
 import { EnvoyThread } from "../types/index.js";
 import { VoxContext } from "../infra/vox-context.js";
 import { createBriefingTool } from "../briefer/briefing-utils.js";
-import { createSendMessageTool } from "./send-message-tool.js";
+import { createSendMessageTool } from "./tools/send-message-tool.js";
 import { getValidCalls } from "../utils/tools/terminal-tools.js";
-import type { DealRowRenderer } from "../utils/diplomacy/transcript-utils.js";
+import type { DealRowRenderer } from "../utils/diplomacy/transcript/transcript-utils.js";
 import { createLogger } from "../utils/logger.js";
 
 const logger = createLogger("live-envoy");

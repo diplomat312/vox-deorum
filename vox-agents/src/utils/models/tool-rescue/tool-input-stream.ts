@@ -24,7 +24,7 @@
 import type { LanguageModelV3StreamPart, LanguageModelV3ToolCall } from '@ai-sdk/provider';
 import { createLogger } from '../../logger.js';
 import { findStreamableToolCallStart } from './extract.js';
-import { sendMessageToolName } from '../../diplomacy/send-message-tool-name.js';
+import { sendMessageToolName } from '../../diplomacy/constants.js';
 
 const logger = createLogger("tool-rescue");
 

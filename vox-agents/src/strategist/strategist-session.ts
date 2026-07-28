@@ -10,7 +10,7 @@ import { createLogger } from "../utils/logger.js";
 import { mcpClient, type GameEventNotification } from "../utils/models/mcp-client.js";
 import { VoxPlayer } from "./vox-player.js";
 import { HumanDecisionBus, type HumanDecisionSubmission } from "./human-decision-bus.js";
-import { IngameBridge } from "../envoy/ingame-bridge.js";
+import { IngameBridge } from "../utils/diplomacy/ingame/ingame-bridge.js";
 import { voxCivilization } from "../infra/vox-civilization.js";
 import { setTimeout } from 'node:timers/promises';
 import { VoxSession } from "../infra/vox-session.js";

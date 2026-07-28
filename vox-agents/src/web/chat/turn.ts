@@ -29,25 +29,25 @@ import type {
   EnvoyThread,
   StreamingEventCallback,
 } from '../../types/index.js';
-import { agentName, needsRetryReply, retryMessage } from '../../utils/diplomacy/transcript.js';
+import { agentName, needsRetryReply, retryMessage } from '../../utils/diplomacy/transcript/transcript.js';
 import {
   insertDurableRows,
   isDealRow,
   type TranscriptPushMessage,
-} from '../../utils/diplomacy/transcript-utils.js';
+} from '../../utils/diplomacy/transcript/transcript-utils.js';
 import {
   beginChatTurn,
   ThreadBusyError,
   threadBusyMessage,
   type ChatTurn,
   type TurnCommit,
-} from '../../utils/diplomacy/chat-turn-commit.js';
+} from '../../utils/diplomacy/turn/chat-turn-commit.js';
 import {
   ConversationClosedThisTurnError,
   LiveTurnUnavailableError,
   requireOpenConversationTurn,
-} from '../../utils/diplomacy/live-turn.js';
-import { IllegalDealError, ProposalConflictError } from '../../utils/diplomacy/deal.js';
+} from '../../utils/diplomacy/turn/live-turn.js';
+import { IllegalDealError, ProposalConflictError } from '../../utils/diplomacy/deal/deal.js';
 import { createLogger } from '../../utils/logger.js';
 import {
   createSendMessageStreamer,

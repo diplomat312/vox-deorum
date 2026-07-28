@@ -7,7 +7,7 @@
 
 import type { ChatThreadStoreDependencies, EnvoyThread } from '../../types/index.js';
 import { contextRegistry } from '../../infra/context-registry.js';
-import { syncThreadMessages } from '../../utils/diplomacy/transcript.js';
+import { syncThreadMessages } from '../../utils/diplomacy/transcript/transcript.js';
 import { createLogger } from '../../utils/logger.js';
 
 const logger = createLogger('webui:chat-store');

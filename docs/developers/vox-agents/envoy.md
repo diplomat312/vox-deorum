@@ -29,7 +29,7 @@ Envoys also understand **special messages**: triple-brace tokens like `{{{Greeti
 
 It opens the conversation with the civilization's identity, the players it knows, and its current strategy. It exposes a `get-briefing` tool so the envoy can pull fresh military, economic, or diplomatic [briefings](support-agents.md) on demand instead of carrying the whole game state in context. Subclasses supply a `getHint()` — a standing reminder of who they are and who they are talking to.
 
-Both concrete envoys share prompt building blocks (`src/envoy/envoy-prompts.ts`):
+Both concrete envoys share prompt building blocks (`src/envoy/context/envoy-prompts.ts`):
 
 - The fictional-world framing.
 - An explicit disclaimer that the envoy has **no decision-making power** — it cannot bind its leader to anything.
@@ -38,11 +38,11 @@ Both concrete envoys share prompt building blocks (`src/envoy/envoy-prompts.ts`)
 
 ### Spokesperson
 
-`Spokesperson` (`src/envoy/spokesperson.ts`) is the civilization's public voice. It answers questions about its nation's positions and views, drawing on briefings and diplomatic history (`get-diplomatic-events`). It conveys existing positions rather than creating new ones, and it does not report back to anyone — a conversation with the spokesperson stays between you and it.
+`Spokesperson` (`src/envoy/agents/spokesperson.ts`) is the civilization's public voice. It answers questions about its nation's positions and views, drawing on briefings and diplomatic history (`get-diplomatic-events`). It conveys existing positions rather than creating new ones, and it does not report back to anyone — a conversation with the spokesperson stays between you and it.
 
 ### Diplomat
 
-`Diplomat` (`src/envoy/diplomat.ts`) plays the same conversational role with one crucial addition: it is an intelligence collector. Alongside the spokesperson's tools it has `call-diplomatic-analyst`. When a conversation produces something noteworthy — an official proposal, a threat, a rumor, an observation — the diplomat files a report (content, situation context, and its own memo) to the [diplomatic analyst](support-agents.md).
+`Diplomat` (`src/envoy/agents/diplomat.ts`) plays the same conversational role with one crucial addition: it is an intelligence collector. Alongside the spokesperson's tools it has `call-diplomatic-analyst`. When a conversation produces something noteworthy — an official proposal, a threat, a rumor, an observation — the diplomat files a report (content, situation context, and its own memo) to the [diplomatic analyst](support-agents.md).
 
 That call is fire-and-forget. The handoff forks a detached root run that keeps the submitting diplomat's turn and survives cancellation of the chat. The analyst assesses the report in the background and decides independently whether to relay it to the leader, while the diplomat keeps talking without pause. The diplomat itself still has no authority to agree to anything.
 

@@ -6,7 +6,7 @@
 
 import type { CreateChatRequest, PlayerAssignment } from './api.js';
 import type { EnvoyThread, ParticipantIdentity } from './chat.js';
-import type { TranscriptPushMessage } from '../utils/diplomacy/transcript-utils.js';
+import type { TranscriptPushMessage } from '../utils/diplomacy/transcript/transcript-utils.js';
 import type { DealTranscriptMessage } from '../../../mcp-server/dist/utils/deal-schema.js';
 
 /** Refresh a diplomacy thread from its durable transcript. */

@@ -14,7 +14,7 @@ import { describe, it, expect } from 'vitest';
 import { agentRegistry } from '../../../src/infra/agent-registry.js';
 import type { EnvoyThread, MessageWithMetadata } from '../../../src/types/index.js';
 import { specialMessages } from '../../../src/envoy/envoy.js';
-import { speakerLabel } from '../../../src/utils/diplomacy/transcript-utils.js';
+import { speakerLabel } from '../../../src/utils/diplomacy/transcript/transcript-utils.js';
 import { buildGameContextMessages } from '../../../src/strategist/strategy-parameters.js';
 import { createFakeVoxContext } from '../../helpers/fake-vox-context.js';
 

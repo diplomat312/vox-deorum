@@ -1,6 +1,6 @@
 -- Vox Deorum diplomacy conversation panel.
 -- Bubble design adapted with credit to @schnetziomi5's diplomacy-message-log modmod.
--- Deal reduction mirrors vox-agents/src/utils/diplomacy/deal-reduce.ts.
+-- Deal reduction mirrors vox-agents/src/utils/diplomacy/deal/deal-reduce.ts.
 
 include("IconSupport")
 include("VoxDeorumSeat")
