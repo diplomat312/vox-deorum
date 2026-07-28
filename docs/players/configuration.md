@@ -53,7 +53,7 @@ A sensible starting point is a mid-tier model from your chosen provider. Move up
 
 The default configuration includes common Codex models in the dashboard. You can also set the provider to `codex` and enter any other Codex model name available to your ChatGPT account.
 
-The first Codex request runs the `codex-openai-proxy` package through `npx`. npm downloads the proxy and its bundled CLI if they are not already cached. Existing Codex authentication is reused. Otherwise, follow the device-login URL and instructions in the Vox Deorum logs. The proxy starts lazily, so using another provider does not download or launch it.
+The first Codex request runs the `codex-openai-proxy` package through `npx`. npm downloads the proxy and its bundled CLI if they are not already cached. At startup, the proxy keeps the newer login from its own Codex home or the main Codex installation. If a copied login cannot be used, a recovered login can update an older existing main login. Otherwise, follow the device-login URL and instructions in the Vox Deorum logs. The proxy starts lazily, so using another provider does not download or launch it.
 
 The optional lifecycle settings are `CODEX_PROXY_PORT`, `CODEX_PROXY_COMMAND`, `CODEX_PROXY_ROOT`, `CODEX_PROXY_REQUEST_TIMEOUT`, and `CODEX_PROXY_STARTUP_TIMEOUT`. Blank values use defaults. The default Codex request deadline follows the same five-minute model execution budget as other providers. A custom command is trusted operator configuration, and Vox Deorum appends the required `serve` arguments.
 
