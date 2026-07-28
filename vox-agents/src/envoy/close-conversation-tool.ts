@@ -6,9 +6,11 @@
  * Closing a conversation is recorded as a special `close` transcript message rather than a
  * status flag. vox-agents derives open/closed status — and the same-turn resume lock — from
  * the presence and turn of that message: once closed, the conversation cannot be reopened on
- * the same turn (specs §8). The message is authored by the diplomat's own seat (endpoint B)
- * and written through the archival `append-message` store tool, the same path the Web Close
- * control uses.
+ * the same turn (specs §8).
+ *
+ * The tool itself writes nothing. It stages the close, authored by the diplomat's own seat
+ * (endpoint B), on the active chat turn; that turn commits it through `closeConversation` once the
+ * spoken reply and any nested negotiator work have settled, so the close row is always last.
  */
 
 import { z } from "zod";
@@ -17,11 +19,7 @@ import type { VoxContext } from "../infra/vox-context.js";
 import type { StrategistParameters } from "../strategist/strategy-parameters.js";
 import type { EnvoyThread } from "../types/index.js";
 import { createSimpleTool } from "../utils/tools/simple-tools.js";
-import { closeConversation } from "../utils/diplomacy/deal.js";
-import { createLogger } from "../utils/logger.js";
 import { stageThreadClose } from "../utils/diplomacy/row-observer.js";
-
-const logger = createLogger("close-conversation-tool");
 
 /**
  * Creates the diplomat's `close-conversation` tool. Reads the active conversation from
@@ -44,30 +42,15 @@ export function createCloseConversationTool(context: VoxContext<StrategistParame
         if (!thread || thread.player1ID === undefined || thread.player2ID === undefined) {
           return "No active conversation to close.";
         }
-        // AI SDK may execute same-step tools concurrently. While a chat turn observes this thread,
-        // defer the durable close until terminal reconciliation, after any spoken message and nested
-        // negotiator work have settled. Calls outside that lifecycle remain immediate.
-        const staged = stageThreadClose(thread, { speakerID: thread.agent, content: input.Farewell });
-        if (staged !== undefined) {
-          return staged
-            ? "Conversation will close after this reply is recorded."
-            : "Conversation is already scheduled to close after this reply is recorded.";
+        // AI SDK may execute same-step tools concurrently. Defer the durable close until terminal
+        // reconciliation, after any spoken message and nested negotiator work have settled.
+        // Staging only fails when no chat turn owns the thread, and only that lifecycle can order the
+        // close last. Throw rather than report the failure as ordinary output: an errored call is not
+        // a terminal action, so the turn still archives a visible stand-in instead of ending silent.
+        if (!stageThreadClose(thread, { speakerID: thread.agent, content: input.Farewell })) {
+          throw new Error("A conversation can only be closed during an active chat turn.");
         }
-        // The diplomat voices the agent seat (thread.agent), so the close is authored by it.
-        // closeConversation first retracts any open proposal so nothing is left enactable, then
-        // records the close. The recorded turn comes from the store's authoritative current turn
-        // (returned by append-message), never the live agent's `parameters.turn` — a decision-point
-        // snapshot that can be stale once a conversation outlives its pause. The rows it commits are
-        // reported to the turn running this tool, so they reach the client with that turn's result.
-        try {
-          const { turn } = await closeConversation(thread, thread.agent, input.Farewell);
-          return `Conversation closed on turn ${turn}. It cannot be reopened until a later turn.`;
-        } catch (error) {
-          logger.error("Failed to append close message", { error });
-          return `Failed to close the conversation: ${
-            error instanceof Error ? error.message : "unknown error"
-          }`;
-        }
+        return "Conversation will close after this reply is recorded.";
       },
     },
     context

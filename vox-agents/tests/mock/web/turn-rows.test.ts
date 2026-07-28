@@ -126,7 +126,6 @@ function echoAppends(startID: number): void {
 /** Archive a spoken tool result, then leave the raw model output for terminal cleanup. */
 async function speak(thread: EnvoyThread, text: string): Promise<void> {
   const row = await appendTranscriptMessageRow(thread, thread.agent, text);
-  reportThreadRow(thread, row);
   thread.messages.push({
     message: {
       role: 'assistant',
@@ -388,6 +387,62 @@ describe('runChatTurn row contract', () => {
         ['deal-proposal', 'A deal was proposed.'],
         ['close', 'Until next time.'],
       ]);
+  });
+
+  it('completes a committed reply when the staged close write fails', async () => {
+    let nextID = 100;
+    mcp.onTool('append-message', (args) => {
+      if (args.MessageType === 'close') throw new Error('store refused the close');
+      return structuredResult({
+        ID: nextID++,
+        Player1ID: 1,
+        Player2ID: 3,
+        Player1Role: 'the leader',
+        Player2Role: 'diplomat',
+        SpeakerID: args.SpeakerID,
+        MessageType: args.MessageType,
+        Content: args.Content,
+        Payload: args.Payload ?? {},
+        Turn: 5,
+        CreatedAt: 0,
+      });
+    });
+    const thread = registerThread();
+    vi.spyOn(contextRegistry, 'get').mockReturnValue(mockContext(async (_n, input) => {
+      await speak(input, 'My reply was delivered.');
+      expect(stageThreadClose(input, {
+        speakerID: input.agent,
+        content: 'Until next time.',
+      })).toBe(true);
+      input.messages.push({
+        message: {
+          role: 'assistant',
+          content: [{
+            type: 'tool-call',
+            toolCallId: 'close-1',
+            toolName: 'close-conversation',
+            input: {},
+          }],
+        },
+        metadata: { datetime: new Date(), turn: 5 },
+      });
+      return input;
+    }));
+    const sink = recordingSink();
+
+    await runChatTurn({ kind: 'text', chatId: thread.id, message: 'Your answer?' }, sink);
+
+    expect(sink.errorEvents).toHaveLength(0);
+    expect(sink.doneEvents).toHaveLength(1);
+    expect(sink.doneEvents[0]!.rows).toEqual([
+      expect.objectContaining({
+        ID: 101,
+        MessageType: 'text',
+        Content: 'My reply was delivered.',
+      }),
+    ]);
+    expect(thread.messages.map((item) => item.metadata.id)).toEqual([100, 101]);
+    expect(thread.closeTurn).toBeUndefined();
   });
 
   it('suppresses duplicate reports and rows belonging to another thread', async () => {

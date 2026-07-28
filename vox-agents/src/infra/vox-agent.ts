@@ -76,6 +76,11 @@ export abstract class VoxAgent<TParameters extends AgentParameters, TInput = unk
    * tool-call text that renders badly). The streaming chat route swallows native text chunks for
    * such an agent, and the diplomacy commit path archives only the explicit spoken reply, so live
    * and reload agree and the junk reaches neither. Default false (ordinary agents speak as free text).
+   *
+   * This doubles as the diplomacy-voice contract: opening a diplomacy thread rejects any voice
+   * without it (see the chat factory), because a reply that never passes through `send-message` is
+   * never archived. Diplomacy code downstream of that gate therefore treats "the spoken reply is a
+   * send-message argument" as an invariant rather than a per-turn condition.
    */
   public suppressFreeText = false;
 

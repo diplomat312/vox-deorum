@@ -13,8 +13,8 @@ import type { DealTranscriptMessage } from "../../../../mcp-server/dist/utils/de
 import { appendTranscriptMessageRow, audienceID, collectSpokenReply, retryMessage, needsRetryReply, maybeAutoCompact } from "./transcript.js";
 import { collectTrace, hydrateDealRow, type TranscriptPushMessage } from "./transcript-utils.js";
 import type { ModelMessage } from "ai";
-import { reportThreadRow } from "./row-observer.js";
 import { appendDealProposal, classifyDealSubmission } from "./deal.js";
+import { observeThreadRows, type StagedThreadClose } from "./row-observer.js";
 
 /** Triple-brace special tokens (e.g. {{{Greeting}}}) are agent triggers, not archival text. */
 const SPECIAL_MESSAGE = /^\{\{\{.+\}\}\}$/;
@@ -77,17 +77,25 @@ export interface ChatTurn {
    *
    * Retry archival is not best-effort: if the store refuses that append this throws, so the caller can
    * report a failure instead of letting a streamed draft masquerade as a durable completed reply.
-   *
-   * @returns the retry row when fallback was needed, otherwise undefined.
    */
-  complete(opts?: { sendMessageOnly?: boolean }): Promise<TranscriptPushMessage | undefined>;
-  /** The single spoken row whose cache entry should retain the native model trace, if any. */
-  traceTarget(): { content: string; trace: ModelMessage[] } | undefined;
+  complete(): Promise<void>;
   /**
-   * Release the per-thread lock and reconcile the cache with the store: a completed turn keeps both
-   * rows; an incomplete one trims the unwritten reply (and a {{{Greeting}}} trigger's own cache row,
-   * never a durable utterance) so the live view matches the append-only store. Idempotent — always
-   * call it exactly once, in a `finally`.
+   * Freeze the row capture and return every durable row this turn committed after its caller row, in
+   * append order. Memoized, so the terminal event and the cache repair always see the same set.
+   */
+  terminalRows(): TranscriptPushMessage[];
+  /**
+   * Take the close the diplomat staged mid-run, so the caller can commit it after the spoken reply
+   * and the negotiator's nested writes. Undefined when the turn requested no close.
+   */
+  takeStagedClose(): StagedThreadClose | undefined;
+  /** The durable reply row that should carry this turn's native model trace, if any. */
+  traceTarget(): { rowID: number; trace: ModelMessage[] } | undefined;
+  /**
+   * Release the per-thread lock and its row capture, and reconcile the cache with the store: a
+   * completed turn keeps both rows; an incomplete one trims the unwritten reply (and a {{{Greeting}}}
+   * trigger's own cache row, never a durable utterance) so the live view matches the append-only
+   * store. Idempotent — always call it exactly once, in a `finally`.
    */
   finish(): void;
 }
@@ -100,6 +108,10 @@ export interface ChatTurn {
  * prompted it — then mirror it into the cache so the diplomat sees it and the live view renders it. The move is either a plain-text utterance (`{kind:'text'}`, never a
  * {{{Greeting}}} trigger) or a structured deal proposal/counter (`{kind:'deal'}`, which computes the
  * value snapshots + durations server-side via `appendDealProposal`).
+ *
+ * The returned handle then registers this turn's coordination state (`row-observer.ts`), which is
+ * what lets the diplomat's mid-run tools report the rows they commit, name the spoken reply row, and
+ * stage a close for the caller to commit last.
  *
  * Rejects with `ThreadBusyError` when a turn is already in flight for this thread, or with the
  * underlying commit error (a store append failure, or — for a deal — an `IllegalDealError` /
@@ -170,52 +182,55 @@ export async function beginChatTurn(thread: EnvoyThread, commit: TurnCommit, tur
   thread.metadata!.updatedAt = new Date();
   const replyStart = thread.messages.length;
 
+  // Everything committed from here on belongs to the post-run phase. The caller row is excluded by ID
+  // so the two phases can never overlap, whatever a nested writer reports. Registering here (rather
+  // than in the route) ties the capture's lifetime to the lock's: `finish` releases both.
+  const observer = observeThreadRows(thread, {
+    ignoreIDs: callerRow ? [callerRow.ID] : undefined,
+  });
+
   let completed = false;
   let finished = false;
-  let traceTarget: { content: string; trace: ModelMessage[] } | undefined;
+  let terminalRows: TranscriptPushMessage[] | undefined;
+  let traceTarget: { rowID: number; trace: ModelMessage[] } | undefined;
   return {
     callerRow,
     dealRow,
-    async complete(opts?: { sendMessageOnly?: boolean }) {
-      let retryRow: TranscriptPushMessage | undefined;
+    async complete() {
       if (thread.diplomacy) {
         const slice = thread.messages.slice(replyStart);
-        const spoken = collectSpokenReply(slice, opts);
-        if (!spoken && needsRetryReply(slice, opts)) {
-          retryRow = await appendTranscriptMessageRow(thread, thread.agent, retryMessage);
-          reportThreadRow(thread, retryRow);
+        // Every diplomacy voice speaks only through `send-message` (enforced when the thread opens,
+        // see the chat factory), so raw free text is never the reply here.
+        const spoken = collectSpokenReply(slice, { sendMessageOnly: true });
+        if (!spoken && needsRetryReply(slice)) {
+          await appendTranscriptMessageRow(thread, thread.agent, retryMessage);
         }
         // The cache is deliberately left without reply rows until the terminal observer is frozen.
         // That shared done/error path restores exactly the rows that reached the append-only store.
         thread.messages.splice(replyStart);
-        if (spoken && countSendMessageCalls(slice) === 1) {
-          const trace = collectTrace(slice, opts);
-          if (trace.length) traceTarget = { content: spoken, trace };
+        // The trace is the WHOLE turn's trajectory, so it is kept only when the turn has exactly one
+        // spoken row to hang it on. The tool that committed that row named it; nothing is guessed.
+        const rowID = observer.soleSpokenRowID();
+        if (spoken && rowID !== undefined) {
+          const trace = collectTrace(slice);
+          if (trace.length) traceTarget = { rowID, trace };
         }
       }
       completed = true;
-      return retryRow;
     },
+    terminalRows: () => (terminalRows ??= observer.close()),
+    takeStagedClose: () => observer.takeStagedClose(),
     traceTarget: () => traceTarget,
     finish() {
       if (finished) return;
       finished = true;
+      // Idempotent, and a no-op on the normal path where the terminal event already froze it — but a
+      // turn that returns without emitting one must still leave no registration behind.
+      observer.close();
       if (!completed) thread.messages.splice(isSpecial ? replyStart - 1 : replyStart);
       inFlight.delete(thread.id);
     },
   };
-}
-
-/** Count explicit spoken tool calls so a whole-turn trace is only attached when it has one home. */
-function countSendMessageCalls(messages: import("../../types/index.js").MessageWithMetadata[]): number {
-  let count = 0;
-  for (const item of messages) {
-    if (item.message.role !== "assistant" || !Array.isArray(item.message.content)) continue;
-    for (const part of item.message.content) {
-      if (part.type === "tool-call" && part.toolName === "send-message") count++;
-    }
-  }
-  return count;
 }
 
 /**

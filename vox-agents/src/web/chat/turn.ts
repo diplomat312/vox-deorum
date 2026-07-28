@@ -7,13 +7,13 @@
  *
  *  1. **Pre-run.** `beginChatTurn` takes the thread lock and commits the caller's move. That single
  *     durable row is the whole of `connected.rows`.
- *  2. **Post-connect.** A per-thread row observer captures every durable row the run commits — the
+ *  2. **Post-connect.** The turn handle's row capture records every durable row the run commits — the
  *     deal/close rows the diplomat's tools write mid-run, and the final archived reply. Before either
- *     terminal event the observer is frozen and unregistered, and its rows are snapshotted once. That
- *     terminal-only set is what feeds `done.rows` / `error.rows`, the `done.deals` compatibility view,
- *     and the cache repair.
+ *     terminal event `turn.terminalRows()` freezes it and snapshots the rows once. That terminal-only
+ *     set is what feeds `done.rows` / `error.rows`, the `done.deals` compatibility view, and the cache
+ *     repair.
  *
- * The observer never records the caller row's ID, so no transcript ID can appear in both phases, and
+ * The capture never records the caller row's ID, so no transcript ID can appear in both phases, and
  * detached work cannot append to the terminal set after it has been reported. Every committed turn
  * emits exactly one terminal event: `done` or `error`, never both and never neither.
  */
@@ -35,7 +35,6 @@ import {
   isDealRow,
   type TranscriptPushMessage,
 } from '../../utils/diplomacy/transcript-utils.js';
-import { observeThreadRows, takeStagedThreadClose } from '../../utils/diplomacy/row-observer.js';
 import {
   beginChatTurn,
   ThreadBusyError,
@@ -210,18 +209,9 @@ export async function runChatTurn(
     return mapBeginTurnError(error);
   }
 
-  // Everything committed from here on belongs to the post-connect phase. The caller row is excluded
-  // by ID so the two phases can never overlap, whatever a nested writer reports.
-  const observer = observeThreadRows(thread, {
-    ignoreIDs: turn.callerRow ? [turn.callerRow.ID] : undefined,
-  });
   const replyStart = thread.messages.length;
   let terminal: 'done' | 'error' | undefined;
-  let terminalRows: TranscriptPushMessage[] | undefined;
   let completed = false;
-
-  /** Freeze and unregister the capture, snapshotting its rows exactly once for the terminal event. */
-  const takeTerminalRows = (): TranscriptPushMessage[] => (terminalRows ??= observer.close());
 
   /**
    * Emit the turn's single terminal success event: freeze the capture, splice the mid-run durable
@@ -231,17 +221,12 @@ export async function runChatTurn(
   const emitDone = (): void => {
     if (terminal) return;
     terminal = 'done';
-    const rows = takeTerminalRows();
+    const rows = turn.terminalRows();
     insertDurableRows(thread, rows, replyStart);
-    const traceTarget = turn.traceTarget();
-    if (traceTarget) {
-      const row = rows.find((candidate) =>
-        candidate.MessageType === 'text'
-        && candidate.SpeakerID === thread.agent
-        && candidate.Content === traceTarget.content
-      );
-      const cached = row && thread.messages.find((item) => item.metadata.id === row.ID);
-      if (cached) cached.metadata.trace = traceTarget.trace;
+    const target = turn.traceTarget();
+    if (target) {
+      const cached = thread.messages.find((item) => item.metadata.id === target.rowID);
+      if (cached) cached.metadata.trace = target.trace;
     }
     sink.done({
       sessionId: thread.id,
@@ -259,7 +244,7 @@ export async function runChatTurn(
   const emitError = (message: string): void => {
     if (terminal) return;
     terminal = 'error';
-    const rows = takeTerminalRows();
+    const rows = turn.terminalRows();
     turn.finish();
     insertDurableRows(thread, rows);
     sink.error({ message, rows });
@@ -345,18 +330,25 @@ export async function runChatTurn(
       }
 
       const replySlice = thread.messages.slice(replyStart);
-      if (thread.diplomacy && needsRetryReply(replySlice, { sendMessageOnly: suppressFreeText })) {
+      if (thread.diplomacy && needsRetryReply(replySlice)) {
         emitSpoken(sink, retryMessage, 'retry');
       }
 
       // A valid send-message call already appended its own text row. Completion clears transient
       // model traffic and appends only the retry fallback when nothing spoke or took a terminal action.
-      await turn.complete({ sendMessageOnly: suppressFreeText });
+      await turn.complete();
       // Close is staged while same-step tools run so its row follows any spoken reply and the
       // negotiator's nested writes. It is discarded automatically if this turn takes the error path.
-      const stagedClose = takeStagedThreadClose(thread);
+      const stagedClose = turn.takeStagedClose();
       if (stagedClose) {
-        await closeConversation(thread, stagedClose.speakerID, stagedClose.content);
+        try {
+          await closeConversation(thread, stagedClose.speakerID, stagedClose.content);
+        } catch (error) {
+          logger.error('Failed to commit a staged conversation close after the reply', {
+            chatId,
+            error,
+          });
+        }
       }
       emitDone();
     });

@@ -333,32 +333,26 @@ export function carryOverTrace(
  *
  * Rows and parts are shallow-copied so the capture outlives the slice (the commit path splices it
  * away); `providerOptions` (e.g. Anthropic's thinking-block signature) ride by reference on the copy.
- * With `sendMessageOnly` the model's raw free text is dropped (it is the swallowed tool-force
- * fallback the user never saw). A final pairing pass drops any orphaned tool_use / tool_result so the
- * captured array is always a provider-valid sequence; empty-text reasoning placeholders are dropped.
+ * The model's raw free text is dropped: only a diplomacy turn captures a trace, and every diplomacy
+ * voice speaks solely through `send-message` (enforced when the thread opens), so free text there is
+ * the swallowed tool-force fallback the user never saw. A final pairing pass drops any orphaned
+ * tool_use / tool_result so the captured array is always a provider-valid sequence; empty-text
+ * reasoning placeholders are dropped.
  */
-export function collectTrace(
-  messages: MessageWithMetadata[],
-  opts?: { sendMessageOnly?: boolean }
-): ModelMessage[] {
-  const sendMessageOnly = opts?.sendMessageOnly ?? false;
+export function collectTrace(messages: MessageWithMetadata[]): ModelMessage[] {
   const droppedCallIds = new Set<string>();
   const rows: ModelMessage[] = [];
 
   for (const item of messages) {
     const message = item.message;
     if (message.role === "assistant") {
-      if (typeof message.content === "string") {
-        // A raw free-text assistant row: junk tool-force fallback in sendMessageOnly mode.
-        if (sendMessageOnly || message.content.trim() === "") continue;
-        rows.push({ ...message, content: [{ type: "text", text: message.content }] });
-        continue;
-      }
+      // A raw free-text assistant row is the junk tool-force fallback, never part of the trajectory.
+      if (typeof message.content === "string") continue;
       if (!Array.isArray(message.content)) continue;
       const kept = message.content
         .filter((part) => {
           if (part.type === "reasoning") return part.text.trim() !== "";
-          if (part.type === "text") return !sendMessageOnly && part.text.trim() !== "";
+          if (part.type === "text") return false;
           if (part.type === "tool-call") {
             if (traceExcludedTools.has(part.toolName)) { droppedCallIds.add(part.toolCallId); return false; }
             return true;
@@ -446,19 +440,44 @@ export const terminalActionTools = new Set(["call-negotiator", "close-conversati
 export const traceExcludedTools = new Set<string>([sendMessageToolName, "call-diplomatic-analyst", ...terminalActionTools]);
 
 /**
+ * Tool call IDs whose execution came back as an error, so the action the model asked for never
+ * happened. Only an explicit error result counts: a call with no recorded result at all (an aborted
+ * step, a hand-built fixture) is treated as having run.
+ */
+function failedToolCallIDs(messages: MessageWithMetadata[]): Set<string> {
+  const failed = new Set<string>();
+  for (const item of messages) {
+    if (item.message.role !== "tool" || !Array.isArray(item.message.content)) continue;
+    for (const part of item.message.content) {
+      if (part.type === "tool-result" && part.output?.type?.startsWith("error")) {
+        failed.add(part.toolCallId);
+      }
+    }
+  }
+  return failed;
+}
+
+/**
  * Whether a reply slice contains a deliberate non-spoken outcome (a negotiator handoff or a
  * conversation close). Such a turn produced a deal move / close — shown to the counterpart in its
  * own right — so a missing spoken reply is intentional, NOT a stuck turn. The retry line (which
  * reads as "I lost my train of thought") must therefore stand in only when nothing was spoken AND
  * no terminal action was taken; otherwise it contradicts the deal/close the turn just produced.
+ *
+ * A terminal call whose execution errored does NOT count: the handoff or closure it stood for never
+ * happened, so suppressing the stand-in reply on its account would end the turn on silence — no
+ * spoken line, no deal, no close, nothing for the client to render.
  */
 export function tookTerminalAction(messages: MessageWithMetadata[]): boolean {
+  const failed = failedToolCallIDs(messages);
   for (const item of messages) {
     if (item.message.role !== "assistant") continue;
     const content = item.message.content;
     if (!Array.isArray(content)) continue;
     for (const part of content) {
-      if (part.type === "tool-call" && terminalActionTools.has(part.toolName)) return true;
+      if (part.type === "tool-call" && terminalActionTools.has(part.toolName) && !failed.has(part.toolCallId)) {
+        return true;
+      }
     }
   }
   return false;
@@ -473,12 +492,10 @@ export function tookTerminalAction(messages: MessageWithMetadata[]): boolean {
  * (e.g. a model whose spoken reply happens to equal `retryMessage` verbatim is NOT stuck — it spoke,
  * so this returns false and the route does not double the line the streamer already showed live).
  *
- * `sendMessageOnly` is forwarded to {@link collectSpokenReply} so the stuck-turn decision uses the
- * same reply definition the archive does, so for a live envoy free text does not count as "spoke".
+ * Free text does not count as "spoke": every diplomacy voice speaks solely through `send-message`
+ * (enforced when the thread opens), so the stuck-turn decision uses the same reply definition the
+ * archive does.
  */
-export function needsRetryReply(
-  messages: MessageWithMetadata[],
-  opts?: { sendMessageOnly?: boolean }
-): boolean {
-  return !collectSpokenReply(messages, opts) && !tookTerminalAction(messages);
+export function needsRetryReply(messages: MessageWithMetadata[]): boolean {
+  return !collectSpokenReply(messages, { sendMessageOnly: true }) && !tookTerminalAction(messages);
 }

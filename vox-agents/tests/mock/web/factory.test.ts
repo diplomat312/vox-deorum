@@ -27,7 +27,7 @@ function createDependencies(
   const threads = new Map<string, EnvoyThread>();
   const dependencies: ChatThreadFactoryDependencies<VoxContext<StrategistParameters>> = {
     getContext: () => undefined,
-    getAgent: () => ({ diplomacyOnly: false }),
+    getAgent: () => ({ diplomacyOnly: false, suppressFreeText: true }),
     getAssignments: () => undefined,
     getThread: (threadId) => threads.get(threadId),
     setThread: (thread) => {
@@ -171,6 +171,25 @@ describe('chat thread factory', () => {
   });
 
   describe('openDiplomacyChat', () => {
+    it('should reject a voice that can answer without send-message', async () => {
+      const { dependencies } = createDependencies({
+        getContext: () => fakeContext(),
+        getAgent: () => ({ diplomacyOnly: false, suppressFreeText: false }),
+      });
+      const factory = createChatThreadFactory(dependencies);
+
+      await expect(factory.openDiplomacyChat({
+        mode: 'diplomacy',
+        contextId: 'game-7-player-2',
+        callerPlayerID: 1,
+        targetPlayerID: 2,
+        agentName: 'ordinary-agent',
+      })).rejects.toMatchObject({
+        status: 400,
+        message: 'Agent ordinary-agent cannot voice diplomacy because it does not require the send-message tool.',
+      });
+    });
+
     it('should mutate direction, context, roles, and voice when reopening a reversed pair', async () => {
       const assignments: Record<number, PlayerAssignment> = {
         1: { strategist: 'human-strategist', diplomat: 'diplomat', configSlot: 0 },

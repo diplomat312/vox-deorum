@@ -20,6 +20,7 @@ vi.mock('../../../src/utils/models/mcp-client.js', async () => {
 
 import { beginChatTurn, isThreadBusy } from '../../../src/utils/diplomacy/chat-turn-commit.js';
 import { insertDurableRows, retryMessage } from '../../../src/utils/diplomacy/transcript-utils.js';
+import { reportSpokenRow } from '../../../src/utils/diplomacy/row-observer.js';
 import { sendMessageToolName } from '../../../src/utils/diplomacy/send-message-tool-name.js';
 
 let mcp: ReturnType<typeof installMockMcpClient>;
@@ -76,6 +77,13 @@ const sendResult = (): MessageWithMetadata => ({
   message: { role: 'tool', content: [{ type: 'tool-result', toolName: sendMessageToolName, toolCallId: 't1', output: { type: 'text', value: 'Message delivered.' } }] as never },
   metadata: { datetime: new Date(), turn: 5 },
 });
+/**
+ * Stand in for the send-message tool naming the durable row it committed. The tool's own archival is
+ * covered end to end in tests/mock/web/turn-rows; here only the naming matters, so the row is
+ * synthesized rather than appended (keeping the append count at just the caller commit).
+ */
+const reportSpoken = (t: EnvoyThread, ID: number, Content: string): void =>
+  reportSpokenRow(t, { ID, SpeakerID: t.agent, MessageType: 'text', Content, Turn: 5 } as never);
 
 describe('beginChatTurn().complete() cache normalization', () => {
   it('reports the thread busy only while a turn owns its lock', async () => {
@@ -99,7 +107,7 @@ describe('beginChatTurn().complete() cache normalization', () => {
       assistant([freeText('}}> trailing junk')]),
     );
 
-    await turn.complete({ sendMessageOnly: true });
+    await turn.complete();
     turn.finish();
 
     // Cache insertion is terminal reconciliation's job. Completion only drops transient model traffic.
@@ -121,7 +129,7 @@ describe('beginChatTurn().complete() cache normalization', () => {
       { message: { role: 'tool', content: [{ type: 'tool-result', toolName: 'call-negotiator', toolCallId: 'n1', output: { type: 'text', value: 'handled' } }] as never }, metadata: { datetime: new Date(), turn: 5 } },
     );
 
-    await turn.complete({ sendMessageOnly: true });
+    await turn.complete();
     turn.finish();
 
     // Only the committed user row remains; the ephemeral handoff plumbing is gone (a reload would not
@@ -146,27 +154,32 @@ describe('beginChatTurn().complete() cache normalization', () => {
       assistant([think(''), think('We can press our advantage.'), spoke('Let us speak plainly.')]),
       sendResult(),
     );
+    reportSpoken(t, 101, 'Let us speak plainly.');
 
-    await turn.complete({ sendMessageOnly: true });
+    await turn.complete();
     const traceTarget = turn.traceTarget();
     turn.finish();
 
     expect(t.messages).toHaveLength(1);
-    // The trace replays the model's ACTUAL trajectory: signed reasoning, the get-briefing use paired
-    // with its result, then the send-message step reduced to its reasoning (the spoken text IS the
-    // reply row). Empty placeholders dropped; the send-message call/result never enter the trace.
-    expect(traceTarget).toMatchObject({ content: 'Let us speak plainly.' });
-    expect(traceTarget!.trace).toEqual([
-      { role: 'assistant', content: [
-        { type: 'reasoning', text: 'They sound conciliatory.', providerOptions: { anthropic: { signature: 'sig-1' } } },
-        { type: 'tool-call', toolName: 'get-briefing', toolCallId: 'b1', input: {} },
-      ] },
-      { role: 'tool', content: [
-        { type: 'tool-result', toolName: 'get-briefing', toolCallId: 'b1', output: { type: 'text', value: 'Military: strong.' } },
-      ] },
-      { role: 'assistant', content: [{ type: 'reasoning', text: 'We can press our advantage.' }] },
-    ]);
-    expect(JSON.stringify(traceTarget!.trace)).not.toContain('send-message');
+    // The trace hangs on the exact row the send-message tool named, not on whichever text row a scan
+    // happens to reach first. It replays the model's ACTUAL trajectory: signed reasoning, the
+    // get-briefing use paired with its result, then the send-message step reduced to its reasoning
+    // (the spoken text IS the reply row). Empty placeholders dropped; the send-message call/result
+    // never enter the trace.
+    expect(traceTarget).toEqual({
+      rowID: 101,
+      trace: [
+        { role: 'assistant', content: [
+          { type: 'reasoning', text: 'They sound conciliatory.', providerOptions: { anthropic: { signature: 'sig-1' } } },
+          { type: 'tool-call', toolName: 'get-briefing', toolCallId: 'b1', input: {} },
+        ] },
+        { role: 'tool', content: [
+          { type: 'tool-result', toolName: 'get-briefing', toolCallId: 'b1', output: { type: 'text', value: 'Military: strong.' } },
+        ] },
+        { role: 'assistant', content: [{ type: 'reasoning', text: 'We can press our advantage.' }] },
+      ],
+    });
+    expect(JSON.stringify(traceTarget)).not.toContain('send-message');
     // Completion does not append a second durable copy of the spoken tool call.
     const appends = mcp.calls('append-message');
     expect(appends).toHaveLength(1);
@@ -178,8 +191,8 @@ describe('beginChatTurn().complete() cache normalization', () => {
     // The turn produced only native free text (no send-message, no terminal action): a stuck turn.
     t.messages.push(assistant([freeText('<|tool_call|> garbled and nothing usable')]));
 
-    const retryRow = await turn.complete({ sendMessageOnly: true });
-    insertDurableRows(t, [retryRow!]);
+    await turn.complete();
+    insertDurableRows(t, turn.terminalRows());
     turn.finish();
 
     expect(t.messages).toHaveLength(2);
@@ -199,8 +212,8 @@ describe('beginChatTurn().complete() cache normalization', () => {
       assistant([freeText('<|tool_call|> garbled, nothing usable')]),
     );
 
-    const retryRow = await turn.complete({ sendMessageOnly: true });
-    insertDurableRows(t, [retryRow!]);
+    await turn.complete();
+    insertDurableRows(t, turn.terminalRows());
     turn.finish();
 
     // Exactly the committed user row + the single archived retry line remain; the briefing tool traffic

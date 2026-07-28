@@ -1,9 +1,10 @@
 /**
  * @module tests/mock/diplomacy/row-observer
  *
- * Unit coverage for the per-thread durable-row capture (src/utils/diplomacy/row-observer.ts) — the
- * mechanism that lets a chat turn report exactly the rows it committed without rereading the
- * transcript. Pure in-memory: no MCP client, no store.
+ * Unit coverage for the active chat turn's per-thread coordination state
+ * (src/utils/diplomacy/row-observer.ts) — the mechanism that lets a turn report exactly the rows it
+ * committed without rereading the transcript, and lets its tools name the spoken reply row and stage
+ * a close. Pure in-memory: no MCP client, no store.
  */
 
 import { describe, expect, it } from 'vitest';
@@ -11,6 +12,7 @@ import type { EnvoyThread } from '../../../src/types/index.js';
 import type { TranscriptPushMessage } from '../../../src/utils/diplomacy/transcript-utils.js';
 import {
   observeThreadRows,
+  reportSpokenRow,
   reportThreadRow,
   reportThreadRows,
 } from '../../../src/utils/diplomacy/row-observer.js';
@@ -116,6 +118,36 @@ describe('thread row observer', () => {
     reportThreadRow(t, row(2));
 
     expect(second.close().map((r) => r.ID)).toEqual([2]);
+  });
+
+  it('names the spoken reply row only while the turn spoke exactly once', () => {
+    const t = thread('spoken');
+    const observer = observeThreadRows(t);
+    expect(observer.soleSpokenRowID()).toBeUndefined();
+
+    reportSpokenRow(t, row(11));
+    expect(observer.soleSpokenRowID()).toBe(11);
+
+    // A repeat of the same commit is the same reply, not a second one.
+    reportSpokenRow(t, row(11));
+    expect(observer.soleSpokenRowID()).toBe(11);
+
+    // Two genuinely different spoken rows leave a whole-turn trace with no single home.
+    reportSpokenRow(t, row(12));
+    expect(observer.soleSpokenRowID()).toBeUndefined();
+
+    observer.close();
+  });
+
+  it('ignores a spoken row reported with no turn listening, or after the capture froze', () => {
+    const t = thread('spoken-late');
+    expect(() => reportSpokenRow(t, row(20))).not.toThrow();
+
+    const observer = observeThreadRows(t);
+    observer.close();
+    reportSpokenRow(t, row(21));
+
+    expect(observer.soleSpokenRowID()).toBeUndefined();
   });
 
   it('reports a batch in one call, skipping absent entries', () => {

@@ -139,9 +139,9 @@ export async function appendTranscriptMessageRow(
  * authoritative current server turn (`knowledgeManager.getTurn()`); a live agent's `parameters.turn`
  * is a decision-point snapshot that can be stale once a conversation outlives its pause (specs §8).
  *
- * The echoed row is required, not best-effort: every caller now reports the exact committed row to
- * its turn's capture and mirrors that row's ID and turn into the live cache, so an append that does
- * not echo a usable row is a store-contract violation rather than a value to paper over.
+ * The echoed row is required, not best-effort: this helper reports the exact committed row to its
+ * turn's capture and callers mirror that row's ID and turn into the live cache, so an append that
+ * does not echo a usable row is a store-contract violation rather than a value to paper over.
  */
 async function appendCommittedRow(
   thread: EnvoyThread,
@@ -170,21 +170,20 @@ async function appendCommittedRow(
   ) {
     throw new Error("append-message did not return a committed transcript row.");
   }
-  return row as TranscriptPushMessage;
+  const committed = row as TranscriptPushMessage;
+  reportThreadRow(thread, committed);
+  return committed;
 }
 
 /**
  * Append a `close` special message and record the close turn on the thread so it is
- * immediately locked for the rest of the current turn. Shared by the diplomat's
- * close-conversation tool and the Web close control.
+ * immediately locked for the rest of the current turn. Reached only through `closeConversation`,
+ * which every closing path goes through: the Web close control and the terminal reconciliation
+ * that commits a close the diplomat staged mid-run.
  *
  * The recorded turn is the **server-stamped** turn returned by `append-message` — the same
  * value `deriveCloseTurn` will read back on reopen — so the in-memory lock and the persisted
  * close turn can never diverge.
- *
- * The committed row is also reported to any turn observing this thread, so a diplomat that closes the
- * conversation mid-run carries the close row in its terminal rows (a no-op for the blocking Web close
- * control, which owns the lock outright and takes the returned row directly).
  *
  * @returns the stamped turn and the exact committed `close` row
  */
@@ -195,6 +194,5 @@ export async function appendCloseMessage(
 ): Promise<{ turn: number; row: TranscriptPushMessage }> {
   const row = await appendCommittedRow(thread, speakerID, "close", content);
   thread.closeTurn = row.Turn;
-  reportThreadRow(thread, row);
   return { turn: row.Turn, row };
 }

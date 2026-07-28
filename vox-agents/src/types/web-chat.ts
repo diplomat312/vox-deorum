@@ -24,6 +24,7 @@ export interface ChatThreadStoreDependencies {
 /** The subset of an agent needed while validating a chat open request. */
 export interface ChatAgentDescriptor {
   diplomacyOnly?: boolean;
+  suppressFreeText?: boolean;
 }
 
 /** A context created for a database-backed ordinary chat. */

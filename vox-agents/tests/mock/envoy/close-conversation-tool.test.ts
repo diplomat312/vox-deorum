@@ -1,12 +1,10 @@
 /**
  * Tests for the diplomat's close-conversation tool (src/envoy/close-conversation-tool.ts).
- * The close flows through the durable store via closeConversation → mcpClient.callTool
- * (reading the active proposal, retracting it if open, then writing the close), driven here by
- * the shared mcpClient fixture — no live server / game.
+ * The tool stages a close inside the active turn. Terminal reconciliation owns the durable write.
  */
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { installMockMcpClient, structuredResult } from '../../helpers/mock-mcp-client.js';
+import { installMockMcpClient } from '../../helpers/mock-mcp-client.js';
 import type { EnvoyThread } from '../../../src/types/index.js';
 
 vi.mock('../../../src/utils/models/mcp-client.js', async () => {
@@ -15,17 +13,11 @@ vi.mock('../../../src/utils/models/mcp-client.js', async () => {
 });
 
 import { createCloseConversationTool } from '../../../src/envoy/close-conversation-tool.js';
-import {
-  observeThreadRows,
-  takeStagedThreadClose,
-} from '../../../src/utils/diplomacy/row-observer.js';
+import { observeThreadRows } from '../../../src/utils/diplomacy/row-observer.js';
 
 let mcp: ReturnType<typeof installMockMcpClient>;
 beforeEach(() => {
   mcp = installMockMcpClient();
-  // closeConversation reads the transcript first to find any open proposal to retract; default to
-  // none so the close-only tests exercise the plain close path.
-  mcp.respondWith('read-transcript', structuredResult({ messages: [] }));
 });
 
 /** Active diplomacy thread the diplomat is voicing (agent = seat 3). */
@@ -66,77 +58,30 @@ describe('close-conversation tool', () => {
     expect(await close(thread({ player2ID: undefined as any }))).toBe('No active conversation to close.');
   });
 
-  it('writes a close authored by the agent seat and returns the stamped turn', async () => {
-    mcp.onTool('append-message', (args) => structuredResult({
-      ID: 30, SpeakerID: args.SpeakerID, MessageType: args.MessageType, Content: args.Content, Turn: 8,
-    }));
-
-    const result = await close(thread(), 'Until next time.');
-
-    expect(result).toBe('Conversation closed on turn 8. It cannot be reopened until a later turn.');
-    const args = mcp.calls('append-message')[0].args;
-    expect(args.MessageType).toBe('close');
-    expect(args.SpeakerID).toBe(3); // thread.agent
-    expect(args.Content).toBe('Until next time.');
-  });
-
-  it('retracts an open proposal before closing (authored by the diplomat seat)', async () => {
-    mcp.respondWith('read-transcript', structuredResult({ messages: [{
-      ID: 9, Player1ID: 1, Player2ID: 3, Player1Role: 'the leader', Player2Role: 'diplomat',
-      SpeakerID: 1, MessageType: 'deal-proposal', Content: 'Offer',
-      Payload: { Deal: { version: 1, items: [], promises: [] } }, Turn: 5, CreatedAt: 0,
-    }] }));
-    // The retraction goes through the transactional reject action; only the close still uses
-    // append-message (which refuses deal-reject outright).
-    mcp.onTool('reject-agent-deal', (args) => structuredResult({
-      Result: 'rejected',
-      ProposalMessageID: args.ProposalMessageID,
-      AlreadyRejected: false,
-      Row: {
-        ID: 20, Player1ID: 1, Player2ID: 3, Player1Role: 'the leader', Player2Role: 'diplomat',
-        SpeakerID: args.SpeakerID, MessageType: 'deal-reject', Content: args.Content,
-        Payload: { ProposalMessageID: args.ProposalMessageID }, Turn: 7, CreatedAt: 0,
-      },
-    }));
-    mcp.onTool('append-message', (args) => structuredResult({
-      ID: 21, SpeakerID: args.SpeakerID, MessageType: args.MessageType, Content: args.Content, Turn: 7,
-    }));
-
-    const result = await close(thread(), 'Done here.');
-
-    expect(result).toBe('Conversation closed on turn 7. It cannot be reopened until a later turn.');
-    // The open proposal is rejected first, then the close is written — both authored by seat 3.
-    const rejects = mcp.calls('reject-agent-deal');
-    expect(rejects).toHaveLength(1);
-    expect(rejects[0].args.SpeakerID).toBe(3); // thread.agent retracts
-    expect(rejects[0].args.ProposalMessageID).toBe(9);
-    expect(mcp.calls('append-message').map((c) => c.args.MessageType)).toEqual(['close']);
-  });
-
-  it('stages one close under an active turn and never writes a duplicate early', async () => {
+  it('stages one close idempotently under an active turn without writing early', async () => {
     const input = thread();
     const observer = observeThreadRows(input);
 
     expect(await close(input, 'First farewell.'))
       .toBe('Conversation will close after this reply is recorded.');
     expect(await close(input, 'Duplicate farewell.'))
-      .toBe('Conversation is already scheduled to close after this reply is recorded.');
+      .toBe('Conversation will close after this reply is recorded.');
 
     expect(mcp.calls('read-transcript')).toHaveLength(0);
     expect(mcp.calls('append-message')).toHaveLength(0);
-    expect(takeStagedThreadClose(input)).toEqual({
+    expect(observer.takeStagedClose()).toEqual({
       speakerID: 3,
       content: 'First farewell.',
     });
-    expect(takeStagedThreadClose(input)).toBeUndefined();
+    expect(observer.takeStagedClose()).toBeUndefined();
     expect(observer.close()).toEqual([]);
   });
 
-  it('returns a failure string when the store write throws', async () => {
-    mcp.failWith('append-message', 'store down');
-
-    const result = await close(thread());
-
-    expect(result).toBe('Failed to close the conversation: store down');
+  // Throwing (rather than returning the refusal as ordinary output) is what keeps the errored call
+  // from counting as a terminal action, so the turn still archives its stand-in reply.
+  it('throws when no chat turn owns the thread, and writes nothing', async () => {
+    await expect(close(thread()))
+      .rejects.toThrow('A conversation can only be closed during an active chat turn.');
+    expect(mcp.calls('append-message')).toHaveLength(0);
   });
 });

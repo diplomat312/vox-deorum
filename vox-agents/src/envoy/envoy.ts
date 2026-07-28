@@ -139,7 +139,7 @@ export abstract class Envoy<TParameters extends AgentParameters = AgentParameter
     const currentDatetime = new Date();
     // The exact prefix the prompt renderer scaffolds spoken rows with — built by the SAME helper,
     // so the strip can never drift from what the model actually saw and echoed.
-    const selfLabel = this.speakerLabel(input, input.agent);
+    const selfLabel = speakerLabel(input, input.agent);
 
     lastStep.response.messages.forEach(element => {
       // Strip LLM-echoed turn markers (and the model's own speaker label) from assistant text —
@@ -238,20 +238,6 @@ export abstract class Envoy<TParameters extends AgentParameters = AgentParameter
    */
   protected includeTurnPrefix: boolean = true;
 
-  // Utilities
-  /**
-   * Builds the display label of the seat speaking a row: `{civ}, the {role}` when both are on
-   * the thread (e.g. "Brazil, the diplomat"), the civ alone when the role is missing, and — when
-   * even the identity is missing — {@link observerName} for the audience seat (the human caller,
-   * whose civ is absent by design) or `Player {seat}` for the voiced seat (a civ by construction,
-   * so a gap there is a data gap, not an observer). Labels the same way
-   * {@link formatUserDescription} describes the audience, and never throws. The prompt renderers
-   * AND the echo-strip both build labels here, so they can never disagree.
-   */
-  protected speakerLabel(input: EnvoyThread, seat: number): string {
-    return speakerLabel(input, seat);
-  }
-
   /**
    * Splits the raw thread record at the thread's open mark (`pastMessageID`, the durable store
    * row ID recorded when the thread was opened from the UI): rows at or before the mark are the
@@ -307,7 +293,7 @@ export abstract class Envoy<TParameters extends AgentParameters = AgentParameter
         lastTurn = item.metadata.turn;
       }
       const seat = role === "assistant" ? input.agent : audienceID(input);
-      const label = `${this.speakerLabel(input, seat)} (${seat === input.agent ? "me" : "the counterpart"})`;
+      const label = `${speakerLabel(input, seat)} (${seat === input.agent ? "me" : "the counterpart"})`;
       lines.push(`${label}: ${content}`.split("\n").map(line => `> ${line}`).join("\n"));
     }
     if (lines.length === 0) return undefined;
@@ -332,7 +318,7 @@ export abstract class Envoy<TParameters extends AgentParameters = AgentParameter
     // The prefix a spoken row gets ahead of its text: turn marker, then the speaker label when
     // thread data is available. Tool-result rows never go through this (they are not spoken).
     const spokenPrefix = (item: MessageWithMetadata, role: "assistant" | "user"): string => {
-      const label = input ? `${this.speakerLabel(input, role === "assistant" ? input.agent : audienceID(input))}: ` : "";
+      const label = input ? `${speakerLabel(input, role === "assistant" ? input.agent : audienceID(input))}: ` : "";
       return `[Turn ${item.metadata.turn}] ${label}`;
     };
     const result: ModelMessage[] = [];

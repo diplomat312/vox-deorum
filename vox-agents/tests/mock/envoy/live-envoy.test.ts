@@ -14,6 +14,7 @@ import { describe, it, expect } from 'vitest';
 import { agentRegistry } from '../../../src/infra/agent-registry.js';
 import type { EnvoyThread, MessageWithMetadata } from '../../../src/types/index.js';
 import { specialMessages } from '../../../src/envoy/envoy.js';
+import { speakerLabel } from '../../../src/utils/diplomacy/transcript-utils.js';
 import { buildGameContextMessages } from '../../../src/strategist/strategy-parameters.js';
 import { createFakeVoxContext } from '../../helpers/fake-vox-context.js';
 
@@ -210,19 +211,19 @@ describe('LiveEnvoy.getInitialMessages past/ongoing split (cache-aware record)',
   });
 });
 
-describe('Envoy.speakerLabel', () => {
+describe('speakerLabel', () => {
   it('labels civ + role, falls back to civ alone, then to the observer', () => {
     const t = thread();
-    expect(spokesperson.speakerLabel(t, 3)).toBe('Germany, the spokesperson');
-    expect(spokesperson.speakerLabel(t, 1)).toBe('Rome, the leader'); // role already phrased with "the"
+    expect(speakerLabel(t, 3)).toBe('Germany, the spokesperson');
+    expect(speakerLabel(t, 1)).toBe('Rome, the leader'); // role already phrased with "the"
     const bare = thread({ player1Role: undefined });
-    expect(spokesperson.speakerLabel(bare, 1)).toBe('Rome');
+    expect(speakerLabel(bare, 1)).toBe('Rome');
     // Audience seat with no civ identity: the human caller, labelled like the audience description.
     const anon = thread({ player1Identity: undefined, player1Role: undefined });
-    expect(spokesperson.speakerLabel(anon, 1)).toBe('Observer');
+    expect(speakerLabel(anon, 1)).toBe('Observer');
     // The voiced seat is a civ by construction, so a gap there stays a bare seat number.
     const voiceless = thread({ player2Identity: undefined, player2Role: undefined });
-    expect(spokesperson.speakerLabel(voiceless, 3)).toBe('Player 3');
+    expect(speakerLabel(voiceless, 3)).toBe('Player 3');
   });
 });
 

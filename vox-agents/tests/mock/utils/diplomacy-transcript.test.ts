@@ -134,7 +134,7 @@ describe('diplomacy transcript helpers', () => {
         toolRow([{ type: 'tool-result', toolName: 'call-negotiator', toolCallId: 'n1', output: { type: 'text', value: 'handoff' } }]),
       ];
 
-      const trace = collectTrace(messages, { sendMessageOnly: true });
+      const trace = collectTrace(messages);
       // assistant[reasoning, get-briefing call], tool[get-briefing result], assistant[reasoning].
       expect(trace.map(m => m.role)).toEqual(['assistant', 'tool', 'assistant']);
       expect(trace.flatMap(parts).filter((p: any) => p.type === 'tool-call').map((p: any) => p.toolName)).toEqual(['get-briefing']);
@@ -146,10 +146,10 @@ describe('diplomacy transcript helpers', () => {
       expect(parts(trace[2]).map((p: any) => p.type)).toEqual(['reasoning']);
     });
 
-    it('drops empty-text reasoning and, in sendMessageOnly mode, raw free text', () => {
+    it('drops empty-text reasoning and the raw free text a live envoy never really spoke', () => {
       const trace = collectTrace([
         asst([{ type: 'reasoning', text: '  ' }, { type: 'text', text: 'garbled fallback' }, { type: 'reasoning', text: 'keep me' }]),
-      ], { sendMessageOnly: true });
+      ]);
       expect(trace).toHaveLength(1);
       expect(parts(trace[0]).map((p: any) => p.type)).toEqual(['reasoning']);
       expect(parts(trace[0])[0].text).toBe('keep me');
@@ -159,13 +159,13 @@ describe('diplomacy transcript helpers', () => {
       const trace = collectTrace([
         asst([{ type: 'tool-call', toolName: 'get-briefing', toolCallId: 'x1', input: {} }]), // result absent
         toolRow([{ type: 'tool-result', toolName: 'get-briefing', toolCallId: 'y1', output: { type: 'text', value: 'stray' } }]), // no use
-      ], { sendMessageOnly: true });
+      ]);
       expect(trace).toHaveLength(0);
     });
 
     it('shallow-copies rows and parts so the capture never aliases the slice', () => {
       const part = { type: 'reasoning', text: 'thinking' };
-      const trace = collectTrace([asst([part])], { sendMessageOnly: true });
+      const trace = collectTrace([asst([part])]);
       expect(parts(trace[0])[0]).not.toBe(part);
       expect(parts(trace[0])[0]).toEqual({ type: 'reasoning', text: 'thinking' });
     });
@@ -329,6 +329,26 @@ describe('diplomacy transcript helpers', () => {
       ])];
       expect(tookTerminalAction(messages)).toBe(false);
       expect(tookTerminalAction([assistant('plain free text, no tools')])).toBe(false);
+    });
+
+    it('is false when the terminal call errored — the closure it stood for never happened', () => {
+      const toolResult = (output: unknown): MessageWithMetadata => ({
+        message: {
+          role: 'tool',
+          content: [{ type: 'tool-result', toolCallId: 't5', toolName: 'close-conversation', output }],
+        } as never,
+        metadata: { datetime: new Date(0), turn: 1 },
+      });
+      const call = assistant([
+        { type: 'tool-call', toolCallId: 't5', toolName: 'close-conversation', input: {} },
+      ]);
+
+      // Without this, a refused close would suppress the stand-in reply and the turn would end on
+      // silence: nothing spoken, no deal, no close, nothing for the client to render.
+      expect(tookTerminalAction([call, toolResult({ type: 'error-text', value: 'no active turn' })])).toBe(false);
+      // A call that actually ran still counts, whether or not the fixture records its result.
+      expect(tookTerminalAction([call, toolResult({ type: 'text', value: 'staged' })])).toBe(true);
+      expect(tookTerminalAction([call])).toBe(true);
     });
   });
 });

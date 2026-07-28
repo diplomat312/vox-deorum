@@ -529,8 +529,10 @@ export async function readActiveProposal(playerAID: number, playerBID: number): 
  * proposal — authored by whoever closes — BEFORE writing the `close`, leaving nothing to enact.
  *
  * The retract is not swallowed: if it fails, the close fails too, so a conversation is never closed
- * while an open proposal survives (the caller's existing error handling retries). Shared by the Web
- * close control and the diplomat's close-conversation tool so both paths retract identically.
+ * while an open proposal survives. The reverse order can still leave a retracted proposal on an open
+ * conversation if the close append fails after it, so callers own that outcome: the Web close control
+ * surfaces it as a failed request the human can retry, while a chat turn's staged close logs it and
+ * completes the reply. Shared by both so they retract identically.
  *
  * @returns the turn the close was recorded at plus the durable rows this call created, in append
  *          order (the retraction, when there was an open offer, then the close), so the caller

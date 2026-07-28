@@ -20,7 +20,7 @@ import type { EnvoyThread } from "../types/index.js";
 import { createSimpleTool } from "../utils/tools/simple-tools.js";
 import { sendMessageToolName } from "../utils/diplomacy/send-message-tool-name.js";
 import { appendTranscriptMessageRow } from "../utils/diplomacy/transcript.js";
-import { reportThreadRow } from "../utils/diplomacy/row-observer.js";
+import { reportSpokenRow } from "../utils/diplomacy/row-observer.js";
 import { speakerLabel } from "../utils/diplomacy/transcript-utils.js";
 import { stripSpokenEcho } from "../utils/models/text-cleaning.js";
 
@@ -57,7 +57,9 @@ export function createSendMessageTool(context: VoxContext<StrategistParameters>)
           // A failed append must reject the tool call. Returning a normal confirmation would let the
           // model and client treat an undurable spoken message as delivered.
           const row = await appendTranscriptMessageRow(thread, thread.agent, content);
-          reportThreadRow(thread, row);
+          // This call is the only writer that knows which durable row carries the spoken reply, so it
+          // names it for the turn instead of leaving reconciliation to infer it from the row set.
+          reportSpokenRow(thread, row);
         }
         return "Message delivered.";
       },

@@ -132,8 +132,18 @@ export function createChatThreadFactory(
     }
 
     const voice = agentOverride ?? assignments?.[targetPlayerID]?.diplomat ?? 'diplomat';
-    if (!dependencies.getAgent(voice)) {
+    const voiceAgent = dependencies.getAgent(voice);
+    if (!voiceAgent) {
       throw new ChatOpenError(404, `Agent ${voice} not found`);
+    }
+    // The archival invariant every diplomacy turn downstream relies on: a voice that can answer as
+    // raw free text would produce replies the transcript never sees, so it is refused here rather
+    // than handled as a per-turn special case (see VoxAgent.suppressFreeText).
+    if (!voiceAgent.suppressFreeText) {
+      throw new ChatOpenError(
+        400,
+        `Agent ${voice} cannot voice diplomacy because it does not require the send-message tool.`,
+      );
     }
 
     const audienceRole = callerRole?.trim() || 'the leader';
