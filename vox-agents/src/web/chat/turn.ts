@@ -35,7 +35,7 @@ import {
   isDealRow,
   type TranscriptPushMessage,
 } from '../../utils/diplomacy/transcript-utils.js';
-import { observeThreadRows } from '../../utils/diplomacy/row-observer.js';
+import { observeThreadRows, takeStagedThreadClose } from '../../utils/diplomacy/row-observer.js';
 import {
   beginChatTurn,
   ThreadBusyError,
@@ -48,7 +48,7 @@ import {
   LiveTurnUnavailableError,
   requireOpenConversationTurn,
 } from '../../utils/diplomacy/live-turn.js';
-import { IllegalDealError, ProposalConflictError } from '../../utils/diplomacy/deal.js';
+import { closeConversation, IllegalDealError, ProposalConflictError } from '../../utils/diplomacy/deal.js';
 import { createLogger } from '../../utils/logger.js';
 import {
   createSendMessageStreamer,
@@ -233,6 +233,16 @@ export async function runChatTurn(
     terminal = 'done';
     const rows = takeTerminalRows();
     insertDurableRows(thread, rows, replyStart);
+    const traceTarget = turn.traceTarget();
+    if (traceTarget) {
+      const row = rows.find((candidate) =>
+        candidate.MessageType === 'text'
+        && candidate.SpeakerID === thread.agent
+        && candidate.Content === traceTarget.content
+      );
+      const cached = row && thread.messages.find((item) => item.metadata.id === row.ID);
+      if (cached) cached.metadata.trace = traceTarget.trace;
+    }
     sink.done({
       sessionId: thread.id,
       messageCount: thread.messages.length,
@@ -339,8 +349,15 @@ export async function runChatTurn(
         emitSpoken(sink, retryMessage, 'retry');
       }
 
-      // Archival is no longer best-effort: a refused reply append throws here and becomes `error`.
+      // A valid send-message call already appended its own text row. Completion clears transient
+      // model traffic and appends only the retry fallback when nothing spoke or took a terminal action.
       await turn.complete({ sendMessageOnly: suppressFreeText });
+      // Close is staged while same-step tools run so its row follows any spoken reply and the
+      // negotiator's nested writes. It is discarded automatically if this turn takes the error path.
+      const stagedClose = takeStagedThreadClose(thread);
+      if (stagedClose) {
+        await closeConversation(thread, stagedClose.speakerID, stagedClose.content);
+      }
       emitDone();
     });
   } catch (error) {

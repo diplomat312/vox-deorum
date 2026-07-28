@@ -10,7 +10,7 @@ import { VoxAgent, AgentParameters } from "../infra/vox-agent.js";
 import { EnvoyThread, MessageWithMetadata, ParticipantIdentity } from "../types/index.js";
 import { VoxContext } from "../infra/vox-context.js";
 import { formatToolResultOutput, stripSpokenEcho } from "../utils/models/text-cleaning.js";
-import { audienceID, boundaryIndex, collectSpokenReply, identityOf, roleOf, type DealRowRenderer } from "../utils/diplomacy/transcript-utils.js";
+import { audienceID, boundaryIndex, collectSpokenReply, identityOf, observerName, roleOf, speakerLabel, type DealRowRenderer } from "../utils/diplomacy/transcript-utils.js";
 import { sendMessageToolName } from "../utils/diplomacy/send-message-tool-name.js";
 
 /**
@@ -99,7 +99,7 @@ export const specialMessages: Record<string, string> = {
  * name keeps the prompt (and the transcript labels built from it) coherent instead of failing the
  * turn or leaking a bare seat number into the audience description.
  */
-export const observerName = "Observer";
+export { observerName } from "../utils/diplomacy/transcript-utils.js";
 
 /**
  * Generic base envoy agent that can chat with the user.
@@ -249,11 +249,7 @@ export abstract class Envoy<TParameters extends AgentParameters = AgentParameter
    * AND the echo-strip both build labels here, so they can never disagree.
    */
   protected speakerLabel(input: EnvoyThread, seat: number): string {
-    const civ = identityOf(input, seat)?.name?.trim();
-    if (!civ) return seat === input.agent ? `Player ${seat}` : observerName;
-    const role = roleOf(input, seat)?.trim();
-    if (!role) return civ;
-    return /^the\s/i.test(role) ? `${civ}, ${role}` : `${civ}, the ${role}`;
+    return speakerLabel(input, seat);
   }
 
   /**

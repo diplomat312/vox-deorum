@@ -20,6 +20,9 @@ import { DEAL_MESSAGE_TYPES, type DealTranscriptMessage } from "../../../../mcp-
 import { sendMessageToolName } from "./send-message-tool-name.js";
 export type { TranscriptMessage } from "../../../../mcp-server/dist/utils/transcript-schema.js";
 
+/** The display name used for an audience seat without a civilization identity. */
+export const observerName = "Observer";
+
 /**
  * The durable row fields every transport needs after a write commits: the identity the panel
  * deduplicates by, who spoke, what kind of row it is, its text, the server-stamped turn, and (for
@@ -69,6 +72,15 @@ export function roleOf(thread: EnvoyThread, id: number): string | undefined {
 /** The civ/leader identity stored for `id` in the ordered pair, if any. */
 export function identityOf(thread: EnvoyThread, id: number): ParticipantIdentity | undefined {
   return id === thread.player1ID ? thread.player1Identity : thread.player2Identity;
+}
+
+/** Build the speaker label shared by prompt rendering and spoken-message archival. */
+export function speakerLabel(thread: EnvoyThread, seat: number): string {
+  const civ = identityOf(thread, seat)?.name?.trim();
+  if (!civ) return seat === thread.agent ? `Player ${seat}` : observerName;
+  const role = roleOf(thread, seat)?.trim();
+  if (!role) return civ;
+  return /^the\s/i.test(role) ? `${civ}, ${role}` : `${civ}, the ${role}`;
 }
 
 /** The agent-voiced (LLM) seat — the civ the agent speaks as. */

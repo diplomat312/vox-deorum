@@ -12,6 +12,7 @@ import type { EnvoyThread, ChatMessageRequest } from "../../types/index.js";
 import type { DealTranscriptMessage } from "../../../../mcp-server/dist/utils/deal-schema.js";
 import { appendTranscriptMessageRow, audienceID, collectSpokenReply, retryMessage, needsRetryReply, maybeAutoCompact } from "./transcript.js";
 import { collectTrace, hydrateDealRow, type TranscriptPushMessage } from "./transcript-utils.js";
+import type { ModelMessage } from "ai";
 import { reportThreadRow } from "./row-observer.js";
 import { appendDealProposal, classifyDealSubmission } from "./deal.js";
 
@@ -70,18 +71,18 @@ export interface ChatTurn {
    */
   dealRow?: DealTranscriptMessage;
   /**
-   * Archive the streamed reply (diplomacy only), normalize the cached reply slice to that same
-   * archived content, and mark the turn complete. `sendMessageOnly` (set for a live envoy) archives
-   * only the explicit `send-message` reply, dropping raw free text (the same text the route swallows from
-   * the live stream), so live and reload agree.
+   * Remove transient model/tool traffic and mark the turn complete. A valid `send-message` call
+   * already archived its own row during tool execution. When nothing spoke or acted, this appends the
+   * shared retry row instead. Terminal reconciliation mirrors observed durable rows into the cache.
    *
-   * Archival is NOT best-effort: if the store refuses the append this throws, so the caller can report
-   * a failure instead of letting a streamed draft masquerade as a durable completed reply.
+   * Retry archival is not best-effort: if the store refuses that append this throws, so the caller can
+   * report a failure instead of letting a streamed draft masquerade as a durable completed reply.
    *
-   * @returns the exact committed reply row, or undefined when the turn archived no reply (it took a
-   *          deliberate terminal action, or it is not a diplomacy thread).
+   * @returns the retry row when fallback was needed, otherwise undefined.
    */
   complete(opts?: { sendMessageOnly?: boolean }): Promise<TranscriptPushMessage | undefined>;
+  /** The single spoken row whose cache entry should retain the native model trace, if any. */
+  traceTarget(): { content: string; trace: ModelMessage[] } | undefined;
   /**
    * Release the per-thread lock and reconcile the cache with the store: a completed turn keeps both
    * rows; an incomplete one trims the unwritten reply (and a {{{Greeting}}} trigger's own cache row,
@@ -104,7 +105,7 @@ export interface ChatTurn {
  * underlying commit error (a store append failure, or — for a deal — an `IllegalDealError` /
  * inspect failure) when the commit fails. In every case nothing has streamed yet, so the route can
  * still send a non-2xx body and the UI can restore/roll back the never-sent move. The returned
- * handle owns the success archive (`complete`) and the lock-release + failure rollback (`finish`).
+ * handle owns terminal cleanup (`complete`) and the lock-release + failure rollback (`finish`).
  */
 export async function beginChatTurn(thread: EnvoyThread, commit: TurnCommit, turn: number): Promise<ChatTurn> {
   if (inFlight.has(thread.id)) throw new ThreadBusyError(thread.id);
@@ -171,70 +172,31 @@ export async function beginChatTurn(thread: EnvoyThread, commit: TurnCommit, tur
 
   let completed = false;
   let finished = false;
+  let traceTarget: { content: string; trace: ModelMessage[] } | undefined;
   return {
     callerRow,
     dealRow,
     async complete(opts?: { sendMessageOnly?: boolean }) {
-      let replyRow: TranscriptPushMessage | undefined;
+      let retryRow: TranscriptPushMessage | undefined;
       if (thread.diplomacy) {
-        // Archive exactly what was displayed: the spoken reply is the interleaved text plus send-message
-        // arguments (collectSpokenReply). For a live envoy (`sendMessageOnly`) only the explicit
-        // send-message reply is kept, since raw free text is the swallowed tool-force fallback, so
-        // excluding it here keeps the archive identical to the live stream. A turn that spoke nothing
-        // falls back to the shared retry line (the same one the web route streams, under the SAME
-        // `needsRetryReply` predicate with the same option), UNLESS it took a deliberate terminal action
-        // (a deal handoff or a close): that turn's outcome is the deal/close itself (archived by its own
-        // tool), so a "lost my train of thought" line would contradict it (needsRetryReply is false).
-        // Such a turn archives no reply row.
         const slice = thread.messages.slice(replyStart);
         const spoken = collectSpokenReply(slice, opts);
-        const reply = spoken || (needsRetryReply(slice, opts) ? retryMessage : "");
-        if (reply) {
-          // Deliberately NOT best-effort. Swallowing this append let a turn report `done` with a
-          // streamed draft the store never accepted — the client then showed a "completed" reply that
-          // vanished on the next reload. Letting it throw makes the turn end in `error` (carrying
-          // whatever it did commit) instead of a false completion.
-          replyRow = await appendTranscriptMessageRow(thread, thread.agent, reply);
-          // Reported only after the store confirms it, so the turn's terminal rows are exactly the
-          // durable ones. The caller row is deliberately excluded from this capture (it belongs to the
-          // pre-run phase), so no ID can appear in both phases.
-          reportThreadRow(thread, replyRow);
+        if (!spoken && needsRetryReply(slice, opts)) {
+          retryRow = await appendTranscriptMessageRow(thread, thread.agent, retryMessage);
+          reportThreadRow(thread, retryRow);
         }
-        // Normalize the cache to exactly what was archived. The run left the raw assistant messages in
-        // the slice (free text, the send-message tool call, the negotiator/close handoff); for a live
-        // envoy that raw text is the swallowed tool-force fallback the user never saw, and none of the
-        // tool plumbing is durable. Replacing the slice with the single archived reply row (or nothing
-        // when the turn spoke none) drops the unseen text the same way the store does, so a later turn
-        // prompts on the same history a reload would hydrate rather than resurfacing malformed junk. The
-        // route splices any mid-run deal rows in at this same boundary afterward, ahead of this reply,
-        // matching the durable order.
-        //
-        // The run's full native trajectory is the one thing rescued from the discarded slice: it
-        // rides the normalized reply row's metadata (vox-agents memory only, the durable append above
-        // stays reply-text-only) so the next run's prompt replays exactly what the model emitted
-        // (signed thinking, paired tool_use/tool_result), not a reconstruction. See collectTrace.
-        // Retained ONLY for a genuine spoken reply: a stuck turn that fell back to the retry line
-        // gathered nothing worth replaying, and its dead-end tool traffic must not anchor the cache.
-        const trace = spoken ? collectTrace(slice, opts) : [];
+        // The cache is deliberately left without reply rows until the terminal observer is frozen.
+        // That shared done/error path restores exactly the rows that reached the append-only store.
         thread.messages.splice(replyStart);
-        if (reply) {
-          // Normalize to the EXACT archived row: its durable ID (so the turn's own cache repair and a
-          // later re-hydrate both recognize this row) and its server-stamped turn (which can differ
-          // from the live snapshot this turn opened with).
-          thread.messages.push({
-            message: { role: "assistant", content: reply },
-            metadata: {
-              datetime: new Date(),
-              turn: replyRow?.Turn ?? turn,
-              ...(replyRow ? { id: replyRow.ID } : {}),
-              ...(trace.length ? { trace } : {}),
-            },
-          });
+        if (spoken && countSendMessageCalls(slice) === 1) {
+          const trace = collectTrace(slice, opts);
+          if (trace.length) traceTarget = { content: spoken, trace };
         }
       }
       completed = true;
-      return replyRow;
+      return retryRow;
     },
+    traceTarget: () => traceTarget,
     finish() {
       if (finished) return;
       finished = true;
@@ -242,6 +204,18 @@ export async function beginChatTurn(thread: EnvoyThread, commit: TurnCommit, tur
       inFlight.delete(thread.id);
     },
   };
+}
+
+/** Count explicit spoken tool calls so a whole-turn trace is only attached when it has one home. */
+function countSendMessageCalls(messages: import("../../types/index.js").MessageWithMetadata[]): number {
+  let count = 0;
+  for (const item of messages) {
+    if (item.message.role !== "assistant" || !Array.isArray(item.message.content)) continue;
+    for (const part of item.message.content) {
+      if (part.type === "tool-call" && part.toolName === "send-message") count++;
+    }
+  }
+  return count;
 }
 
 /**

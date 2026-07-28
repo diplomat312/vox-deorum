@@ -31,7 +31,10 @@ vi.mock('../../../src/telepathist/telepathist-parameters.js', async () => {
 import { createAgentRoutes } from '../../../src/web/routes/agent.js';
 import { appendDealProposal } from '../../../src/utils/diplomacy/deal.js';
 import { withThreadLock } from '../../../src/utils/diplomacy/chat-turn-commit.js';
+import { appendTranscriptMessageRow } from '../../../src/utils/diplomacy/transcript.js';
 import { retryMessage } from '../../../src/utils/diplomacy/transcript-utils.js';
+import { reportThreadRow } from '../../../src/utils/diplomacy/row-observer.js';
+import { sendMessageToolName } from '../../../src/utils/diplomacy/send-message-tool-name.js';
 import { chatThreadStore } from '../../../src/web/chat/store.js';
 import { agentRegistry } from '../../../src/infra/agent-registry.js';
 import { contextRegistry } from '../../../src/infra/context-registry.js';
@@ -47,6 +50,21 @@ function makeApp() {
 }
 
 const app = makeApp();
+
+/** Append and report a spoken diplomat row while retaining the raw tool-call shape for cleanup. */
+async function recordDiplomatReply(input: any, text: string): Promise<void> {
+  const row = await appendTranscriptMessageRow(input, input.agent, text);
+  reportThreadRow(input, row);
+  input.messages.push({
+    message: {
+      role: 'assistant',
+      content: [{
+        type: 'tool-call', toolCallId: `send-${row.ID}`, toolName: sendMessageToolName, input: { Message: text },
+      }],
+    },
+    metadata: { datetime: new Date(), turn: 5 },
+  });
+}
 
 /**
  * A fake VoxContext mirroring the run-model API the agent routes now use (Stage 3): base
@@ -411,7 +429,7 @@ describe('agent routes', () => {
     /** A diplomat execute that voices a fixed reply into the thread. */
     const replyWith = (text: string) =>
       vi.fn(async (_n: string, input: any) => {
-        input.messages.push({ message: { role: 'assistant', content: text }, metadata: { datetime: new Date(), turn: 5 } });
+        await recordDiplomatReply(input, text);
         return input;
       });
 
@@ -681,7 +699,7 @@ describe('agent routes', () => {
         await appendDealProposal(input, input.agent, 'deal-counter', {
           version: 1, items: [], promises: [], message: 'Consider this instead.',
         });
-        input.messages.push({ message: { role: 'assistant', content: 'A measured reply.' }, metadata: { datetime: new Date(), turn: 5 } });
+        await recordDiplomatReply(input, 'A measured reply.');
         return input;
       });
       const { mcp, chatId } = await openDiplomacy({ liveTurn: 5, execute });
@@ -855,7 +873,7 @@ describe('agent routes', () => {
       const gate = new Promise<void>((resolve) => { release = resolve; });
       const slow = vi.fn(async (_n: string, input: any) => {
         await gate;
-        input.messages.push({ message: { role: 'assistant', content: 'A reply.' }, metadata: { datetime: new Date(), turn: 5 } });
+        await recordDiplomatReply(input, 'A reply.');
         return input;
       });
       const { mcp, chatId } = await openDiplomacy({ liveTurn: 5, execute: slow });
@@ -888,7 +906,7 @@ describe('agent routes', () => {
       const gate = new Promise<void>((resolve) => { release = resolve; });
       const slow = vi.fn(async (_n: string, input: any) => {
         await gate;
-        input.messages.push({ message: { role: 'assistant', content: 'A reply.' }, metadata: { datetime: new Date(), turn: 5 } });
+        await recordDiplomatReply(input, 'A reply.');
         return input;
       });
       const { mcp, chatId } = await openDiplomacy({ liveTurn: 5, execute: slow });
@@ -1580,7 +1598,7 @@ describe('agent routes', () => {
         session: { getTurn: () => 5 },
         baseParameters: { turn: 5, gameID: 'g', playerID: 3, gameStates: { 5: { options: {}, players: {} } } },
         execute: vi.fn(async (_n: string, input: any) => {
-          input.messages.push({ message: { role: 'assistant', content: 'Noted.' }, metadata: { datetime: new Date(), turn: 5 } });
+          await recordDiplomatReply(input, 'Noted.');
           return input;
         }),
       });

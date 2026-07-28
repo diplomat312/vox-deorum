@@ -28,6 +28,14 @@
 import type { EnvoyThread } from "../../types/index.js";
 import type { TranscriptPushMessage } from "./transcript-utils.js";
 
+/** A close requested by the diplomat while a streamed chat turn is still executing. */
+export interface StagedThreadClose {
+  /** The agent seat that authored the closing line. */
+  speakerID: number;
+  /** The visible farewell to store in the close row. */
+  content: string;
+}
+
 /**
  * A live capture of the durable rows one chat turn commits for its thread. Obtain one with
  * {@link observeThreadRows}, and always release it with {@link ThreadRowObserver.close} before the
@@ -49,6 +57,8 @@ export interface ThreadRowObserver {
 /** The mutable half of an observer, kept off the public interface so only writers can record. */
 interface RegisteredObserver extends ThreadRowObserver {
   record(row: TranscriptPushMessage): void;
+  stageClose(close: StagedThreadClose): boolean;
+  takeClose(): StagedThreadClose | undefined;
 }
 
 /**
@@ -75,6 +85,7 @@ export function observeThreadRows(
   const ignored = new Set(options.ignoreIDs ?? []);
   const captured = new Map<number, TranscriptPushMessage>();
   let frozen = false;
+  let stagedClose: StagedThreadClose | undefined;
 
   /** The captured rows in ascending store-ID order — the durable append order. */
   const ordered = (): TranscriptPushMessage[] =>
@@ -86,9 +97,20 @@ export function observeThreadRows(
       if (frozen || ignored.has(row.ID) || captured.has(row.ID)) return;
       captured.set(row.ID, row);
     },
+    stageClose(close) {
+      if (frozen || stagedClose) return false;
+      stagedClose = close;
+      return true;
+    },
+    takeClose() {
+      const close = stagedClose;
+      stagedClose = undefined;
+      return close;
+    },
     rows: ordered,
     close() {
       frozen = true;
+      stagedClose = undefined;
       // Only clear the slot if it is still ours: an overlapping turn (which the thread lock should
       // make impossible) must not have its registration torn down by a predecessor's cleanup.
       if (observers.get(threadId) === observer) observers.delete(threadId);
@@ -122,4 +144,19 @@ export function reportThreadRows(
   rows: readonly (TranscriptPushMessage | undefined)[]
 ): void {
   for (const row of rows) reportThreadRow(thread, row);
+}
+
+/**
+ * Stage a diplomat close until the active chat turn reaches terminal reconciliation. Returns
+ * undefined outside a streamed turn so callers can retain their immediate close behavior.
+ */
+export function stageThreadClose(thread: EnvoyThread | undefined, close: StagedThreadClose): boolean | undefined {
+  if (!thread) return undefined;
+  const observer = observers.get(thread.id);
+  return observer?.stageClose(close);
+}
+
+/** Take the active turn's staged close so the terminal coordinator can commit it last. */
+export function takeStagedThreadClose(thread: EnvoyThread): StagedThreadClose | undefined {
+  return observers.get(thread.id)?.takeClose();
 }

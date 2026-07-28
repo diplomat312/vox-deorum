@@ -15,6 +15,10 @@ vi.mock('../../../src/utils/models/mcp-client.js', async () => {
 });
 
 import { createCloseConversationTool } from '../../../src/envoy/close-conversation-tool.js';
+import {
+  observeThreadRows,
+  takeStagedThreadClose,
+} from '../../../src/utils/diplomacy/row-observer.js';
 
 let mcp: ReturnType<typeof installMockMcpClient>;
 beforeEach(() => {
@@ -107,6 +111,25 @@ describe('close-conversation tool', () => {
     expect(rejects[0].args.SpeakerID).toBe(3); // thread.agent retracts
     expect(rejects[0].args.ProposalMessageID).toBe(9);
     expect(mcp.calls('append-message').map((c) => c.args.MessageType)).toEqual(['close']);
+  });
+
+  it('stages one close under an active turn and never writes a duplicate early', async () => {
+    const input = thread();
+    const observer = observeThreadRows(input);
+
+    expect(await close(input, 'First farewell.'))
+      .toBe('Conversation will close after this reply is recorded.');
+    expect(await close(input, 'Duplicate farewell.'))
+      .toBe('Conversation is already scheduled to close after this reply is recorded.');
+
+    expect(mcp.calls('read-transcript')).toHaveLength(0);
+    expect(mcp.calls('append-message')).toHaveLength(0);
+    expect(takeStagedThreadClose(input)).toEqual({
+      speakerID: 3,
+      content: 'First farewell.',
+    });
+    expect(takeStagedThreadClose(input)).toBeUndefined();
+    expect(observer.close()).toEqual([]);
   });
 
   it('returns a failure string when the store write throws', async () => {

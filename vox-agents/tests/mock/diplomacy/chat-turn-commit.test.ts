@@ -19,7 +19,7 @@ vi.mock('../../../src/utils/models/mcp-client.js', async () => {
 });
 
 import { beginChatTurn, isThreadBusy } from '../../../src/utils/diplomacy/chat-turn-commit.js';
-import { retryMessage } from '../../../src/utils/diplomacy/transcript-utils.js';
+import { insertDurableRows, retryMessage } from '../../../src/utils/diplomacy/transcript-utils.js';
 import { sendMessageToolName } from '../../../src/utils/diplomacy/send-message-tool-name.js';
 
 let mcp: ReturnType<typeof installMockMcpClient>;
@@ -89,7 +89,7 @@ describe('beginChatTurn().complete() cache normalization', () => {
     expect(isThreadBusy(t.id)).toBe(false);
   });
 
-  it('replaces the reply slice with the archived send-message text, dropping suppressed free text', async () => {
+  it('removes transient send-message traffic without re-archiving it', async () => {
     const t = thread('dipl:g:1:3#a');
     const turn = await beginChatTurn(t, { kind: 'text', message: 'Greetings.' }, 5);
     // Simulate the run persisting its raw steps: junk free text BEFORE and AFTER the real spoken line.
@@ -102,14 +102,11 @@ describe('beginChatTurn().complete() cache normalization', () => {
     await turn.complete({ sendMessageOnly: true });
     turn.finish();
 
-    // The cache now holds only the committed user row plus a single normalized assistant text row.
-    expect(t.messages).toHaveLength(2);
+    // Cache insertion is terminal reconciliation's job. Completion only drops transient model traffic.
+    expect(t.messages).toHaveLength(1);
     expect(t.messages[0].message).toEqual({ role: 'user', content: 'Greetings.' });
-    expect(t.messages[1].message).toEqual({ role: 'assistant', content: 'Peace to you, neighbor.' });
-    // The archived reply matches the normalized cache row exactly (live == reload).
     const appends = mcp.calls('append-message');
-    expect(appends).toHaveLength(2);
-    expect(appends[1].args).toMatchObject({ SpeakerID: 3, MessageType: 'text', Content: 'Peace to you, neighbor.' });
+    expect(appends).toHaveLength(1);
     // No malformed free text survives anywhere in the cache.
     expect(JSON.stringify(t.messages)).not.toContain('tool_call');
     expect(JSON.stringify(t.messages)).not.toContain('trailing junk');
@@ -151,15 +148,15 @@ describe('beginChatTurn().complete() cache normalization', () => {
     );
 
     await turn.complete({ sendMessageOnly: true });
+    const traceTarget = turn.traceTarget();
     turn.finish();
 
-    expect(t.messages).toHaveLength(2);
-    const reply = t.messages[1];
-    expect(reply.message).toEqual({ role: 'assistant', content: 'Let us speak plainly.' });
+    expect(t.messages).toHaveLength(1);
     // The trace replays the model's ACTUAL trajectory: signed reasoning, the get-briefing use paired
     // with its result, then the send-message step reduced to its reasoning (the spoken text IS the
     // reply row). Empty placeholders dropped; the send-message call/result never enter the trace.
-    expect(reply.metadata.trace).toEqual([
+    expect(traceTarget).toMatchObject({ content: 'Let us speak plainly.' });
+    expect(traceTarget!.trace).toEqual([
       { role: 'assistant', content: [
         { type: 'reasoning', text: 'They sound conciliatory.', providerOptions: { anthropic: { signature: 'sig-1' } } },
         { type: 'tool-call', toolName: 'get-briefing', toolCallId: 'b1', input: {} },
@@ -169,12 +166,10 @@ describe('beginChatTurn().complete() cache normalization', () => {
       ] },
       { role: 'assistant', content: [{ type: 'reasoning', text: 'We can press our advantage.' }] },
     ]);
-    expect(JSON.stringify(reply.metadata.trace)).not.toContain('send-message');
-    // The durable archive stays reply-text-only: no trace ever reaches mcp-server.
+    expect(JSON.stringify(traceTarget!.trace)).not.toContain('send-message');
+    // Completion does not append a second durable copy of the spoken tool call.
     const appends = mcp.calls('append-message');
-    expect(appends).toHaveLength(2);
-    expect(JSON.stringify(appends[1].args)).not.toContain('reasoning');
-    expect(JSON.stringify(appends[1].args)).not.toContain('get-briefing');
+    expect(appends).toHaveLength(1);
   });
 
   it('falls back to the shared retry line when the turn spoke only suppressed free text', async () => {
@@ -183,7 +178,8 @@ describe('beginChatTurn().complete() cache normalization', () => {
     // The turn produced only native free text (no send-message, no terminal action): a stuck turn.
     t.messages.push(assistant([freeText('<|tool_call|> garbled and nothing usable')]));
 
-    await turn.complete({ sendMessageOnly: true });
+    const retryRow = await turn.complete({ sendMessageOnly: true });
+    insertDurableRows(t, [retryRow!]);
     turn.finish();
 
     expect(t.messages).toHaveLength(2);
@@ -203,7 +199,8 @@ describe('beginChatTurn().complete() cache normalization', () => {
       assistant([freeText('<|tool_call|> garbled, nothing usable')]),
     );
 
-    await turn.complete({ sendMessageOnly: true });
+    const retryRow = await turn.complete({ sendMessageOnly: true });
+    insertDurableRows(t, [retryRow!]);
     turn.finish();
 
     // Exactly the committed user row + the single archived retry line remain; the briefing tool traffic

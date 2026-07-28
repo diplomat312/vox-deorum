@@ -34,9 +34,12 @@ import {
   closeConversation,
   enactAgentDeal,
 } from '../../../src/utils/diplomacy/deal.js';
-import { reportThreadRow } from '../../../src/utils/diplomacy/row-observer.js';
+import { reportThreadRow, stageThreadClose } from '../../../src/utils/diplomacy/row-observer.js';
+import { appendTranscriptMessageRow } from '../../../src/utils/diplomacy/transcript.js';
+import { sendMessageToolName } from '../../../src/utils/diplomacy/send-message-tool-name.js';
 import { chatThreadStore } from '../../../src/web/chat/store.js';
 import { runChatTurn } from '../../../src/web/chat/turn.js';
+import { createSendMessageTool } from '../../../src/envoy/send-message-tool.js';
 
 let mcp: ReturnType<typeof installMockMcpClient>;
 let threadSeq = 0;
@@ -120,10 +123,17 @@ function echoAppends(startID: number): void {
   }));
 }
 
-/** Push a spoken assistant reply into the thread, the way a real run leaves its output behind. */
-function speak(thread: EnvoyThread, text: string): void {
+/** Archive a spoken tool result, then leave the raw model output for terminal cleanup. */
+async function speak(thread: EnvoyThread, text: string): Promise<void> {
+  const row = await appendTranscriptMessageRow(thread, thread.agent, text);
+  reportThreadRow(thread, row);
   thread.messages.push({
-    message: { role: 'assistant', content: text },
+    message: {
+      role: 'assistant',
+      content: [{
+        type: 'tool-call', toolCallId: `send-${row.ID}`, toolName: sendMessageToolName, input: { Message: text },
+      }] as never,
+    },
     metadata: { datetime: new Date(), turn: 5 },
   });
 }
@@ -151,7 +161,7 @@ describe('runChatTurn row contract', () => {
   it('reports the committed caller text row on connected and the archived reply on done', async () => {
     const thread = registerThread();
     vi.spyOn(contextRegistry, 'get').mockReturnValue(mockContext(async (_n, input) => {
-      speak(input, 'A measured reply.');
+      await speak(input, 'A measured reply.');
       return input;
     }));
     const sink = recordingSink();
@@ -169,10 +179,57 @@ describe('runChatTurn row contract', () => {
     expect(thread.messages.map((m) => m.metadata.id)).toEqual([100, 101]);
   });
 
+  it('attaches the retained trace to the echo-cleaned durable reply row', async () => {
+    const thread = registerThread();
+    vi.spyOn(contextRegistry, 'get').mockReturnValue(mockContext(async (_n, input) => {
+      const tool = createSendMessageTool({
+        id: 'send-test',
+        currentInput: input,
+        currentParameters: { turn: 5, playerID: input.agent },
+      } as never) as any;
+      await tool.execute(
+        { Message: '[Turn 5] Player 3: Agreed.' },
+        { toolCallId: 'send-clean', messages: [] },
+      );
+      // Envoy.stopCheck reuses the same cleaner before retaining the native response trajectory.
+      input.messages.push({
+        message: {
+          role: 'assistant',
+          content: [
+            { type: 'reasoning', text: 'A concise acceptance is appropriate.' },
+            {
+              type: 'tool-call',
+              toolCallId: 'send-clean',
+              toolName: sendMessageToolName,
+              input: { Message: 'Agreed.' },
+            },
+          ],
+        },
+        metadata: { datetime: new Date(), turn: 5 },
+      });
+      return input;
+    }));
+    const sink = recordingSink();
+
+    await runChatTurn({ kind: 'text', chatId: thread.id, message: 'Do we agree?' }, sink);
+
+    expect(sink.doneEvents[0]!.rows).toEqual([
+      expect.objectContaining({ ID: 101, Content: 'Agreed.' }),
+    ]);
+    const cachedReply = thread.messages.find((item) => item.metadata.id === 101)!;
+    expect(cachedReply.message).toEqual({ role: 'assistant', content: 'Agreed.' });
+    expect(cachedReply.metadata.trace).toEqual([
+      {
+        role: 'assistant',
+        content: [{ type: 'reasoning', text: 'A concise acceptance is appropriate.' }],
+      },
+    ]);
+  });
+
   it('reports the committed proposal row on connected, with `deal` as its compatibility view', async () => {
     const thread = registerThread();
     vi.spyOn(contextRegistry, 'get').mockReturnValue(mockContext(async (_n, input) => {
-      speak(input, 'We will weigh your offer.');
+      await speak(input, 'We will weigh your offer.');
       return input;
     }));
     const sink = recordingSink();
@@ -199,7 +256,7 @@ describe('runChatTurn row contract', () => {
     mcp.respondWith('read-transcript', structuredResult({ messages: [open] }));
     const thread = registerThread();
     vi.spyOn(contextRegistry, 'get').mockReturnValue(mockContext(async (_n, input) => {
-      speak(input, 'Noted.');
+      await speak(input, 'Noted.');
       return input;
     }));
     const sink = recordingSink();
@@ -217,7 +274,7 @@ describe('runChatTurn row contract', () => {
   it('has no durable caller row for a {{{Greeting}}} trigger', async () => {
     const thread = registerThread();
     vi.spyOn(contextRegistry, 'get').mockReturnValue(mockContext(async (_n, input) => {
-      speak(input, 'Greetings, neighbor.');
+      await speak(input, 'Greetings, neighbor.');
       return input;
     }));
     const sink = recordingSink();
@@ -248,7 +305,7 @@ describe('runChatTurn row contract', () => {
       await enactAgentDeal(7, { accepterID: 1, thread: input });
       await appendDealReject(input, 3, 'Declined.', 7);
       await appendDealProposal(input, 3, 'deal-counter', { version: 1, items: [], promises: [] });
-      speak(input, 'Here is where we stand.');
+      await speak(input, 'Here is where we stand.');
       return input;
     }));
     const sink = recordingSink();
@@ -261,9 +318,8 @@ describe('runChatTurn row contract', () => {
     expect(sink.doneEvents[0]!.deals.map((row) => row.ID)).toEqual([101, 200, 300, 301]);
     // The turn never rereads the transcript to learn what it wrote.
     expect(mcp.calls('read-transcript')).toHaveLength(0);
-    // The cache is repaired from the same rows: mid-run rows land at the reply boundary, ahead of the
-    // normalized reply, matching the durable order.
-    expect(thread.messages.map((m) => m.metadata.id)).toEqual([100, 101, 200, 300, 301, 102]);
+    // Terminal reconciliation inserts the entire captured set in durable order at the reply boundary.
+    expect(thread.messages.map((m) => m.metadata.id)).toEqual([100, 101, 102, 200, 300, 301]);
   });
 
   it('captures the ordered rejection and close rows a mid-run close writes', async () => {
@@ -307,6 +363,33 @@ describe('runChatTurn row contract', () => {
     expect(thread.messages.map((m) => m.metadata.id)).toEqual([100, 101, 102]);
   });
 
+  it('commits a staged close after the spoken message and negotiated outcome', async () => {
+    const thread = registerThread();
+    vi.spyOn(contextRegistry, 'get').mockReturnValue(mockContext(async (_n, input) => {
+      await speak(input, 'I will make our position clear.');
+      await appendDealProposal(input, input.agent, 'deal-proposal', { version: 1, items: [], promises: [] });
+      expect(stageThreadClose(input, { speakerID: input.agent, content: 'Until next time.' })).toBe(true);
+      input.messages.push({
+        message: {
+          role: 'assistant',
+          content: [{ type: 'tool-call', toolCallId: 'close-1', toolName: 'close-conversation', input: {} }],
+        },
+        metadata: { datetime: new Date(), turn: 5 },
+      });
+      return input;
+    }));
+    const sink = recordingSink();
+
+    await runChatTurn({ kind: 'text', chatId: thread.id, message: 'What do you propose?' }, sink);
+
+    expect(sink.doneEvents[0]!.rows.map((row) => [row.MessageType, row.Content]))
+      .toEqual([
+        ['text', 'I will make our position clear.'],
+        ['deal-proposal', 'A deal was proposed.'],
+        ['close', 'Until next time.'],
+      ]);
+  });
+
   it('suppresses duplicate reports and rows belonging to another thread', async () => {
     const other = registerThread();
     const thread = registerThread();
@@ -315,7 +398,7 @@ describe('runChatTurn row contract', () => {
       reportThreadRow(input, row);
       reportThreadRow(input, { ...row, Content: 'a second report of the same row' });
       reportThreadRow(other, outcomeRow(201, 'deal-reject'));
-      speak(input, 'Understood.');
+      await speak(input, 'Understood.');
       return input;
     }));
     const sink = recordingSink();
@@ -331,7 +414,7 @@ describe('runChatTurn row contract', () => {
     vi.spyOn(contextRegistry, 'get').mockReturnValue(mockContext(async (_n, input) => {
       // A misbehaving writer re-reports the caller row; the phase boundary must reject it.
       reportThreadRow(input, { ID: 100, SpeakerID: 1, MessageType: 'text', Content: 'Well?', Turn: 5 });
-      speak(input, 'Understood.');
+      await speak(input, 'Understood.');
       return input;
     }));
     const sink = recordingSink();
@@ -350,7 +433,7 @@ describe('runChatTurn row contract', () => {
     let detached: (() => void) | undefined;
     vi.spyOn(contextRegistry, 'get').mockReturnValue(mockContext(async (_n, input) => {
       detached = () => reportThreadRow(input, outcomeRow(500, 'deal-reject'));
-      speak(input, 'Understood.');
+      await speak(input, 'Understood.');
       return input;
     }));
     const sink = recordingSink();
@@ -370,7 +453,10 @@ describe('runChatTurn row contract', () => {
     vi.spyOn(contextRegistry, 'get').mockReturnValue(mockContext(async (_n, input) => {
       await appendDealReject(input, 3, 'Declined.', 7);
       // Transient model output that must NOT survive the failure.
-      speak(input, 'half-formed draft');
+      input.messages.push({
+        message: { role: 'assistant', content: 'half-formed draft' },
+        metadata: { datetime: new Date(), turn: 5 },
+      });
       throw new Error('LLM exploded');
     }));
     const sink = recordingSink();
@@ -387,6 +473,33 @@ describe('runChatTurn row contract', () => {
     expect(JSON.stringify(thread.messages)).not.toContain('half-formed draft');
   });
 
+  it('keeps an archived send-message row when later agent work fails', async () => {
+    const thread = registerThread();
+    vi.spyOn(contextRegistry, 'get').mockReturnValue(mockContext(async (_n, input) => {
+      await speak(input, 'This was already delivered.');
+      input.messages.push({
+        message: { role: 'assistant', content: 'transient reasoning after delivery' },
+        metadata: { datetime: new Date(), turn: 5 },
+      });
+      throw new Error('later work failed');
+    }));
+    const sink = recordingSink();
+
+    await runChatTurn({ kind: 'text', chatId: thread.id, message: 'Your answer?' }, sink);
+
+    expect(sink.doneEvents).toHaveLength(0);
+    expect(sink.errorEvents).toHaveLength(1);
+    expect(sink.errorEvents[0]!.rows).toEqual([
+      expect.objectContaining({ ID: 101, Content: 'This was already delivered.' }),
+    ]);
+    expect(thread.messages.map((item) => [item.metadata.id, item.message.content])).toEqual([
+      [100, 'Your answer?'],
+      [101, 'This was already delivered.'],
+    ]);
+    expect(JSON.stringify(thread.messages)).not.toContain(sendMessageToolName);
+    expect(JSON.stringify(thread.messages)).not.toContain('transient reasoning after delivery');
+  });
+
   it('fails the turn when the final reply cannot be archived, instead of a false completion', async () => {
     // Swallowing this append let a streamed draft masquerade as a durable completed reply.
     let appended = 0;
@@ -401,7 +514,7 @@ describe('runChatTurn row contract', () => {
     });
     const thread = registerThread();
     vi.spyOn(contextRegistry, 'get').mockReturnValue(mockContext(async (_n, input) => {
-      speak(input, 'A reply that never lands.');
+      await speak(input, 'A reply that never lands.');
       return input;
     }));
     const sink = recordingSink();
@@ -417,7 +530,7 @@ describe('runChatTurn row contract', () => {
   });
 
   it.each([
-    ['a completed run', async (input: EnvoyThread) => { speak(input, 'Done.'); return input; }],
+    ['a completed run', async (input: EnvoyThread) => { await speak(input, 'Done.'); return input; }],
     ['a failed run', async () => { throw new Error('LLM exploded'); }],
   ])('emits exactly one terminal event for %s', async (_label, execute) => {
     const thread = registerThread();
@@ -433,7 +546,7 @@ describe('runChatTurn row contract', () => {
   it('emits a single error when the terminal event itself throws, never a second event', async () => {
     const thread = registerThread();
     vi.spyOn(contextRegistry, 'get').mockReturnValue(mockContext(async (_n, input) => {
-      speak(input, 'Done.');
+      await speak(input, 'Done.');
       return input;
     }));
     const sink = recordingSink();

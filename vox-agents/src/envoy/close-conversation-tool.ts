@@ -19,6 +19,7 @@ import type { EnvoyThread } from "../types/index.js";
 import { createSimpleTool } from "../utils/tools/simple-tools.js";
 import { closeConversation } from "../utils/diplomacy/deal.js";
 import { createLogger } from "../utils/logger.js";
+import { stageThreadClose } from "../utils/diplomacy/row-observer.js";
 
 const logger = createLogger("close-conversation-tool");
 
@@ -42,6 +43,15 @@ export function createCloseConversationTool(context: VoxContext<StrategistParame
         const thread = context.currentInput as EnvoyThread | undefined;
         if (!thread || thread.player1ID === undefined || thread.player2ID === undefined) {
           return "No active conversation to close.";
+        }
+        // AI SDK may execute same-step tools concurrently. While a chat turn observes this thread,
+        // defer the durable close until terminal reconciliation, after any spoken message and nested
+        // negotiator work have settled. Calls outside that lifecycle remain immediate.
+        const staged = stageThreadClose(thread, { speakerID: thread.agent, content: input.Farewell });
+        if (staged !== undefined) {
+          return staged
+            ? "Conversation will close after this reply is recorded."
+            : "Conversation is already scheduled to close after this reply is recorded.";
         }
         // The diplomat voices the agent seat (thread.agent), so the close is authored by it.
         // closeConversation first retracts any open proposal so nothing is left enactable, then
