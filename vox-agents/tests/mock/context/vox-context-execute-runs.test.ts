@@ -29,6 +29,8 @@ import { VoxSpanExporter } from '../../../src/utils/telemetry/vox-exporter.js';
 import type { StrategistParameters } from '../../../src/strategist/strategy-parameters.js';
 import { makeStrategistParameters } from '../../helpers/fake-vox-context.js';
 import type { Model } from '../../../src/types/index.js';
+import { buildCompletionToolsNudge } from '../../../src/utils/tools/tool-names.js';
+import { buildRescuePrompt } from '../../../src/utils/models/text-cleaning.js';
 
 const stc = vi.mocked(streamTextWithConcurrency);
 
@@ -74,6 +76,72 @@ class CodexStepAgent extends VoxAgent<StrategistParameters> {
   override stopCheck(): boolean { return true; }
 }
 
+/** Two-step agent whose second prepareStep call narrows the available completion tools. */
+class DynamicNudgeAgent extends VoxAgent<StrategistParameters> {
+  readonly name = 'test-dynamic-nudge';
+  readonly description = 'dynamic continuation-nudge test agent';
+  override completionTools = ['finish-a', 'finish-b'];
+
+  /** Selects a mocked model. */
+  override getModel(): Model { return { provider: 'test', name: 'test' } as Model; }
+
+  /** Supplies the minimal system prompt required by the execution loop. */
+  async getSystem(): Promise<string> { return 'system'; }
+
+  /** Starts with both completion tools available. */
+  override getActiveTools(): string[] { return ['finish-a', 'finish-b']; }
+
+  /** Narrows the second step after the base preparation has completed. */
+  override async prepareStep(
+    parameters: StrategistParameters,
+    input: unknown,
+    lastStep: any,
+    allSteps: any[],
+    messages: any[],
+    context: VoxContext<StrategistParameters>,
+  ) {
+    const config = await super.prepareStep(parameters, input, lastStep, allSteps, messages, context);
+    if (allSteps.length > 0) config.activeTools = ['finish-b'];
+    return config;
+  }
+
+  /** Stops after the continuation step. */
+  override stopCheck(
+    _parameters: StrategistParameters,
+    _input: unknown,
+    _lastStep: any,
+    allSteps: any[],
+  ): boolean {
+    return allSteps.length >= 2;
+  }
+}
+
+/** Three-step agent whose completion tool stays active, so every continuation derives the same nudge. */
+class RepeatNudgeAgent extends VoxAgent<StrategistParameters> {
+  readonly name = 'test-repeat-nudge';
+  readonly description = 'continuation-nudge dedup test agent';
+  override completionTools = ['finish-a'];
+
+  /** Selects a mocked model. */
+  override getModel(): Model { return { provider: 'test', name: 'test' } as Model; }
+
+  /** Supplies the minimal system prompt required by the execution loop. */
+  async getSystem(): Promise<string> { return 'system'; }
+
+  /** Keeps the completion tool available on every step. */
+  override getActiveTools(): string[] { return ['finish-a']; }
+
+  /** Runs three steps, so the nudge is derived twice against the same trailing message. */
+  override stopCheck(
+    _parameters: StrategistParameters,
+    _input: unknown,
+    _lastStep: any,
+    allSteps: any[],
+  ): boolean {
+    return allSteps.length >= 3;
+  }
+}
+
 /** Agent that performs a nested execute() inside its initial-message hook, then runs its own step. */
 class NestingAgent extends VoxAgent<StrategistParameters> {
   readonly description = 'nesting test agent';
@@ -104,6 +172,8 @@ beforeAll(() => {
   agentRegistry.register(new StepAgent('test-step-b') as any);
   agentRegistry.register(new StepAgent('test-step-child') as any);
   agentRegistry.register(new CodexStepAgent('test-step-codex') as any);
+  agentRegistry.register(new DynamicNudgeAgent() as any);
+  agentRegistry.register(new RepeatNudgeAgent() as any);
   agentRegistry.register(new NestingAgent('test-nesting', 'test-step-child') as any);
   agentRegistry.register(new DiplomacyOnlyAgent('test-diplomacy-only') as any);
 });
@@ -176,6 +246,54 @@ describe('VoxContext.execute token accounting', () => {
     expect(tokensA).toEqual([100]);
     expect(tokensB).toEqual([100]);
     expect(ctx.inputTokens).toBe(200); // seat total is the sum of both roots
+  });
+});
+
+describe('VoxContext continuation nudges', () => {
+  it('uses the active tools resolved after prepareStep for the continuation nudge', async () => {
+    const ctx = new VoxContext<StrategistParameters>({}, 'exec-dynamic-nudge');
+    const base = makeStrategistParameters();
+
+    await ctx.withRun({ parameters: base, overrides: { turn: 1 } }, async () => {
+      await ctx.execute('test-dynamic-nudge', {});
+    });
+
+    expect(stc).toHaveBeenCalledTimes(2);
+    const continuation = stc.mock.calls[1]![0] as any;
+    expect(continuation.activeTools).toEqual(['finish-b']);
+    // prepareStep's rescue stays ahead of the nudge appended after the tools were resolved.
+    expect(continuation.messages.at(-2).content).toBe(buildRescuePrompt('required'));
+    expect(continuation.messages.at(-1)).toEqual({
+      role: 'user',
+      content: buildCompletionToolsNudge(['finish-b']),
+    });
+    expect(continuation.messages.at(-1).content).not.toContain('finish-a');
+  });
+
+  it('does not repeat a nudge that is already the last message', async () => {
+    // A step that called a tool skips prepareStep's empty-response rescue, and one that returns no
+    // response messages leaves the nudge trailing — the only shape where the dedup guard is load-bearing.
+    stc.mockImplementation(async () => ({
+      steps: [{
+        text: '',
+        usage: { inputTokens: 100, reasoningTokens: 10, outputTokens: 20 },
+        response: { messages: [] },
+        toolCalls: [{ toolName: 'finish-a' }],
+        toolResults: [],
+      }],
+      text: '',
+    }) as any);
+    const ctx = new VoxContext<StrategistParameters>({}, 'exec-repeat-nudge');
+    const base = makeStrategistParameters();
+
+    await ctx.withRun({ parameters: base, overrides: { turn: 1 } }, async () => {
+      await ctx.execute('test-repeat-nudge', {});
+    });
+
+    expect(stc).toHaveBeenCalledTimes(3);
+    const nudge = buildCompletionToolsNudge(['finish-a']);
+    const third = stc.mock.calls[2]![0] as any;
+    expect(third.messages.filter((m: any) => m.content === nudge)).toHaveLength(1);
   });
 });
 

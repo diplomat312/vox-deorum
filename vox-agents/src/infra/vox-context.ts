@@ -35,6 +35,7 @@ import { VoxSpanExporter } from '../utils/telemetry/vox-exporter.js';
 import { countMessagesTokens } from "../utils/models/token-counter.js";
 import { emitProviderExecutedToolSpans } from "../utils/telemetry/provider-tool-spans.js";
 import { cleanToolArtifacts } from "../utils/models/text-cleaning.js";
+import { appendReminder } from "../utils/prompts/reminders.js";
 import { isContextLengthError } from "../utils/retry.js";
 import { agentRegistry } from "./agent-registry.js";
 import { contextRegistry } from "./context-registry.js";
@@ -748,6 +749,18 @@ export class VoxContext<TParameters extends AgentParameters> {
         const stepActiveTools = stepConfig.activeTools || agent.getActiveTools(parameters);
         const stepToolChoice = stepActiveTools && stepActiveTools.length > 0 ? agent.toolChoice : "auto";
         const stepOutputSchema = stepConfig.outputSchema;
+
+        // Nudge the model to finalize once the loop continues past the first step. Runs here, after
+        // prepareStep has finalized this step's active tools (undefined means "all registered tools",
+        // the AI SDK's activeTools contract), so the nudge can only name tools this step offers. Any
+        // rescue prompt prepareStep appended is already in `messages` and stays ahead of the nudge:
+        // the model reads "your last response was empty, retry" and then "finalize with these tools".
+        if (allSteps.length > 0) {
+          messages = appendReminder(
+            messages,
+            agent.continuationNudge(parameters, stepActiveTools ?? Object.keys(this.tools)),
+          );
+        }
 
         // Prepare tool-result messages by converting nested objects to markdown
         messages.forEach((message) => {

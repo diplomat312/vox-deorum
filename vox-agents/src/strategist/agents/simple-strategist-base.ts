@@ -8,13 +8,6 @@
 import { Strategist } from "../strategist.js";
 import { StrategistParameters } from "../strategy-parameters.js";
 import { StrategyDecisionType } from "../../types/config.js";
-import { buildCompletionToolsNudge } from "../../utils/tools/tool-names.js";
-
-/** Builds a mode-aware nudge reminding the model to finalize its strategic decision */
-function buildStrategistNudge(parameters: StrategistParameters): string {
-  const decisionTool = parameters.mode === "Flavor" ? "set-flavors" : "set-strategy";
-  return buildCompletionToolsNudge([decisionTool, "keep-status-quo"])!;
-}
 
 /**
  * Base class for simple strategist agents.
@@ -27,10 +20,6 @@ export abstract class SimpleStrategistBase extends Strategist {
   public removeUsedTools: boolean = true;
   public completionTools = ["set-strategy", "set-flavors", "keep-status-quo"];
   public maxSteps = 5;
-
-  public override continuationNudge(parameters: StrategistParameters): string {
-    return buildStrategistNudge(parameters);
-  }
 
   // ============================================================
   // System Section Prompts (for getSystem method)

@@ -34,7 +34,7 @@ The main hooks, in the order they matter:
 | `stopCheck()` | Decides after each step whether the loop is done. |
 | `getOutput()` / `postprocessOutput()` | Turn the final exchange into a typed result, optionally validated against a Zod schema. |
 
-Most agents declare `completionTools` to control stopping. The loop ends once one of those tools has been called successfully — a strategist stops after `set-strategy` or `keep-status-quo`, for example — with a maximum step count as a backstop. The same set drives the default continuation nudge, with mode-specific agents narrowing it to the completion tools currently available. It also drives the required-tool-choice instruction on providers that reject a wire-level forced tool choice (Anthropic, Codex).
+Most agents declare `completionTools` to control stopping. The loop ends once one of those tools has been called successfully — a strategist stops after `set-strategy` or `keep-status-quo`, for example — with a maximum step count as a backstop. After each step prepares its active tools, the continuation nudge intersects that resolved set with `completionTools`, so it never recommends a tool unavailable on the next call. The required-tool-choice instruction applies the same intersection on providers that reject a wire-level forced tool choice (Anthropic, Codex).
 
 Two flags change the execution shape entirely:
 

@@ -15,7 +15,6 @@ import { VoxContext } from "../infra/vox-context.js";
 import { createBriefingTool } from "../briefer/briefing-utils.js";
 import { createSendMessageTool } from "./tools/send-message-tool.js";
 import { getValidCalls } from "../utils/tools/terminal-tools.js";
-import { buildCompletionToolsNudge } from "../utils/tools/tool-names.js";
 import type { DealRowRenderer } from "../utils/diplomacy/transcript/transcript-utils.js";
 import { createLogger } from "../utils/logger.js";
 
@@ -177,19 +176,6 @@ export abstract class LiveEnvoy extends Envoy<StrategistParameters> {
    * read the same set.
    */
   public override completionTools = ["send-message"];
-
-  /**
-   * Keeps special-message continuations focused on the only tool available in that mode. Normal
-   * turns use the full completion set declared by the concrete live envoy.
-   */
-  public override continuationNudge(
-    parameters: StrategistParameters,
-    input?: EnvoyThread,
-  ): string | undefined {
-    return input && this.isSpecialMode(input)
-      ? buildCompletionToolsNudge(["send-message"])
-      : super.continuationNudge(parameters, input);
-  }
 
   /**
    * Keeps a live envoy working until it has spoken (via send-message), deliberately ended its turn

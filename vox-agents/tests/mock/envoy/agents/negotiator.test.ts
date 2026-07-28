@@ -26,13 +26,7 @@ import {
   type NegotiatorInput,
 } from '../../../../src/envoy/context/negotiator-utils.js';
 import { sessionRegistry } from '../../../../src/infra/session-registry.js';
-import { createFakeVoxContext } from '../../../helpers/fake-vox-context.js';
-import { buildCompletionToolsNudge } from '../../../../src/utils/tools/tool-names.js';
 import { PROMISE_METADATA, AGREEMENT_METADATA } from '../../../../../mcp-server/dist/utils/deal-schema.js';
-
-/** The nudge the negotiator inherits from its terminal-tool completionTools (declared order). */
-const NEGOTIATOR_NUDGE =
-  buildCompletionToolsNudge(['accept-deal', 'propose-deal', 'reject-deal'])!;
 
 /** The canonical label for an agreement item type (from the single-source AGREEMENT_METADATA). */
 const agreementLabel = (itemType: string) => AGREEMENT_METADATA.find((a) => a.itemType === itemType)!.label;
@@ -447,43 +441,6 @@ describe('negotiator completion', () => {
     expect(
       negotiator.stopCheck({} as any, input, failedTerminalStep, [failedTerminalStep], {} as any)
     ).toBe(false);
-  });
-
-  it('nudges toward its terminal tools when a continuation step produced text but no move', async () => {
-    // Negotiator runs toolChoice:"auto", so text-without-a-terminal-call is not the empty-response
-    // rescue path; the inherited completionTools nudge is what pushes it to commit. No override needed.
-    const negotiator = new Negotiator();
-    const ctx = createFakeVoxContext().asContext();
-    const messages = [
-      { role: 'system' as const, content: 'sys' },
-      { role: 'user' as const, content: 'Decide on the deal.' },
-    ];
-    const textStep = { toolCalls: [], text: 'Let me weigh the offer...', response: { messages: [] } } as any;
-
-    const config = await negotiator.prepareStep({} as any, negotiatorInput(), textStep, [textStep], messages, ctx);
-
-    const last = config.messages![config.messages!.length - 1];
-    expect(last).toEqual({ role: 'user', content: NEGOTIATOR_NUDGE });
-  });
-
-  it('does not re-append the nudge when it is already the last message', async () => {
-    const negotiator = new Negotiator();
-    const ctx = createFakeVoxContext().asContext();
-    const messages = [
-      { role: 'system' as const, content: 'sys' },
-      { role: 'user' as const, content: 'Decide on the deal.' },
-      { role: 'user' as const, content: NEGOTIATOR_NUDGE },
-    ];
-    // A step that called a SUPPORT tool (get-briefing) produced tool calls, so the empty-response
-    // rescue is skipped and only the continuation-nudge dedup runs. (A text-only step under the
-    // required tool-choice would instead trip the rescue, which is its own path.) The nudge is already
-    // the last message, so it must not be appended again.
-    const supportStep = { toolCalls: [{ toolName: 'get-briefing' }], text: '', response: { messages: [] } } as any;
-
-    const config = await negotiator.prepareStep({} as any, negotiatorInput(), supportStep, [supportStep], messages, ctx);
-
-    // Duplicate guard: the nudge is already last, so prepareStep leaves messages untouched.
-    expect(config.messages).toBeUndefined();
   });
 
   it('takes only the first terminal tool call from one model step', async () => {

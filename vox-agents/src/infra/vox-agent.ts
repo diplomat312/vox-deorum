@@ -15,6 +15,7 @@ import { getModelConfig, resolveToolFraming } from "../utils/models/models.js";
 import { getValidCalls, hasOnlyTerminalCalls, isTerminalTool } from "../utils/tools/terminal-tools.js";
 import { buildCompletionToolsNudge } from "../utils/tools/tool-names.js";
 import { buildRescuePrompt } from "../utils/models/text-cleaning.js";
+import { appendReminder } from "../utils/prompts/reminders.js";
 // @ts-ignore - jaison doesn't have type definitions
 import jaison from 'jaison';
 
@@ -151,12 +152,18 @@ export abstract class VoxAgent<TParameters extends AgentParameters, TInput = unk
   /**
    * Reminder injected as a user message when the loop continues past the first step, nudging the
    * model to finalize. The default derives from {@link completionTools} (so any agent that declares
-   * them gets a sensible nudge for free); the input is available to overrides that must narrow the
-   * reminder for a mode-specific tool set. Return undefined to disable the nudge (e.g. replay agents
-   * that must not perturb the reproduced prompt).
+   * them gets a sensible nudge for free) intersected with `activeTools` — the set this step actually
+   * offers, which `VoxContext` resolves after {@link prepareStep} — so the reminder never names a
+   * tool the model cannot call. An empty intersection yields undefined, as does returning undefined
+   * outright to disable the nudge (e.g. replay agents that must not perturb the reproduced prompt).
    */
-  public continuationNudge(_parameters: TParameters, _input?: TInput): string | undefined {
-    return this.completionTools?.length ? buildCompletionToolsNudge(this.completionTools) : undefined;
+  public continuationNudge(
+    _parameters: TParameters,
+    activeTools: string[],
+  ): string | undefined {
+    if (!this.completionTools?.length) return undefined;
+    const active = new Set(activeTools);
+    return buildCompletionToolsNudge(this.completionTools.filter(toolName => active.has(toolName)));
   }
 
   /**
@@ -442,20 +449,7 @@ export abstract class VoxAgent<TParameters extends AgentParameters, TInput = unk
       // asked for an "action", not pointed at its host "tools".
       const rescueFraming = resolveToolFraming(this.getModel(parameters, input, context.modelOverrides));
       const rescue = buildRescuePrompt(toolChoice, rescueFraming);
-      if (cleaned[cleaned.length - 1]?.content !== rescue)
-        cleaned.push({ role: 'user', content: rescue });
-      config.messages = cleaned;
-    }
-
-    // Inject continuation nudge when loop continues past the first step
-    if (allSteps.length > 0) {
-      const nudge = this.continuationNudge(parameters, input);
-      if (nudge) {
-        const msgs = config.messages || messages;
-        if (msgs[msgs.length - 1]?.content !== nudge) {
-          config.messages = [...msgs, { role: 'user', content: nudge }];
-        }
-      }
+      config.messages = appendReminder(cleaned, rescue);
     }
 
     config.model = this.getModel(parameters, input, context.modelOverrides);

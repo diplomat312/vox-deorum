@@ -2,10 +2,13 @@
  * Mock-tier tests for the shared `continuationNudge` mechanism (VoxAgent + overrides).
  *
  * The base `VoxAgent.continuationNudge` derives a default finalize-reminder from an agent's
- * `completionTools`, so any agent that declares them (the negotiator, and every live envoy since
- * the completion set moved onto the shared field) is nudged for free. The strategist overrides it
- * for mode-aware wording; Oracle overrides it to `undefined` so a replayed turn is never perturbed
- * by an unrecorded message.
+ * `completionTools`, intersected with the active tools VoxContext resolves after prepareStep. Any
+ * agent that declares completion tools is nudged only toward the ones available on the current step.
+ * Oracle overrides the hook to `undefined` so a replayed turn is never perturbed by an unrecorded
+ * message.
+ *
+ * These cover the wording produced for a given tool set; that the resolved set is what reaches the
+ * hook, and that the reminder is appended once, are covered in context/vox-context-execute-runs.
  *
  * Each expectation composes the wording through `buildCompletionToolsNudge` rather than repeating
  * it, so the reminder's prose can be edited in one place.
@@ -22,45 +25,65 @@ import { buildCompletionToolsNudge } from '../../../src/utils/tools/tool-names.j
 describe('continuationNudge', () => {
   it('derives the default nudge from completionTools (negotiator, inherited)', () => {
     const negotiator = agentRegistry.get('negotiator') as any;
-    expect(negotiator.continuationNudge({})).toBe(
+    expect(negotiator.continuationNudge({}, ['accept-deal', 'propose-deal', 'reject-deal'])).toBe(
       buildCompletionToolsNudge(['accept-deal', 'propose-deal', 'reject-deal'])
     );
   });
 
-  it('keeps the strategist wording mode-aware after the shared-formatter refactor', () => {
+  it('derives the strategist nudge from the tools active for its current mode', () => {
     const strategist = agentRegistry.get('simple-strategist') as any;
-    expect(strategist.continuationNudge({ mode: 'Strategy' })).toBe(
+    expect(strategist.continuationNudge(
+      { mode: 'Strategy' },
+      ['set-strategy', 'set-persona', 'keep-status-quo'],
+    )).toBe(
       buildCompletionToolsNudge(['set-strategy', 'keep-status-quo'])
     );
-    expect(strategist.continuationNudge({ mode: 'Flavor' })).toBe(
+    expect(strategist.continuationNudge(
+      { mode: 'Flavor' },
+      ['set-flavors', 'set-persona', 'keep-status-quo'],
+    )).toBe(
       buildCompletionToolsNudge(['set-flavors', 'keep-status-quo'])
+    );
+    expect(strategist.continuationNudge(
+      { mode: 'Strategy' },
+      ['set-persona', 'keep-status-quo'],
+    )).toBe(
+      buildCompletionToolsNudge(['keep-status-quo'])
     );
   });
 
   it('disables the nudge for Oracle so a replayed prompt is never perturbed', () => {
     const oracle = agentRegistry.get('oracle') as any;
-    expect(oracle.continuationNudge({})).toBeUndefined();
+    expect(oracle.continuationNudge({}, ['set-strategy', 'keep-status-quo'])).toBeUndefined();
   });
 
   it('nudges a live envoy toward its own completion tools in normal mode (diplomat)', () => {
     const diplomat = agentRegistry.get('diplomat') as any;
-    expect(diplomat.continuationNudge({}, { messages: [] })).toBe(
+    expect(diplomat.continuationNudge(
+      {},
+      ['get-briefing', 'send-message', 'call-negotiator', 'close-conversation'],
+    )).toBe(
       buildCompletionToolsNudge(['send-message', 'call-negotiator', 'close-conversation'])
     );
   });
 
-  it('nudges a live envoy only toward send-message when special mode restricts the tool set', () => {
+  it('nudges a live envoy only toward the completion tools resolved for this step', () => {
     const diplomat = agentRegistry.get('diplomat') as any;
-    const input = {
-      messages: [{
-        message: { role: 'user', content: '{{{Greeting}}}' },
-        metadata: { datetime: new Date(0), turn: 5 },
-      }],
-    };
-
-    const nudge = diplomat.continuationNudge({}, input);
+    const nudge = diplomat.continuationNudge({}, ['send-message']);
     expect(nudge).toBe(buildCompletionToolsNudge(['send-message']));
     expect(nudge).not.toContain('call-negotiator');
     expect(nudge).not.toContain('close-conversation');
+
+    expect(diplomat.continuationNudge(
+      {},
+      ['call-negotiator', 'send-message'],
+    )).toBe(
+      buildCompletionToolsNudge(['send-message', 'call-negotiator'])
+    );
+  });
+
+  it('omits the nudge when the resolved step exposes no completion tool', () => {
+    const diplomat = agentRegistry.get('diplomat') as any;
+    expect(diplomat.continuationNudge({}, ['get-briefing'])).toBeUndefined();
   });
 });
