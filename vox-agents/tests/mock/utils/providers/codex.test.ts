@@ -40,6 +40,7 @@ vi.mock('../../../../src/utils/logger.js', () => ({
 
 import { buildCodexModel, buildCodexProviderOptions } from '../../../../src/utils/models/providers/codex.js';
 import { codexActivityMiddleware } from '../../../../src/utils/models/providers/codex-response.js';
+import { requiredToolChoiceInstruction } from '../../../../src/utils/models/providers/required-tool-choice.js';
 
 const testProxyRoot = path.join(os.tmpdir(), 'vox-codex-provider-test');
 
@@ -213,7 +214,7 @@ describe('Codex model middleware', () => {
 });
 
 describe('Codex compatible adapter requests', () => {
-  it('turns required into auto while naming the client tools as the final-output requirement', async () => {
+  it('turns required into auto while restating the requirement over the client tools', async () => {
     const fetchMock = vi.fn().mockResolvedValue(completion(
       { role: 'assistant', content: 'Ready.' },
       'stop',
@@ -239,9 +240,41 @@ describe('Codex compatible adapter requests', () => {
     const [body] = capturedBodies(fetchMock);
     expect(body.tool_choice).toBe('auto');
     expect(body.messages[0]).toMatchObject({ role: 'system' });
-    expect(body.messages[0].content).toContain('final-output requirement');
-    expect(body.messages[0].content).toContain('client-provided tools: `found_city`, `choose_research`');
-    expect(body.messages[0].content).toContain('instead of ending with plain text');
+    expect(body.messages[0].content).toContain(
+      requiredToolChoiceInstruction(['found_city', 'choose_research'], [], false),
+    );
+  });
+
+  it('names the caller\'s completion tools so a host or support call cannot read as finishing', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(completion(
+      { role: 'assistant', content: 'Ready.' },
+      'stop',
+    ));
+    vi.stubGlobal('fetch', fetchMock);
+    const model = buildCodexModel(
+      { provider: 'codex', name: 'gpt-5.4-mini' },
+      { completionTools: ['found_city'] },
+    );
+    const chooseResearchTool = {
+      ...foundCityTool(),
+      name: 'choose_research',
+      description: 'Choose the next technology.',
+    };
+
+    await model.doGenerate({
+      prompt: [
+        { role: 'system', content: 'Make sound strategic decisions.' },
+        { role: 'user', content: [{ type: 'text', text: 'Take the turn.' }] },
+      ],
+      providerOptions: buildCodexProviderOptions({ provider: 'codex', name: 'gpt-5.4-mini' }),
+      tools: [foundCityTool(), chooseResearchTool],
+      toolChoice: { type: 'required' },
+    });
+
+    const [body] = capturedBodies(fetchMock);
+    expect(body.messages[0].content).toContain(
+      requiredToolChoiceInstruction(['found_city', 'choose_research'], ['found_city'], false),
+    );
   });
 
   it('names only the client tools active for the current high-level step', async () => {
@@ -271,7 +304,7 @@ describe('Codex compatible adapter requests', () => {
 
     const [body] = capturedBodies(fetchMock);
     expect(body.tool_choice).toBe('auto');
-    expect(body.messages[0].content).toContain('client-provided tools: `choose_research`');
+    expect(body.messages[0].content).toContain(requiredToolChoiceInstruction(['choose_research'], [], false));
     expect(body.messages[0].content).not.toContain('`found_city`');
     expect(body.tools).toHaveLength(1);
     expect(body.tools[0].function.name).toBe('choose_research');

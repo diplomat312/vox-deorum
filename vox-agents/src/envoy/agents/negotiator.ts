@@ -102,7 +102,7 @@ export class Negotiator extends VoxAgent<StrategistParameters, NegotiatorInput, 
   }
 
   /** Stop as soon as one terminal tool has produced a move. */
-  public override requiredTools = [...NEGOTIATOR_TERMINAL_TOOLS];
+  public override completionTools = [...NEGOTIATOR_TERMINAL_TOOLS];
 
   public override maxSteps = 4;
 

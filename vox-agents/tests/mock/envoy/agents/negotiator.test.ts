@@ -27,11 +27,12 @@ import {
 } from '../../../../src/envoy/context/negotiator-utils.js';
 import { sessionRegistry } from '../../../../src/infra/session-registry.js';
 import { createFakeVoxContext } from '../../../helpers/fake-vox-context.js';
+import { buildCompletionToolsNudge } from '../../../../src/utils/tools/tool-names.js';
 import { PROMISE_METADATA, AGREEMENT_METADATA } from '../../../../../mcp-server/dist/utils/deal-schema.js';
 
-/** The nudge the negotiator inherits from its terminal-tool requiredTools (declared order). */
+/** The nudge the negotiator inherits from its terminal-tool completionTools (declared order). */
 const NEGOTIATOR_NUDGE =
-  'Make sure to call `accept-deal`, `propose-deal`, or `reject-deal` following the EXACT provided format to finalize your decisions.';
+  buildCompletionToolsNudge(['accept-deal', 'propose-deal', 'reject-deal'])!;
 
 /** The canonical label for an agreement item type (from the single-source AGREEMENT_METADATA). */
 const agreementLabel = (itemType: string) => AGREEMENT_METADATA.find((a) => a.itemType === itemType)!.label;
@@ -450,7 +451,7 @@ describe('negotiator completion', () => {
 
   it('nudges toward its terminal tools when a continuation step produced text but no move', async () => {
     // Negotiator runs toolChoice:"auto", so text-without-a-terminal-call is not the empty-response
-    // rescue path; the inherited requiredTools nudge is what pushes it to commit. No override needed.
+    // rescue path; the inherited completionTools nudge is what pushes it to commit. No override needed.
     const negotiator = new Negotiator();
     const ctx = createFakeVoxContext().asContext();
     const messages = [

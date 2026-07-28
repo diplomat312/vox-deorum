@@ -424,7 +424,7 @@ export function boundaryIndex(messages: MessageWithMetadata[], mark: number | un
 /**
  * Completion tools whose call is itself the turn's visible outcome — a deal handoff or a closure —
  * even when the agent speaks no accompanying line. This is the single source of truth for the
- * diplomat's non-spoken terminal tools: `Diplomat.getCompletionTools()` is built from this set plus
+ * diplomat's non-spoken terminal tools: `Diplomat.completionTools` is built from this set plus
  * `send-message` (speaking is captured by {@link collectSpokenReply}), so the two cannot drift.
  */
 export const terminalActionTools = new Set(["call-negotiator", "close-conversation"]);

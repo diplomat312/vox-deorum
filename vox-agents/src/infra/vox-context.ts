@@ -782,6 +782,10 @@ export class VoxContext<TParameters extends AgentParameters> {
             model: getModel(stepModel, {
               ...runtimeIdentity,
               onToolFraming: ({ framing }) => { stepToolFraming = framing; },
+              // Providers that neutralize the tool force name these as what ends the turn. Passed
+              // unfiltered: the middleware intersects them with the tools actually declared on the
+              // wire, which already reflects this step's active tools.
+              completionTools: agent.completionTools,
             }),
             providerOptions: stepProviderOptions,
             // Disable Vercel AI SDK's internal retry to let our wrapper handle it
@@ -794,8 +798,9 @@ export class VoxContext<TParameters extends AgentParameters> {
             // Tools
             tools: this.tools,
             activeTools: stepActiveTools,
-            // Providers that reject a wire-level required tool choice (Anthropic, Codex) map it to
-            // auto in provider middleware installed by getModel, preserving the requirement in the prompt.
+            // Providers that reject a wire-level required tool choice (Anthropic, Codex) map it to auto
+            // in provider middleware installed by getModel, preserving the requirement in the prompt
+            // and naming the agent's completionTools as the calls that end the turn.
             toolChoice: stepToolChoice as any,
             experimental_context: parameters,
             // Output schema for tool as agent

@@ -15,6 +15,7 @@ import { VoxContext } from "../infra/vox-context.js";
 import { createBriefingTool } from "../briefer/briefing-utils.js";
 import { createSendMessageTool } from "./tools/send-message-tool.js";
 import { getValidCalls } from "../utils/tools/terminal-tools.js";
+import { buildCompletionToolsNudge } from "../utils/tools/tool-names.js";
 import type { DealRowRenderer } from "../utils/diplomacy/transcript/transcript-utils.js";
 import { createLogger } from "../utils/logger.js";
 
@@ -169,17 +170,33 @@ export abstract class LiveEnvoy extends Envoy<StrategistParameters> {
    * Tool calls that complete a live envoy's conversational turn without requiring free text. The
    * shared {@link stopCheck} ends the turn once any of these is called. send-message is a completion
    * tool for every live envoy, so "the model spoke" collapses into "the model called a completion
-   * tool"; subclasses override to add terminal tools such as the negotiator handoff or closure.
+   * tool"; subclasses extend this with terminal tools such as the negotiator handoff or closure.
+   *
+   * Declared through the shared {@link VoxAgent.completionTools} field, so the stop rule, the
+   * continuation nudge, and the required-tool-choice instruction injected on Anthropic/Codex all
+   * read the same set.
    */
-  protected getCompletionTools(): Set<string> {
-    return new Set(["send-message"]);
+  public override completionTools = ["send-message"];
+
+  /**
+   * Keeps special-message continuations focused on the only tool available in that mode. Normal
+   * turns use the full completion set declared by the concrete live envoy.
+   */
+  public override continuationNudge(
+    parameters: StrategistParameters,
+    input?: EnvoyThread,
+  ): string | undefined {
+    return input && this.isSpecialMode(input)
+      ? buildCompletionToolsNudge(["send-message"])
+      : super.continuationNudge(parameters, input);
   }
 
   /**
    * Keeps a live envoy working until it has spoken (via send-message), deliberately ended its turn
    * through a completion tool, or hit the hard step ceiling. The inherited Envoy check is still called
-   * so each response is persisted to the thread, but its generic terminal/maximum-step decisions do
-   * not govern live envoys; this shared rule, generalized over {@link getCompletionTools}, does.
+   * so each response is persisted to the thread, but its return value is discarded: its generic
+   * completion/maximum-step decisions do not govern live envoys; this shared rule, generalized over
+   * {@link completionTools}, does.
    *
    * Raw free text does NOT end a forced-tool envoy's turn. A live envoy speaks only through
    * send-message (see {@link speaksOnlyViaSendMessage}), so on Anthropic — where the tool force is neutralized
@@ -201,7 +218,7 @@ export abstract class LiveEnvoy extends Envoy<StrategistParameters> {
   ): boolean {
     super.stopCheck(parameters, input, lastStep, allSteps, context);
 
-    const completionTools = this.getCompletionTools();
+    const completionTools = new Set(this.completionTools);
     // A malformed completion call this step means the model's terminal intent never ran. Keep working
     // (below the ceiling) so it can redo the call — even if a VALID completion also fired in the same
     // step (that line was already spoken; the model sees it plus the tool-error and rarely re-speaks).
@@ -226,8 +243,10 @@ export abstract class LiveEnvoy extends Envoy<StrategistParameters> {
     // No pending tool and no completion tool. A forced-tool live envoy (toolChoice="required", the
     // default) speaks ONLY through send-message, so raw free text is never an authoritative reply
     // (see speaksOnlyViaSendMessage) and must not end the turn: the envoy keeps working until it actually
-    // calls a completion tool or hits the ceiling above. Only a subclass that opts out of the tool
-    // force (toolChoice !== "required") treats raw spoken free text as a completing reply.
+    // calls a completion tool or hits the ceiling above. Where the force is neutralized the injected
+    // instruction names `completionTools` as what ends the turn, so this branch is the fallback for a
+    // model that ignored it. Only a subclass that opts out of the tool force (toolChoice !== "required")
+    // treats raw spoken free text as a completing reply.
     return this.toolChoice !== "required" && allSteps.some(step => Boolean(step.text?.trim()));
   }
 

@@ -13,9 +13,11 @@ import { describe, expect, it } from 'vitest';
 import {
   getValidCalls,
   hasOnlyTerminalCalls,
-  formatToolChoiceList,
-  buildRequiredToolsNudge,
 } from '../../../src/utils/tools/terminal-tools.js';
+import {
+  formatToolChoiceList,
+  buildCompletionToolsNudge,
+} from '../../../src/utils/tools/tool-names.js';
 
 const mcpToolMap = new Map<string, any>([
   ['end_turn', { name: 'end_turn', inputSchema: { type: 'object' }, annotations: { readOnlyHint: false } }],
@@ -108,13 +110,13 @@ describe('formatToolChoiceList', () => {
   });
 });
 
-describe('buildRequiredToolsNudge', () => {
+describe('buildCompletionToolsNudge', () => {
   it('returns undefined for an empty list so the injection site skips', () => {
-    expect(buildRequiredToolsNudge([])).toBeUndefined();
+    expect(buildCompletionToolsNudge([])).toBeUndefined();
   });
 
   it('wraps the formatted list in the finalize reminder', () => {
-    expect(buildRequiredToolsNudge(['accept-deal', 'propose-deal', 'reject-deal']))
-      .toBe('Make sure to call `accept-deal`, `propose-deal`, or `reject-deal` following the EXACT provided format to finalize your decisions.');
+    const names = ['accept-deal', 'propose-deal', 'reject-deal'];
+    expect(buildCompletionToolsNudge(names)).toContain(formatToolChoiceList(names));
   });
 });

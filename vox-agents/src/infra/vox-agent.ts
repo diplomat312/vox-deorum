@@ -12,7 +12,8 @@ import { z, ZodObject } from "zod";
 import { Model, ReasoningEffort } from "../types/index.js";
 import { VoxContext } from "./vox-context.js";
 import { getModelConfig, resolveToolFraming } from "../utils/models/models.js";
-import { getValidCalls, hasOnlyTerminalCalls, isTerminalTool, buildRequiredToolsNudge } from "../utils/tools/terminal-tools.js";
+import { getValidCalls, hasOnlyTerminalCalls, isTerminalTool } from "../utils/tools/terminal-tools.js";
+import { buildCompletionToolsNudge } from "../utils/tools/tool-names.js";
 import { buildRescuePrompt } from "../utils/models/text-cleaning.js";
 // @ts-ignore - jaison doesn't have type definitions
 import jaison from 'jaison';
@@ -138,19 +139,24 @@ export abstract class VoxAgent<TParameters extends AgentParameters, TInput = unk
   public maxSteps: number = 3;
 
   /**
-   * Tool names that must be called to complete execution.
-   * When set, stopCheck uses required-tool membership instead of default terminal-call logic.
+   * Tool names whose successful call completes this agent's run — the single source of truth for
+   * "these end the turn", consumed by {@link stopCheck} (and `LiveEnvoy.stopCheck`), by
+   * {@link continuationNudge}, and by the required-tool-choice provider middleware, which names them
+   * as the finishing set so a model cannot mistake a support call for a completion. Distinct from
+   * {@link toolChoice} `"required"`, which only means "some tool must be called this step".
+   * When set, stopCheck uses completion-tool membership instead of default terminal-call logic.
    */
-  public requiredTools?: string[];
+  public completionTools?: string[];
 
   /**
    * Reminder injected as a user message when the loop continues past the first step, nudging the
-   * model to finalize. The default derives from {@link requiredTools} (so any required-tools agent
-   * gets a sensible nudge for free); override for mode-aware wording, or return undefined to disable
-   * (e.g. replay agents that must not perturb the reproduced prompt).
+   * model to finalize. The default derives from {@link completionTools} (so any agent that declares
+   * them gets a sensible nudge for free); the input is available to overrides that must narrow the
+   * reminder for a mode-specific tool set. Return undefined to disable the nudge (e.g. replay agents
+   * that must not perturb the reproduced prompt).
    */
-  public continuationNudge(_parameters: TParameters): string | undefined {
-    return this.requiredTools?.length ? buildRequiredToolsNudge(this.requiredTools) : undefined;
+  public continuationNudge(_parameters: TParameters, _input?: TInput): string | undefined {
+    return this.completionTools?.length ? buildCompletionToolsNudge(this.completionTools) : undefined;
   }
 
   /**
@@ -258,10 +264,10 @@ export abstract class VoxAgent<TParameters extends AgentParameters, TInput = unk
     if (this.retriesMalformedTerminal(lastStep, allSteps, (name) => isTerminalTool(name, context.mcpToolMap))) {
       return false;
     }
-    if (this.requiredTools?.length) {
-      // Required-tools mode: stop when any required tool succeeds
+    if (this.completionTools?.length) {
+      // Completion-tools mode: stop when any completion tool succeeds
       if (allSteps.some(step =>
-        step.toolResults.some(r => this.requiredTools!.includes(r.toolName) && r.output)
+        step.toolResults.some(r => this.completionTools!.includes(r.toolName) && r.output)
       )) return true;
     } else {
       // Default mode: stop on empty responses or terminal-only calls (invalid calls never
@@ -443,7 +449,7 @@ export abstract class VoxAgent<TParameters extends AgentParameters, TInput = unk
 
     // Inject continuation nudge when loop continues past the first step
     if (allSteps.length > 0) {
-      const nudge = this.continuationNudge(parameters);
+      const nudge = this.continuationNudge(parameters, input);
       if (nudge) {
         const msgs = config.messages || messages;
         if (msgs[msgs.length - 1]?.content !== nudge) {

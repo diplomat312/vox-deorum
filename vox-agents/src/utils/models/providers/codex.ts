@@ -18,6 +18,7 @@ import {
 import type { CodexProxyConfig } from './codex-proxy.js';
 import { codexActivityMiddleware } from './codex-response.js';
 import { requiredToolChoiceMiddleware } from './required-tool-choice.js';
+import type { RequiredToolChoiceOptions } from './required-tool-choice.js';
 import { resolveHostToolAccess } from './host-tools.js';
 import type { ModelRuntimeIdentity } from './host-tools.js';
 
@@ -44,7 +45,7 @@ function getCodexDispatcher(config: CodexProxyConfig): Agent {
  * Builds a native-tool Codex model backed by the local compatible proxy. The
  * proxy starts lazily from fetch, so constructing unrelated models has no effect.
  */
-export function buildCodexModel(config: Model): LanguageModelV3 {
+export function buildCodexModel(config: Model, options?: RequiredToolChoiceOptions): LanguageModelV3 {
   const middleware = config.options?.toolMiddleware;
   if (middleware === 'prompt' || middleware === 'gemma') {
     throw new Error(`Codex requires native function tools. toolMiddleware '${middleware}' is not supported; use 'rescue' or omit it.`);
@@ -69,10 +70,14 @@ export function buildCodexModel(config: Model): LanguageModelV3 {
   }).chatModel(config.name);
   // The first middleware is outermost: it adapts a required tool choice before
   // activity normalization, and both run inner to the generic rescue wrapper
-  // installed by models.ts.
+  // installed by models.ts. Its instruction names the caller's completion tools,
+  // so the host's built-in tools read as support rather than as a way to finish.
   return wrapLanguageModel({
     model,
-    middleware: [requiredToolChoiceMiddleware(), codexActivityMiddleware()],
+    middleware: [
+      requiredToolChoiceMiddleware({ completionTools: options?.completionTools }),
+      codexActivityMiddleware(),
+    ],
   });
 }
 

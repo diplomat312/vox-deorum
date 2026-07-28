@@ -23,11 +23,11 @@ export class OracleAgent extends VoxAgent<OracleParameters, OracleInput, ReplayR
 
   /** Let the LLM decide whether to call tools */
   public override toolChoice = 'auto';
-  public override requiredTools = ['set-strategy', 'set-flavors', 'keep-status-quo'];
+  public override completionTools = ['set-strategy', 'set-flavors', 'keep-status-quo'];
   public override maxSteps = 5;
 
   /**
-   * Disable the requiredTools-derived nudge: Oracle replays the originally recorded prompt
+   * Disable the completionTools-derived nudge: Oracle replays the originally recorded prompt
    * verbatim, so injecting an unrecorded reminder on a continuation step would diverge the
    * replayed conversation from what the original agent saw and bias the counterfactual.
    */
@@ -98,7 +98,7 @@ export class OracleAgent extends VoxAgent<OracleParameters, OracleInput, ReplayR
         };
 
         // Extract Rationale from strategist decision tool args
-        if (this.requiredTools!.includes(tc.toolName) && decision.args.Rationale) {
+        if (this.completionTools!.includes(tc.toolName) && decision.args.Rationale) {
           decision.rationale = decision.args.Rationale as string;
           delete decision.args.Rationale;
         }

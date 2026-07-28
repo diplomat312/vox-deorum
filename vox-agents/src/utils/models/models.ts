@@ -118,7 +118,12 @@ export function resolveToolFraming(config: Model): ToolCallFraming {
  * const model = getModel(modelConfig, { workingDirId: `${gameID}-${playerID}` });
  * ```
  */
-export function getModel(config: Model, options?: { workingDirId?: string; onToolFraming?: (info: { framing: ToolCallFraming }) => void }): LanguageModel {
+export function getModel(config: Model, options?: {
+  workingDirId?: string;
+  onToolFraming?: (info: { framing: ToolCallFraming }) => void;
+  /** The calling agent's completion tools, named by the required-tool-choice instruction. */
+  completionTools?: string[];
+}): LanguageModel {
   var result: LanguageModelV3;
   // Terminology preset for the prompt-mode tool instructions (see resolveToolFraming):
   // 'action' for claude-code, 'tool' for everything else.
@@ -168,7 +173,7 @@ export function getModel(config: Model, options?: { workingDirId?: string; onToo
         // Claude on Vertex shares Anthropic's required-tool-choice rejection.
         result = wrapLanguageModel({
           model: provider(config.name),
-          middleware: requiredToolChoiceMiddleware()
+          middleware: requiredToolChoiceMiddleware({ completionTools: options?.completionTools })
         });
       } else {
         const useVertex = process.env.GOOGLE_GENAI_USE_VERTEXAI === 'true';
@@ -179,11 +184,12 @@ export function getModel(config: Model, options?: { workingDirId?: string; onToo
       break;
     }
     case "anthropic":
-      // Anthropic rejects a wire-level required tool choice; the middleware
-      // maps it to auto and restates the requirement in the system prompt.
+      // Anthropic rejects a wire-level required tool choice; the middleware maps it to auto and
+      // restates the requirement in the system prompt, naming the agent's completion tools as the
+      // ones that end the turn so a support call cannot read as a way to finish.
       result = wrapLanguageModel({
         model: createAnthropic()(config.name),
-        middleware: requiredToolChoiceMiddleware()
+        middleware: requiredToolChoiceMiddleware({ completionTools: options?.completionTools })
       });
       break;
     case "claude-code": {
@@ -195,7 +201,7 @@ export function getModel(config: Model, options?: { workingDirId?: string; onToo
       break;
     }
     case "codex":
-      result = buildCodexModel(config);
+      result = buildCodexModel(config, { completionTools: options?.completionTools });
       break;
     case "aws":
       result = createAmazonBedrock()(config.name);

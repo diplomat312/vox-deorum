@@ -114,13 +114,13 @@ export class Diplomat extends LiveEnvoy {
   /**
    * The diplomat ends its turn by speaking (send-message), handing the deal to the negotiator, or
    * closing the conversation — all terminal wherever they appear. The shared LiveEnvoy stop logic
-   * (with the hard step ceiling and the Anthropic free-text fallback) consumes this set.
+   * (with the hard step ceiling and the Anthropic free-text fallback) consumes this set, as do the
+   * continuation nudge and the required-tool-choice instruction.
+   *
+   * send-message (a spoken reply ends the turn) plus the non-spoken terminal tools, sourced from the
+   * shared `terminalActionTools` so the retry-suppression predicate can never drift from this set.
    */
-  protected override getCompletionTools(): Set<string> {
-    // send-message (a spoken reply ends the turn) plus the non-spoken terminal tools, sourced from
-    // the shared `terminalActionTools` so the retry-suppression predicate can never drift from this set.
-    return new Set(["send-message", ...terminalActionTools]);
-  }
+  public override completionTools = ["send-message", ...terminalActionTools];
 
   /**
    * Grounds the diplomat's turn so it sees live deal context at every step (specs §7). The cities plus
