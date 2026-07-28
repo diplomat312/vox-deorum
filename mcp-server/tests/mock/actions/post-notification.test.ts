@@ -36,7 +36,12 @@ describe('post-notification', () => {
 
     expect(result.Success).toBe(true);
     expect(result.Result).toBe(true);
-    expect(spy).toHaveBeenCalledWith(0, 3, 'Napoleon writes', 'We should talk.');
+    expect(spy).toHaveBeenCalledWith(
+      0,
+      3,
+      '[COLOR_POSITIVE_TEXT]Napoleon writes[ENDCOLOR]',
+      'We should talk.',
+    );
   });
 
   it('defaults CounterpartID to -1 when omitted (general message path)', async () => {
@@ -46,7 +51,12 @@ describe('post-notification', () => {
       PlayerID: 2, Summary: 'Notice', Message: 'The council has news.',
     } as any);
 
-    expect(spy).toHaveBeenCalledWith(2, -1, 'Notice', 'The council has news.');
+    expect(spy).toHaveBeenCalledWith(
+      2,
+      -1,
+      '[COLOR_POSITIVE_TEXT]Notice[ENDCOLOR]',
+      'The council has news.',
+    );
   });
 
   it('trims text and strips the IPC frame delimiter from Summary and Message', async () => {
@@ -58,7 +68,39 @@ describe('post-notification', () => {
       Message: '  before!@#$%^!after  ',
     } as any);
 
-    expect(spy).toHaveBeenCalledWith(1, -1, 'headline', 'beforeafter');
+    expect(spy).toHaveBeenCalledWith(
+      1,
+      -1,
+      '[COLOR_POSITIVE_TEXT]headline[ENDCOLOR]',
+      'beforeafter',
+    );
+  });
+
+  it('truncates messages longer than 400 characters and ends them with an ellipsis', async () => {
+    const spy = mockLua(true);
+
+    await tool.execute({
+      PlayerID: 1,
+      Summary: 'Notice',
+      Message: 'M'.repeat(401),
+    } as any);
+
+    const message = spy.mock.calls[0]?.[3] as string;
+    expect(message).toHaveLength(400);
+    expect(message).toBe(`${'M'.repeat(397)}...`);
+  });
+
+  it('does not truncate a message of exactly 400 characters', async () => {
+    const spy = mockLua(true);
+    const message = 'M'.repeat(400);
+
+    await tool.execute({
+      PlayerID: 1,
+      Summary: 'Notice',
+      Message: message,
+    } as any);
+
+    expect(spy.mock.calls[0]?.[3]).toBe(message);
   });
 
   it('rejects a diplomacy notification addressed to the receiving player', async () => {
@@ -116,7 +158,12 @@ describe('post-notification observer-capable recipient', () => {
     })).not.toThrow();
 
     await tool.execute({ PlayerID: observerSlot, Summary: 'Notice', Message: 'A reply arrived.' } as any);
-    expect(spy).toHaveBeenCalledWith(observerSlot, -1, 'Notice', 'A reply arrived.');
+    expect(spy).toHaveBeenCalledWith(
+      observerSlot,
+      -1,
+      '[COLOR_POSITIVE_TEXT]Notice[ENDCOLOR]',
+      'A reply arrived.',
+    );
   });
 
   it('bounds PlayerID at the full player range and CounterpartID at the major civs', async () => {

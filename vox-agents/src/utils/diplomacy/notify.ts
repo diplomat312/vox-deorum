@@ -116,8 +116,10 @@ export async function notifyDiplomacyOutcome(notice: DiplomacyOutcomeNotice): Pr
   if (!outcome) return false;
 
   const identity = civIdentity(notice.counterpartContext, notice.counterpartID);
-  const summary = toNotificationText(identity?.leader || identity?.name || "", summaryLimit)
-    || `Player ${notice.counterpartID}`;
+  const identitySummary = identity?.leader && identity.name
+    ? `${identity.leader} of ${identity.name}`
+    : identity?.leader || identity?.name || `Player ${notice.counterpartID}`;
+  const summary = toNotificationText(identitySummary, summaryLimit);
   const message = toNotificationText(firstNonEmptyLine(outcome.Content), messageLimit)
     || defaultOutcomeMessage;
 

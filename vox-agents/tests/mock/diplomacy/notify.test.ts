@@ -130,9 +130,9 @@ describe("notifyDiplomacyOutcome content", () => {
     expect(posted()).toMatchObject({ PlayerID: 27, CounterpartID: counterpartID });
   });
 
-  it("headlines with the counterpart's leader name", async () => {
+  it("headlines with the counterpart's leader and civilization names", async () => {
     await post([row(5)]);
-    expect(posted()?.Summary).toBe("Caesar");
+    expect(posted()?.Summary).toBe("Caesar of Rome");
   });
 
   it("falls back to the civilization, then to the seat, when identity is unavailable", async () => {
@@ -154,7 +154,7 @@ describe("notifyDiplomacyOutcome content", () => {
   it("strips the IPC frame delimiter from both fields", async () => {
     identity.value = { name: "Rome", leader: `Cae${eventPipeDelimiter}sar` };
     await post([row(5, { Content: `Well${eventPipeDelimiter} met.` })]);
-    expect(posted()).toMatchObject({ Summary: "Caesar", Message: "Well met." });
+    expect(posted()).toMatchObject({ Summary: "Caesar of Rome", Message: "Well met." });
   });
 
   it("trims both fields to the tool's schema limits", async () => {

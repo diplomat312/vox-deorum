@@ -22,6 +22,14 @@ import { eventPipeDelimiter } from "../../bridge/protocol.js";
 /** Sentinel counterpart for a notification with no diplomacy target. */
 const NO_COUNTERPART = -1;
 
+/** Civ V markup used by the game's notification headlines. */
+const HIGHLIGHT_START = "[COLOR_POSITIVE_TEXT]";
+const HIGHLIGHT_END = "[ENDCOLOR]";
+
+/** Maximum notification body length after truncation, including the ellipsis. */
+const MESSAGE_LIMIT = 400;
+const ELLIPSIS = "...";
+
 /** Normalize notification text and reject content that becomes blank at the IPC boundary. */
 function normalizeNotificationText(text: string, field: "Summary" | "Message"): string {
   const normalized = text.split(eventPipeDelimiter).join("").trim();
@@ -29,6 +37,17 @@ function normalizeNotificationText(text: string, field: "Summary" | "Message"): 
     throw new Error(`${field} must contain visible text after IPC sanitization`);
   }
   return normalized;
+}
+
+/** Format a notification summary like the highlighted headlines used by the game. */
+function highlightNotificationSummary(summary: string): string {
+  return `${HIGHLIGHT_START}${summary}${HIGHLIGHT_END}`;
+}
+
+/** Fit a notification body to the game's readable tooltip length. */
+function truncateNotificationMessage(message: string): string {
+  if (message.length <= MESSAGE_LIMIT) return message;
+  return `${message.slice(0, MESSAGE_LIMIT - ELLIPSIS.length).trimEnd()}${ELLIPSIS}`;
 }
 
 /**
@@ -44,9 +63,9 @@ const PostNotificationInputSchema = z.object({
   CounterpartID: z.number().int().min(0).max(MaxMajorCivs - 1).optional()
     .describe("Optional diplomacy counterpart (a major civilization): when set, clicking opens the conversation with this player; when omitted, clicking shows Message in a dialog"),
   Summary: z.string().min(1).max(200)
-    .describe("Short notification headline (shown in the notification panel)"),
+    .describe("Short notification headline (highlighted in the notification panel)"),
   Message: z.string().min(1).max(2000)
-    .describe("Full notification body (shown as tooltip, and in the dialog for counterpart-less notifications)"),
+    .describe("Notification body (shown as a tooltip and in the dialog for counterpart-less notifications; truncated to 400 characters)"),
 });
 
 /**
@@ -80,8 +99,8 @@ class PostNotificationTool extends LuaFunctionTool<boolean> {
     return await this.call(
       args.PlayerID,
       args.CounterpartID ?? NO_COUNTERPART,
-      normalizeNotificationText(args.Summary, "Summary"),
-      normalizeNotificationText(args.Message, "Message"),
+      highlightNotificationSummary(normalizeNotificationText(args.Summary, "Summary")),
+      truncateNotificationMessage(normalizeNotificationText(args.Message, "Message")),
     );
   }
 }
