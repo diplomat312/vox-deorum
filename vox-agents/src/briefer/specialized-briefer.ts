@@ -14,7 +14,7 @@ import { jsonToMarkdown } from "../utils/tools/json-to-markdown.js";
 import { createSimpleTool } from "../utils/tools/simple-tools.js";
 import { getOffsetedTurn } from "../utils/prompts/game-speed.js";
 import { SimpleBriefer } from "./simple-briefer.js";
-import { briefingInstructionKeys, getLastBriefingState } from "./briefing-utils.js";
+import { briefingInstructionKeys, briefingReportKeys, getLastBriefingState } from "./briefing-utils.js";
 import { filterEventsByCategory, EventCategory } from "../utils/prompts/event-filters.js";
 import { pickPlayerFields, omitPlayerFields, pickCityFields, omitCityFields } from "../utils/prompts/report-filters.js";
 import type { ConsolidatedEventsReport } from '../../../mcp-server/dist/tools/knowledge/get-events.js';
@@ -43,7 +43,6 @@ interface ModeConfig {
     parameters: StrategistParameters,
     events: ConsolidatedEventsReport
   ) => string;
-  getReportKey: (mode: BriefingMode) => string;
 }
 
 /**
@@ -118,8 +117,6 @@ Events: military-related events since the last decision-making.
 
 ${jsonToMarkdown(events)}`.trim();
   },
-
-  getReportKey: () => "briefing-military"
 };
 
 /**
@@ -181,8 +178,6 @@ Events: economy-related events since the last decision-making.
 
 ${jsonToMarkdown(events)}`.trim();
   },
-
-  getReportKey: () => "briefing-economy"
 };
 
 /**
@@ -247,8 +242,6 @@ Events: diplomacy-related events since the last decision-making.
 
 ${jsonToMarkdown(events)}`.trim();
   },
-
-  getReportKey: () => "briefing-diplomacy"
 };
 
 /**
@@ -335,7 +328,7 @@ ${input.instruction}`.trim()
 
     // Add past briefing from the closest prior decision point (a turn that actually has a
     // matching briefing), so pacing's skipped turns don't drop the comparison.
-    const reportKey = config.getReportKey(input.mode);
+    const reportKey = briefingReportKeys[input.mode];
     const lastState = getLastBriefingState(parameters, getOffsetedTurn(parameters, -5), [reportKey, "briefing"]);
     if (lastState) {
       messages.push({
@@ -357,8 +350,7 @@ ${lastState.reports[reportKey] ?? lastState.reports["briefing"]}`
     input: SpecializedBrieferInput,
     output: string
   ): string {
-    const config = modeConfigs[input.mode];
-    const reportKey = config.getReportKey(input.mode);
+    const reportKey = briefingReportKeys[input.mode];
     parameters.gameStates[parameters.turn].reports[reportKey] = output;
     return output;
   }

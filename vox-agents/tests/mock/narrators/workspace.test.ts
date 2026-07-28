@@ -106,12 +106,6 @@ describe('NarratorWorkspace', () => {
       expect(onDisk).toEqual(ctx);
     });
 
-    it('should report context presence via hasContext', () => {
-      expect(ws.hasContext()).toBe(false);
-      ws.writeContext(makeContext());
-      expect(ws.hasContext()).toBe(true);
-    });
-
     it('should throw a helpful error when reading a missing context', () => {
       expect(() => ws.getContext()).toThrow(/Narrator context not found/);
       expect(() => ws.getContext()).toThrow(/Run Stage 1/);

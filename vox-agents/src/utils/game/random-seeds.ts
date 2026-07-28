@@ -90,11 +90,6 @@ export function mergeRandomSeeds(
   });
 }
 
-/** True when at least one seed is explicitly fixed. */
-export function hasRandomSeeds(seeds?: RandomSeedsConfig): boolean {
-  return seeds?.sync !== undefined || seeds?.map !== undefined;
-}
-
 /**
  * Normalize `randomSeeds` (single object, array, or undefined) into an array of
  * length ≥ 1 for cycle scheduling. Returns `[undefined]` (one entry, no fixed

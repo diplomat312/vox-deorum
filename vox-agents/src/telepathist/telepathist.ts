@@ -17,10 +17,7 @@ import { GetConversationLogTool } from './tools/get-conversation-log.js';
 import { runPreparation } from './preparation/index.js';
 import { EnvoyThread } from '../types/index.js';
 import { VoxContext } from '../infra/vox-context.js';
-import { createLogger } from '../utils/logger.js';
 import { getValidCalls, hasOnlyTerminalCalls } from '../utils/tools/terminal-tools.js';
-
-const logger = createLogger('Telepathist');
 
 /**
  * All available telepathist tool instances

@@ -67,15 +67,6 @@ class ContextRegistry {
   }
 
   /**
-   * Get all active VoxContext instances.
-   *
-   * @returns Array of all active contexts
-   */
-  public getAll(): VoxContext<any>[] {
-    return Array.from(this.contexts.values());
-  }
-
-  /**
    * Shutdown all active contexts.
    * Useful for graceful application shutdown or cleanup.
    *

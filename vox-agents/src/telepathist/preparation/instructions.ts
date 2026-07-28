@@ -18,9 +18,6 @@ export const turnSummarySchema = z.object({
   narrative: z.string().describe('Short combined narrative weaving situation and decisions together')
 });
 
-/** Output type for turn summaries */
-export type TurnSummaryOutput = z.infer<typeof turnSummarySchema>;
-
 /** Zod schema for phase summary structured output */
 export const phaseSummarySchema = z.object({
   situation: z.string().describe('Narrative paragraph of the phase\'s world state arc'),
@@ -29,9 +26,6 @@ export const phaseSummarySchema = z.object({
   decisionabstract: z.string().describe('Context-agnostic generalized phase summary of the decisions with no concrete names'),
   narrative: z.string().describe('Short combined narrative for the phase')
 });
-
-/** Output type for phase summaries */
-export type PhaseSummaryOutput = z.infer<typeof phaseSummarySchema>;
 
 /** Scope descriptor for summary instructions: either a single turn or a turn range (phase). */
 type SummaryScope =

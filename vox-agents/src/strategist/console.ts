@@ -26,7 +26,7 @@ import type { RandomSeedsConfig } from "../types/config.js";
 const logger = createLogger('Strategists');
 
 // Parse command line arguments using parseArgs
-const { values, positionals } = parseArgs({
+const { values } = parseArgs({
   options: {
     config: {
       type: 'string',

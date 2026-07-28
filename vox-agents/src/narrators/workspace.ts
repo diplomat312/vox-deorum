@@ -52,11 +52,6 @@ export class NarratorWorkspace {
     return JSON.parse(fs.readFileSync(filePath, 'utf-8')) as NarratorContext;
   }
 
-  /** Check if the context file exists */
-  hasContext(): boolean {
-    return fs.existsSync(this.getPath(CONTEXT_FILE));
-  }
-
   // ── DB access ────────────────────────────────────────────────────────
 
   /** Open the game knowledge DB from the stored context path */

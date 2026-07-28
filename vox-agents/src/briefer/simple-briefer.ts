@@ -109,7 +109,6 @@ ${SimpleBriefer.instructionFooter}`.trim()
   public async getInitialMessages(parameters: StrategistParameters, input: string, _context: VoxContext<StrategistParameters>): Promise<ModelMessage[]> {
     var state = getRecentGameState(parameters)!;
     const { YouAre, ...SituationData } = parameters.metadata || {};
-    const { Options, ...Strategy } = state.options || {};
     // Return the messages
     const messages: ModelMessage[] = [{
       role: "system",

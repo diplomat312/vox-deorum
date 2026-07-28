@@ -11,7 +11,6 @@ import { SQLiteSpanExporter } from "./utils/telemetry/sqlite-exporter.js";
 import { VoxSpanExporter } from "./utils/telemetry/vox-exporter.js";
 import { BatchSpanProcessor } from "@opentelemetry/sdk-trace-base";
 import dotenv from 'dotenv';
-import { createLogger } from "./utils/logger.js";
 import { config } from "./utils/config.js";
 
 dotenv.config();

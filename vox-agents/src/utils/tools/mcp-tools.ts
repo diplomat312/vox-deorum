@@ -134,10 +134,8 @@ export function wrapMCPTool(tool: Tool, context: VoxContext<AgentParameters>): V
               // an explicitly-passed arg (e.g. get-events `Original: true`) with undefined.
               const value = (options.experimental_context as any)[camelKey];
               if (value !== undefined) args[key] = value;
-              // console.log(`${key} => ${camelKey} => ${(options.experimental_context as any)[camelKey]}`)
             }
           )
-          // console.log(options.experimental_context);
         }
 
         // Log inputs

@@ -12,7 +12,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { EpisodeWriter } from '../../../src/archivist/pipeline/writer.js';
-import { getEpisodeDbConnection } from '../../../src/archivist/episode-db.js';
+import { getEpisodeDbInstance } from '../../../src/archivist/episode-db.js';
 import type { Episode } from '../../../src/archivist/types.js';
 
 // ---------------------------------------------------------------------------
@@ -141,7 +141,7 @@ function normalize(value: any): any {
 }
 
 async function queryAll(sql: string): Promise<Record<string, any>[]> {
-  const conn = await getEpisodeDbConnection(dbPath);
+  const conn = await (await getEpisodeDbInstance(dbPath)).connect();
   try {
     const reader = await conn.runAndReadAll(sql);
     const rows = reader.getRowObjects() as Record<string, any>[];

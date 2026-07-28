@@ -16,7 +16,7 @@ import { jsonToMarkdown, HeadingConfig } from '../utils/tools/json-to-markdown.j
 import { VoxContext } from '../infra/vox-context.js';
 import { buildToolSummaryInstruction, summarizeWithCache } from './summarizer.js';
 import { createLogger } from '../utils/logger.js';
-import type { TelemetryDatabase, Span, SpanAttributes } from '../utils/telemetry/schema.js';
+import type { TelemetryDatabase, Span } from '../utils/telemetry/schema.js';
 import type { SummarizerInput } from './summarizer.js';
 import { parseSpanAttributes } from '../utils/telemetry/attributes.js';
 

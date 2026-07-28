@@ -40,14 +40,6 @@ const databases = new Map<string, DatabaseConnection>();
 const customFolders = new Map<string, string>();
 
 /**
- * Events emitted by SQLiteSpanExporter:
- * - 'spans-exported': Emitted when new spans are exported with { contextId, spans }
- */
-export interface SQLiteSpanExporterEvents {
-  'spans-exported': (data: { contextId: string; spans: NewSpan[] }) => void;
-}
-
-/**
  * Custom OpenTelemetry span exporter that writes to SQLite databases using Kysely.
  * Groups trace data by VoxContext ID for easier analysis.
  * Emits events when new spans are exported for real-time streaming.
@@ -249,7 +241,7 @@ export class SQLiteSpanExporter extends VoxSpanExporter {
       await spanProcessor.forceFlush();
 
       // Checkpoint all databases to ensure data is written
-      for (const [contextId, connection] of databases) {
+      for (const connection of databases.values()) {
         connection.sqlite.pragma('wal_checkpoint(TRUNCATE)');
       }
 

@@ -39,9 +39,6 @@ describe('isVisualMode', () => {
     expect(isVisualMode(undefined)).toBe(false);
   });
 
-  it('should return false when called without arguments', () => {
-    expect(isVisualMode()).toBe(false);
-  });
 });
 
 describe('isObsMode', () => {
@@ -65,9 +62,6 @@ describe('isObsMode', () => {
     expect(isObsMode(undefined)).toBe(false);
   });
 
-  it('should return false when called without arguments', () => {
-    expect(isObsMode()).toBe(false);
-  });
 });
 
 describe('isHumanControl', () => {

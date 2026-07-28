@@ -140,8 +140,6 @@ export async function streamTextWithConcurrency<T extends Parameters<typeof stre
   // Wrap the streamText call with both concurrency limiting and exponential retry
   return limiter(async () => {
     let maxIteration = 0;
-    let stopStreaming = () => {};
-    let streamController: TransformStreamDefaultController<TextStreamPart<ToolSet>> | undefined;
     let toolCount = 0;
 
     // Convert system messages after the first non-system message to user messages
@@ -186,15 +184,10 @@ export async function streamTextWithConcurrency<T extends Parameters<typeof stre
         onStepFinish: (results: any) => {
           if (maxIteration === iteration) originalOnStepFinish?.(results);
         },
-        experimental_transform: (options: {
-              tools: ToolSet;
-              stopStream: () => void;
-          }) => {
-          stopStreaming = options.stopStream;
+        experimental_transform: () => {
           return new TransformStream<TextStreamPart<ToolSet>, TextStreamPart<ToolSet>>({
             transform(chunk, controller) {
               if (maxIteration !== iteration) return;
-              streamController = controller;
               controller.enqueue(chunk);
             }
           });
@@ -207,7 +200,7 @@ export async function streamTextWithConcurrency<T extends Parameters<typeof stre
       const reader = result.fullStream.getReader();
       try {
         while (true) {
-          const { done, value } = await reader.read();
+          const { done } = await reader.read();
           if (done) break;
           update(false);
         }

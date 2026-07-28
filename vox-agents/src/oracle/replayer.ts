@@ -120,9 +120,6 @@ export async function runReplay(config: OracleConfig, rows?: RetrievedRow[]): Pr
     });
   });
 
-  // Removed interleave to increase cache hit rate
-  // tasks.sort((a, b) => (a.repetition ?? 0) - (b.repetition ?? 0));
-
   logger.info(`Replaying ${tasks.length} tasks (${rows.length} rows × models)`);
 
   // Initialize VoxContext with MCP for schema-only tools
