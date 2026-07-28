@@ -22,7 +22,7 @@ import {
   autoCompact,
   maybeAutoCompact,
 } from '../../../src/utils/diplomacy/transcript.js';
-import { observeThreadRows } from '../../../src/utils/diplomacy/row-observer.js';
+import { beginTurnState } from '../../../src/utils/diplomacy/active-turn-state.js';
 
 let mcp: ReturnType<typeof installMockMcpClient>;
 beforeEach(() => {
@@ -269,10 +269,10 @@ describe('appendCloseMessage', () => {
 
     await expect(appendCloseMessage(t, t.agent, 'farewell')).resolves.toMatchObject({ turn: 12 });
 
-    const observer = observeThreadRows(t);
+    const turnState = beginTurnState(t);
     mcp.respondWith('append-message', structuredResult({ ...committed, ID: 33 }));
     await appendCloseMessage(t, t.agent, 'farewell again');
-    expect(observer.close().map((r) => r.ID)).toEqual([33]);
+    expect(turnState.freeze().map((r) => r.ID)).toEqual([33]);
   });
 });
 

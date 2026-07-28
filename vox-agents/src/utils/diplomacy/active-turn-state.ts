@@ -1,5 +1,5 @@
 /**
- * @module utils/diplomacy/row-observer
+ * @module utils/diplomacy/active-turn-state
  *
  * The per-thread coordination state for one active chat turn (interactive-diplomacy stage 7.04,
  * technical decision 1).
@@ -14,10 +14,11 @@
  * The same registration carries the two other facts a mid-run tool knows and terminal reconciliation
  * needs: which durable row the spoken reply landed on (so the retained native trace attaches by ID
  * rather than by scanning for a plausible row) and whether the diplomat asked to close (held back
- * until reconciliation so the close row commits after every other durable write).
+ * until reconciliation so the close row commits after every other durable write). All three share one
+ * key and one lifetime, which is why they are one record rather than three registries.
  *
  * `beginChatTurn` creates the registration right after it takes the thread lock and releases it in
- * `finish()`, so "an observer is registered for this thread" means exactly "a chat turn is in
+ * `finish()`, so "a turn state is registered for this thread" means exactly "a chat turn is in
  * flight for it" — which is what {@link stageThreadClose}'s false result reports.
  *
  * Deliberately minimal:
@@ -25,12 +26,14 @@
  *    already receives the active `EnvoyThread`. That is the whole correlation key.
  *  - **No transcript cursor or follow-up query.** A row is recorded only after the backing store
  *    confirms the *current* operation created it.
- *  - **No transport argument threaded through the negotiator tools.** Reporting is a no-op when no
- *    turn observes that thread, so a blocking status write (or a bare tool call in a test) simply
- *    reports into the void.
+ *  - **No transport argument threaded through the negotiator tools.** Every report — a durable row,
+ *    the spoken row's identity, a close request — is a no-op when no turn is registered for that
+ *    thread, so a blocking status write (or a bare tool call in a test) simply reports into the void.
+ *  - **No state the turn could recompute.** Only facts a mid-run writer knows and the terminal path
+ *    cannot rederive get held here.
  *
  * The per-thread chat lock (`chat-turn-commit.ts`) guarantees at most one turn per thread, so the
- * registry holds at most one observer per thread id and a nested write can never land in a sibling
+ * registry holds at most one record per thread id and a nested write can never land in a sibling
  * turn's capture.
  */
 
@@ -47,11 +50,10 @@ export interface StagedThreadClose {
 
 /**
  * One active chat turn's coordination state: the durable rows it commits, the row its spoken reply
- * landed on, and any close it staged. Obtained through {@link observeThreadRows}; `beginChatTurn`
- * releases it with {@link ThreadRowObserver.close} in the same step that releases the thread lock.
+ * landed on, and any close it staged. Obtained through {@link beginTurnState}.
  */
-export interface ThreadRowObserver {
-  /** The thread this observer accepts rows for; rows for any other thread are ignored. */
+export interface ActiveTurnState {
+  /** The thread this record accepts rows for; rows for any other thread are ignored. */
   readonly threadId: string;
   /** Rows captured so far, deduplicated by transcript ID and in ascending ID order. */
   rows(): TranscriptPushMessage[];
@@ -65,14 +67,14 @@ export interface ThreadRowObserver {
   takeStagedClose(): StagedThreadClose | undefined;
   /**
    * Freeze the capture, unregister it, and return the final ordered snapshot. Idempotent: later
-   * calls return the same frozen set, and any row reported after this point is dropped — so detached
+   * calls return that same snapshot, and any row reported after this point is dropped — so detached
    * work cannot extend a turn's terminal row set after it has been reported to the client.
    */
-  close(): TranscriptPushMessage[];
+  freeze(): TranscriptPushMessage[];
 }
 
-/** The mutable half of an observer, kept off the public interface so only writers can record. */
-interface RegisteredObserver extends ThreadRowObserver {
+/** The mutable half of the record, kept off the public interface so only writers can record. */
+interface RegisteredTurnState extends ActiveTurnState {
   record(row: TranscriptPushMessage): void;
   recordSpokenRow(row: TranscriptPushMessage): void;
   stageClose(close: StagedThreadClose): boolean;
@@ -82,12 +84,11 @@ interface RegisteredObserver extends ThreadRowObserver {
  * The at-most-one-per-thread registry. Keyed by `thread.id` because that is exactly the granularity
  * the chat lock serializes on.
  */
-const observers = new Map<string, RegisteredObserver>();
+const activeTurns = new Map<string, RegisteredTurnState>();
 
 /**
  * Register the active chat turn's coordination state for `thread`. `beginChatTurn` is the only
- * production caller: it registers after taking the lock and committing the caller row, so the caller
- * row belongs to the pre-run phase alone and the registration's lifetime matches the turn's.
+ * production caller.
  *
  * @param thread   The thread whose writes should be captured.
  * @param options.ignoreIDs Transcript IDs this capture must never record — the turn's own caller row,
@@ -95,22 +96,23 @@ const observers = new Map<string, RegisteredObserver>();
  *                 boundary here (rather than trusting that no writer re-reports it) is what makes
  *                 "no ID appears in both phases" an invariant instead of an intention.
  */
-export function observeThreadRows(
+export function beginTurnState(
   thread: EnvoyThread,
   options: { ignoreIDs?: Iterable<number> } = {}
-): ThreadRowObserver {
+): ActiveTurnState {
   const threadId = thread.id;
   const ignored = new Set(options.ignoreIDs ?? []);
   const captured = new Map<number, TranscriptPushMessage>();
   const spokenRowIDs: number[] = [];
   let frozen = false;
+  let snapshot: TranscriptPushMessage[] | undefined;
   let stagedClose: StagedThreadClose | undefined;
 
   /** The captured rows in ascending store-ID order — the durable append order. */
   const ordered = (): TranscriptPushMessage[] =>
     [...captured.values()].sort((left, right) => left.ID - right.ID);
 
-  const observer: RegisteredObserver = {
+  const state: RegisteredTurnState = {
     threadId,
     record(row) {
       if (frozen || ignored.has(row.ID) || captured.has(row.ID)) return;
@@ -133,24 +135,25 @@ export function observeThreadRows(
       return close;
     },
     rows: ordered,
-    close() {
+    freeze() {
+      if (frozen) return snapshot!;
       frozen = true;
       stagedClose = undefined;
       // Only clear the slot if it is still ours: an overlapping turn (which the thread lock should
       // make impossible) must not have its registration torn down by a predecessor's cleanup.
-      if (observers.get(threadId) === observer) observers.delete(threadId);
-      return ordered();
+      if (activeTurns.get(threadId) === state) activeTurns.delete(threadId);
+      return (snapshot = ordered());
     },
   };
 
-  observers.set(threadId, observer);
-  return observer;
+  activeTurns.set(threadId, state);
+  return state;
 }
 
 /**
- * Report a durable row the current operation just created for `thread`. A no-op when no turn observes
- * that thread, when the row belongs to the observing turn's pre-run phase, or when the row was already
- * captured — so a writer may report unconditionally without knowing whether a turn is listening.
+ * Report a durable row the current operation just created for `thread`. A no-op when no turn is in
+ * flight for that thread, when the row belongs to the active turn's pre-run phase, or when the row was
+ * already captured — so a writer may report unconditionally without knowing whether a turn is listening.
  *
  * Call this only AFTER the backing store confirms the write: an optimistic report would put a row the
  * store never accepted into the turn's terminal set.
@@ -160,7 +163,7 @@ export function reportThreadRow(
   row: TranscriptPushMessage | undefined
 ): void {
   if (!thread || !row) return;
-  observers.get(thread.id)?.record(row);
+  activeTurns.get(thread.id)?.record(row);
 }
 
 /** Report several durable rows created by the current operation, in the order they were committed. */
@@ -181,7 +184,7 @@ export function reportThreadRows(
  */
 export function reportSpokenRow(thread: EnvoyThread | undefined, row: TranscriptPushMessage): void {
   if (!thread) return;
-  observers.get(thread.id)?.recordSpokenRow(row);
+  activeTurns.get(thread.id)?.recordSpokenRow(row);
 }
 
 /**
@@ -192,6 +195,5 @@ export function reportSpokenRow(thread: EnvoyThread | undefined, row: Transcript
  */
 export function stageThreadClose(thread: EnvoyThread | undefined, close: StagedThreadClose): boolean {
   if (!thread) return false;
-  const observer = observers.get(thread.id);
-  return observer?.stageClose(close) ?? false;
+  return activeTurns.get(thread.id)?.stageClose(close) ?? false;
 }

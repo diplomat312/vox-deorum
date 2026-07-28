@@ -14,7 +14,7 @@ import type { EnvoyThread } from "../../types/index.js";
 import { mcpClient } from "../models/mcp-client.js";
 import { unwrapMcpResponse } from "../models/mcp-response.js";
 import { hydrateMessages, deriveCloseTurn, carryOverTrace, boundaryIndex } from "./transcript-utils.js";
-import { reportThreadRow } from "./row-observer.js";
+import { reportThreadRow } from "./active-turn-state.js";
 import { countTokens } from "../models/token-counter.js";
 import type { TranscriptMessage, TranscriptPushMessage } from "./transcript-utils.js";
 

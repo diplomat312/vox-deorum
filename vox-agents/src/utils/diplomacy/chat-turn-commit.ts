@@ -13,8 +13,11 @@ import type { DealTranscriptMessage } from "../../../../mcp-server/dist/utils/de
 import { appendTranscriptMessageRow, audienceID, collectSpokenReply, retryMessage, needsRetryReply, maybeAutoCompact } from "./transcript.js";
 import { collectTrace, hydrateDealRow, type TranscriptPushMessage } from "./transcript-utils.js";
 import type { ModelMessage } from "ai";
-import { appendDealProposal, classifyDealSubmission } from "./deal.js";
-import { observeThreadRows, type StagedThreadClose } from "./row-observer.js";
+import { appendDealProposal, classifyDealSubmission, closeConversation } from "./deal.js";
+import { beginTurnState } from "./active-turn-state.js";
+import { createLogger } from "../logger.js";
+
+const logger = createLogger("diplomacy:chat-turn");
 
 /** Triple-brace special tokens (e.g. {{{Greeting}}}) are agent triggers, not archival text. */
 const SPECIAL_MESSAGE = /^\{\{\{.+\}\}\}$/;
@@ -77,18 +80,17 @@ export interface ChatTurn {
    *
    * Retry archival is not best-effort: if the store refuses that append this throws, so the caller can
    * report a failure instead of letting a streamed draft masquerade as a durable completed reply.
+   *
+   * Any close the diplomat staged mid-run is committed as the LAST step here — after the spoken reply
+   * and the negotiator's nested writes — so this one function owns the whole close-last ordering rule
+   * rather than leaving it to a transport's call order.
    */
   complete(): Promise<void>;
   /**
    * Freeze the row capture and return every durable row this turn committed after its caller row, in
-   * append order. Memoized, so the terminal event and the cache repair always see the same set.
+   * append order. Idempotent: the frozen snapshot is what every later call returns.
    */
   terminalRows(): TranscriptPushMessage[];
-  /**
-   * Take the close the diplomat staged mid-run, so the caller can commit it after the spoken reply
-   * and the negotiator's nested writes. Undefined when the turn requested no close.
-   */
-  takeStagedClose(): StagedThreadClose | undefined;
   /** The durable reply row that should carry this turn's native model trace, if any. */
   traceTarget(): { rowID: number; trace: ModelMessage[] } | undefined;
   /**
@@ -108,10 +110,6 @@ export interface ChatTurn {
  * prompted it — then mirror it into the cache so the diplomat sees it and the live view renders it. The move is either a plain-text utterance (`{kind:'text'}`, never a
  * {{{Greeting}}} trigger) or a structured deal proposal/counter (`{kind:'deal'}`, which computes the
  * value snapshots + durations server-side via `appendDealProposal`).
- *
- * The returned handle then registers this turn's coordination state (`row-observer.ts`), which is
- * what lets the diplomat's mid-run tools report the rows they commit, name the spoken reply row, and
- * stage a close for the caller to commit last.
  *
  * Rejects with `ThreadBusyError` when a turn is already in flight for this thread, or with the
  * underlying commit error (a store append failure, or — for a deal — an `IllegalDealError` /
@@ -185,13 +183,12 @@ export async function beginChatTurn(thread: EnvoyThread, commit: TurnCommit, tur
   // Everything committed from here on belongs to the post-run phase. The caller row is excluded by ID
   // so the two phases can never overlap, whatever a nested writer reports. Registering here (rather
   // than in the route) ties the capture's lifetime to the lock's: `finish` releases both.
-  const observer = observeThreadRows(thread, {
+  const turnState = beginTurnState(thread, {
     ignoreIDs: callerRow ? [callerRow.ID] : undefined,
   });
 
   let completed = false;
   let finished = false;
-  let terminalRows: TranscriptPushMessage[] | undefined;
   let traceTarget: { rowID: number; trace: ModelMessage[] } | undefined;
   return {
     callerRow,
@@ -199,34 +196,48 @@ export async function beginChatTurn(thread: EnvoyThread, commit: TurnCommit, tur
     async complete() {
       if (thread.diplomacy) {
         const slice = thread.messages.slice(replyStart);
-        // Every diplomacy voice speaks only through `send-message` (enforced when the thread opens,
-        // see the chat factory), so raw free text is never the reply here.
+        // Raw free text is never the reply here (see VoxAgent.speaksOnlyViaSendMessage).
         const spoken = collectSpokenReply(slice, { sendMessageOnly: true });
         if (!spoken && needsRetryReply(slice)) {
           await appendTranscriptMessageRow(thread, thread.agent, retryMessage);
         }
-        // The cache is deliberately left without reply rows until the terminal observer is frozen.
+        // The cache is deliberately left without reply rows until the turn state is frozen.
         // That shared done/error path restores exactly the rows that reached the append-only store.
         thread.messages.splice(replyStart);
         // The trace is the WHOLE turn's trajectory, so it is kept only when the turn has exactly one
         // spoken row to hang it on. The tool that committed that row named it; nothing is guessed.
-        const rowID = observer.soleSpokenRowID();
+        const rowID = turnState.soleSpokenRowID();
         if (spoken && rowID !== undefined) {
           const trace = collectTrace(slice);
           if (trace.length) traceTarget = { rowID, trace };
         }
+        // Last durable write of the turn, by construction: the diplomat's close-conversation tool only
+        // stages, so the close row lands after the spoken reply and the negotiator's nested writes. A
+        // failure here is logged rather than thrown — the reply is already durable and visible, and
+        // `closeConversation` retracts before it closes, so the conversation simply stays open (see
+        // deal.ts). Rethrowing would strand a committed reply behind an error the client can't act on.
+        const staged = turnState.takeStagedClose();
+        if (staged) {
+          try {
+            await closeConversation(thread, staged.speakerID, staged.content);
+          } catch (error) {
+            logger.error("Failed to commit a staged conversation close after the reply", {
+              threadId: thread.id,
+              error,
+            });
+          }
+        }
       }
       completed = true;
     },
-    terminalRows: () => (terminalRows ??= observer.close()),
-    takeStagedClose: () => observer.takeStagedClose(),
+    terminalRows: () => turnState.freeze(),
     traceTarget: () => traceTarget,
     finish() {
       if (finished) return;
       finished = true;
       // Idempotent, and a no-op on the normal path where the terminal event already froze it — but a
       // turn that returns without emitting one must still leave no registration behind.
-      observer.close();
+      turnState.freeze();
       if (!completed) thread.messages.splice(isSpecial ? replyStart - 1 : replyStart);
       inFlight.delete(thread.id);
     },

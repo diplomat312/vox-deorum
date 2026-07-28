@@ -25,7 +25,7 @@ import {
   ProposalConflictError,
   type InspectDealResult,
 } from '../../../src/utils/diplomacy/deal.js';
-import { observeThreadRows } from '../../../src/utils/diplomacy/row-observer.js';
+import { beginTurnState } from '../../../src/utils/diplomacy/active-turn-state.js';
 
 let mcp: ReturnType<typeof installMockMcpClient>;
 beforeEach(() => {
@@ -363,13 +363,13 @@ describe('appendDealProposal', () => {
     mcp.respondWith('inspect-deal', structuredResult({ items: [], promises: [], tradableRange: {} }));
     mcp.respondWith('append-message', appendEcho({ ID: 41, Turn: 6 }));
     const t = thread();
-    const observer = observeThreadRows(t);
+    const turnState = beginTurnState(t);
 
     const out = await appendDealProposal(t, 1, 'deal-proposal', emptyDeal);
 
     // The negotiator's mid-run proposal reaches the client through the running turn's rows — no
     // transcript reread. The captured object is the exact authoritative row the append returned.
-    expect(observer.close()).toEqual([out.row]);
+    expect(turnState.freeze()).toEqual([out.row]);
   });
 });
 
@@ -502,19 +502,19 @@ describe('appendDealReject', () => {
 
   it('records the row only when THIS call created it', async () => {
     const t = thread();
-    const fresh = observeThreadRows(t);
+    const fresh = beginTurnState(t);
     mcp.respondWith('reject-agent-deal', structuredResult({
       Result: 'rejected', ProposalMessageID: 7, AlreadyRejected: false, Row: rejectRow(),
     }));
     await appendDealReject(t, 1, 'No thanks', 7);
-    expect(fresh.close().map((r) => r.ID)).toEqual([9]);
+    expect(fresh.freeze().map((r) => r.ID)).toEqual([9]);
 
-    const repeat = observeThreadRows(t);
+    const repeat = beginTurnState(t);
     mcp.respondWith('reject-agent-deal', structuredResult({
       Result: 'already-rejected', ProposalMessageID: 7, AlreadyRejected: true, Row: rejectRow(),
     }));
     await appendDealReject(t, 1, 'No thanks', 7);
-    expect(repeat.close()).toEqual([]);
+    expect(repeat.freeze()).toEqual([]);
   });
 
   it.each([

@@ -82,7 +82,7 @@ export abstract class VoxAgent<TParameters extends AgentParameters, TInput = unk
    * never archived. Diplomacy code downstream of that gate therefore treats "the spoken reply is a
    * send-message argument" as an invariant rather than a per-turn condition.
    */
-  public suppressFreeText = false;
+  public speaksOnlyViaSendMessage = false;
 
   /**
    * Optional description for when this agent is exposed as a tool

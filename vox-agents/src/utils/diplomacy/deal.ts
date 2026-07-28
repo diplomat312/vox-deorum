@@ -33,7 +33,7 @@ import { mcpClient } from "../models/mcp-client.js";
 import { unwrapMcpResponse } from "../models/mcp-response.js";
 import type { TranscriptMessage, TranscriptPushMessage } from "./transcript-utils.js";
 import { identityOf } from "./transcript-utils.js";
-import { reportThreadRow, reportThreadRows } from "./row-observer.js";
+import { reportThreadRow, reportThreadRows } from "./active-turn-state.js";
 import { appendCloseMessage, readTranscript } from "./transcript.js";
 import { createLogger } from "../logger.js";
 import { deriveActiveProposal, type DealReduction } from "./deal-reduce.js";
@@ -385,8 +385,8 @@ export async function appendDealProposal(
   };
   // Report the exact committed row to whichever turn owns this thread, so a proposal the negotiator
   // authors mid-run reaches the client in that turn's terminal rows without a transcript reread. A
-  // no-op when nothing observes the thread — including the caller-row commit inside `beginChatTurn`,
-  // which happens before the turn registers its observer and is reported to the client separately.
+  // no-op when no turn is in flight for the thread — including the caller-row commit inside
+  // `beginChatTurn`, which runs before the turn registers and is reported to the client separately.
   reportThreadRow(thread, row);
   return { id: stored.ID, turn: stored.Turn, inspection, deal: storedDeal, row };
 }

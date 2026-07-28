@@ -10,7 +10,7 @@ vi.mock('../../../src/utils/models/mcp-client.js', async () => {
 
 import { createSendMessageTool } from '../../../src/envoy/send-message-tool.js';
 import type { EnvoyThread } from '../../../src/types/index.js';
-import { observeThreadRows } from '../../../src/utils/diplomacy/row-observer.js';
+import { beginTurnState } from '../../../src/utils/diplomacy/active-turn-state.js';
 import { createFakeVoxContext } from '../../helpers/fake-vox-context.js';
 
 let mcp: ReturnType<typeof installMockMcpClient>;
@@ -59,7 +59,7 @@ describe('createSendMessageTool', () => {
     const context = createFakeVoxContext();
     context.setBaseParameters({ turn: 5 });
     context.currentInput = input;
-    const observer = observeThreadRows(input);
+    const turnState = beginTurnState(input);
 
     await expect(execute(createSendMessageTool(context.asContext()), '[Turn 5] Germany, the diplomat: Greetings.'))
       .resolves.toBe('Message delivered.');
@@ -69,7 +69,7 @@ describe('createSendMessageTool', () => {
       MessageType: 'text',
       Content: 'Greetings.',
     });
-    expect(observer.close()).toEqual([expect.objectContaining({ ID: 101, Content: 'Greetings.' })]);
+    expect(turnState.freeze()).toEqual([expect.objectContaining({ ID: 101, Content: 'Greetings.' })]);
     expect(input.messages).toEqual([]);
   });
 
@@ -94,13 +94,13 @@ describe('createSendMessageTool', () => {
     const context = createFakeVoxContext();
     context.setBaseParameters({ turn: 5 });
     context.currentInput = input;
-    const observer = observeThreadRows(input);
+    const turnState = beginTurnState(input);
     const tool = createSendMessageTool(context.asContext());
 
     await execute(tool, 'First point.');
     await execute(tool, 'Second point.');
 
-    expect(observer.close().map((row) => [row.ID, row.Content]))
+    expect(turnState.freeze().map((row) => [row.ID, row.Content]))
       .toEqual([[101, 'First point.'], [102, 'Second point.']]);
   });
 

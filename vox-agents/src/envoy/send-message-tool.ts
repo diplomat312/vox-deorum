@@ -20,7 +20,7 @@ import type { EnvoyThread } from "../types/index.js";
 import { createSimpleTool } from "../utils/tools/simple-tools.js";
 import { sendMessageToolName } from "../utils/diplomacy/send-message-tool-name.js";
 import { appendTranscriptMessageRow } from "../utils/diplomacy/transcript.js";
-import { reportSpokenRow } from "../utils/diplomacy/row-observer.js";
+import { reportSpokenRow } from "../utils/diplomacy/active-turn-state.js";
 import { speakerLabel } from "../utils/diplomacy/transcript-utils.js";
 import { stripSpokenEcho } from "../utils/models/text-cleaning.js";
 

@@ -20,7 +20,7 @@ vi.mock('../../../src/utils/models/mcp-client.js', async () => {
 
 import { beginChatTurn, isThreadBusy } from '../../../src/utils/diplomacy/chat-turn-commit.js';
 import { insertDurableRows, retryMessage } from '../../../src/utils/diplomacy/transcript-utils.js';
-import { reportSpokenRow } from '../../../src/utils/diplomacy/row-observer.js';
+import { reportSpokenRow } from '../../../src/utils/diplomacy/active-turn-state.js';
 import { sendMessageToolName } from '../../../src/utils/diplomacy/send-message-tool-name.js';
 
 let mcp: ReturnType<typeof installMockMcpClient>;

@@ -13,9 +13,9 @@
  *     set is what feeds `done.rows` / `error.rows`, the `done.deals` compatibility view, and the cache
  *     repair.
  *
- * The capture never records the caller row's ID, so no transcript ID can appear in both phases, and
- * detached work cannot append to the terminal set after it has been reported. Every committed turn
- * emits exactly one terminal event: `done` or `error`, never both and never neither.
+ * The capture's own phase-boundary and lifetime guarantees are `active-turn-state.ts`'s to state; what
+ * this module owes on top of them is that every committed turn emits exactly one terminal event:
+ * `done` or `error`, never both and never neither.
  */
 
 import { agentRegistry } from '../../infra/agent-registry.js';
@@ -47,7 +47,7 @@ import {
   LiveTurnUnavailableError,
   requireOpenConversationTurn,
 } from '../../utils/diplomacy/live-turn.js';
-import { closeConversation, IllegalDealError, ProposalConflictError } from '../../utils/diplomacy/deal.js';
+import { IllegalDealError, ProposalConflictError } from '../../utils/diplomacy/deal.js';
 import { createLogger } from '../../utils/logger.js';
 import {
   createSendMessageStreamer,
@@ -258,10 +258,13 @@ export async function runChatTurn(
     });
 
     const voiceName = agentName(thread);
-    const suppressFreeText = Boolean(voiceName && agentRegistry.get(voiceName)?.suppressFreeText);
+    // The one place the voice capability becomes a rendering decision: a voice that speaks only
+    // through `send-message` emits native text chunks that are tool-force junk, so they are swallowed.
+    const speaksOnlyViaSendMessage =
+      Boolean(voiceName && agentRegistry.get(voiceName)?.speaksOnlyViaSendMessage);
     const streamer = createSendMessageStreamer(
       (text, id) => emitSpoken(sink, text, id),
-      { suppressFreeText },
+      { suppressFreeText: speaksOnlyViaSendMessage },
     );
     const streamCallback: StreamingEventCallback = {
       OnChunk: ({ chunk }) => {
@@ -335,21 +338,10 @@ export async function runChatTurn(
       }
 
       // A valid send-message call already appended its own text row. Completion clears transient
-      // model traffic and appends only the retry fallback when nothing spoke or took a terminal action.
+      // model traffic, appends the retry fallback when nothing spoke or took a terminal action, and
+      // commits any close the diplomat staged mid-run last of all. A staged close is discarded
+      // automatically if this turn takes the error path instead.
       await turn.complete();
-      // Close is staged while same-step tools run so its row follows any spoken reply and the
-      // negotiator's nested writes. It is discarded automatically if this turn takes the error path.
-      const stagedClose = turn.takeStagedClose();
-      if (stagedClose) {
-        try {
-          await closeConversation(thread, stagedClose.speakerID, stagedClose.content);
-        } catch (error) {
-          logger.error('Failed to commit a staged conversation close after the reply', {
-            chatId,
-            error,
-          });
-        }
-      }
       emitDone();
     });
   } catch (error) {

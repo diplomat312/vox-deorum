@@ -27,7 +27,7 @@ function createDependencies(
   const threads = new Map<string, EnvoyThread>();
   const dependencies: ChatThreadFactoryDependencies<VoxContext<StrategistParameters>> = {
     getContext: () => undefined,
-    getAgent: () => ({ diplomacyOnly: false, suppressFreeText: true }),
+    getAgent: () => ({ diplomacyOnly: false, speaksOnlyViaSendMessage: true }),
     getAssignments: () => undefined,
     getThread: (threadId) => threads.get(threadId),
     setThread: (thread) => {
@@ -174,7 +174,7 @@ describe('chat thread factory', () => {
     it('should reject a voice that can answer without send-message', async () => {
       const { dependencies } = createDependencies({
         getContext: () => fakeContext(),
-        getAgent: () => ({ diplomacyOnly: false, suppressFreeText: false }),
+        getAgent: () => ({ diplomacyOnly: false, speaksOnlyViaSendMessage: false }),
       });
       const factory = createChatThreadFactory(dependencies);
 

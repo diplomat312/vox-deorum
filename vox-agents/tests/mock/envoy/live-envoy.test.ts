@@ -403,7 +403,7 @@ describe('LiveEnvoy.stopCheck (shared completion logic via Spokesperson)', () =>
     const ctx = createFakeVoxContext().asContext();
     const spoken = step('We share your hope for peace.');
     // Tools are forced (toolChoice="required"), so raw free text is never an authoritative reply
-    // (see LiveEnvoy.suppressFreeText) and does not end the turn; only a completion tool does.
+    // (see LiveEnvoy.speaksOnlyViaSendMessage) and does not end the turn; only a completion tool does.
     expect(spokesperson.stopCheck(parameters, thread(), spoken, [spoken], ctx)).toBe(false);
   });
 });

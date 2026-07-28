@@ -1,21 +1,21 @@
 /**
- * @module tests/mock/diplomacy/row-observer
+ * @module tests/mock/diplomacy/active-turn-state
  *
  * Unit coverage for the active chat turn's per-thread coordination state
- * (src/utils/diplomacy/row-observer.ts) — the mechanism that lets a turn report exactly the rows it
- * committed without rereading the transcript, and lets its tools name the spoken reply row and stage
- * a close. Pure in-memory: no MCP client, no store.
+ * (src/utils/diplomacy/active-turn-state.ts) — the mechanism that lets a turn report exactly the rows
+ * it committed without rereading the transcript, and lets its tools name the spoken reply row and
+ * stage a close. Pure in-memory: no MCP client, no store.
  */
 
 import { describe, expect, it } from 'vitest';
 import type { EnvoyThread } from '../../../src/types/index.js';
 import type { TranscriptPushMessage } from '../../../src/utils/diplomacy/transcript-utils.js';
 import {
-  observeThreadRows,
+  beginTurnState,
   reportSpokenRow,
   reportThreadRow,
   reportThreadRows,
-} from '../../../src/utils/diplomacy/row-observer.js';
+} from '../../../src/utils/diplomacy/active-turn-state.js';
 
 /** Minimal thread identity — the capture keys off `id` and nothing else. */
 function thread(id: string): EnvoyThread {
@@ -40,26 +40,26 @@ const row = (ID: number, MessageType = 'text'): TranscriptPushMessage => ({
   ID, SpeakerID: 1, MessageType, Content: `row ${ID}`, Turn: 5,
 });
 
-describe('thread row observer', () => {
+describe('active turn state', () => {
   it('returns captured rows in ascending transcript-ID order regardless of report order', () => {
     const t = thread('order');
-    const observer = observeThreadRows(t);
+    const turnState = beginTurnState(t);
 
     reportThreadRow(t, row(12));
     reportThreadRow(t, row(4));
     reportThreadRow(t, row(9));
 
-    expect(observer.close().map((r) => r.ID)).toEqual([4, 9, 12]);
+    expect(turnState.freeze().map((r) => r.ID)).toEqual([4, 9, 12]);
   });
 
   it('deduplicates by transcript ID, keeping the first reported projection', () => {
     const t = thread('dedup');
-    const observer = observeThreadRows(t);
+    const turnState = beginTurnState(t);
 
     reportThreadRow(t, { ...row(7), Content: 'first' });
     reportThreadRow(t, { ...row(7), Content: 'second' });
 
-    const rows = observer.close();
+    const rows = turnState.freeze();
     expect(rows).toHaveLength(1);
     expect(rows[0]!.Content).toBe('first');
   });
@@ -69,12 +69,12 @@ describe('thread row observer', () => {
     // wrong thread must never leak into a sibling conversation's capture.
     const mine = thread('mine');
     const other = thread('other');
-    const observer = observeThreadRows(mine);
+    const turnState = beginTurnState(mine);
 
     reportThreadRow(other, row(1));
     reportThreadRow(mine, row(2));
 
-    expect(observer.close().map((r) => r.ID)).toEqual([2]);
+    expect(turnState.freeze().map((r) => r.ID)).toEqual([2]);
   });
 
   it('is a no-op when no turn observes the thread', () => {
@@ -86,89 +86,89 @@ describe('thread row observer', () => {
 
   it('never records an ignored ID, so the caller row cannot cross into the terminal phase', () => {
     const t = thread('phases');
-    const observer = observeThreadRows(t, { ignoreIDs: [40] });
+    const turnState = beginTurnState(t, { ignoreIDs: [40] });
 
     reportThreadRow(t, row(40)); // the turn's caller row, re-reported by some later writer
     reportThreadRow(t, row(41));
 
-    expect(observer.close().map((r) => r.ID)).toEqual([41]);
+    expect(turnState.freeze().map((r) => r.ID)).toEqual([41]);
   });
 
   it('freezes on close: later reports are dropped and the snapshot is stable', () => {
     // Detached work must not be able to extend a terminal row set that was already reported.
     const t = thread('freeze');
-    const observer = observeThreadRows(t);
+    const turnState = beginTurnState(t);
     reportThreadRow(t, row(1));
 
-    const first = observer.close();
+    const first = turnState.freeze();
     reportThreadRow(t, row(2));
 
     expect(first.map((r) => r.ID)).toEqual([1]);
-    expect(observer.close().map((r) => r.ID)).toEqual([1]);
-    expect(observer.rows().map((r) => r.ID)).toEqual([1]);
+    expect(turnState.freeze().map((r) => r.ID)).toEqual([1]);
+    expect(turnState.rows().map((r) => r.ID)).toEqual([1]);
   });
 
   it('unregisters on close so a later turn on the same thread starts clean', () => {
     const t = thread('sequential');
-    const first = observeThreadRows(t);
+    const first = beginTurnState(t);
     reportThreadRow(t, row(1));
-    first.close();
+    first.freeze();
 
-    const second = observeThreadRows(t);
+    const second = beginTurnState(t);
     reportThreadRow(t, row(2));
 
-    expect(second.close().map((r) => r.ID)).toEqual([2]);
+    expect(second.freeze().map((r) => r.ID)).toEqual([2]);
   });
 
   it('names the spoken reply row only while the turn spoke exactly once', () => {
     const t = thread('spoken');
-    const observer = observeThreadRows(t);
-    expect(observer.soleSpokenRowID()).toBeUndefined();
+    const turnState = beginTurnState(t);
+    expect(turnState.soleSpokenRowID()).toBeUndefined();
 
     reportSpokenRow(t, row(11));
-    expect(observer.soleSpokenRowID()).toBe(11);
+    expect(turnState.soleSpokenRowID()).toBe(11);
 
     // A repeat of the same commit is the same reply, not a second one.
     reportSpokenRow(t, row(11));
-    expect(observer.soleSpokenRowID()).toBe(11);
+    expect(turnState.soleSpokenRowID()).toBe(11);
 
     // Two genuinely different spoken rows leave a whole-turn trace with no single home.
     reportSpokenRow(t, row(12));
-    expect(observer.soleSpokenRowID()).toBeUndefined();
+    expect(turnState.soleSpokenRowID()).toBeUndefined();
 
-    observer.close();
+    turnState.freeze();
   });
 
   it('ignores a spoken row reported with no turn listening, or after the capture froze', () => {
     const t = thread('spoken-late');
     expect(() => reportSpokenRow(t, row(20))).not.toThrow();
 
-    const observer = observeThreadRows(t);
-    observer.close();
+    const turnState = beginTurnState(t);
+    turnState.freeze();
     reportSpokenRow(t, row(21));
 
-    expect(observer.soleSpokenRowID()).toBeUndefined();
+    expect(turnState.soleSpokenRowID()).toBeUndefined();
   });
 
   it('reports a batch in one call, skipping absent entries', () => {
     const t = thread('batch');
-    const observer = observeThreadRows(t);
+    const turnState = beginTurnState(t);
 
     reportThreadRows(t, [row(3), undefined, row(1)]);
 
-    expect(observer.close().map((r) => r.ID)).toEqual([1, 3]);
+    expect(turnState.freeze().map((r) => r.ID)).toEqual([1, 3]);
   });
 
   it('exposes a live snapshot before the turn reaches its terminal phase', () => {
     const t = thread('live');
-    const observer = observeThreadRows(t);
+    const turnState = beginTurnState(t);
 
     reportThreadRow(t, row(5));
-    expect(observer.rows().map((r) => r.ID)).toEqual([5]);
+    expect(turnState.rows().map((r) => r.ID)).toEqual([5]);
     reportThreadRow(t, row(6));
-    expect(observer.rows().map((r) => r.ID)).toEqual([5, 6]);
-    expect(observer.threadId).toBe('live');
+    expect(turnState.rows().map((r) => r.ID)).toEqual([5, 6]);
+    expect(turnState.threadId).toBe('live');
 
-    observer.close();
+    turnState.freeze();
   });
 });

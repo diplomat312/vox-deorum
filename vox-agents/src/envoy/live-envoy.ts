@@ -48,7 +48,7 @@ export abstract class LiveEnvoy extends Envoy<StrategistParameters> {
    * Force a tool call every step so "speak" is an explicit action (the send-message tool), not raw
    * free text. Honored on the deployed model; vox-context neutralizes it to "auto" on Anthropic,
    * where the prompt steers the model back to send-message and any raw free text is a degraded
-   * fallback the envoy does not treat as an authoritative reply (see {@link suppressFreeText}).
+   * fallback the envoy does not treat as an authoritative reply (see {@link speaksOnlyViaSendMessage}).
    */
   public override toolChoice: string = "required";
 
@@ -65,7 +65,7 @@ export abstract class LiveEnvoy extends Envoy<StrategistParameters> {
    * as malformed tool-call text). The chat route swallows it from the live stream and the commit path
    * keeps it out of the archive, so the UI and a reload show only the explicit spoken reply.
    */
-  public override suppressFreeText = true;
+  public override speaksOnlyViaSendMessage = true;
 
   /**
    * Hard step ceiling for every live envoy (overrides the base default of 3). A runaway support-tool
@@ -182,7 +182,7 @@ export abstract class LiveEnvoy extends Envoy<StrategistParameters> {
    * not govern live envoys; this shared rule, generalized over {@link getCompletionTools}, does.
    *
    * Raw free text does NOT end a forced-tool envoy's turn. A live envoy speaks only through
-   * send-message (see {@link suppressFreeText}), so on Anthropic — where the tool force is neutralized
+   * send-message (see {@link speaksOnlyViaSendMessage}), so on Anthropic — where the tool force is neutralized
    * to "auto" — any free text is a degraded fallback the envoy ignores, working on until it actually
    * calls a completion tool. Only a subclass that opts out of the force (toolChoice !== "required")
    * treats free text as a completing reply.
@@ -225,7 +225,7 @@ export abstract class LiveEnvoy extends Envoy<StrategistParameters> {
     if (hasPendingSupportTool) return false;
     // No pending tool and no completion tool. A forced-tool live envoy (toolChoice="required", the
     // default) speaks ONLY through send-message, so raw free text is never an authoritative reply
-    // (see suppressFreeText) and must not end the turn: the envoy keeps working until it actually
+    // (see speaksOnlyViaSendMessage) and must not end the turn: the envoy keeps working until it actually
     // calls a completion tool or hits the ceiling above. Only a subclass that opts out of the tool
     // force (toolChoice !== "required") treats raw spoken free text as a completing reply.
     return this.toolChoice !== "required" && allSteps.some(step => Boolean(step.text?.trim()));

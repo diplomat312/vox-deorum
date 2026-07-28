@@ -34,7 +34,7 @@ import {
   closeConversation,
   enactAgentDeal,
 } from '../../../src/utils/diplomacy/deal.js';
-import { reportThreadRow, stageThreadClose } from '../../../src/utils/diplomacy/row-observer.js';
+import { reportThreadRow, stageThreadClose } from '../../../src/utils/diplomacy/active-turn-state.js';
 import { appendTranscriptMessageRow } from '../../../src/utils/diplomacy/transcript.js';
 import { sendMessageToolName } from '../../../src/utils/diplomacy/send-message-tool-name.js';
 import { chatThreadStore } from '../../../src/web/chat/store.js';
@@ -108,19 +108,25 @@ function registerThread(): EnvoyThread {
   return thread;
 }
 
-/** Make `append-message` echo the canonical committed row the real store returns. */
-function echoAppends(startID: number): void {
+/**
+ * Make `append-message` echo the canonical committed row the real store returns. `failOn` makes the
+ * store refuse that one message type, so a test can fail a single append mid-turn.
+ */
+function echoAppends(startID: number, failOn?: string): void {
   let nextID = startID;
-  mcp.onTool('append-message', (args) => structuredResult({
-    ID: nextID++,
-    Player1ID: 1, Player2ID: 3, Player1Role: 'the leader', Player2Role: 'diplomat',
-    SpeakerID: args.SpeakerID,
-    MessageType: args.MessageType,
-    Content: args.Content,
-    Payload: args.Payload ?? {},
-    Turn: 5,
-    CreatedAt: 0,
-  }));
+  mcp.onTool('append-message', (args) => {
+    if (args.MessageType === failOn) throw new Error(`store refused the ${failOn}`);
+    return structuredResult({
+      ID: nextID++,
+      Player1ID: 1, Player2ID: 3, Player1Role: 'the leader', Player2Role: 'diplomat',
+      SpeakerID: args.SpeakerID,
+      MessageType: args.MessageType,
+      Content: args.Content,
+      Payload: args.Payload ?? {},
+      Turn: 5,
+      CreatedAt: 0,
+    });
+  });
 }
 
 /** Archive a spoken tool result, then leave the raw model output for terminal cleanup. */
@@ -146,7 +152,9 @@ const outcomeRow = (ID: number, MessageType: string) => ({
 beforeEach(() => {
   mcp = installMockMcpClient();
   vi.restoreAllMocks();
-  vi.spyOn(agentRegistry, 'get').mockReturnValue({ name: 'diplomat', description: 'Diplomat', tags: [] } as never);
+  // `speaksOnlyViaSendMessage` is the archival contract the diplomacy gate admits a voice on; a stub without
+  // it describes a voice the chat factory would have refused.
+  vi.spyOn(agentRegistry, 'get').mockReturnValue({ name: 'diplomat', description: 'Diplomat', tags: [], speaksOnlyViaSendMessage: true } as never);
   mcp.respondWith('read-transcript', structuredResult({ messages: [] }));
   mcp.respondWith('inspect-deal', structuredResult({ items: [], promises: [], tradableRange: {} }));
   echoAppends(100);
@@ -390,23 +398,7 @@ describe('runChatTurn row contract', () => {
   });
 
   it('completes a committed reply when the staged close write fails', async () => {
-    let nextID = 100;
-    mcp.onTool('append-message', (args) => {
-      if (args.MessageType === 'close') throw new Error('store refused the close');
-      return structuredResult({
-        ID: nextID++,
-        Player1ID: 1,
-        Player2ID: 3,
-        Player1Role: 'the leader',
-        Player2Role: 'diplomat',
-        SpeakerID: args.SpeakerID,
-        MessageType: args.MessageType,
-        Content: args.Content,
-        Payload: args.Payload ?? {},
-        Turn: 5,
-        CreatedAt: 0,
-      });
-    });
+    echoAppends(100, 'close');
     const thread = registerThread();
     vi.spyOn(contextRegistry, 'get').mockReturnValue(mockContext(async (_n, input) => {
       await speak(input, 'My reply was delivered.');

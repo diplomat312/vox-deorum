@@ -19,7 +19,7 @@ import type { VoxContext } from "../infra/vox-context.js";
 import type { StrategistParameters } from "../strategist/strategy-parameters.js";
 import type { EnvoyThread } from "../types/index.js";
 import { createSimpleTool } from "../utils/tools/simple-tools.js";
-import { stageThreadClose } from "../utils/diplomacy/row-observer.js";
+import { stageThreadClose } from "../utils/diplomacy/active-turn-state.js";
 
 /**
  * Creates the diplomat's `close-conversation` tool. Reads the active conversation from

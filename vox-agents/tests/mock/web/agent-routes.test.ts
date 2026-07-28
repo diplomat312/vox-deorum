@@ -50,6 +50,15 @@ function makeApp() {
 
 const app = makeApp();
 
+/**
+ * A registry entry for a voice the diplomacy gate accepts: `speaksOnlyViaSendMessage` is the archival
+ * contract the chat factory admits on, so every stub that opens a diplomacy (or live) chat needs it.
+ */
+const agentStub = (name: string) => ({ name, description: name, tags: [], speaksOnlyViaSendMessage: true } as any);
+const diplomatAgent = agentStub('diplomat');
+/** Point `agentRegistry.get` at that voice for the rest of the test. */
+const mockDiplomatAgent = () => vi.spyOn(agentRegistry, 'get').mockReturnValue(diplomatAgent);
+
 /** Append a spoken diplomat row while retaining the raw tool-call shape for cleanup. */
 async function recordDiplomatReply(input: any, text: string): Promise<void> {
   const row = await appendTranscriptMessageRow(input, input.agent, text);
@@ -300,12 +309,7 @@ describe('agent routes', () => {
           baseParameters: { turn: -1, gameID: 'g', playerID: 3, gameStates: { 5: { options: {}, players: {} } } },
         }) as any,
       );
-      vi.spyOn(agentRegistry, 'get').mockReturnValue({
-        name: 'diplomat',
-        description: 'Diplomat',
-        tags: [],
-        suppressFreeText: true,
-      } as any);
+      mockDiplomatAgent();
 
       const opened = await request(app).post('/api/agents/chat').send({
         agentName: 'diplomat',
@@ -339,12 +343,7 @@ describe('agent routes', () => {
     /** Open an ordinary live chat over the given mock context and return its thread id. */
     async function openLiveChat(ctx: ReturnType<typeof makeMockContext>) {
       vi.spyOn(contextRegistry, 'get').mockReturnValue(ctx as any);
-      vi.spyOn(agentRegistry, 'get').mockReturnValue({
-        name: 'diplomat',
-        description: 'Diplomat',
-        tags: [],
-        suppressFreeText: true,
-      } as any);
+      mockDiplomatAgent();
       const opened = await request(app).post('/api/agents/chat').send({ agentName: 'diplomat', contextId: 'g-player-3' });
       expect(opened.status).toBe(200);
       return opened.body.id as string;
@@ -422,12 +421,7 @@ describe('agent routes', () => {
         execute: opts.execute ?? vi.fn(async (_n: string, input: any) => input),
       });
       vi.spyOn(contextRegistry, 'get').mockReturnValue(ctx as any);
-      vi.spyOn(agentRegistry, 'get').mockReturnValue({
-        name: 'diplomat',
-        description: 'Diplomat',
-        tags: [],
-        suppressFreeText: true,
-      } as any);
+      mockDiplomatAgent();
       const opened = await request(app).post('/api/agents/chat').send({
         mode: 'diplomacy', contextId: 'g-player-3', callerPlayerID: 1, targetPlayerID: 3,
       });
@@ -1022,12 +1016,7 @@ describe('agent routes', () => {
           baseParameters: { turn: 5, gameID: 'g', playerID: 3, gameStates: { 5: { options: {}, players: {} } } },
         }) as any,
       );
-      vi.spyOn(agentRegistry, 'get').mockReturnValue({
-        name: 'diplomat',
-        description: 'Diplomat',
-        tags: [],
-        suppressFreeText: true,
-      } as any);
+      mockDiplomatAgent();
     }
 
     it('stores the dialog-sent target and initiator identities on a diplomacy thread', async () => {
@@ -1089,9 +1078,7 @@ describe('agent routes', () => {
       ]);
       vi.spyOn(contextRegistry, 'get').mockImplementation((id: string) => contexts.get(id) as any);
       vi.spyOn(agentRegistry, 'get').mockImplementation((name: string) => (
-        name === 'diplomat' || name === 'spokesperson'
-          ? { name, description: name, tags: [], suppressFreeText: true } as any
-          : undefined
+        name === 'diplomat' || name === 'spokesperson' ? agentStub(name) : undefined
       ));
 
       const first = await request(app).post('/api/agents/chat').send({
@@ -1357,12 +1344,7 @@ describe('agent routes', () => {
         execute,
       });
       vi.spyOn(contextRegistry, 'get').mockReturnValue(ctx as any);
-      vi.spyOn(agentRegistry, 'get').mockReturnValue({
-        name: 'diplomat',
-        description: 'Diplomat',
-        tags: [],
-        suppressFreeText: true,
-      } as any);
+      mockDiplomatAgent();
 
       const response = await request(app).post('/api/agents/chat').send({
         mode: 'diplomacy',
@@ -1461,12 +1443,7 @@ describe('agent routes', () => {
         },
       });
       vi.spyOn(contextRegistry, 'get').mockReturnValue(ctx as any);
-      vi.spyOn(agentRegistry, 'get').mockReturnValue({
-        name: 'diplomat',
-        description: 'Diplomat',
-        tags: [],
-        suppressFreeText: true,
-      } as any);
+      mockDiplomatAgent();
       const opened = await request(app).post('/api/agents/chat').send({
         mode: 'diplomacy', contextId: 'g-player-3', callerPlayerID: 1, targetPlayerID: 3,
       });
@@ -1623,12 +1600,7 @@ describe('agent routes', () => {
         }),
       });
       vi.spyOn(contextRegistry, 'get').mockReturnValue(ctx as any);
-      vi.spyOn(agentRegistry, 'get').mockReturnValue({
-        name: 'diplomat',
-        description: 'Diplomat',
-        tags: [],
-        suppressFreeText: true,
-      } as any);
+      mockDiplomatAgent();
       const opened = await request(app).post('/api/agents/chat').send({
         mode: 'diplomacy', contextId: 'g-player-3', callerPlayerID: 1, targetPlayerID: 3,
       });

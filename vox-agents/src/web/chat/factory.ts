@@ -138,8 +138,8 @@ export function createChatThreadFactory(
     }
     // The archival invariant every diplomacy turn downstream relies on: a voice that can answer as
     // raw free text would produce replies the transcript never sees, so it is refused here rather
-    // than handled as a per-turn special case (see VoxAgent.suppressFreeText).
-    if (!voiceAgent.suppressFreeText) {
+    // than handled as a per-turn special case (see VoxAgent.speaksOnlyViaSendMessage).
+    if (!voiceAgent.speaksOnlyViaSendMessage) {
       throw new ChatOpenError(
         400,
         `Agent ${voice} cannot voice diplomacy because it does not require the send-message tool.`,

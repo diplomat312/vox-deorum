@@ -13,7 +13,7 @@ vi.mock('../../../src/utils/models/mcp-client.js', async () => {
 });
 
 import { ProposalConflictError, enactAgentDeal, readActiveProposal } from '../../../src/utils/diplomacy/deal.js';
-import { observeThreadRows } from '../../../src/utils/diplomacy/row-observer.js';
+import { beginTurnState } from '../../../src/utils/diplomacy/active-turn-state.js';
 import type { EnvoyThread } from '../../../src/types/index.js';
 
 let mcp: ReturnType<typeof installMockMcpClient>;
@@ -88,11 +88,11 @@ describe('enactAgentDeal', () => {
       EnactedRow: outcomeRow(9, 'deal-enacted'),
     }));
     const t = thread();
-    const observer = observeThreadRows(t);
+    const turnState = beginTurnState(t);
 
     await enactAgentDeal(7, { accepterID: 1, thread: t });
 
-    expect(observer.close().map((row) => row.ID)).toEqual([8, 9]);
+    expect(turnState.freeze().map((row) => row.ID)).toEqual([8, 9]);
   });
 
   it('reports a prior enactment as idempotent (no accept id) and records nothing', async () => {
@@ -103,7 +103,7 @@ describe('enactAgentDeal', () => {
       EnactedRow: outcomeRow(9, 'deal-enacted'),
     }));
     const t = thread();
-    const observer = observeThreadRows(t);
+    const turnState = beginTurnState(t);
 
     const out = await enactAgentDeal(7, { thread: t });
 
@@ -113,7 +113,7 @@ describe('enactAgentDeal', () => {
     expect(out.enactedRow).toEqual(outcomeRow(9, 'deal-enacted'));
     // …but it is not part of what this call created.
     expect(out.rows).toEqual([]);
-    expect(observer.close()).toEqual([]);
+    expect(turnState.freeze()).toEqual([]);
   });
 
   it.each([

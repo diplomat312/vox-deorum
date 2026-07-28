@@ -96,7 +96,7 @@ describe('Diplomat.stopCheck', () => {
     const spoken = step('We welcome further discussion.');
 
     // Tools are forced (toolChoice="required"), so raw free text is never an authoritative reply
-    // (see LiveEnvoy.suppressFreeText): neither an empty line nor a spoken one ends the turn.
+    // (see LiveEnvoy.speaksOnlyViaSendMessage): neither an empty line nor a spoken one ends the turn.
     expect(diplomat.stopCheck(parameters, thread(), whitespace, [whitespace], context)).toBe(false);
     expect(diplomat.stopCheck(parameters, thread(), spoken, [spoken], context)).toBe(false);
   });

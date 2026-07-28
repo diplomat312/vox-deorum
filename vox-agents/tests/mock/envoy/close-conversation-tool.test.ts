@@ -13,7 +13,7 @@ vi.mock('../../../src/utils/models/mcp-client.js', async () => {
 });
 
 import { createCloseConversationTool } from '../../../src/envoy/close-conversation-tool.js';
-import { observeThreadRows } from '../../../src/utils/diplomacy/row-observer.js';
+import { beginTurnState } from '../../../src/utils/diplomacy/active-turn-state.js';
 
 let mcp: ReturnType<typeof installMockMcpClient>;
 beforeEach(() => {
@@ -60,7 +60,7 @@ describe('close-conversation tool', () => {
 
   it('stages one close idempotently under an active turn without writing early', async () => {
     const input = thread();
-    const observer = observeThreadRows(input);
+    const turnState = beginTurnState(input);
 
     expect(await close(input, 'First farewell.'))
       .toBe('Conversation will close after this reply is recorded.');
@@ -69,12 +69,12 @@ describe('close-conversation tool', () => {
 
     expect(mcp.calls('read-transcript')).toHaveLength(0);
     expect(mcp.calls('append-message')).toHaveLength(0);
-    expect(observer.takeStagedClose()).toEqual({
+    expect(turnState.takeStagedClose()).toEqual({
       speakerID: 3,
       content: 'First farewell.',
     });
-    expect(observer.takeStagedClose()).toBeUndefined();
-    expect(observer.close()).toEqual([]);
+    expect(turnState.takeStagedClose()).toBeUndefined();
+    expect(turnState.freeze()).toEqual([]);
   });
 
   // Throwing (rather than returning the refusal as ordinary output) is what keeps the errored call
