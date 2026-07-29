@@ -16,8 +16,8 @@ import { createLogger } from '../../logger.js';
 import { executionTimeoutDefault } from '../../retry.js';
 import { processManager } from '../../../infra/process-manager.js';
 
-/** The published rc.11 proxy contract accepted by this integration. */
-export const codexProxyVersion = '0.1.0-rc.11';
+/** The published proxy contract accepted by this integration. */
+export const codexProxyVersion = '0.1.0-rc.12';
 
 /** The proxy request deadline, aligned with the shared model execution budget. */
 export const codexProxyRequestTimeoutDefault = executionTimeoutDefault;

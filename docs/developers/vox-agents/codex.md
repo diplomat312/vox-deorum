@@ -1,8 +1,8 @@
 # Updating the Codex proxy
 
-This guide is for developers updating the managed `codex-openai-proxy` release used by vox-agents. Vox Deorum launches an exact version through `npx` on the first Codex request. The proxy is not a workspace dependency, so an update changes the source pin and its version-specific tests and documentation without running `npm install`.
+This guide is for developers updating the managed `codex-openai-proxy` release used by vox-agents. Vox Deorum launches an exact version through `npx` on the first Codex request. The proxy is not a workspace dependency.
 
-The current pin is `codex-openai-proxy@0.1.0-rc.11`, which bundles `@openai/codex@0.145.0`.
+The current pin is `codex-openai-proxy@0.1.0-rc.12`, which bundles `@openai/codex@0.145.0`.
 
 ## Check the release
 
@@ -13,7 +13,7 @@ npm view codex-openai-proxy dist-tags time --json
 npm view codex-openai-proxy@<version> version dependencies --json
 ```
 
-Do not assume the `latest` tag identifies the newest prerelease. Check tags such as `next`, then query the exact candidate to confirm its bundled `@openai/codex` version.
+Do not assume the `latest` tag identifies the newest prerelease. Check tags such as `next`. The update script queries the exact candidate and reads its bundled `@openai/codex` version from the npm registry.
 
 Review the candidate's release notes and command help for changes to:
 
@@ -26,11 +26,15 @@ These are integration contracts. A compatible dependency update needs only the v
 
 ## Update the repository
 
-1. Change `codexProxyVersion` in `vox-agents/src/utils/models/providers/codex-proxy.ts`.
-2. Update the exact default-command assertion in `vox-agents/tests/mock/utils/providers/codex-proxy.test.ts`.
-3. If the activity contract changed, update `codex.ts`, `codex-response.ts`, and their tests under `vox-agents/tests/mock/utils/providers/`.
-4. Update the pinned proxy and bundled Codex CLI versions in the player configuration and troubleshooting guides.
-5. Search for the old release to catch remaining operational references:
+Run the updater from the repository root with a full version or an rc shorthand:
+
+```bash
+npm run update:codex-proxy -- rc.12
+```
+
+The script verifies the target package with npm, validates each operational reference, and updates the source pin, exact-command test, developer guide, and player troubleshooting command. It does not install the proxy or change the lockfile. If a write is interrupted, run the same command again to repair any remaining references.
+
+If the activity contract changed, update `codex.ts`, `codex-response.ts`, and their tests under `vox-agents/tests/mock/utils/providers/`. Search for version-specific descriptions that need a manual contract update:
 
 ```bash
 rg "codex-openai-proxy@|Codex rc\.|Proxy rc\.|proxy.*rc\." vox-agents docs
