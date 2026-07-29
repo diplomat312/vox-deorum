@@ -52,7 +52,7 @@ export function requiredToolChoiceInstruction(
 
   // "one or more", never "a tool call": agent prompts encourage batching several calls in one reply,
   // and this restatement must not read as a cap. One step is one reply, so it is addressed as such.
-  const opening = 'IMPORTANT: You must issue one or more tool calls to collect information or make actions. Plain text response goes nowhere.';
+  const opening = 'IMPORTANT: You must issue (multiple) tool calls to collect information or make actions. Plain text response goes nowhere.';
 
   const completionList = formatToolChoiceList(completionNames);
   if (!completionList) {
