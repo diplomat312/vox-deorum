@@ -242,7 +242,7 @@ describe('CodexProxyManager startup', () => {
     expect(command).toBe('C:\\Program Files\\nodejs\\node.exe');
     expect(args.slice(0, 4)).toEqual([
       'C:\\Program Files\\nodejs\\node_modules\\npm\\bin\\npx-cli.js',
-      '--yes', `codex-openai-proxy@0.1.0-rc.9`, 'serve',
+      '--yes', `codex-openai-proxy@0.1.0-rc.11`, 'serve',
     ]);
   });
 
