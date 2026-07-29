@@ -11,7 +11,7 @@ import { VoxAgent } from '../infra/vox-agent.js';
 import type { VoxContext } from '../infra/vox-context.js';
 import type { Model } from '../types/index.js';
 import { formatModelString } from './utils/model-resolver.js';
-import type { OracleParameters, OracleInput, ReplayResult, ReplayDecision } from './types.js';
+import type { OracleConfig, OracleParameters, OracleInput, ReplayResult, ReplayDecision } from './types.js';
 
 /**
  * Oracle agent that replays prompts through an LLM for counterfactual analysis.
@@ -21,10 +21,21 @@ export class OracleAgent extends VoxAgent<OracleParameters, OracleInput, ReplayR
   readonly name = 'oracle';
   readonly description = 'Replays past agent turns with modified prompts for counterfactual analysis.';
 
-  /** Let the LLM decide whether to call tools */
+  /** Let the LLM decide whether to call tools. Experiments override via {@link configure}. */
   public override toolChoice = 'auto';
   public override completionTools = ['set-strategy', 'set-flavors', 'keep-status-quo'];
   public override maxSteps = 5;
+
+  /**
+   * Apply per-experiment overrides from {@link OracleConfig}, once per replay run before any task
+   * starts. VoxContext reads `toolChoice` and `completionTools` as plain fields off the registered
+   * agent, and one replay process runs one experiment, so a run-scoped assignment is the whole
+   * configuration surface. Omitted fields keep the defaults declared above.
+   */
+  public configure(overrides: Pick<OracleConfig, 'toolChoice' | 'completionTools'>): void {
+    if (overrides.toolChoice !== undefined) this.toolChoice = overrides.toolChoice;
+    if (overrides.completionTools !== undefined) this.completionTools = overrides.completionTools;
+  }
 
   /**
    * Disable the completionTools-derived nudge: Oracle replays the originally recorded prompt
@@ -72,13 +83,7 @@ export class OracleAgent extends VoxAgent<OracleParameters, OracleInput, ReplayR
     _context: VoxContext<OracleParameters>
   ): boolean {
     parameters.capturedSteps.push(lastStep);
-
-    if (!parameters.agentType || parameters.agentType?.includes('strategist')) {
-      return super.stopCheck(parameters, _input, lastStep, allSteps, _context);
-    }
-
-    // Default: stop after one step
-    return true;
+    return super.stopCheck(parameters, _input, lastStep, allSteps, _context);
   }
 
   /** Build the ReplayResult from captured steps */

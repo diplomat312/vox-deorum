@@ -32,11 +32,13 @@ Turn numbers alone are unreliable, because botched and re-run turns reuse them. 
 
 ## Experiments
 
-An experiment is an ES module exporting an `OracleConfig`. See `src/oracle/types.ts` for the exact shape and `vox-agents/experiments/` for examples. Beyond the required CSV path and experiment name, the interesting knobs are callbacks:
+An experiment is an ES module exporting an `OracleConfig`. See `src/oracle/types.ts` for the exact shape and `vox-agents/experiments/` for examples. Beyond the required CSV path and experiment name, the main controls are:
 
 - **`modifyPrompt`** is the heart of the experiment. It receives the original system prompts, messages, active tools, model, and CSV row, and returns whichever of those it wants to override — rewrite one sentence of the system prompt, drop a briefing, hide a tool. Omitted fields keep their originals. It also carries the original turn's recorded `framing` (see *Tool framing* below).
 - **`modelOverride`** redirects the replay to a different model, or to an *array* of models. With an array, each row is replayed once per entry for side-by-side comparison. Duplicating a model in the array repeats the sample, with results distinguished by a repetition index. Its third argument exposes the original turn's `{ framing }`, so an experiment can return a model with `options.framing` set to reproduce the source framing (see *Tool framing*).
 - **`rewriteToolSchemas`** rewrites the tool descriptions and schemas the model sees, useful for terminology experiments.
+- **`toolChoice`** controls whether the replay model may choose whether to call a tool (`auto`, the default), must call at least one tool (`required`), or cannot call tools (`none`). Anthropic and Codex providers do not accept `required` directly, so Oracle sends `auto` at the provider boundary and adds a system instruction that preserves the requirement. This deliberately differs from a verbatim replay.
+- **`completionTools`** names the tools that complete a strategist replay, identifies which tool decisions carry an extracted rationale, and tells the `required` fallback instruction which calls finish the turn. It defaults to `set-strategy`, `set-flavors`, and `keep-status-quo`.
 - **`filter`** narrows which CSV rows run.
 - **`extractColumns`** pulls experiment-specific values out of each replay into extra CSV columns.
 

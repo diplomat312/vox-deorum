@@ -110,6 +110,19 @@ export interface OracleConfig {
   targetAgent?: string;
   /** The type of agent being replayed (e.g. 'strategist', 'spokesperson'). Determines stop behavior. */
   agentType?: string;
+  /**
+   * Wire-level tool choice for the replay ('auto' | 'required' | 'none'). Default: 'auto', which
+   * replays the recorded turn verbatim. 'required' forces a tool call; on providers that reject a
+   * wire-level required choice (Anthropic, Codex) it is mapped to auto and restated as a system
+   * instruction naming `completionTools` — a deliberate divergence from verbatim replay.
+   */
+  toolChoice?: 'auto' | 'required' | 'none';
+  /**
+   * Tool names whose successful call ends the replay turn. Default: the strategist decision tools
+   * ['set-strategy', 'set-flavors', 'keep-status-quo']. Consumed by the required-tool-choice
+   * instruction, by stopCheck's completion-tools mode, and by Rationale extraction in getOutput.
+   */
+  completionTools?: string[];
   /** Max parallel row executions. Default: 5 */
   concurrency?: number;
   /** Read existing per-task replay trail JSONs as cache. Default: true */

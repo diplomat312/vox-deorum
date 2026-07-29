@@ -14,7 +14,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import Papa from 'papaparse';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { OracleConfig, RetrievedRow } from '../../../src/oracle/types.js';
 
 const mocks = vi.hoisted(() => {
@@ -97,6 +97,8 @@ vi.mock('../../../src/instrumentation.js', () => ({
 }));
 
 import { runReplay } from '../../../src/oracle/replayer.js';
+import { agentRegistry } from '../../../src/infra/agent-registry.js';
+import type { OracleAgent } from '../../../src/oracle/oracle-agent.js';
 
 const tempDirs: string[] = [];
 
@@ -642,6 +644,62 @@ describe('oracle replayer (non-cache paths)', () => {
       // The completed task's trail still landed, so the next run can reuse it as cache.
       const trails = fs.readdirSync(path.join(outputDir, 'interrupt-csv')).filter(f => f.endsWith('.json'));
       expect(trails).toEqual(['game-1-p2-t3-m-a.json']);
+    });
+  });
+
+  describe('tool policy', () => {
+    // The registered agent is a process-wide singleton that runReplay configures in place, so each
+    // case restores the declared defaults rather than leaking a policy into the next test.
+    const agent = () => agentRegistry.get('oracle') as unknown as OracleAgent;
+    let defaults: { toolChoice: string; completionTools: string[] };
+
+    beforeEach(() => {
+      defaults = { toolChoice: agent().toolChoice, completionTools: agent().completionTools };
+    });
+
+    afterEach(() => {
+      agent().toolChoice = defaults.toolChoice;
+      agent().completionTools = defaults.completionTools;
+    });
+
+    it('keeps the declared defaults when the config sets no tool policy', async () => {
+      const outputDir = makeTempDir();
+      mockFreshExecution();
+
+      await runReplay(baseConfig(outputDir, 'policy-default', () => ({})), [retrieved()]);
+
+      expect(agent().toolChoice).toBe('auto');
+      expect(agent().completionTools).toEqual(['set-strategy', 'set-flavors', 'keep-status-quo']);
+    });
+
+    it('applies the config tool choice and completion tools to the registered agent', async () => {
+      const outputDir = makeTempDir();
+      mockFreshExecution();
+
+      await runReplay(
+        baseConfig(outputDir, 'policy-required', () => ({}), {
+          toolChoice: 'required',
+          completionTools: ['set-flavors', 'keep-status-quo'],
+        }),
+        [retrieved()]
+      );
+
+      expect(agent().toolChoice).toBe('required');
+      expect(agent().completionTools).toEqual(['set-flavors', 'keep-status-quo']);
+    });
+
+    it('overrides each setting independently', async () => {
+      const outputDir = makeTempDir();
+      mockFreshExecution();
+
+      await runReplay(
+        baseConfig(outputDir, 'policy-choice-only', () => ({}), { toolChoice: 'required' }),
+        [retrieved()]
+      );
+
+      expect(agent().toolChoice).toBe('required');
+      // completionTools was omitted, so the declared default survives.
+      expect(agent().completionTools).toEqual(['set-strategy', 'set-flavors', 'keep-status-quo']);
     });
   });
 });

@@ -10,7 +10,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 import pLimit from 'p-limit';
 import { VoxContext } from '../infra/vox-context.js';
+import { agentRegistry } from '../infra/agent-registry.js';
 import { processManager } from '../infra/process-manager.js';
+import { OracleAgent } from './oracle-agent.js';
 import type { ExecuteTokenOutput } from '../infra/vox-run.js';
 import { VoxSpanExporter } from '../utils/telemetry/vox-exporter.js';
 import { mcpClient } from '../utils/models/mcp-client.js';
@@ -138,6 +140,13 @@ export async function runReplay(config: OracleConfig, rows?: RetrievedRow[]): Pr
     }
     replaceToolsWithSchemaOnly(voxContext, config.rewriteToolSchemas);
     logger.info(`Registered ${Object.keys(voxContext.tools).length} schema-only tools`);
+
+    // Apply this experiment's tool policy before any task runs: VoxContext reads both settings as
+    // plain fields off the registered agent, and one replay process runs one experiment.
+    const oracleAgent = agentRegistry.get<OracleParameters>('oracle') as OracleAgent | undefined;
+    if (!oracleAgent) throw new Error('Oracle agent is not registered');
+    oracleAgent.configure(config);
+    logger.info(`Tool policy: choice=${oracleAgent.toolChoice}, completion tools=${oracleAgent.completionTools.join(', ')}`);
 
     await VoxSpanExporter.getInstance().createContext(config.experimentName, 'oracle');
 
