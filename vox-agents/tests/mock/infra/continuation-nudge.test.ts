@@ -4,8 +4,7 @@
  * The base `VoxAgent.continuationNudge` derives a default finalize-reminder from an agent's
  * `completionTools`, intersected with the active tools VoxContext resolves after prepareStep. Any
  * agent that declares completion tools is nudged only toward the ones available on the current step.
- * Oracle overrides the hook to `undefined` so a replayed turn is never perturbed by an unrecorded
- * message.
+ * Oracle inherits this behavior so replay continuations receive the same finalize reminder.
  *
  * These cover the wording produced for a given tool set; that the resolved set is what reaches the
  * hook, and that the reminder is appended once, are covered in context/vox-context-execute-runs.
@@ -52,9 +51,12 @@ describe('continuationNudge', () => {
     );
   });
 
-  it('disables the nudge for Oracle so a replayed prompt is never perturbed', () => {
+  it('derives the Oracle nudge from the completion tools active in the replay', () => {
     const oracle = agentRegistry.get('oracle') as any;
-    expect(oracle.continuationNudge({}, ['set-strategy', 'keep-status-quo'])).toBeUndefined();
+    expect(oracle.continuationNudge({}, ['set-strategy', 'get-briefing', 'keep-status-quo'])).toBe(
+      buildCompletionToolsNudge(['set-strategy', 'keep-status-quo'])
+    );
+    expect(oracle.continuationNudge({}, ['get-briefing'])).toBeUndefined();
   });
 
   it('nudges a live envoy toward its own completion tools in normal mode (diplomat)', () => {

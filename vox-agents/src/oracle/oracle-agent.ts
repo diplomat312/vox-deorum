@@ -37,15 +37,6 @@ export class OracleAgent extends VoxAgent<OracleParameters, OracleInput, ReplayR
     if (overrides.completionTools !== undefined) this.completionTools = overrides.completionTools;
   }
 
-  /**
-   * Disable the completionTools-derived nudge: Oracle replays the originally recorded prompt
-   * verbatim, so injecting an unrecorded reminder on a continuation step would diverge the
-   * replayed conversation from what the original agent saw and bias the counterfactual.
-   */
-  public override continuationNudge(): undefined {
-    return undefined;
-  }
-
   /** Return the pre-resolved model from parameters */
   public override getModel(parameters: OracleParameters, _input: OracleInput, _overrides: Record<string, Model | string>): Model {
     return parameters.resolvedModel;
