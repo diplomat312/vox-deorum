@@ -87,6 +87,7 @@ export interface CodexProxyDependencies {
   execPath?: string;
   fileExists?: (path: string) => boolean;
   probeTimeout?: <T>(operation: Promise<T>, timeoutMs: number, signal?: AbortSignal) => Promise<T>;
+  openLoginUrl?: (url: string, platform: NodeJS.Platform) => Promise<void>;
 }
 
 /** A classified proxy failure lets the existing outer retry layer distinguish terminal setup errors. */
@@ -200,6 +201,7 @@ export class CodexProxyManager {
   private childFailure: CodexProxyError | undefined;
   private lifecycleRegistered = false;
   private readonly stderrBuffers = new Map<CodexProxyChild, string>();
+  private readonly openedDeviceLogins = new Map<CodexProxyChild, string>();
   private readonly ownedChildren = new Set<CodexProxyChild>();
 
   /** Creates a manager with production defaults or controlled test doubles. */
@@ -220,6 +222,7 @@ export class CodexProxyManager {
       execPath: dependencies.execPath ?? process.execPath,
       fileExists: dependencies.fileExists ?? existsSync,
       probeTimeout: dependencies.probeTimeout ?? raceProbeTimeout,
+      openLoginUrl: dependencies.openLoginUrl ?? openLoginUrl,
     };
   }
 
@@ -409,21 +412,47 @@ export class CodexProxyManager {
   private logProxyStderr(child: CodexProxyChild, raw: string): void {
     const parts = `${this.stderrBuffers.get(child) ?? ''}${raw}`.split(/\r?\n/);
     this.stderrBuffers.set(child, parts.pop() ?? '');
-    for (const line of parts) this.logProxyStderrLine(line);
+    for (const line of parts) this.logProxyStderrLine(child, line);
   }
 
   /** Logs one complete stderr line after parsing structured records or redacting plain text. */
-  private logProxyStderrLine(line: string): void {
+  private logProxyStderrLine(child: CodexProxyChild, line: string): void {
     if (!line.trim()) return;
-    try { logProxyRecord(this.dependencies.logger, JSON.parse(line)); }
-    catch { this.dependencies.logger.info('Codex proxy:', redactProxyText(line)); }
+    let record: unknown;
+    try { record = JSON.parse(line); }
+    catch {
+      this.dependencies.logger.info('Codex proxy:', redactProxyText(line));
+      return;
+    }
+    this.openDeviceLogin(child, record);
+    logProxyRecord(this.dependencies.logger, record);
+  }
+
+  /** Opens each device-login prompt once while keeping proxy output on the redacted log path. */
+  private openDeviceLogin(child: CodexProxyChild, record: unknown): void {
+    if (this.stopped || child !== this.child || !isChildAlive(child)) return;
+    if (!isRecord(record) || record.event !== 'device_code_login_started') return;
+    const verificationUrl = record.verification_url;
+    const userCode = record.user_code;
+    if (typeof verificationUrl !== 'string' || typeof userCode !== 'string') return;
+    let parsedUrl: URL;
+    try { parsedUrl = new URL(verificationUrl); }
+    catch { return; }
+    if (parsedUrl.protocol !== 'https:') return;
+    const prompt = `${parsedUrl.href}\n${userCode}`;
+    if (this.openedDeviceLogins.get(child) === prompt) return;
+    this.openedDeviceLogins.set(child, prompt);
+    void this.dependencies.openLoginUrl(parsedUrl.href, this.dependencies.platform).catch((error) => {
+      this.dependencies.logger.warn(`Could not open Codex login in the default browser: ${errorMessage(error)}. Use the verification URL and code in the Codex proxy logs.`);
+    });
   }
 
   /** Flushes a final non-newline stderr fragment when an owned child ends. */
   private flushProxyStderr(child: CodexProxyChild): void {
     const residual = this.stderrBuffers.get(child);
     this.stderrBuffers.delete(child);
-    if (residual) this.logProxyStderrLine(residual);
+    if (residual) this.logProxyStderrLine(child, residual);
+    this.openedDeviceLogins.delete(child);
   }
 
   /** Clears only the state owned by the matching child generation. */
@@ -656,6 +685,18 @@ function redactProxyText(value: string): string {
     .replace(/(bearer\s+)[A-Za-z0-9._~-]+/gi, '$1[redacted]')
     .replace(/([?&](?:(?:access|refresh|id|device|user)_?)?(?:token|code)=)[^&#\s]+/gi, '$1[redacted]')
     .replace(/((?:(?:access|refresh|id|device|user)[ _-]?(?:token|code)|token|secret|password|authorization|api[ _-]?key)\s*[:=]\s*)[^\s,]+/gi, '$1[redacted]');
+}
+
+/** Opens an HTTPS login page through the platform handler without invoking a command shell. */
+async function openLoginUrl(url: string, platform: NodeJS.Platform): Promise<void> {
+  const command = platform === 'darwin' ? 'open' : platform === 'win32' ? 'rundll32.exe' : 'xdg-open';
+  const args = platform === 'win32' ? ['url.dll,FileProtocolHandler', url] : [url];
+  await new Promise<void>((resolve, reject) => {
+    execFile(command, args, { windowsHide: true }, (error) => {
+      if (error) reject(error);
+      else resolve();
+    });
+  });
 }
 
 /** Sends structured proxy stderr records to the matching Winston method without leaking credentials. */

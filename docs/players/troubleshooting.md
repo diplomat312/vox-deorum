@@ -46,7 +46,7 @@ See [Configuration](configuration.md) for where to get keys and how to choose a 
 
 Codex is downloaded and started only on its first request. Check the Vox Deorum logs for the specific failure:
 
-- For device login, open the logged verification URL and follow its instructions within the proxy's fixed five-minute login deadline. Restarting Vox Deorum reuses a completed Codex login.
+- Vox Deorum opens the ChatGPT device-login page in your browser. Enter the one-time code shown in the logs. If the browser does not appear, open the logged verification URL yourself. Finish login within the proxy's fixed five-minute deadline. Restarting Vox Deorum reuses a completed Codex login.
 - If the configured port is occupied, Vox Deorum starts the proxy on the next free port instead, scanning ten ports from `CODEX_PROXY_PORT` upward and logging each one it skips. It does not adopt an existing listener because the proxy health endpoints do not identify its version or capabilities. Only when every scanned port is occupied does startup fail, and then you need to stop one of those services or change `CODEX_PROXY_PORT`.
 - If Vox Deorum times out while login is still active, raise `CODEX_PROXY_STARTUP_TIMEOUT`, restart the request, and finish the proxy login within five minutes.
 

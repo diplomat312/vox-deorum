@@ -28,6 +28,7 @@
     "narrator": "npm run build && npm run narrator:dist --",
     "narrator:dist": "node --inspect --import ./dist/instrumentation.js --experimental-loader=@opentelemetry/instrumentation/hook.mjs dist/narrators/console.js",
     "type-check": "tsc --noEmit",
+    "lint": "eslint src --ext .ts",
     "docs": "typedoc"
   },
   "dependencies": {

@@ -39,6 +39,7 @@ function createManager(fetch: typeof globalThis.fetch, spawn = vi.fn(() => creat
     registerExit: () => undefined,
     makeDirectory: async () => undefined,
     logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() } as any,
+    openLoginUrl: async () => undefined,
     ...extra,
   });
 }
@@ -390,11 +391,13 @@ describe('CodexProxyManager startup', () => {
     await manager.ensureCodexProxy();
     child.stderr.emit('data', 'Open https://login.example/?device_code=DEVI');
     child.stderr.emit('data', 'CESECRET with Bearer abc.def.ghi\n');
+    child.stderr.emit('data', 'Open https://auth.openai.com/codex/device and enter code ABCD-1234.\n');
     const output = logger.info.mock.calls.flat().join(' ');
 
     expect(output).toContain('Open https://login.example/');
     expect(output).toContain('device_code=[redacted]');
     expect(output).toContain('Bearer [redacted]');
+    expect(output).toContain('enter code ABCD-1234');
     expect(output).not.toContain('DEVICESECRET');
     expect(output).not.toContain('abc.def.ghi');
   });
@@ -426,6 +429,36 @@ describe('CodexProxyManager startup', () => {
     expect(output).not.toContain('abc.def.ghi');
     expect(output).not.toContain('DEVICESECRET');
     expect(output).not.toContain('secret-value');
+  });
+
+  it('should open each new device-login prompt while keeping its code redacted in structured logs', async () => {
+    const child = createChild();
+    const openLoginUrl = vi.fn(async () => undefined);
+    const logger = { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() };
+    const manager = createManager(
+      vi.fn()
+        .mockRejectedValueOnce(new TypeError('connection refused'))
+        .mockResolvedValue(response(200, { status: 'ready' })),
+      vi.fn(() => child),
+      { logger, openLoginUrl },
+    );
+
+    await manager.ensureCodexProxy();
+    const prompt = `${JSON.stringify({
+      level: 'info',
+      event: 'device_code_login_started',
+      verification_url: 'https://auth.openai.com/codex/device',
+      user_code: 'ABCD-1234',
+    })}\n`;
+    child.stderr.emit('data', prompt);
+    child.stderr.emit('data', prompt);
+    child.exitCode = 1;
+    child.emit('exit', 1);
+    child.stderr.emit('data', prompt.replace('ABCD-1234', 'WXYZ-5678'));
+
+    expect(openLoginUrl).toHaveBeenCalledOnce();
+    expect(openLoginUrl).toHaveBeenCalledWith('https://auth.openai.com/codex/device', process.platform);
+    expect(JSON.stringify(logger.info.mock.calls)).not.toContain('ABCD-1234');
   });
 
   it('should treat proxy-root creation failure as terminal', async () => {
