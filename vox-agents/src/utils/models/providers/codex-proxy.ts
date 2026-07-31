@@ -43,6 +43,9 @@ export const codexProxyCommandDefault = `npx --yes codex-openai-proxy@${codexPro
 /** A probe cannot consume the entire startup budget while a loopback socket stays silent. */
 export const codexProxyProbeTimeoutDefault = 5_000;
 
+/** The consecutive ports scanned from the configured one before startup gives up. */
+export const codexProxyPortScanLimit = 10;
+
 /** The explicit lifecycle states exposed for focused tests and diagnostics. */
 export type CodexProxyState = 'stopped' | 'starting' | 'ready';
 
@@ -188,6 +191,7 @@ export function buildCodexProxyCommand(config: CodexProxyConfig): { command: str
 export class CodexProxyManager {
   private readonly dependencies: Required<CodexProxyDependencies>;
   private resolvedConfig: CodexProxyConfig | undefined;
+  private activePortValue: number | undefined;
   private stateValue: CodexProxyState = 'stopped';
   private child: CodexProxyChild | undefined;
   private starting: Promise<void> | undefined;
@@ -222,6 +226,11 @@ export class CodexProxyManager {
   /** Returns the current explicit lifecycle state. */
   get state(): CodexProxyState {
     return this.stateValue;
+  }
+
+  /** Returns the port the owned proxy actually serves, which a port scan may have moved. */
+  get activePort(): number {
+    return this.activePortValue ?? this.getConfig().port;
   }
 
   /** Ensures the shared proxy is authenticated, while allowing one caller to abandon only its wait. */
@@ -311,22 +320,39 @@ export class CodexProxyManager {
     if (generation === this.generation) this.clearState();
   }
 
-  /** Refuses an existing listener, then owns a newly spawned proxy until it is ready. */
+  /** Owns a newly spawned proxy on the first free scanned port until it is ready. */
   private async startGeneration(generation: number, config: CodexProxyConfig): Promise<void> {
     const deadline = this.dependencies.now() + config.startupTimeoutMs;
-    let health: Awaited<ReturnType<CodexProxyManager['probe']>>;
-    try {
-      health = await this.probe('/health', undefined, deadline, config);
-    } catch (error) {
-      if (error instanceof CodexProxyProbeTimeoutError) {
-        throw occupiedPortError(config.port, error);
+    const activeConfig = { ...config, port: await this.findFreePort(generation, config, deadline) };
+    this.activePortValue = activeConfig.port;
+    await this.spawnOwned(generation, activeConfig);
+    await this.waitForReady(generation, activeConfig, deadline);
+    this.installReady(generation);
+  }
+
+  /** Scans upward for a port without a listener, because an existing one cannot safely be adopted. */
+  private async findFreePort(generation: number, config: CodexProxyConfig, deadline: number): Promise<number> {
+    const lastPort = Math.min(config.port + codexProxyPortScanLimit - 1, 65_535);
+    for (let port = config.port; port <= lastPort; port += 1) {
+      if (this.stopped || generation !== this.generation) {
+        throw new CodexProxyError('Codex proxy startup was stopped while scanning for a free port.', true);
       }
+      if (!await this.isPortOccupied(port, config, deadline)) return port;
+      this.dependencies.logger.warn(port < lastPort
+        ? `Port ${port} is occupied by an existing listener. Trying port ${port + 1}.`
+        : `Port ${port} is occupied by an existing listener.`);
+    }
+    throw occupiedPortError(config.port, lastPort);
+  }
+
+  /** Reports whether a scanned port already answers, counting a silent socket as occupied. */
+  private async isPortOccupied(port: number, config: CodexProxyConfig, deadline: number): Promise<boolean> {
+    try {
+      return (await this.probe('/health', undefined, deadline, { ...config, port })) !== undefined;
+    } catch (error) {
+      if (error instanceof CodexProxyProbeTimeoutError) return true;
       throw error;
     }
-    if (health) throw occupiedPortError(config.port);
-    await this.spawnOwned(generation, config);
-    await this.waitForReady(generation, config, deadline);
-    this.installReady(generation);
   }
 
   /** Launches the pinned proxy command and captures its structured stderr diagnostics. */
@@ -577,13 +603,12 @@ function isReadyBody(body: unknown): boolean {
   return isRecord(body) && body.status === 'ready';
 }
 
-/** Explains why cannot safely use a listener it did not start itself. */
-function occupiedPortError(port: number, cause?: unknown): CodexProxyError {
-  return new CodexProxyError(
-    `Port ${port} is occupied by an existing listener. Stop the listener or change CODEX_PROXY_PORT.`,
-    false,
-    cause === undefined ? undefined : { cause },
-  );
+/** Explains why a scan that found only listeners it did not start cannot serve the proxy. */
+function occupiedPortError(firstPort: number, lastPort: number): CodexProxyError {
+  const scanned = firstPort === lastPort
+    ? `Port ${firstPort} is occupied by an existing listener`
+    : `Ports ${firstPort} through ${lastPort} are all occupied by existing listeners`;
+  return new CodexProxyError(`${scanned}. Stop a listener or change CODEX_PROXY_PORT.`, false);
 }
 
 /** Narrows an unknown JSON payload to a record. */
@@ -673,4 +698,9 @@ export const codexProxyManager = new CodexProxyManager();
 /** Awaits the module singleton for provider code that needs no manager-specific access. */
 export function ensureCodexProxy(signal?: AbortSignal): Promise<void> {
   return codexProxyManager.ensureCodexProxy(signal);
+}
+
+/** Returns the port the shared proxy serves, so requests follow a scan away from a busy port. */
+export function getActiveCodexProxyPort(): number {
+  return codexProxyManager.activePort;
 }

@@ -101,20 +101,65 @@ describe('CodexProxyManager startup', () => {
     expect(manager.state).toBe('ready');
   });
 
-  it('should refuse a responsive pre-existing listener without spawning', async () => {
+  it('should move past a responsive pre-existing listener onto the next free port', async () => {
     const spawn = vi.fn(() => createChild());
+    const logger = { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() };
     const fetch = vi.fn()
       .mockResolvedValueOnce(response(200, { status: 'ok', proxy_version: '0.2.0' }))
-      .mockResolvedValueOnce(response(200, { status: 'ready' }));
+      .mockRejectedValueOnce(new TypeError('connection refused'))
+      .mockResolvedValue(response(200, { status: 'ready' }));
+    const manager = createManager(fetch, spawn, { logger });
+
+    await manager.ensureCodexProxy();
+
+    expect(spawn).toHaveBeenCalledTimes(1);
+    expect(spawn.mock.calls[0][1]).toEqual(expect.arrayContaining(['--port', '8788']));
+    expect(manager.activePort).toBe(8788);
+    expect(manager.state).toBe('ready');
+    expect(String(fetch.mock.calls[0][0])).toBe('http://127.0.0.1:8787/health');
+    expect(fetch.mock.calls.slice(1).every(([url]) => String(url).startsWith('http://127.0.0.1:8788/'))).toBe(true);
+    expect(logger.warn).toHaveBeenCalledWith('Port 8787 is occupied by an existing listener. Trying port 8788.');
+  });
+
+  it('should never adopt an existing listener it did not start', async () => {
+    const spawn = vi.fn(() => createChild());
+    const fetch = vi.fn()
+      .mockResolvedValueOnce(response(200, { status: 'ready', proxy_version: '0.1.0-rc.15' }))
+      .mockRejectedValueOnce(new TypeError('connection refused'))
+      .mockResolvedValue(response(200, { status: 'ready' }));
     const manager = createManager(fetch, spawn);
 
-    await expect(manager.ensureCodexProxy()).rejects.toMatchObject<CodexProxyError>({
-      retryable: false,
-      message: 'Port 8787 is occupied by an existing listener. Stop the listener or change CODEX_PROXY_PORT.',
-    });
+    await manager.ensureCodexProxy();
 
-    expect(spawn).not.toHaveBeenCalled();
-    expect(manager.state).toBe('stopped');
+    expect(spawn).toHaveBeenCalledTimes(1);
+    expect(manager.activePort).toBe(8788);
+  });
+
+  it('should report the configured port as active before any startup', () => {
+    expect(createManager(vi.fn()).activePort).toBe(8787);
+  });
+
+  it('should re-scan from the configured port when a later generation restarts', async () => {
+    const first = createChild(81);
+    const second = createChild(82);
+    const spawn = vi.fn().mockReturnValueOnce(first).mockReturnValueOnce(second);
+    const fetch = vi.fn()
+      .mockResolvedValueOnce(response(200, { status: 'other-service' }))
+      .mockRejectedValueOnce(new TypeError('connection refused'))
+      .mockResolvedValueOnce(response(200, { status: 'ready' }))
+      .mockRejectedValueOnce(new TypeError('connection refused'))
+      .mockResolvedValue(response(200, { status: 'ready' }));
+    const manager = createManager(fetch, spawn);
+
+    await manager.ensureCodexProxy();
+    expect(manager.activePort).toBe(8788);
+    first.exitCode = 1;
+    first.emit('exit', 1);
+    await manager.ensureCodexProxy();
+
+    expect(spawn.mock.calls[1][1]).toEqual(expect.arrayContaining(['--port', '8787']));
+    expect(manager.activePort).toBe(8787);
+    expect(manager.state).toBe('ready');
   });
 
   it('should resolve injected configuration once across readiness probes', async () => {
@@ -139,14 +184,31 @@ describe('CodexProxyManager startup', () => {
     expect(fetch.mock.calls.every(([url]) => String(url).startsWith('http://127.0.0.1:8787/'))).toBe(true);
   });
 
-  it('should reject an occupied port without retrying', async () => {
-    const manager = createManager(vi.fn().mockResolvedValue(response(200, { status: 'different-service' })));
+  it('should reject an exhausted port scan without retrying', async () => {
+    const fetch = vi.fn(async () => response(200, { status: 'different-service' }));
+    const spawn = vi.fn(() => createChild());
+    const manager = createManager(fetch, spawn);
 
     await expect(manager.ensureCodexProxy()).rejects.toMatchObject<CodexProxyError>({
       retryable: false,
-      message: expect.stringContaining('Stop the listener or change CODEX_PROXY_PORT.'),
+      message: 'Ports 8787 through 8796 are all occupied by existing listeners. Stop a listener or change CODEX_PROXY_PORT.',
     });
+    expect(fetch).toHaveBeenCalledTimes(10);
+    expect(spawn).not.toHaveBeenCalled();
     expect(manager.state).toBe('stopped');
+  });
+
+  it('should scan a single candidate when the configured port ends the range', async () => {
+    const manager = createManager(
+      vi.fn(async () => response(200, { status: 'different-service' })),
+      vi.fn(() => createChild()),
+      { env: { CODEX_PROXY_PORT: '65535' } },
+    );
+
+    await expect(manager.ensureCodexProxy()).rejects.toMatchObject<CodexProxyError>({
+      retryable: false,
+      message: 'Port 65535 is occupied by an existing listener. Stop a listener or change CODEX_PROXY_PORT.',
+    });
   });
 
   it('should classify a synchronous missing command as terminal and leave no stale startup state', async () => {
@@ -279,18 +341,39 @@ describe('CodexProxyManager startup', () => {
     expect(spawn).not.toHaveBeenCalled();
   });
 
-  it('should reject a silent startup health probe as an occupied port', async () => {
+  it('should reject a scan of silent startup health probes as occupied ports', async () => {
+    const spawn = vi.fn();
     const manager = createManager(
       vi.fn(() => new Promise<Response>(() => undefined)) as any,
-      vi.fn(),
+      spawn,
       { probeTimeout: async () => { throw new CodexProxyProbeTimeoutError(); } },
     );
 
     await expect(manager.ensureCodexProxy()).rejects.toMatchObject<CodexProxyError>({
       isRetryable: false,
-      message: expect.stringContaining('Port 8787 is occupied'),
+      message: expect.stringContaining('Ports 8787 through 8796 are all occupied'),
     });
+    expect(spawn).not.toHaveBeenCalled();
     expect(manager.state).toBe('stopped');
+  });
+
+  it('should skip a silent listener and start on the next free port', async () => {
+    const spawn = vi.fn(() => createChild());
+    const probeTimeout = vi.fn(async (operation: Promise<unknown>) => operation)
+      .mockImplementationOnce(async () => { throw new CodexProxyProbeTimeoutError(); });
+    const manager = createManager(
+      vi.fn()
+        .mockReturnValueOnce(new Promise<Response>(() => undefined))
+        .mockRejectedValueOnce(new TypeError('connection refused'))
+        .mockResolvedValue(response(200, { status: 'ready' })) as any,
+      spawn,
+      { probeTimeout },
+    );
+
+    await manager.ensureCodexProxy();
+
+    expect(spawn.mock.calls[0][1]).toEqual(expect.arrayContaining(['--port', '8788']));
+    expect(manager.state).toBe('ready');
   });
 
   it('should redact buffered plain stderr secrets while preserving the device-login instruction', async () => {

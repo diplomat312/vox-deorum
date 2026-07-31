@@ -11,6 +11,7 @@ import type { Model } from '../../../types/index.js';
 import {
   codexProxyManager,
   ensureCodexProxy,
+  getActiveCodexProxyPort,
   getCodexExecutionTimeout,
   getCodexProxyApiBase,
   getCodexProxyConfig,
@@ -24,6 +25,9 @@ import type { ModelRuntimeIdentity } from './host-tools.js';
 
 /** Long-lived loopback dispatchers shared by Codex models with the same deadline. */
 const codexDispatchers = new Map<number, Agent>();
+
+/** The request target accepted by the fetch implementation the provider installs. */
+type ProxyRequestUrl = Parameters<typeof globalThis.fetch>[0];
 
 /** Returns a shared dispatcher whose ceilings match the configured outer attempt budget. */
 function getCodexDispatcher(config: CodexProxyConfig): Agent {
@@ -39,6 +43,19 @@ function getCodexDispatcher(config: CodexProxyConfig): Agent {
     codexDispatchers.set(timeout, dispatcher);
   }
   return dispatcher;
+}
+
+/**
+ * Follows the proxy when its startup scan moved it off the configured port. The
+ * base URL is fixed when the model is built, which is before the proxy starts.
+ */
+function resolveActiveProxyUrl(url: ProxyRequestUrl, configuredPort: number): ProxyRequestUrl {
+  const activePort = getActiveCodexProxyPort();
+  if (activePort === configuredPort) return url;
+  if (typeof url !== 'string' && !(url instanceof URL)) return url;
+  const rewritten = new URL(url);
+  rewritten.port = String(activePort);
+  return rewritten;
 }
 
 /**
@@ -61,7 +78,7 @@ export function buildCodexModel(config: Model, options?: RequiredToolChoiceOptio
     fetch: async (url, options) => {
       await ensureCodexProxy(options?.signal ?? undefined);
       try {
-        return await fetch(url, { ...options, dispatcher } as RequestInit);
+        return await fetch(resolveActiveProxyUrl(url, proxyConfig.port), { ...options, dispatcher } as RequestInit);
       } catch (error) {
         if (error instanceof TypeError) codexProxyManager.invalidateConnection();
         throw error;

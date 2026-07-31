@@ -9,6 +9,7 @@ import { z } from 'zod';
 
 const proxyMocks = vi.hoisted(() => ({
   ensureCodexProxy: vi.fn<() => Promise<void>>(),
+  getActiveCodexProxyPort: vi.fn<() => number>(),
   invalidateConnection: vi.fn(),
 }));
 
@@ -21,6 +22,7 @@ vi.mock('../../../../src/utils/models/providers/codex-proxy.js', async () => {
   const { join } = await import('node:path');
   return {
     ensureCodexProxy: proxyMocks.ensureCodexProxy,
+    getActiveCodexProxyPort: proxyMocks.getActiveCodexProxyPort,
     getCodexExecutionTimeout: () => 645_000,
     getCodexProxyApiBase: () => 'http://127.0.0.1:8787/v1',
     getCodexProxyConfig: () => ({
@@ -104,6 +106,7 @@ function capturedBodies(fetchMock: ReturnType<typeof vi.fn>): any[] {
 
 beforeEach(() => {
   proxyMocks.ensureCodexProxy.mockReset().mockResolvedValue(undefined);
+  proxyMocks.getActiveCodexProxyPort.mockReset().mockReturnValue(8787);
   proxyMocks.invalidateConnection.mockReset();
   loggerMocks.warn.mockReset();
 });
@@ -453,6 +456,20 @@ describe('Codex compatible adapter requests', () => {
     releaseStartup();
     await pending;
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('sends requests to the port a startup scan moved the proxy to', async () => {
+    proxyMocks.getActiveCodexProxyPort.mockReturnValue(8790);
+    const fetchMock = vi.fn().mockResolvedValue(completion({ role: 'assistant', content: 'Moved.' }, 'stop'));
+    vi.stubGlobal('fetch', fetchMock);
+    const model = buildCodexModel({ provider: 'codex', name: 'gpt-5.4-mini' });
+
+    await model.doGenerate({
+      prompt: [{ role: 'user', content: [{ type: 'text', text: 'Hello.' }] }],
+      providerOptions: buildCodexProviderOptions({ provider: 'codex', name: 'gpt-5.4-mini' }),
+    });
+
+    expect(String(fetchMock.mock.calls[0][0])).toBe('http://127.0.0.1:8790/v1/chat/completions');
   });
 
   it('invalidates proxy readiness after a connection TypeError', async () => {
