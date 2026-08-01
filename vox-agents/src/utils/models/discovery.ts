@@ -5,10 +5,8 @@
  */
 
 import type { DiscoveredModel, DiscoveryErrorKind } from '../../types/api.js';
-import type { LLMConfig } from '../../types/config.js';
-import { providerCredentials } from '../../types/constants.js';
-import { defaultConfig } from '../config/defaults.js';
 import { applyModelRules } from './rules.js';
+import { ensureCodexProxy, getActiveCodexProxyPort, getCodexProxyApiBase } from './providers/codex-proxy.js';
 
 /** The credentials supplied by the configuration UI, keyed by environment variable name. */
 export type DiscoveryCredentials = Record<string, string | undefined>;
@@ -26,12 +24,14 @@ export class DiscoveryError extends Error {
   }
 }
 
-/** Returns registered native-client model definitions in their configured registry order. */
-function staticProviderModels(provider: string): LLMConfig[] {
-  if ((providerCredentials[provider]?.required.length ?? 1) > 0) return [];
-  return Object.values(defaultConfig.llms).flatMap((definition) =>
-    typeof definition === 'object' && definition.provider === provider ? [definition] : [],
-  );
+/** Native-client providers whose model choices are fixed, not fetched. */
+const staticModelNames: Record<string, string[]> = {
+  'claude-code': ['sonnet', 'opus', 'haiku'],
+};
+
+/** Reports whether a provider serves a bundled list rather than a live catalog. */
+export function isStaticCatalogProvider(provider: string): boolean {
+  return provider in staticModelNames;
 }
 
 /** Gets a credential from the request first, then falls back to the process environment. */
@@ -47,11 +47,8 @@ function requireCredential(credentials: DiscoveryCredentials, key: string, provi
 }
 
 /** Builds a normalized discovered-model record with established and registry options. */
-function model(provider: string, name: string, configuredOptions?: LLMConfig['options']): DiscoveredModel {
-  const ruleOptions = applyModelRules(provider, name);
-  const recommendedOptions = ruleOptions === undefined && configuredOptions === undefined
-    ? undefined
-    : { ...ruleOptions, ...configuredOptions };
+function model(provider: string, name: string): DiscoveredModel {
+  const recommendedOptions = applyModelRules(provider, name);
   return {
     id: `${provider}/${name}`,
     name,
@@ -109,6 +106,17 @@ function openAiEntries(payload: unknown, provider: string): string[] {
   });
 }
 
+/** Discovers an OpenAI-compatible model catalog from its versioned API base. */
+async function openAiCompatibleModels(
+  provider: string,
+  apiBase: string,
+  init: RequestInit,
+  providerLabel: string,
+): Promise<DiscoveredModel[]> {
+  const payload = await fetchJson(`${apiBase.replace(/\/+$/, '')}/models`, init, providerLabel);
+  return openAiEntries(payload, providerLabel).map((name) => model(provider, name));
+}
+
 /** Returns a validated page from Anthropic's cursor-based models endpoint. */
 function anthropicPage(payload: unknown): { names: string[]; hasMore: boolean; lastId: string | null } {
   if (!isRecord(payload) || !Array.isArray(payload.data) || typeof payload.has_more !== 'boolean') {
@@ -149,10 +157,8 @@ async function anthropicModels(key: string): Promise<string[]> {
 
 /** Discovers model records for one supported provider without caching results. */
 export async function discoverModels(provider: string, credentials: DiscoveryCredentials = {}): Promise<DiscoveredModel[]> {
-  const staticModels = staticProviderModels(provider);
-  if (staticModels.length > 0) {
-    return staticModels.map(({ provider: staticProvider, name, options }) => model(staticProvider, name, options));
-  }
+  const staticNames = staticModelNames[provider];
+  if (staticNames) return staticNames.map((name) => model(provider, name));
 
   switch (provider) {
     case 'openai': {
@@ -194,8 +200,16 @@ export async function discoverModels(provider: string, credentials: DiscoveryCre
     case 'openai-compatible': {
       const url = requireCredential(credentials, 'OPENAI_COMPATIBLE_URL', 'OpenAI Compatible');
       const key = getCredential(credentials, 'OPENAI_COMPATIBLE_API_KEY');
-      const payload = await fetchJson(`${url.replace(/\/+$/, '')}/models`, { headers: key ? { Authorization: `Bearer ${key}` } : undefined }, 'OpenAI Compatible');
-      return openAiEntries(payload, 'OpenAI Compatible').map((name) => model(provider, name));
+      return openAiCompatibleModels(provider, url, { headers: key ? { Authorization: `Bearer ${key}` } : undefined }, 'OpenAI Compatible');
+    }
+    case 'codex': {
+      try {
+        await ensureCodexProxy();
+      } catch {
+        throw new DiscoveryError('provider', 502, 'Could not start the managed Codex proxy for model discovery.');
+      }
+      const apiBase = getCodexProxyApiBase(getActiveCodexProxyPort());
+      return openAiCompatibleModels(provider, apiBase, {}, 'Codex');
     }
     case 'aws':
       throw new DiscoveryError('unsupported', 400, 'AWS Bedrock model discovery is not supported.');

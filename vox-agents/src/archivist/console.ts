@@ -35,6 +35,7 @@ import { selectLandmarks } from './pipeline/selector.js';
 import { computeTargetTurns, type WorkerStats } from './pipeline/target-turns.js';
 import { startWebServer } from '../web/server.js';
 import { processManager } from '../infra/process-manager.js';
+import { ensureModelsResolved } from '../utils/models/resolution.js';
 
 const logger = createLogger('Archivist');
 
@@ -348,12 +349,7 @@ async function main() {
   const limit = values.limit ? parseInt(values.limit as string, 10) : Infinity;
   const models = (values.model as string)?.split(',').map(s => s.trim()).filter(Boolean) ?? [];
 
-  // Validate that all specified models exist in config
-  const invalidModels = models.filter(m => !config.llms[m]);
-  if (invalidModels.length > 0) {
-    const available = Object.keys(config.llms).filter(k => typeof config.llms[k] !== 'string').join(', ');
-    throw new Error(`Model(s) not found in config: ${invalidModels.join(', ')}. Available: ${available}`);
-  }
+  await ensureModelsResolved(models);
 
   const skipTelepathist = values['skip-telepathist'] as boolean;
   const skipEmbeddings = values['skip-embeddings'] as boolean;

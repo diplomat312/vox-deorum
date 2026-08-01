@@ -31,6 +31,7 @@ import {
 } from '../../utils/telemetry/identifier-parser.js';
 import { VoxSpanExporter } from '../../utils/telemetry/vox-exporter.js';
 import { createLogger } from '../../utils/logger.js';
+import { agentModelReference, ensureModelsResolved } from '../../utils/models/resolution.js';
 import {
   civIdentity,
   displayIdentity,
@@ -255,6 +256,7 @@ export function createChatThreadFactory(
       voicedIdentity = civIdentity(existingContext, voicedID);
     } else {
       try {
+        await ensureModelsResolved([agentModelReference(requestedAgentName)]);
         const telepathist = await dependencies.createTelepathistContext(source.databasePath, id);
         effectiveContextId = telepathist.contextId;
         gameID = telepathist.gameID;

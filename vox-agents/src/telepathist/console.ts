@@ -34,6 +34,7 @@ import path from 'node:path';
 import { VoxSpanExporter } from "../utils/telemetry/vox-exporter.js";
 import { startWebServer } from "../web/server.js";
 import { processManager } from "../infra/process-manager.js";
+import { agentModelReference, ensureModelsResolved } from '../utils/models/resolution.js';
 
 const logger = createLogger('Telepathist');
 
@@ -89,14 +90,15 @@ processManager.register('telemetry', async () => {
   await setTimeout(1000);
 });
 
-// Web UI
-await startWebServer();
-
 /**
  * Main entry point.
  * Bootstraps the telepathist agent against a telemetry database.
  */
 async function main() {
+  // Verify the selected agent's model before opening the web server or databases.
+  await ensureModelsResolved([agentModelReference(agentName)]);
+  await startWebServer();
+
   // Parse database identifier for game/player info
   const identifierInfo = parseDatabaseIdentifier(databasePath);
   logger.info(`Opening telemetry database: ${databasePath}`, {
@@ -174,4 +176,9 @@ async function main() {
   await processManager.shutdown('complete');
 }
 
-main();
+main().catch((error) => {
+  // Preflight now runs before the web server, so a bad model reference must report
+  // itself here rather than surfacing as an unhandled rejection with no dashboard.
+  logger.error('Telepathist failed to start:', error);
+  process.exit(1);
+});

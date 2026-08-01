@@ -12,6 +12,7 @@ import type { GameIdentifierInfo } from '../../utils/telemetry/identifier-parser
 import { VoxContext } from '../../infra/vox-context.js';
 import { prepareTurnSummaries } from '../../telepathist/preparation/turn-preparation.js';
 import { createTelepathistParameters, TelepathistParameters } from '../../telepathist/telepathist-parameters.js';
+import { ensureModelsResolved } from '../../utils/models/resolution.js';
 
 const logger = createLogger('TelepathistPrep');
 
@@ -56,6 +57,7 @@ export async function prepareTelepathist(
     // Minimal VoxContext — no registerTools() needed.
     // The summarizer agent only needs the agent registry (auto-initialized on import)
     // and model config from env vars. No MCP connection required.
+    if (modelOverride) await ensureModelsResolved([modelOverride]);
     const modelOverrides: Record<string, string> = modelOverride ? { summarizer: modelOverride } : {};
     context = new VoxContext(modelOverrides, `archivist-${gameId}-${playerId}`);
     // Transfer parameter ownership to the context: prepareTurnSummaries fans out per-turn roots

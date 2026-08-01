@@ -94,21 +94,19 @@ describe('claude-code provider', () => {
     mocks.queryMessages = undefined;
   });
 
-  describe('getModelConfig registration', () => {
-    it('should resolve claude-code/sonnet to the registered default entry', () => {
-      // The registered entry carries empty options: prompt-mode tool calling is forced
-      // unconditionally in getModel's 'claude-code' case (claude-code has no native tool calling),
-      // so it is NOT stored on the config (see config/defaults.ts).
+  describe('getModelConfig synthesis', () => {
+    it('should synthesize claude-code/sonnet with its concurrency rule', () => {
       expect(getModelConfig('claude-code/sonnet')).toMatchObject({
         provider: 'claude-code',
         name: 'sonnet',
+        options: { concurrencyLimit: 1 },
       });
       expect(getModelConfig('claude-code/sonnet').options?.toolMiddleware).toBeUndefined();
     });
 
-    it('should register opus and haiku variants', () => {
-      expect(getModelConfig('claude-code/opus')).toMatchObject({ provider: 'claude-code', name: 'opus' });
-      expect(getModelConfig('claude-code/haiku')).toMatchObject({ provider: 'claude-code', name: 'haiku' });
+    it('should synthesize opus and haiku variants', () => {
+      expect(getModelConfig('claude-code/opus')).toMatchObject({ provider: 'claude-code', name: 'opus', options: { concurrencyLimit: 1 } });
+      expect(getModelConfig('claude-code/haiku')).toMatchObject({ provider: 'claude-code', name: 'haiku', options: { concurrencyLimit: 1 } });
     });
   });
 

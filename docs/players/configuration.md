@@ -41,7 +41,7 @@ The Settings page is also the advanced editor for credentials, providers, and mo
 
 ## Choosing a model
 
-After connecting, the Setup wizard lists models. API-backed providers and local servers report their current lists, while Codex and Claude Code use bundled choices. The choice always comes down to the same three-way trade-off:
+After connecting, the Setup wizard lists models. API-backed providers and local servers report their current lists, Codex reads its current list through the authenticated managed proxy, and Claude Code uses bundled choices. The choice always comes down to the same three-way trade-off:
 
 | Model type | Strengths | Costs |
 | --- | --- | --- |

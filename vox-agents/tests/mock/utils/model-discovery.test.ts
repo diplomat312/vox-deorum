@@ -1,7 +1,17 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { DiscoveryError, discoverModels } from '../../../src/utils/models/discovery.js';
-import { defaultConfig } from '../../../src/utils/config/defaults.js';
-import type { LLMConfig } from '../../../src/types/config.js';
+
+const codexMocks = vi.hoisted(() => ({
+  ensureCodexProxy: vi.fn(async () => undefined),
+  getActiveCodexProxyPort: vi.fn(() => 9123),
+}));
+
+vi.mock('../../../src/utils/models/providers/codex-proxy.js', () => ({
+  ensureCodexProxy: codexMocks.ensureCodexProxy,
+  getActiveCodexProxyPort: codexMocks.getActiveCodexProxyPort,
+  getCodexProxyApiBase: (port: number) => `http://127.0.0.1:${port}/v1`,
+}));
+
+import { DiscoveryError, discoverModels, isStaticCatalogProvider } from '../../../src/utils/models/discovery.js';
 
 /** Builds a JSON response for the mocked provider fetch implementation. */
 function jsonResponse(payload: unknown, status = 200): Response {
@@ -10,6 +20,7 @@ function jsonResponse(payload: unknown, status = 200): Response {
 
 describe('discoverModels', () => {
   afterEach(() => {
+    vi.clearAllMocks();
     vi.unstubAllGlobals();
     vi.unstubAllEnvs();
   });
@@ -21,7 +32,6 @@ describe('discoverModels', () => {
     await expect(discoverModels('openai', { OPENAI_API_KEY: 'request-key' })).resolves.toEqual([
       expect.objectContaining({
         id: 'openai/gpt-oss-120b',
-        recommendedOptions: { toolMiddleware: 'prompt' },
       }),
     ]);
     expect(fetchMock).toHaveBeenCalledWith(
@@ -129,26 +139,41 @@ describe('discoverModels', () => {
     });
   });
 
-  it('should return every registered native-client model without fetching', async () => {
+  it('should return the bundled Claude Code catalog without fetching', async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
 
-    const staticDefinitions = Object.values(defaultConfig.llms).filter(
-      (definition): definition is LLMConfig => typeof definition === 'object'
-        && (definition.provider === 'codex' || definition.provider === 'claude-code'),
-    );
-    for (const provider of ['codex', 'claude-code']) {
-      const expected = staticDefinitions
-        .filter((definition) => definition.provider === provider)
-        .map(({ name }) => `${provider}/${name}`);
-      const discovered = await discoverModels(provider, {});
-      expect(discovered.map(({ id }) => id)).toEqual(expected);
-      for (const definition of staticDefinitions.filter((candidate) => candidate.provider === provider)) {
-        const discoveredDefinition = discovered.find(({ id }) => id === `${provider}/${definition.name}`);
-        expect(discoveredDefinition?.recommendedOptions).toEqual(definition.options);
-      }
-    }
+    await expect(discoverModels('claude-code', {})).resolves.toEqual([
+      { id: 'claude-code/sonnet', name: 'sonnet', recommendedOptions: { concurrencyLimit: 1 } },
+      { id: 'claude-code/opus', name: 'opus', recommendedOptions: { concurrencyLimit: 1 } },
+      { id: 'claude-code/haiku', name: 'haiku', recommendedOptions: { concurrencyLimit: 1 } },
+    ]);
     expect(fetchMock).not.toHaveBeenCalled();
+    expect(isStaticCatalogProvider('claude-code')).toBe(true);
+    expect(isStaticCatalogProvider('codex')).toBe(false);
+  });
+
+  it('should discover Codex models through the active managed proxy', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ data: [
+      { id: 'gpt-5.6-sol' },
+      { id: 'gpt-5.4-mini' },
+    ] }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(discoverModels('codex', {})).resolves.toEqual([
+      { id: 'codex/gpt-5.6-sol', name: 'gpt-5.6-sol', recommendedOptions: { concurrencyLimit: 1, reasoningEffort: 'high' } },
+      { id: 'codex/gpt-5.4-mini', name: 'gpt-5.4-mini' },
+    ]);
+    expect(codexMocks.ensureCodexProxy).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledWith('http://127.0.0.1:9123/v1/models', expect.any(Object));
+  });
+
+  it('should map managed Codex proxy startup failures to discovery errors', async () => {
+    codexMocks.ensureCodexProxy.mockRejectedValueOnce(new Error('startup failed'));
+
+    await expect(discoverModels('codex', {})).rejects.toMatchObject<Partial<DiscoveryError>>({
+      kind: 'provider', status: 502,
+    });
   });
 
   it('should construct an optional-auth compatible URL without a trailing slash', async () => {

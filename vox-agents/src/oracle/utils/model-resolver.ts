@@ -9,55 +9,12 @@
 import { config } from '../../utils/config.js';
 import { getModelConfig } from '../../utils/models/models.js';
 import { createLogger } from '../../utils/logger.js';
-import type { Model, ReasoningEffort } from '../../types/index.js';
-import { ReasoningEfforts } from '../../types/config.js';
+import type { Model } from '../../types/index.js';
+import { formatModelReference, parseModelReference } from '../../utils/models/model-reference.js';
+import { synthesizeModelConfig } from '../../utils/models/rules.js';
+import { getRuntimeModel } from '../../utils/models/resolution.js';
 
 const logger = createLogger('OracleModelResolver');
-
-/**
- * Parse a telemetry model string into provider/name and optional reasoning effort.
- *
- * Telemetry stores model as: `{provider}/{name}@{reasoningEffort}`
- * e.g. `openai-compatible/Kimi-K2.5@Medium`, `anthropic/claude-sonnet-4-6@`
- *
- * @param modelString - The model string from span attributes
- * @returns Parsed components
- */
-function parseModelString(modelString: string): {
-  fullKey: string;
-  provider: string;
-  name: string;
-  reasoningEffort?: ReasoningEffort;
-} {
-  // Split off reasoning effort suffix
-  const atIndex = modelString.lastIndexOf('@');
-  let baseString: string;
-  let reasoningEffort: string | undefined;
-
-  if (atIndex !== -1) {
-    baseString = modelString.substring(0, atIndex);
-    reasoningEffort = modelString.substring(atIndex + 1).toLowerCase() || undefined;
-  } else {
-    baseString = modelString;
-  }
-
-  // Split provider/name
-  const slashIndex = baseString.indexOf('/');
-  const provider = slashIndex !== -1 ? baseString.substring(0, slashIndex) : baseString;
-  const name = slashIndex !== -1 ? baseString.substring(slashIndex + 1) : baseString;
-
-  // Validate reasoning effort
-  const normalizedEffort = reasoningEffort && (ReasoningEfforts as readonly string[]).includes(reasoningEffort)
-    ? reasoningEffort as ReasoningEffort
-    : undefined;
-
-  return {
-    fullKey: baseString,
-    provider,
-    name,
-    reasoningEffort: normalizedEffort,
-  };
-}
 
 /**
  * Render a resolved Model back into the telemetry model string
@@ -72,8 +29,7 @@ function parseModelString(modelString: string): {
  * @returns Model string, e.g. `google/gemini-3.5-flash@high`
  */
 export function formatModelString(model: Model): string {
-  const reasoningEffort = model.options?.reasoningEffort;
-  return `${model.provider}/${model.name}${reasoningEffort ? `@${reasoningEffort}` : ''}`;
+  return formatModelReference(model);
 }
 
 /**
@@ -89,7 +45,13 @@ export function resolveModel(input: string | Model): Model {
     return input;
   }
 
-  const parsed = parseModelString(input);
+  // Preserve an intentionally registered native name before parsing a suffix.
+  const literalEntry = config.llms[input];
+  if (literalEntry) {
+    return typeof literalEntry === 'string' ? getModelConfig(literalEntry) : literalEntry;
+  }
+
+  const parsed = parseModelReference(input);
 
   // Try direct lookup in config.llms
   const llmEntry = config.llms[parsed.fullKey];
@@ -110,7 +72,22 @@ export function resolveModel(input: string | Model): Model {
     return llmEntry;
   }
 
-  // Not found in config -- construct from parsed components
+  const runtimeModel = getRuntimeModel(parsed.fullKey);
+  if (runtimeModel) {
+    return parsed.reasoningEffort
+      ? { ...runtimeModel, options: { ...runtimeModel.options, reasoningEffort: parsed.reasoningEffort } }
+      : runtimeModel;
+  }
+
+  // Preserve the same provider rules as normal model resolution for replayed models.
+  const synthesized = synthesizeModelConfig(parsed.fullKey);
+  if (synthesized) {
+    return parsed.reasoningEffort
+      ? { ...synthesized, options: { ...synthesized.options, reasoningEffort: parsed.reasoningEffort } }
+      : synthesized;
+  }
+
+  // Unknown providers retain telemetry's verbatim provider/name construction.
   logger.warn(`Model "${parsed.fullKey}" not found in config.llms, constructing from telemetry string`);
   return {
     provider: parsed.provider,

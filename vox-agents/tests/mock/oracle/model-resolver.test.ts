@@ -10,6 +10,7 @@
 import { describe, expect, it } from 'vitest';
 import { formatModelString, resolveModel } from '../../../src/oracle/utils/model-resolver.js';
 import type { Model } from '../../../src/types/index.js';
+import { config } from '../../../src/utils/config.js';
 
 function model(overrides: Partial<Model> = {}): Model {
   return { provider: 'google', name: 'gemini-3.5-flash', ...overrides };
@@ -40,5 +41,25 @@ describe('formatModelString', () => {
     expect(resolved.provider).toBe('oracle-test');
     expect(resolved.name).toBe('unknown-model');
     expect(resolved.options?.reasoningEffort).toBe('medium');
+  });
+});
+
+describe('resolveModel', () => {
+  it('should preserve a Codex name outside runtime preflight while applying its reasoning suffix', () => {
+    expect(resolveModel('codex/GPT-5.6-Sol@high')).toEqual({
+      provider: 'codex',
+      name: 'GPT-5.6-Sol',
+      options: { concurrencyLimit: 1, reasoningEffort: 'high' },
+    });
+  });
+
+  it('should preserve a literal configured key ending in a recognized suffix', () => {
+    const key = 'openai/native@high';
+    config.llms[key] = { provider: 'openai', name: 'literal-native-name' };
+    try {
+      expect(resolveModel(key)).toEqual({ provider: 'openai', name: 'literal-native-name' });
+    } finally {
+      delete config.llms[key];
+    }
   });
 });

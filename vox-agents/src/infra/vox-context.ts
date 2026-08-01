@@ -26,6 +26,7 @@ import { getModel, buildProviderOptions } from "../utils/models/models.js";
 import { Model, StreamingEventCallback } from "../types/index.js";
 import { streamTextWithConcurrency, withModelConfig } from "../utils/models/concurrency.js";
 import { v4 as uuidv4 } from 'uuid';
+import { formatModelReference } from '../utils/models/model-reference.js';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -656,7 +657,7 @@ export class VoxContext<TParameters extends AgentParameters> {
             this.reasoningTokens += reasoningTokens;
             this.outputTokens += outputTokens;
             span.setAttributes({
-              'model': `${modelConfig.provider}/${modelConfig.name}@${modelConfig.options?.["reasoningEffort"] ?? ""}`,
+              'model': formatModelReference(modelConfig),
               'tokens.input': inputTokens,
               'tokens.reasoning': reasoningTokens,
               'tokens.output': outputTokens,
@@ -909,7 +910,7 @@ export class VoxContext<TParameters extends AgentParameters> {
         }
 
         stepSpan.setAttributes({
-          'model': `${stepModel.provider}/${stepModel.name}@${stepModel.options?.["reasoningEffort"] ?? ""}`,
+          'model': formatModelReference(stepModel),
           'tokens.input': inputTokens,
           'tokens.reasoning': reasoningTokens,
           'tokens.output': outputTokens,

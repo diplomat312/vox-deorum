@@ -16,22 +16,30 @@ export interface ModelRule {
 }
 
 /**
+ * Providers that serve open-weight models over an OpenAI-compatible surface, where
+ * tool calls go through prompt middleware. First-party hosted providers (openai,
+ * anthropic, google, codex, claude-code) call tools natively and are excluded.
+ */
+const openWeightProviders = ['openai-compatible', 'chutes', 'synthetic'];
+
+/**
  * Applies the established configuration defaults to discovered model names.
  * Later matches deliberately win through shallow option merging.
  */
 export const modelRules: ModelRule[] = [
-  { match: /gpt-oss/i, options: { toolMiddleware: 'prompt' } },
-  { match: /kimi/i, options: { toolMiddleware: 'prompt' } },
-  { match: /glm/i, options: { toolMiddleware: 'prompt' } },
-  { match: /nemotron/i, options: { toolMiddleware: 'prompt' } },
-  { match: /deepseek-v3/i, options: { toolMiddleware: 'prompt' } },
-  { match: /gemma-4/i, options: { toolMiddleware: 'prompt' } },
-  { match: /qwen/i, options: { systemPromptFirst: true, toolMiddleware: 'prompt' } },
-  { match: /minimax/i, options: { toolMiddleware: 'prompt', thinkMiddleware: 'think' } },
-  { provider: 'openrouter', match: /gemma-3/i, options: { toolMiddleware: 'gemma' } },
+  { provider: openWeightProviders, match: /gpt-oss/i, options: { toolMiddleware: 'prompt' } },
+  { provider: openWeightProviders, match: /kimi/i, options: { toolMiddleware: 'prompt' } },
+  { provider: openWeightProviders, match: /glm/i, options: { toolMiddleware: 'prompt' } },
+  { provider: openWeightProviders, match: /nemotron/i, options: { toolMiddleware: 'prompt' } },
+  { provider: openWeightProviders, match: /deepseek-v3/i, options: { toolMiddleware: 'prompt' } },
+  { provider: openWeightProviders, match: /gemma-4/i, options: { toolMiddleware: 'prompt' } },
+  { provider: openWeightProviders, match: /qwen/i, options: { systemPromptFirst: true, toolMiddleware: 'prompt' } },
+  { provider: openWeightProviders, match: /minimax/i, options: { toolMiddleware: 'prompt', thinkMiddleware: 'think' } },
   { provider: 'claude-code', match: /.*/, options: { concurrencyLimit: 1 } },
   { provider: 'codex', match: /gpt-5\.6-sol/i, options: { concurrencyLimit: 1 } },
   { provider: 'codex', match: /gpt-5\.6-terra/i, options: { concurrencyLimit: 2 } },
+  { provider: ['openai', 'codex'], match: /gpt-5\.6/i, options: { reasoningEffort: 'high' } },
+  { match: /gemma-3/i, options: { toolMiddleware: 'gemma' } },
   { match: /embedder/i, options: { embeddingSize: 4096 } },
 ];
 

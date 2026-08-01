@@ -1,4 +1,17 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+const modelMocks = vi.hoisted(() => ({
+  ensureModelsResolved: vi.fn(async () => undefined),
+  // Stubbed rather than real so the assertion does not depend on whether a local
+  // config.json happens to assign the agent a model.
+  agentModelReference: vi.fn((name: string) => `resolved:${name}`),
+}));
+
+vi.mock('../../../../src/utils/models/resolution.js', () => ({
+  ensureModelsResolved: modelMocks.ensureModelsResolved,
+  agentModelReference: modelMocks.agentModelReference,
+  getRuntimeModel: vi.fn(() => undefined),
+}));
 import type { VoxContext } from '../../../../src/infra/vox-context.js';
 import type { StrategistParameters } from '../../../../src/strategist/strategy-parameters.js';
 import type {
@@ -50,6 +63,11 @@ function createDependencies(
   return { dependencies, threads };
 }
 
+beforeEach(() => {
+  modelMocks.ensureModelsResolved.mockClear();
+  modelMocks.agentModelReference.mockClear();
+});
+
 describe('chat thread factory', () => {
   describe('orderParticipants', () => {
     it('should keep each role and identity attached while ordering observer and player endpoints', () => {
@@ -92,6 +110,8 @@ describe('chat thread factory', () => {
         'fixtures/archive-game-player-4.db',
         'ordinary-thread',
       );
+      expect(modelMocks.agentModelReference).toHaveBeenCalledWith('talkative-telepathist');
+      expect(modelMocks.ensureModelsResolved).toHaveBeenCalledWith(['resolved:talkative-telepathist']);
       expect(thread).toMatchObject({
         id: 'ordinary-thread',
         agent: 4,

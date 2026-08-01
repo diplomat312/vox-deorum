@@ -28,6 +28,8 @@ import type { ToolCallFraming } from './tool-rescue/types.js';
 import { Agent } from 'undici';
 import { createLogger } from '../logger.js';
 import { synthesizeModelConfig } from './rules.js';
+import { parseModelReference } from './model-reference.js';
+import { getRuntimeModel } from './resolution.js';
 
 export type { ModelRuntimeIdentity } from './providers/host-tools.js';
 
@@ -84,6 +86,14 @@ export function getModelConfig(
   const model = config.llms[name];
   if (!model) {
     if (name === "default") throw new Error("The assignment for `default` is not found. Please check your settings!")
+    const parsed = parseModelReference(name);
+    const suffixReasoning = parsed.reasoningEffort;
+    if (parsed.fullKey !== name) {
+      const resolved = getModelConfig(parsed.fullKey, suffixReasoning, overrides);
+      return applyReasoning(resolved, reasoning);
+    }
+    const verified = getRuntimeModel(name);
+    if (verified) return applyReasoning(verified, reasoning);
     const synthesized = synthesizeModelConfig(name);
     if (synthesized) {
       if (!loggedSynthesizedIds.has(name)) {
@@ -96,10 +106,10 @@ export function getModelConfig(
       warnedUnknownIds.add(name);
       modelsLogger.warn(`Unknown model configuration '${name}', falling back to 'default'.`);
     }
-    return getModelConfig("default", reasoning);
+    return getModelConfig("default", reasoning, overrides);
   }
   if (typeof(model) === "string") {
-    return getModelConfig(model, reasoning);
+    return getModelConfig(model, reasoning, overrides);
   } else return applyReasoning(model, reasoning);
 }
 

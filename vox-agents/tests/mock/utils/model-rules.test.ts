@@ -88,10 +88,31 @@ describe('model rules', () => {
     expect(getModelConfig('openai/gpt-oss-synth', 'high')).toMatchObject({
       provider: 'openai',
       name: 'gpt-oss-synth',
-      options: { toolMiddleware: 'prompt', reasoningEffort: 'high' },
+      options: { reasoningEffort: 'high' },
     });
     getModelConfig('openai/gpt-oss-synth', 'high');
     expect(mocks.logger.info).toHaveBeenCalledTimes(1);
+  });
+
+  it('should scope prompt middleware to open-weight providers', () => {
+    expect(applyModelRules('openai-compatible', 'gpt-oss-120b')).toEqual({ toolMiddleware: 'prompt' });
+    expect(applyModelRules('chutes', 'zai-org/glm-4.7')).toEqual({ toolMiddleware: 'prompt' });
+    expect(applyModelRules('synthetic', 'hf:moonshotai/Kimi-K2.6')).toEqual({ toolMiddleware: 'prompt' });
+    expect(applyModelRules('openrouter', 'openai/gpt-oss-120b')).toEqual({ toolMiddleware: 'prompt' });
+  });
+
+  it('should leave natively tool-calling providers without prompt middleware', () => {
+    expect(applyModelRules('openai', 'gpt-oss-120b')).toBeUndefined();
+    expect(applyModelRules('anthropic', 'claude-sonnet-5')).toBeUndefined();
+    expect(applyModelRules('google', 'gemini-3.6-flash')).toBeUndefined();
+  });
+
+  it('should retain GPT-5.6 reasoning and Codex concurrency rules', () => {
+    expect(applyModelRules('openai', 'gpt-5.6-terra')).toEqual({ reasoningEffort: 'high' });
+    expect(applyModelRules('codex', 'gpt-5.6-terra')).toEqual({
+      concurrencyLimit: 2,
+      reasoningEffort: 'high',
+    });
   });
 
   it('should fall back from an unknown ID and warn only once', () => {
