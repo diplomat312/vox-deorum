@@ -61,6 +61,7 @@ Time-stamped data with player visibility. Used for:
 - **GameEvents**: All game events with type and payload
 - **PlayerOptions**: Available technologies, policies, strategies per player
 - **TacticalZones**: AI tactical analysis with zone territories, dominance, unit counts
+- **RelationshipChanges**: Diplomatic modifier values
 
 Schema: ID (auto), Turn, Payload (JSON), CreatedAt, PlayerVisibility (Player0-Player21)
 
@@ -75,7 +76,6 @@ Versioned data with change tracking. Used for:
 - **ResearchChanges**: Technology research decisions
 - **PersonaChanges**: 22 AI personality trait values
 - **FlavorChanges**: 34 flavor preferences (offense, defense, growth, etc.)
-- **RelationshipChanges**: Diplomatic modifier values
 - **VictoryProgress**: Domination, science, culture, diplomatic victory tracking
 
 Schema: Extends TimedKnowledge + Key, Version, IsLatest, Changes (changed field names)

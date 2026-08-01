@@ -650,7 +650,7 @@ export class SeatingStateManager {
     ourId: string,
     now: number,
   ): { pick: SeatingCycleCell; before: CellEntry; failureCount: number | undefined } | null {
-    while (true) {
+    for (;;) {
       let pick = pickCell(state, ourId, now);
       if (!pick && allCompleted(state)) {
         if (!this.resetCompletedCycles) return null;

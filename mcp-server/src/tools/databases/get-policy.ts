@@ -62,7 +62,7 @@ class GetPolicyTool extends DatabaseQueryTool<PolicySummary, PolicyReport> {
    * Fetch policy summaries from database
    */
   protected async fetchSummaries(): Promise<PolicySummary[]> {
-    var Summaries = await gameDatabase.getDatabase()
+    const Summaries = await gameDatabase.getDatabase()
       .selectFrom("Policies")
       .where('Policies.Help', '!=', 'NULL')
       .leftJoin('PolicyBranchTypes as b', 'b.Type', 'PolicyBranchType')

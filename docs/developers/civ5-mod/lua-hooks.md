@@ -1,25 +1,27 @@
-# civ5-mod — Lua Hooks and Scripts
+# civ5-mod: Lua Hooks and Scripts
 
-Almost all of the mod's runtime behavior is a single in-game Lua addin, `Lua/VoxDeorumTest.lua`, loaded as an `InGameUIAddin`. Despite the name, it is the real seam between the game's Lua world and the external Vox Deorum stack. It carries strategic decisions *into* the game's event system and carries render-time UI events *out* to the Bridge Service.
+This page covers the mod's observer path: how strategic decisions made outside the game become in-game events, and how a couple of render-time UI events travel back out. The interactive screens are separate and have their own pages ([diplomacy-panel.md](diplomacy-panel.md), [deal-screen.md](deal-screen.md)).
 
-The game's Lua runtime exposes `LuaEvents` — a publish/subscribe bus any addin can fire on or listen to. The mod uses it as a junction between in-game observers and the world outside the game process. This page covers both directions of flow plus the map script.
+The observer path centers on one small addin, `Lua/VoxDeorumTest.lua`, loaded as an `InGameUIAddin`. Despite the name, it is the reference seam between the game's Lua world and the external Vox Deorum stack: it reacts to decisions arriving *in* and forwards UI events back *out* to the Bridge Service.
+
+The game's Lua runtime exposes `LuaEvents`, a publish/subscribe bus any addin can fire on or listen to. The mod uses it as the junction between in-game observers and the world outside the game process.
 
 ## Inbound: strategic decisions become in-game events
 
-When an agent decides something — a strategy shift, a research pick, a relationship change — that decision has to reach the game. It arrives not by the mod reaching out, but by the [MCP server](../mcp-server/) pushing it *in* through the DLL's channel.
+When an agent decides something (a strategy shift, a research pick, a relationship change), that decision has to reach the game. It arrives not by the mod reaching out, but by the [MCP server](../mcp-server/) pushing it *in* through the DLL's channel.
 
-The MCP server keeps two preregistered Lua functions on the [Bridge Service](../bridge-service/), `registerAction` and `setPlayerInfo`. Calling them runs a tiny script inside the game that fires the corresponding `LuaEvent`:
+The MCP server keeps two preregistered Lua functions on the [Bridge Service](../bridge-service/), `registerAction` and `setPlayerInfo`. Calling them runs a small script inside the game that fires the corresponding `LuaEvent`:
 
 | Event | Carries |
 | --- | --- |
-| `LuaEvents.VoxDeorumPlayerInfo(playerID, aiLabel)` | Which model and strategist a player is being run by, e.g. `"deepseek-r1 / simple-strategist"`. |
+| `LuaEvents.VoxDeorumPlayerInfo(playerID, aiLabel)` | Which model and strategist a player is being run by, for example `"deepseek-r1 / simple-strategist"`. |
 | `LuaEvents.VoxDeorumAction(playerID, turn, actionType, summary, rationale)` | One strategic action, tagged with the turn it happened on and a category: `strategy`, `research`, `policy`, `relationship`, `persona`, `flavors`, `unset-flavors`, or `status-quo`. |
 
 These two events are the **observer API**: any in-game mod can subscribe to them to watch the AI think. `VoxDeorumTest.lua` subscribes to both and prints them to `Lua.log`. It is deliberately a minimal reference listener, demonstrating the contract that richer observer mods build on.
 
 The same `registerAction` path can also write the summary and rationale into the game's replay log, so the decisions show up when reviewing a session.
 
-The exact event signatures, parameter ranges, action-type meanings, and a fuller example listener are documented in the mod's own reference, `../../../civ5-mod/docs/observer-api.md`.
+The exact event signatures, parameter ranges, action-type meanings, and a fuller example listener are documented in the mod's own reference, `civ5-mod/docs/observer-api.md`.
 
 ## Outbound: in-game UI events become bridge events
 
@@ -38,16 +40,16 @@ The animation event's payload is normalized to a fixed shape (event type, plot c
 
 Put together, the addin sits in the middle of a loop that crosses every layer:
 
-> agents decide → MCP server calls `registerAction` over the bridge → the DLL runs the preregistered Lua → `LuaEvents.VoxDeorumAction` fires → observer addins (including this one) react, and the replay log records the decision. Meanwhile, the game's own UI events (`VD_*`) are broadcast back out through the DLL and bridge to the capture pipeline.
+> agents decide, the MCP server calls `registerAction` over the bridge, the DLL runs the preregistered Lua, `LuaEvents.VoxDeorumAction` fires, and observer addins (including this one) react while the replay log records the decision. Meanwhile the game's own UI events (`VD_*`) are broadcast back out through the DLL and bridge to the capture pipeline.
 
 This is why the mod is required even though it is small: it is the in-game end of the protocol, and the place where external decisions become events the game and its UI can see.
 
 ## The map script
 
-`Mapscripts/Vox_Deorum.lua` is the mod's other entry point, but a different kind of script entirely: a **map generator**, not a runtime hook. It is a parameter-tuned copy of the community **Communitu_79a** script (Communitas lineage, adapted for Vox Populi) whose values are fixed for Vox Deorum research, so studies run on consistent terrain.
+`Mapscripts/Vox_Deorum.lua` is the mod's other non-UI entry point, and a different kind of script entirely: a **map generator**, not a runtime hook. It is a parameter-tuned copy of the community **Communitu_79a** script (Communitas lineage, adapted for Vox Populi) whose values are fixed for Vox Deorum research, so studies run on consistent terrain.
 
-It runs once, at world generation, and plays no part in the event flow above. Treat it as inherited, third-party map-generation code, included for reproducibility rather than as something the project actively develops.
+It runs once, at world generation, and plays no part in the event flow above. Treat it as inherited third-party map-generation code, included for reproducibility rather than as something the project actively develops.
 
 ## Reference
 
-For the precise observer-event contract, see `../../../civ5-mod/docs/observer-api.md`. For low-level Lua debugging inside the gamecore (reading the Lua stack from a Windows debugger), the mod keeps `../../../civ5-mod/docs/lua-c-debug.md`.
+For the precise observer-event contract, see `civ5-mod/docs/observer-api.md`. For low-level Lua debugging inside the gamecore (reading the Lua stack from a Windows debugger), the mod keeps `civ5-mod/docs/lua-c-debug.md`.

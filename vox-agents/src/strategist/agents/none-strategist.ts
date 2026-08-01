@@ -31,7 +31,7 @@ export class NoneStrategist extends Strategist {
   /**
    * Gets the system prompt for the strategist
    */
-  public async getSystem(_parameters: StrategistParameters, context: VoxContext<StrategistParameters>): Promise<string> {
+  public async getSystem(_parameters: StrategistParameters, _context: VoxContext<StrategistParameters>): Promise<string> {
     return "";
   }
 }

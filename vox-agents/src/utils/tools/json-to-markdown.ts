@@ -161,7 +161,7 @@ function transformObject(
     } else {
       // Use nested lists when heading level exceeded
       if (typeof value === "object" && value !== null) {
-        var transformed = transformValue(
+        const transformed = transformValue(
           value,
           depth + 1,
           config,

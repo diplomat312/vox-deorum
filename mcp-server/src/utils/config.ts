@@ -97,6 +97,16 @@ const defaultConfig: MCPServerConfig = {
 };
 
 /**
+ * Parse a numeric environment variable, returning undefined when it is unset or
+ * unparseable so callers can fall through with ?? instead of ||. Unlike ||, this keeps
+ * an explicitly configured 0, which for a listening port means "any free port".
+ */
+function parseNumericEnv(value: string | undefined): number | undefined {
+  const parsed = parseInt(value ?? '', 10);
+  return Number.isNaN(parsed) ? undefined : parsed;
+}
+
+/**
  * Load configuration from file and environment variables
  */
 export function loadConfig(): MCPServerConfig {
@@ -146,8 +156,8 @@ export function loadConfig(): MCPServerConfig {
     },
     transport: {
       type: transportType,
-      port: parseInt(process.env.MCP_PORT || '') || 
-        fileConfig.transport?.port || 
+      port: parseNumericEnv(process.env.MCP_PORT) ??
+        fileConfig.transport?.port ??
         defaultConfig.transport.port,
       host: process.env.MCP_HOST || 
         fileConfig.transport?.host || 

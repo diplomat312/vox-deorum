@@ -175,7 +175,7 @@ const customFormat = winston.format.combine(
   winston.format.errors({ stack: true }),
   expandErrors(),
   sanitizeErrors(),
-  winston.format.printf(({ timestamp, level, message, context, source, ...meta }) => {
+  winston.format.printf(({ timestamp, level, message, context, source: _source, ...meta }) => {
     const style = getLevelStyle(level);
     const isProduction = process.env.NODE_ENV === 'production';
 

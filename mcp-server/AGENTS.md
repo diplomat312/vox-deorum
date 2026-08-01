@@ -2,7 +2,7 @@
 
 This guide provides essential patterns and conventions for the MCP Server that aren't covered in the README.
 
-**Developer guide:** [mcp-server overview](../docs/developers/mcp-server/overview.md) (role, modes, how tools are organized) and [setup.md](../docs/developers/setup.md) (build and run). **Reference in `docs/`:** [tools.md](docs/tools.md) (tool reference), [knowledge.md](docs/knowledge.md) (knowledge system). Reference data: `docs/events/`, `docs/flavors/`, `docs/strategies/`.
+**Developer guide:** [mcp-server overview](../docs/developers/mcp-server/overview.md) (role, modes, how tools are organized), [configuration.md](../docs/developers/mcp-server/configuration.md) (env vars and `config.json`), and [setup.md](../docs/developers/setup.md) (build and run). **Reference in `docs/`:** [tools.md](docs/tools.md) (tool reference), [knowledge.md](docs/knowledge.md) (knowledge system). Reference data: `docs/events/`, `docs/flavors/`, `docs/strategies/`.
 
 ## MCP Protocol Implementation
 
@@ -19,18 +19,18 @@ This guide provides essential patterns and conventions for the MCP Server that a
 - Each transport has specific initialization and cleanup requirements
 
 ### Event Notifications
-- Use `elicitInput` for client notifications
+- Broadcast with `MCPServer.sendNotification`, which uses the MCP notification protocol (method `vox-deorum/game-event`), not `elicitInput`
 - Include relevant game context (playerID, turn, latestID)
-- Set appropriate timeout values for responsiveness
-- Schema should match expected client response format
+- Only events on the `eventsForNotification` allow-list in `server.ts` are pushed; add yours there if clients must react to it
+- `vox-deorum/heartbeat` is a separate method used to keep the channel alive across long synchronous work
 
 ## Tool Development Patterns
 
 ### Tool Base Architecture
-- All tools inherit from `ToolBase` abstract class
+- All tools inherit from `ToolBase` abstract class, directly or through one of the abstract bases below
 - Required properties: name, description, input/output schemas
 - Required method: execute() for tool logic
-- **Resources and tools both extend ToolBase** to share the same infrastructure
+- The server exposes **tools only**. There are no MCP resources and nothing registers any, despite a stale comment in `server.ts`
 - Use Zod schemas for validation and type safety
 
 ### Factory Pattern with Lazy Loading
@@ -41,6 +41,8 @@ This guide provides essential patterns and conventions for the MCP Server that a
 - This pattern reduces startup time and memory usage
 
 ### Abstract Classes for Common Patterns
+
+There are four abstract bases in `src/tools/abstract/`. Extending `ToolBase` directly is also normal and is what most tools do.
 
 #### Database Query Tools
 - Extend `DatabaseQueryTool` for database-backed tools
@@ -54,6 +56,17 @@ This guide provides essential patterns and conventions for the MCP Server that a
 - Support both inline scripts and external script files
 - Script files should be placed in the `lua/` directory
 - Automatic script loading and execution handling
+
+#### Action Tools
+- Extend `ActionTool` (itself a `LuaFunctionTool`) for tools that mutate game state via Lua
+- Shared base for the whole steering family: set-strategy, set-persona, set-relationship, set-flavors, unset-flavors, set-research, set-policy, keep-status-quo
+- Adds the common action shape, including the recorded source turn
+- Downstream impact of each is analyzed in `docs/tactical-ai-influence.md`
+
+#### Dynamic Event Tools
+- Extend `DynamicEventTool` to write a synthetic event into the GameEvents table
+- Subclass names the event type and builds the payload
+- **Visibility is computed in TypeScript by `composeVisibility`**, from the tool's own `PlayerID`/`VisibleTo` arguments. This is *not* the in-game `event-visibility.lua` analysis that real events get, so the caller decides who sees the event
 
 ### Zod Schema Validation
 - Define input/output schemas using Zod for type safety
@@ -127,16 +140,14 @@ This guide provides essential patterns and conventions for the MCP Server that a
 - Check game identity on each significant operation
 - Compare current gameId with stored gameId
 - Switch context when game changes
-- **Each game gets its own SQLite database** with automatic migration
-- Clean up old game data based on retention policy
+- **Each game gets its own SQLite database**. Tables are created if absent and there are no migrations, since the data is ephemeral and rebuilt from the game
 
 ### Knowledge Persistence
-- Extend TimedKnowledge for versioned data
-- Track version numbers for change detection
-- Mark latest versions with IsLatest flag
-- Store change history in Changes array
+- Four tiers, declared in `knowledge/schema/base.ts` and created in `knowledge/schema/setup.ts`: GameMetadata (key-value), PublicKnowledge, TimedKnowledge, MutableKnowledge
+- Extend **TimedKnowledge** for plain time-stamped rows with per-player visibility (GameEvents, PlayerOptions, TacticalZones, DiplomaticMessages, RelationshipChanges)
+- Extend **MutableKnowledge** for versioned data: adds Key, Version, IsLatest, and a Changes array of changed field names
+- A `*Changes` table name does not imply the Mutable tier. `RelationshipChanges` is Timed. Check `setup.ts`
 - **Pattern**: Version tracking with player visibility and change detection
-- Support rollback and audit trail functionality
 
 ## Database Development
 
@@ -237,7 +248,7 @@ Scripts are executed within the game context via BridgeManager
 ## Development Guidelines
 
 ### Creating New Tools
-1. **Extend abstract base classes** (`DatabaseQueryTool`, `LuaFunctionTool`) not `ToolBase` directly
+1. **Pick the right base.** Use `DatabaseQueryTool`, `LuaFunctionTool`, `ActionTool`, or `DynamicEventTool` when your tool fits that pattern; otherwise extend `ToolBase` directly, which is what most tools do
 2. **Use factory functions** for proper caching
 3. **Add to toolFactories** in `tools/index.ts`
 4. **Use Zod schemas** for validation
@@ -265,25 +276,25 @@ When adding a new field to an existing knowledge table (e.g., PlayerSummary):
 ### MCP Protocol Compliance
 - Always follow Model Context Protocol specifications
 - Use the official @modelcontextprotocol/sdk package
-- Implement proper resource and tool registration
+- Register tools through `toolFactories` in `tools/index.ts`
 - Handle errors gracefully with proper MCP error responses
 - Support multiple transport methods (stdio, HTTP)
 
 ## Integration Points
 
 ### With Bridge Service
-- Connect as SSE client to `/events`
+- Subscribe to the event feed, preferring the named event pipe and falling back to SSE at `/events`
 - Use BridgeManager for all communication
 - Handle connection loss gracefully
 
 ### With Vox Agents
 - Agents connect via MCP protocol
 - Tools exposed automatically on connection
-- Event notifications via `elicitInput`
+- Event notifications via the `vox-deorum/game-event` MCP notification
 
 ### Event System
 - Each event has typed Zod schema for validation
 - Common event types: GameSave, PlayerTurn, CityFounded, etc.
-- Events undergo visibility analysis before storage
-- Visibility analysis determines which players can see the event
-- Results stored as PlayerVisibility flags (0 or 1 per player)
+- Real game events undergo visibility analysis in `lua/event-visibility.lua` before storage, since only the game knows who witnessed what
+- Results stored as PlayerVisibility flags per player: 0 none, 1 basic, 2 detailed
+- `PlayerDoneTurn` drives two different refreshes: a `PlayerID` below `MaxMajorCivs` refreshes that player's opinions/strategy/persona, while `PlayerID` 63 (the barbarian slot, always last in the round) refreshes player summaries and city information for everyone

@@ -83,6 +83,21 @@ const defaultConfig: ServiceConfig = {
 };
 
 /**
+ * Parse a numeric environment variable, returning undefined when it is unset or
+ * unparseable so callers can fall through with ?? instead of ||. Unlike ||, this keeps
+ * an explicitly configured 0, which for a listening port means "any free port".
+ *
+ * @function parseNumericEnv
+ *
+ * @param value - Raw environment variable value
+ * @returns The parsed number, or undefined when there is nothing usable to parse
+ */
+function parseNumericEnv(value: string | undefined): number | undefined {
+  const parsed = parseInt(value ?? '', 10);
+  return Number.isNaN(parsed) ? undefined : parsed;
+}
+
+/**
  * Load configuration from file and environment variables
  *
  * @function loadConfig
@@ -120,7 +135,7 @@ export function loadConfig(): ServiceConfig {
   // Build final configuration with environment variable overrides
   const config: ServiceConfig = {
     rest: {
-      port: parseInt(process.env.PORT || '') || fileConfig.rest?.port || defaultConfig.rest.port,
+      port: parseNumericEnv(process.env.PORT) ?? fileConfig.rest?.port ?? defaultConfig.rest.port,
       host: process.env.HOST || fileConfig.rest?.host || defaultConfig.rest.host
     },
     gamepipe: {

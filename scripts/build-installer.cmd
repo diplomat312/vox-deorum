@@ -116,10 +116,11 @@ if not exist "%PROJECT_ROOT%\scripts\release\CvGameCore_Expansion2.dll" (
 )
 
 :: Step 5: Create dist directory
+:: Inno Setup resolves OutputDir relative to installer.iss, so the installer lands in scripts\dist
 echo.
 echo [5/6] Preparing output directory...
-if not exist "%PROJECT_ROOT%\dist" (
-    mkdir "%PROJECT_ROOT%\dist"
+if not exist "%PROJECT_ROOT%\scripts\dist" (
+    mkdir "%PROJECT_ROOT%\scripts\dist"
 )
 echo   [OK] Output directory ready
 
@@ -165,7 +166,7 @@ if !errorlevel! equ 0 (
     echo =========================================
     echo.
     echo   Installer created at:
-    echo   %PROJECT_ROOT%\dist\VoxDeorum-!VERSION!.exe
+    echo   %PROJECT_ROOT%\scripts\dist\VoxDeorum-!VERSION!.exe
     echo.
     echo   You can now distribute this installer to users.
     echo   It includes everything needed to run Vox Deorum.

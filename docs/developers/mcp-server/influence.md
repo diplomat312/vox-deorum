@@ -1,37 +1,46 @@
-# mcp-server — Tactical AI Influence
+# mcp-server: Tactical AI Influence
 
-Most of the MCP server's tools observe the game. A handful change it — and the most interesting of those don't move units directly, they *steer the game's own AI*.
+Most of the MCP server's tools observe the game. A handful change it, and the most interesting of those don't move units directly. They *steer the game's own AI*.
 
-This page answers the question a developer keeps coming back to: when an agent calls one of these tools, which in-game AI decisions actually shift, and can a civilization the agent doesn't control feel the effect? The deep analysis — the per-tool impact tables, the auto-activation thresholds, the formulas — is kept as reference under `mcp-server/docs/influence/` and `mcp-server/docs/flavors/`. This page is the map to it.
+This page answers two questions a developer keeps coming back to: when an agent calls one of these tools, which in-game AI decisions actually shift, and can a civilization the agent doesn't control feel the effect? The deep analysis (the per-tool impact tables, the auto-activation thresholds, the formulas) is kept as reference under `mcp-server/docs/influence/` and `mcp-server/docs/flavors/`. This page is the map to it.
 
 ## Why steering, not commanding
 
-Vox Deorum doesn't replace Civilization V's AI with a language model — it nudges it. The game already has a rich tactical and strategic AI. The agent influences that AI's preferences and then lets the game act on them.
+Vox Deorum doesn't replace Civilization V's AI with a language model, it nudges it. The game already has a rich tactical and strategic AI. The agent influences that AI's preferences and then lets the game act on them.
 
 This has two benefits:
 
-- It keeps the agent operating at the altitude a strategist actually works at — "favor expansion, prepare for war with this neighbor" — rather than micromanaging every unit.
+- It keeps the agent operating at the altitude a strategist actually works at ("favor expansion, prepare for war with this neighbor") rather than micromanaging every unit.
 - The steering propagates through all the systems the game's AI already wires together: city specialization, tech and policy choice, diplomacy, military production. The influence spreads instead of touching just one system.
 
-The cost is indirection. A tool sets a preference, and the effect shows up later, through the game's own update cycles — sometimes immediately, sometimes only on the next reevaluation. The reference tables exist to pin down exactly that propagation for each tool.
+The cost is indirection. A tool sets a preference, and the effect shows up later, through the game's own update cycles, sometimes immediately and sometimes only on the next reevaluation. The reference tables exist to pin down exactly that propagation for each tool.
 
 ## The kinds of steering
 
-The steering tools fall into a few families, each reaching the AI a different way.
+The steering tools all share one base class, `ActionTool` (`mcp-server/src/tools/abstract/action.ts`), which puts a Lua-backed state change behind a uniform schema. They fall into a few families, each reaching the AI a different way.
 
-**Flavors and strategies** — `set-flavors`, `unset-flavors`, `set-strategy`, and `keep-status-quo` — work through the game's flavor system, the weights the AI uses to value cities, tech, policies, wonders, and military production. Setting a flavor broadcasts to every subsystem that consumes it. Setting a strategy applies flavor deltas plus a few hard-coded effects (yield targets, victory pursuit, production weights). These are the broadest-reaching tools, and they expire on their own after roughly ten turns unless refreshed. The full per-flavor subsystem matrix, the activation thresholds, and the one flavor that leaks across civilizations are in [`docs/influence/flavors.md`](../../../mcp-server/docs/influence/flavors.md).
+**Flavors and strategies:** `set-flavors`, `unset-flavors`, `set-strategy`, and `keep-status-quo` work through the game's flavor system, the weights the AI uses to value cities, tech, policies, wonders, and military production. Setting a flavor broadcasts to every subsystem that consumes it. Setting a strategy applies flavor deltas plus a few hard-coded effects (yield targets, victory pursuit, production weights). These are the broadest-reaching tools, and they expire on their own after roughly ten turns unless refreshed. The full per-flavor subsystem matrix, the activation thresholds, and the one flavor that leaks across civilizations are in [`docs/influence/flavors.md`](../../../mcp-server/docs/influence/flavors.md).
 
-**Diplomacy** — `set-persona` rewrites a leader's personality fields, and `set-relationship` adjusts diplomatic modifiers toward another civilization. Persona changes are mostly felt by the civ itself (and estimated by others). A relationship change, by contrast, can cascade through the whole opinion system: coop war, deals, voting, trade, settlement, and tactical decisions. The three-audience visibility picture (self, teammates, non-teammates) is detailed in [`docs/influence/diplomacy.md`](../../../mcp-server/docs/influence/diplomacy.md).
+**Diplomacy:** `set-persona` rewrites a leader's personality fields, and `set-relationship` adjusts diplomatic modifiers toward another civilization. Persona changes are mostly felt by the civ itself (and estimated by others). A relationship change, by contrast, can cascade through the whole opinion system: coop war, deals, voting, trade, settlement, and tactical decisions. The three-audience visibility picture (self, teammates, non-teammates) is detailed in [`docs/influence/diplomacy.md`](../../../mcp-server/docs/influence/diplomacy.md). Negotiating an actual deal is a different subsystem, covered in [diplomacy.md](../diplomacy.md).
 
-**Forced choices** — `set-research` and `set-policy` override the AI's next technology or next policy pick. These are one-shot: they force the very next choice, then the AI resumes deciding for itself. The mechanics are in [`docs/influence/forced-choices.md`](../../../mcp-server/docs/influence/forced-choices.md).
+**Forced choices:** `set-research` and `set-policy` override the AI's next technology or next policy pick. These are one-shot: they force the very next choice, then the AI resumes deciding for itself. The mechanics are in [`docs/influence/forced-choices.md`](../../../mcp-server/docs/influence/forced-choices.md).
 
-**Pacing and escape hatches** — `pause-game` and `resume-game` block or release a single named player's turn (see [bridge.md](bridge.md)). `lua-executor` runs arbitrary Lua in the game — the universal escape hatch, and therefore a trust boundary. Finally, a couple of tools (`relay-message`, `set-metadata`) touch only the knowledge store and never reach the DLL at all, so they are visible to language-model agents but invisible to the game's AI.
+## Pacing and escape hatches
+
+Four tools sit outside the steering families:
+
+- `pause-game` and `resume-game` block or release a single named player's turn (see [bridge.md](bridge.md)), and `set-production-mode` toggles the DLL's AI-turn cooldown. None of them changes the game world, only when it runs.
+- `lua-executor` runs arbitrary Lua in the game. It is the universal escape hatch, and therefore a trust boundary.
+
+Two more tools are easy to misplace on this map. `relay-message` is the one tool here that genuinely never reaches the DLL: it writes a synthetic event into the knowledge store and stops there, so an agent can see the message while the game's AI cannot.
+
+`set-metadata` is not in that category, despite looking like it. Most keys do only write to the knowledge store, but a key matching `model-{N}` also calls `pushPlayerInfo` (`mcp-server/src/utils/lua/player-actions.ts`), which executes Lua through the bridge to fire a player-info event for observer mods. That path does reach the DLL. Treat `set-metadata` as store-only for every other key, and as a game-touching call for `model-{N}`.
 
 ## Cross-civilization reach
 
 The subtle question is leakage: when an agent steers the civilization it speaks for, how much do *other* civilizations notice? The general answer is "less than you'd fear, by design."
 
-A foreign AI reads another leader's persona mostly through estimate helpers rather than the real values, and reads cross-civ opinion only through cached accessors rather than the raw modifier arrays. This deliberately localizes most steering to the targeted civ, while still allowing the genuine cascades — the opinion system, the single nuke-related flavor — to propagate where the game intends them to. Which tool leaks where is exactly what the impact tables enumerate.
+A foreign AI reads another leader's persona mostly through estimate helpers rather than the real values, and reads cross-civ opinion only through cached accessors rather than the raw modifier arrays. This deliberately localizes most steering to the targeted civ, while still allowing the genuine cascades (the opinion system, the single nuke-related flavor) to propagate where the game intends them to. Which tool leaks where is exactly what the impact tables enumerate.
 
 ## The invariants the analysis rests on
 
@@ -46,11 +55,11 @@ These invariants are written out in `mcp-server/docs/tactical-ai-influence.md`. 
 
 ## Where the details live
 
-This page is the conceptual map. The exact reference — impact matrix, per-tool propagation, per-flavor subsystem tables, thresholds, formulas, and invariants — stays inside the component:
+This page is the conceptual map. The exact reference (impact matrix, per-tool propagation, per-flavor subsystem tables, thresholds, formulas, and invariants) stays inside the component:
 
-- `mcp-server/docs/tactical-ai-influence.md` — the impact matrix and the invariants.
-- `mcp-server/docs/influence/` — the per-family deep dives (flavors, diplomacy, forced choices).
-- `mcp-server/docs/flavors/` — one file per flavor, naming the subsystems it steers.
-- `mcp-server/docs/diplomacy/` — diplomacy mechanics (deal impossibility, war planning) the relationship tools interact with.
+- `mcp-server/docs/tactical-ai-influence.md`: the impact matrix and the invariants.
+- `mcp-server/docs/influence/`: the per-family deep dives (flavors, diplomacy, forced choices).
+- `mcp-server/docs/flavors/`: one file per flavor, naming the subsystems it steers.
+- `mcp-server/docs/diplomacy/`: diplomacy mechanics (deal impossibility, war planning) the relationship tools interact with.
 
 The tools themselves are described in [tools.md](tools.md) and listed with their parameters in `mcp-server/docs/tools.md`.

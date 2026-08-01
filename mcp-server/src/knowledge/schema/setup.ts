@@ -248,8 +248,8 @@ export async function setupKnowledgeDatabase(
   await createMutableKnowledgeIndexes(db, 'PlayerSummaries');
 
   // Create PlayerOpinions table (MutableKnowledge implementation)
-  var opinions = createMutableKnowledgeTable(db, 'PlayerOpinions');
-  for (var I = 0; I < MaxMajorCivs; I++) {
+  let opinions = createMutableKnowledgeTable(db, 'PlayerOpinions');
+  for (let I = 0; I < MaxMajorCivs; I++) {
     opinions = opinions.addColumn('OpinionFrom' + I, 'text')
     opinions = opinions.addColumn('OpinionTo' + I, 'text')
   }

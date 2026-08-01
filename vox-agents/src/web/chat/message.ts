@@ -14,7 +14,7 @@ export function createAgentMessageRoutes(): Router {
 
   router.post(
     '/agents/message',
-    async (req: Request<{}, {}, unknown>, res: Response<ErrorResponse>): Promise<void> => {
+    async (req: Request<object, object, unknown>, res: Response<ErrorResponse>): Promise<void> => {
       let connected = false;
 
       /** Write one SSE event using the route's only wire-format adapter. */

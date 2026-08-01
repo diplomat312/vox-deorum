@@ -103,7 +103,7 @@ class GetGameSettingsTool extends LuaFunctionTool<GameMetadata> {
       const summaries = await readPublicKnowledgeBatch("PlayerInformations", getPlayerInformations);
       const summary = summaries.find(summary => summary.Key == args.PlayerID);
       if (summary) {
-        var civilization = (await getTool("getCivilization")?.getSummaries())?.find(current => current.Name == summary.Civilization);
+        const civilization = (await getTool("getCivilization")?.getSummaries())?.find(current => current.Name == summary.Civilization);
         if (civilization) {
           metadata.YouAre = JSON.parse(JSON.stringify(civilization));
           metadata.YouAre!.PlayerID = args.PlayerID;

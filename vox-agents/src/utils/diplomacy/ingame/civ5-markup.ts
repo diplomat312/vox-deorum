@@ -27,6 +27,7 @@ type OutputMode = "civ5" | "plain";
 // An argumented tag (`[COLOR:...]`, `[X=...]`) is always preserved; a bare tag is preserved only
 // when it is not immediately followed by `(`, so `[TERMS](url)` falls through to the link pass.
 const civ5TagPattern = /\[\/?[A-Z][A-Z0-9_]*[:=][^\]\r\n]*\]|\[\/?[A-Z][A-Z0-9_]*\](?!\()/g;
+// eslint-disable-next-line no-control-regex -- NUL is the deliberate sentinel around inline tokens
 const inlineTokenPattern = /\u0000(\d+)\u0000/g;
 
 /** Normalize Windows and legacy Mac line endings before scanning markdown blocks. */
@@ -130,6 +131,7 @@ function collapseBlankLines(lines: string[]): string[] {
 /** Convert markdown using the shared block scanner and the requested output mode. */
 function convertMarkdown(markdown: string, mode: OutputMode): string {
   // Drop the NUL sentinel from input so real text can never collide with a generated token.
+  // eslint-disable-next-line no-control-regex -- NUL is the deliberate sentinel this strips
   const sanitized = normalizeNewlines(markdown).replace(/\u0000/g, "");
   const lines = sanitized.split("\n").map((line) => renderLine(line, mode));
   if (mode === "plain") return lines.join("\n");

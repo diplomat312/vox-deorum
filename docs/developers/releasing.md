@@ -2,50 +2,92 @@
 
 A Vox Deorum release is a single Windows installer that bundles everything a player needs: the three compiled services, a portable Node.js runtime, the pre-built game DLL, and the mod. Installing is a wizard, not a build.
 
-This page covers how versions are numbered, how release notes are written, and how the installer is packaged. For the full checklist, jump to [Checklist for a release](#checklist-for-a-release).
+Releases are made by a GitHub Actions workflow, not by hand. This page explains what that workflow does, where the version lives, how release notes are written, and how to build an installer locally when you need one. For the short version, jump to [Checklist for a release](#checklist-for-a-release).
+
+## The release workflow
+
+`.github/workflows/release.yml` (named **Release Version**) is the canonical path. It only runs on manual dispatch, and it takes two inputs:
+
+| Input | Meaning |
+|---|---|
+| `version_type` | `patch`, `minor`, `major`, or `none`. Chooses how `version.json` is bumped. |
+| `dry_run` | When true, the job builds and verifies the installer but makes no commit, tag, or release. |
+
+The job runs on `windows-latest` and checks out the repository with submodules and Git LFS. From there it:
+
+1. **Bumps the version** in `version.json`, then rewrites the same number into `release.txt`, the `MyAppVersion` define in `scripts/installer.iss`, the version line in `README.md`, and the default tag in `scripts/bootstrap.cmd`.
+2. **Commits those five files** locally as `Release v<version>`, without pushing yet.
+3. **Installs Inno Setup 6** and runs `scripts/build-installer.cmd`, then verifies that `scripts/dist/VoxDeorum-<version>.exe` exists. A missing installer fails the run before anything is published.
+4. **Pushes the commit to `main`**, creates an annotated tag `v<version>`, and pushes it.
+5. **Publishes the GitHub release** with the installer attached.
+
+Because step 4 pushes straight to `main`, run the workflow from a `main` that is already in the state you want to ship.
+
+### What ends up in the release body
+
+The workflow reads a commit message with `git log -1` and uses it for both the tag annotation and the GitHub release body. A fixed template wraps it, linking the CivFanatics forum thread, naming the installer file, and linking the commit history.
+
+That read happens before the workflow makes its own `Release v<version>` commit, so what it picks up is the last non-merge commit already on `main` when you dispatch the run. Dry runs and real runs see the same commit. Since the last thing you commit before releasing is usually the changelog, that commit message is what readers will see. Tags from before this was fixed are annotated exactly `Release v<version>`.
+
+Even so, **the GitHub release body is not the changelog**: it is one commit message. Treat it as a landing page for the installer download and link readers to the version's page under `docs/versions/`.
+
+### The pre-built DLL
+
+Players never compile the gamecore, so a release ships a binary DLL. `scripts/dll-release-info.txt` pins which upstream DLL build to fetch, and `scripts/download-dll.cmd` retrieves it. A separate workflow, `.github/workflows/update-prebuilt-binaries.yml`, keeps that pin in step with the `civ5-dll` submodule. Building the DLL from source is a developer task; see [setup.md](setup.md) and [civ5-dll/building.md](civ5-dll/building.md).
 
 ## Versioning
 
-The project version lives in `version.json` at the repo root as three fields — `major`, `minor`, `revision` — which compose into the familiar `MAJOR.MINOR.REVISION` string (currently `0.10.0`, a beta).
+The version of record is `version.json` at the repo root: three integer fields (`major`, `minor`, `revision`) that compose into the familiar `MAJOR.MINOR.REVISION`. `release.txt` holds the last shipped tag on one line, as `vMAJOR.MINOR.REVISION`. The build and release-notes tooling reads it to know where the previous release ended.
 
-The last shipped tag is recorded as one line in `release.txt` (e.g. `v0.10.0`). The build and release-notes tooling reads it to know where the previous release ended.
+The same number appears in three more places, all of which the release workflow rewrites for you:
 
-Releases are tagged `vMAJOR.MINOR.REVISION`. The DLL, being a submodule with its own upstream history, tracks its own Vox Populi base version independently of the project version (noted in the release notes when it changes).
+| File | Form it takes |
+|---|---|
+| `scripts/installer.iss` | `#define MyAppVersion "MAJOR.MINOR.REVISION"`, which names the installer and its wizard |
+| `README.md` | the `**Version MAJOR.MINOR.REVISION - Beta**` line near the top |
+| `scripts/bootstrap.cmd` | the tag it falls back to when none is given |
+
+The workflow finds each of those by regular expression, so keep their exact shape when editing around them, and prefer letting the workflow do the bump rather than editing the five files by hand.
+
+Releases are tagged `vMAJOR.MINOR.REVISION`. The DLL is a submodule with its own upstream history, so it tracks its own Vox Populi base version independently of the project version. The release notes call that out when it changes.
 
 ## Release notes
 
-Per-release changelogs live in [`docs/versions/`](../versions/), one Markdown file per version (`0.10.0.md`, `0.9.0.md`, …). Each is grouped into short thematic sections — Narrators, Oracle, MCP Server, Models & Providers, Infrastructure, and so on — with a one-line header noting the date and any savegame-compatibility or DLL-base change. These are the canonical changelogs and the only release documentation that lives in the standing doc tree.
+Per-release changelogs live in [`docs/versions/`](../versions/), one Markdown file per version. Each opens with a headline giving the version and date plus a one-line summary of the release's theme, then groups changes under short thematic headings such as Diplomacy & Deals, Under the Hood, or Not Yet Done. Any savegame-compatibility or DLL-base change is called out there. These are the canonical changelogs and the only release documentation in the standing doc tree.
 
-To draft notes for a new version, follow the process in the root `AGENTS.md`. Read the last tag from `release.txt`, then survey what changed since it:
+Drafting and publishing are separate steps with different rules:
 
-```bash
-git log <tag>..HEAD --oneline --no-merges
-git diff --stat <tag>..HEAD
-```
+- **Drafting.** Follow the survey process in the root `AGENTS.md`. Read the last tag from `release.txt`, then look at what changed since it, and print short grouped bullets to the console for review. That step deliberately writes no files, so nothing half-finished lands in the repo.
 
-Group the result into short bullets. A new `docs/versions/<version>.md` is the home for the finished notes.
+  ```bash
+  git log <tag>..HEAD --oneline --no-merges
+  git diff --stat <tag>..HEAD
+  ```
 
-## Building the installer
+- **Publishing.** Once those bullets have been reviewed and edited, commit them as `docs/versions/<version>.md`. That committed file is the finished changelog.
 
-The installer is produced by `scripts/build-installer.cmd`, which prepares everything and then compiles an [Inno Setup](https://jrsoftware.org/isinfo.php) script (`scripts/installer.iss`). It needs **Inno Setup 6** installed.
+## Building the installer locally
 
-In order, the script:
+`scripts/build-installer.cmd` is the same script the workflow calls, and you can run it directly to test packaging without publishing anything. It needs **Inno Setup 6** installed. In order, it:
 
-1. **Fetches a portable Node.js** (v22.12.0) into `node/` if it isn't already there, so the installer can ship a self-contained runtime — no system Node required on the player's machine.
-2. **Installs all dependencies** from the root via npm workspaces (including dev, needed to compile), plus the `vox-agents/ui` dependencies.
-3. **Builds all three TypeScript services** with `npm run build:all`, then **prunes to production dependencies** (`npm install --omit=dev` + `npm prune`) so only what's needed to run is bundled.
-4. **Downloads the pre-built game DLL** via `scripts/download-dll.cmd` if it isn't already staged under `scripts/release/`. Players get a binary DLL; they never compile the gamecore. (Building the DLL from source is a developer task; see [setup.md](setup.md) and [civ5-dll/building.md](civ5-dll/building.md).)
-5. **Prepares the output directory** and **compiles the installer** with Inno Setup.
+1. **Fetches a portable Node.js** (v22.12.0) into `node/` if it isn't already there, so the installer can ship a self-contained runtime and no player needs system Node.
+2. **Installs all dependencies** from the root via npm workspaces, including dev dependencies needed to compile, plus the `vox-agents/ui` dependencies separately.
+3. **Builds everything** with `npm run build:all`, then **prunes to production dependencies** so only what's needed to run is bundled.
+4. **Downloads the pre-built game DLL** via `scripts/download-dll.cmd` if it isn't already staged under `scripts/release/`.
+5. **Compiles the installer** from `scripts/installer.iss` with Inno Setup.
 
-The result is `dist/VoxDeorum-<version>.exe`, with the version read from `release.txt`. That single file is what's attached to a GitHub release. The installer wizard places the services, the runtime, the DLL, and the mod, and wires up the `scripts/vox-deorum.cmd` launcher a player runs to start a session.
+The result is `scripts/dist/VoxDeorum-<version>.exe`, versioned from `release.txt`. That single file is what gets attached to a GitHub release. Inno Setup resolves its output directory relative to the `.iss` file, which is why an `OutputDir=dist` in `scripts/installer.iss` means `scripts/dist/` rather than a repo-root folder.
+
+Running this by hand does not bump any version, so a local build reuses whatever version the working tree currently carries. Use it to check that packaging succeeds, and use the workflow's `dry_run` to check the same thing on a clean machine.
 
 ## Generated API docs
 
-Separate from release packaging, each TypeScript service publishes a generated TypeDoc API reference (`npm run docs` per service, or `scripts/generate-docs.cmd` for all three at once). These land in the components' own `docs/api/` folders as reference material. They are not part of the prose documentation and not bundled into the installer.
+Separate from release packaging, each TypeScript service publishes a generated TypeDoc API reference: `npm run docs` per service, or `scripts/generate-docs.cmd` for all three at once. `.github/workflows/generate-docs.yml` regenerates and commits them whenever service source changes land on `main`. They are reference material in the components' own `docs/api/` folders, not part of the prose documentation and not bundled into the installer.
 
 ## Checklist for a release
 
-1. Bump `version.json` and update `release.txt` to the new tag.
-2. Write `docs/versions/<version>.md` from the commit range since the last tag.
-3. Build the installer with `scripts/build-installer.cmd` and verify `dist/VoxDeorum-<version>.exe` was produced.
-4. Tag the commit `v<version>` and attach the installer to the GitHub release, with the changelog as the release body.
+1. Get `main` into the state you want to ship, and confirm the [pre-submit checks](testing.md#before-you-submit) pass. Nothing in CI runs the tests for you.
+2. Draft the notes for the new version and commit them as `docs/versions/<version>.md`.
+3. Run **Release Version** with `dry_run` enabled and the intended `version_type`. Confirm the installer builds and verifies.
+4. Re-run it with `dry_run` off. The workflow bumps the version files, commits, tags, builds, and publishes.
+5. Check the published release: the installer is attached, and the body carries your last commit message. Edit the body if you want the full notes visible there, since the workflow only copies that one message.

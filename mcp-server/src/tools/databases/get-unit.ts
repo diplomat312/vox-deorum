@@ -91,7 +91,7 @@ class GetUnitTool extends DatabaseQueryTool<UnitSummary, UnitReport> {
    * Fetch unit summaries from database
    */
   protected async fetchSummaries(): Promise<UnitSummary[]> {
-    var summaries = await gameDatabase.getDatabase()
+    const summaries = await gameDatabase.getDatabase()
       .selectFrom("Units as u")
       .leftJoin("Technologies as t", "u.PrereqTech", "t.Type")
       .leftJoin("Civilization_UnitClassOverrides as cuo", "cuo.UnitType", "u.Type")

@@ -53,7 +53,7 @@ export class DatabaseManager {
    * Load database with retry logic - keeps retrying every 5 seconds until successful
    */
   private async loadDatabaseWithRetry(): Promise<void> {
-    while (true) {
+    for (;;) {
       try {
         const documentsPath = await getDocumentsPath();
         const civ5Path = path.join(documentsPath, 'My Games', 'Sid Meier\'s Civilization 5', 'cache');
@@ -304,7 +304,7 @@ export class DatabaseManager {
 
     let hadToWait = false;
 
-    while (true) {
+    for (;;) {
       try {
         // Try to query the table - if it exists, this will succeed
         await this.mainDb
@@ -330,7 +330,7 @@ export class DatabaseManager {
   private async waitForPolicyDescriptions(): Promise<boolean> {
     let hadToWait = false;
 
-    while (true) {
+    for (;;) {
       // Get TXT_KEY_* description keys for policies that have Help text
       const rows = await this.mainDb!
         .selectFrom('Policies')
@@ -428,7 +428,7 @@ export class DatabaseManager {
         if ('Description' in row) {
           tableMap[id] = String(row.Description);
         } else if ('Type' in row) {
-          var type = String(row.Type);
+          let type = String(row.Type);
           if (!isNaN(id)) {
             type = type.includes('_') ? type.split('_').slice(1).join('_') : type;
             tableMap[id] = prefix + changeCase.pascalCase(type);

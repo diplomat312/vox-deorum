@@ -42,7 +42,7 @@ export function explainEnums<T extends Record<string, any>>(obj: T): T {
       enumMapping = enumMappings[key];
     } else {
       // Try fuzzy match: check if key ends with any of the enum mapping keys
-      let lowerKey = key.toLowerCase();
+      const lowerKey = key.toLowerCase();
       for (const [mappingKey, mappingValue] of Object.entries(enumMappings)) {
         if (lowerKey.endsWith(mappingKey.toLowerCase())) {
           enumMapping = mappingValue;

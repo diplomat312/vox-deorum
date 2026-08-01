@@ -41,7 +41,7 @@ export abstract class Briefer<TInput = string> extends VoxAgent<StrategistParame
     allSteps: StepResult<Record<string, Tool>>[]
   ): boolean {
     // Stop if we've executed set-strategy tool
-    for (var step of allSteps) {
+    for (const step of allSteps) {
       for (const result of step.content) {
         if (result.type === "text" && result.text.length >= 10) {
           this.logger.info(`Briefing produced (length ${result.text.length}), stopping agent`, {

@@ -192,7 +192,7 @@ External Service                Bridge Service                  Community Patch 
        |                              |  pause_player message            |                               |
        |                              |--------------------------------->|                               |
        |  HTTP 200                    |                                  | Adds player to pause set      |
-       |  {pausedPlayers:[0]}         |                                  |                               |
+       |  {result:{pausedPlayers:[0]}} |                                  |                               |
        |<-----------------------------|                                  |                               |
        |                              |                                  |                               |
        |                              |  ... PlayerDoTurn event ...      |                               |

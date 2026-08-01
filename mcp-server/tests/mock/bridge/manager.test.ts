@@ -165,12 +165,31 @@ describe('BridgeManager HTTP request shaping', () => {
     expect(ok).toBe(true);
   });
 
-  it('pausePlayer / resumePlayer POST and DELETE the per-player route', async () => {
-    await manager.pausePlayer(3);
+  it('pausePlayer / resumePlayer POST and DELETE the per-player route and return the success flag', async () => {
+    postSpy.mockResolvedValueOnce({ success: true } as any);
+    expect(await manager.pausePlayer(3)).toBe(true);
     expect(postSpy).toHaveBeenCalledWith('/external/pause-player/3', undefined, { fast: true });
 
-    await manager.resumePlayer(3);
+    deleteSpy.mockResolvedValueOnce({ success: true } as any);
+    expect(await manager.resumePlayer(3)).toBe(true);
     expect(deleteSpy).toHaveBeenCalledWith('/external/pause-player/3', { fast: true });
+  });
+
+  it('pausePlayer / resumePlayer return false when the bridge answers success: false', async () => {
+    postSpy.mockResolvedValueOnce({ success: false, error: { code: 'DLL_DISCONNECTED', message: 'DLL is not connected' } } as any);
+    expect(await manager.pausePlayer(3)).toBe(false);
+
+    deleteSpy.mockResolvedValueOnce({ success: false, error: { code: 'DLL_DISCONNECTED', message: 'DLL is not connected' } } as any);
+    expect(await manager.resumePlayer(3)).toBe(false);
+  });
+
+  it('setProductionMode POSTs /external/production-mode and returns the success flag', async () => {
+    postSpy.mockResolvedValueOnce({ success: true } as any);
+    expect(await manager.setProductionMode(true)).toBe(true);
+    expect(postSpy).toHaveBeenCalledWith('/external/production-mode', { enabled: true }, { fast: true });
+
+    postSpy.mockResolvedValueOnce({ success: false, error: { code: 'INTERNAL_ERROR', message: 'boom' } } as any);
+    expect(await manager.setProductionMode(true)).toBe(false);
   });
 });
 

@@ -1,4 +1,4 @@
-# vox-agents — Telepathists
+# vox-agents: Telepathists
 
 A telepathist lets you interrogate a finished game. Ask it "what happened between turns 30 and 50?", "why did the AI build a settler on turn 45?", or "show me the full conversation behind that decision." It answers from the record every live game leaves behind: each agent's prompts, tool calls, decisions, and rationales are saved to a telemetry database (see [observability.md](observability.md)). The telepathist reads that record as if it had read the AI player's mind.
 
@@ -34,7 +34,7 @@ The **`Summarizer`** (`src/telepathist/summarizer.ts`) is a small, reusable, ins
 
 ## The query tools
 
-Three tools answer conversation-time questions, designed as zoom levels and built on a shared base class, `TelepathistTool` (`src/telepathist/telepathist-tool.ts`). The base class walks the recorded span hierarchy — each turn's root span, the agent spans beneath it, their steps, and their tool calls — and handles two awkward realities:
+Three tools answer conversation-time questions. They are designed as zoom levels and built on a shared base class, `TelepathistTool` (`src/telepathist/telepathist-tool.ts`). The base class walks the recorded span hierarchy (each turn's root span, the agent spans beneath it, their steps, and their tool calls) and handles two awkward realities:
 
 - A botched turn leaves multiple root spans for one turn number; only the last counts.
 - Fire-and-forget agents like the diplomatic analyst live in detached traces, so they must be found by turn and name rather than by trace.
@@ -43,7 +43,7 @@ It also parses flexible turn input (`"30"`, `"10,20,30"`, `"30-50"`) and summari
 
 | Tool | Zoom level | Returns |
 | --- | --- | --- |
-| `get-situation` | Wide | The world as the AI saw it — players, cities, military, resources — reconstructed from the recorded knowledge-tool outputs and formatted the way live agents saw it. The ground truth for judging a decision. |
+| `get-situation` | Wide | The world as the AI saw it (players, cities, military, resources), reconstructed from the recorded knowledge-tool outputs and formatted the way live agents saw it. The ground truth for judging a decision. |
 | `get-decision` | Medium | What the AI did and why: which agents ran, the options on the table, the reasoning, and each decision with its rationale. For turn ranges it serves cached turn summaries first and digs into the detailed record only where needed. |
 | `get-conversation-log` | Close | The deep dive: the full LLM conversation for a single turn, stitched per agent from system prompt through responses, optionally filtered to one agent. |
 
@@ -52,7 +52,7 @@ It also parses flexible turn input (`"30"`, `"10,20,30"`, `"30-50"`) and summari
 Two agents run on top of these tools:
 
 - **`talkative-telepathist`** (`src/telepathist/talkative-telepathist.ts`) is the conversational analyst, an in-character historian of the game who answers questions using the tools above.
-- **`episode-retriever`** (`src/telepathist/episode-retriever.ts`) is a programmatic, no-LLM sibling. Give it a turn number and it fetches and formats similar historical cases from the [archivist's](archivist.md) episode archive — a direct window into what the retrieval-augmented strategist would see.
+- **`episode-retriever`** (`src/telepathist/episode-retriever.ts`) is a programmatic, no-LLM sibling. Give it a turn number and it fetches and formats similar historical cases from the [archivist's](archivist.md) episode archive, a direct window into what the retrieval-augmented strategist would see.
 
 ## Running it
 
@@ -64,4 +64,4 @@ npm run telepathist -- -d <database>
 
 Bare filenames resolve under `telemetry/`. Use `-a` to select a different agent, and `--prepare` to run summarization only.
 
-The same experience is available in the dashboard. Create a chat with a database path instead of a live context, and the web backend builds the telepathist context, runs initialization with streamed progress, and chats over the same SSE channel — see [ui.md](ui.md).
+The same experience is available in the dashboard. Create a chat with a database path instead of a live context, and the web backend builds the telepathist context, runs initialization with streamed progress, and chats over the same SSE channel. See [ui.md](ui.md).

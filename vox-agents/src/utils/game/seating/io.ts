@@ -40,7 +40,7 @@ export async function acquireLock(lockPath: string, runnerId: string): Promise<v
   let attempt = 0;
   let delayMs = LOCK_INITIAL_DELAY_MS;
 
-  while (true) {
+  for (;;) {
     try {
       const fd = fs.openSync(lockPath, 'wx');
       fs.writeSync(fd, runnerId);

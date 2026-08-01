@@ -206,7 +206,7 @@ function consolidateEventsByTurn(events: Array<Record<string, unknown>>): Record
     const turnKey = `${event.Turn}`;
     
     // Create a copy of the event without Turn
-    const { Turn, ID, ...eventWithoutTurn } = event;
+    const { Turn: _Turn, ID: _ID, ...eventWithoutTurn } = event;
     
     if (!consolidated[turnKey]) {
       consolidated[turnKey] = [];
@@ -249,6 +249,7 @@ function consolidateConsecutiveEvents(events: Array<Record<string, unknown>>): A
     if (currentGroup && 
         currentGroup.Type === eventType &&
         eventsMatch(currentGroup, event, matchFields)) {
+      // Event belongs to the current group: it is appended below, so nothing to do here
     } else {
       // Flush current group if exists
       if (currentGroup) result.push(currentGroup);
@@ -308,7 +309,7 @@ function consolidateConsecutiveEvents(events: Array<Record<string, unknown>>): A
       const firstKeys = Object.keys(item.Events[0]);
       if (firstKeys.length === 1 && (item.Events as Record<string, unknown>[]).every((e: Record<string, unknown>) => Object.keys(e).length === 1 && Object.keys(e)[0] === firstKeys[0])) {
         const key = firstKeys[0];
-        var properties = (item.Events as Record<string, unknown>[]).map((event: Record<string, unknown>) => event[key]);
+        let properties = (item.Events as Record<string, unknown>[]).map((event: Record<string, unknown>) => event[key]);
         if (item.Type === "UnitSetXY" && key === "Plot") {
           // If the unit is a caravan, only keep the last plot
           if (item.AI == "TradeUnit") {

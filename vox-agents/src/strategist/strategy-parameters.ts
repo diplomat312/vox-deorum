@@ -318,7 +318,7 @@ export function buildGameContextMessages(parameters: StrategistParameters): Mode
     throw new Error(`No game state available near turn ${parameters.turn}`);
   }
   const { YouAre, ...SituationData } = parameters.metadata || {};
-  const { Options, ...Strategy } = state.options || {};
+  const { Options: _Options, ...Strategy } = state.options || {};
 
   return [{
       role: "system",

@@ -62,7 +62,7 @@ class GetBuildingTool extends DatabaseQueryTool<BuildingSummary, BuildingReport>
    * Fetch building summaries from database
    */
   protected async fetchSummaries(): Promise<BuildingSummary[]> {
-    var summaries = await gameDatabase.getDatabase()
+    const summaries = await gameDatabase.getDatabase()
       .selectFrom("Buildings as b")
       .leftJoin("Technologies as t", "b.PrereqTech", "t.Type")
       .leftJoin("Civilization_BuildingClassOverrides as cbo", "cbo.BuildingType", "b.Type")

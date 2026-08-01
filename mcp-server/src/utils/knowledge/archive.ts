@@ -96,7 +96,7 @@ export async function archiveGameData(
   try {
     // Get the strategist name from metadata or use override/default
     const store = knowledgeManager.getStore();
-    let experiment = experimentOverride ?? await store.getMetadata('experiment') ?? "none";
+    const experiment = experimentOverride ?? await store.getMetadata('experiment') ?? "none";
 
     // Get the game ID
     const gameId = knowledgeManager.getGameId();

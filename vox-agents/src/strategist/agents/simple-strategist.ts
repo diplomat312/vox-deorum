@@ -58,8 +58,8 @@ ${SimpleBriefer.eventsPrompt}`.trim()
   /**
    * Gets the initial messages for the conversation
    */
-  public async getInitialMessages(parameters: StrategistParameters, input: unknown, context: VoxContext<StrategistParameters>): Promise<ModelMessage[]> {
-    var state = getRecentGameState(parameters)!;
+  public async getInitialMessages(parameters: StrategistParameters, _input: unknown, _context: VoxContext<StrategistParameters>): Promise<ModelMessage[]> {
+    const state = getRecentGameState(parameters)!;
     const { YouAre, ...SituationData } = parameters.metadata || {};
     const { Options, ...Strategy } = state.options || {};
     // Return the messages

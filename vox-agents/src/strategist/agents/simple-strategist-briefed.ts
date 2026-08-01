@@ -62,7 +62,7 @@ ${SimpleStrategistBase.playersInfoPrompt}
    * Gets the initial messages for the conversation
    */
   public async getInitialMessages(parameters: StrategistParameters, _input: unknown, context: VoxContext<StrategistParameters>): Promise<ModelMessage[]> {
-    var state = getRecentGameState(parameters)!;
+    const state = getRecentGameState(parameters)!;
     // Fold the focus-briefer instructions into one for the combined briefer
     const instruction = buildCombinedInstruction(parameters);
 

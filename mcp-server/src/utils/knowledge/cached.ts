@@ -20,7 +20,7 @@ export async function readPlayerKnowledge<T>
 
   // Use getMutableKnowledge to read from the knowledge database
   // The key for player-specific knowledge is typically the playerId
-  var cached = await store.getMutableKnowledge(
+  let cached = await store.getMutableKnowledge(
     table as any,
     playerId,
     undefined,
@@ -50,7 +50,7 @@ export async function readPublicKnowledgeBatch<T>
   const store = knowledgeManager.getStore();
 
   // Use getMutableKnowledgeBatch to read all entries from the knowledge database
-  var cached = await store.getAllPublicKnowledge(
+  let cached = await store.getAllPublicKnowledge(
     table as any
   );
 

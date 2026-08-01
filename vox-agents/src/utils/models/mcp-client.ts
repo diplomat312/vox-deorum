@@ -351,7 +351,7 @@ export class MCPClient extends EventEmitter {
       throw new Error('Not connected to MCP server');
     }
 
-    for (var I = 0; I <= 3; I++) {
+    for (let I = 0; I <= 3; I++) {
       try {
         // Out potato servers can be *really* slow
         const result = await this.client.callTool({ name, arguments: args }, undefined, {

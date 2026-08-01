@@ -37,7 +37,7 @@ function deepEqual(a: unknown, b: unknown): boolean {
  */
 function stripLLMId(val: string | LLMConfig | null): string | Omit<LLMConfig, 'id'> | null {
   if (typeof val !== 'object' || val === null) return val;
-  const { id, ...rest } = val;
+  const { id: _id, ...rest } = val;
   return rest;
 }
 

@@ -15,6 +15,7 @@ const logger = createLogger('PlayerActions');
  * Preserves tabs (\t), newlines (\n), and carriage returns (\r).
  */
 export function sanitize(text: string): string {
+  // eslint-disable-next-line no-control-regex -- matching control characters is the point here
   return text.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
 }
 

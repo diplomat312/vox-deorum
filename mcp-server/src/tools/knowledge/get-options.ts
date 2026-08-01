@@ -212,7 +212,7 @@ class GetOptionsTool extends ToolBase {
         Object.fromEntries(
           cleanOptions.Policies.map(policyName => {
             const current = policies.find((s) => s.Name === policyName);
-            var Help = formatPolicyHelp(current?.Help ?? "", policyName);
+            const Help = formatPolicyHelp(current?.Help ?? "", policyName);
             if (!current?.Branch) throw new Error(`Failed to retrieve the policy branch: ${policyName}`);
             // Add tenet level information for ideology policies
             let displayName = policyName;
@@ -227,7 +227,7 @@ class GetOptionsTool extends ToolBase {
             ];
           }).concat(cleanOptions.PolicyBranches.map(policyName => {
             const current = policies.find((s) => s.Name === policyName);
-            var Help = formatPolicyHelp(current?.Help ?? "", policyName);
+            const Help = formatPolicyHelp(current?.Help ?? "", policyName);
             return [
               policyName + " (New Branch)",
               Help.length > 1 ? Help : Help[0]
@@ -256,7 +256,7 @@ class GetOptionsTool extends ToolBase {
     // Add mode-specific result fields
     if (isFlavorMode) {
       // In Flavor mode: Add current flavors
-      const { Key, Rationale, GrandStrategy, ...flavorValues } = flavors!;
+      const { Key: _Key, Rationale, GrandStrategy, ...flavorValues } = flavors!;
       result.Strategy = {
         Rationale: Rationale,
         GrandStrategy: GrandStrategy,
@@ -298,7 +298,7 @@ class GetOptionsTool extends ToolBase {
     }
 
     return result;
-  };
+  }
 }
 
 /**

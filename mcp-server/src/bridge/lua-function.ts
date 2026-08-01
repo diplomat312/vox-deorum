@@ -123,7 +123,7 @@ export class LuaFunction {
    * Execute the function with given arguments
    */
   public async execute(...args: any[]): Promise<LuaResponse> {
-    var bridgeManager = MCPServer.getInstance().getBridgeManager();
+    const bridgeManager = MCPServer.getInstance().getBridgeManager();
     // Try to register with the manager if not already done
     if (!this._registered) await this.register();
 

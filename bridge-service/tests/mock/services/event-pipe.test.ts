@@ -20,6 +20,7 @@ const mocks = vi.hoisted(() => {
     serverStart: vi.fn(),
     serverStop: vi.fn(),
     broadcast: vi.fn(),
+    emit: vi.fn(),
     serverOn: vi.fn(),
     config: {} as Record<string, any>
   };
@@ -34,6 +35,7 @@ vi.mock('node-ipc', () => {
         start: mocks.serverStart,
         stop: mocks.serverStop,
         broadcast: mocks.broadcast,
+        emit: mocks.emit,
         on: mocks.serverOn
       }
     }
@@ -207,14 +209,17 @@ describe('EventPipe.getStats', () => {
 });
 
 describe('EventPipe connect/disconnect handlers', () => {
-  it('increments the client count and broadcasts a welcome payload on connect', async () => {
+  it('increments the client count and sends a welcome payload to only the connecting socket', async () => {
     const pipe = await startedPipe();
+    const socket = { id: 'fake-socket' };
 
-    mocks.handlers['connect']?.();
+    mocks.handlers['connect']?.(socket);
 
     expect(pipe.getStats().clients).toBe(1);
-    expect(mocks.broadcast).toHaveBeenCalledTimes(1);
-    const payload = mocks.broadcast.mock.calls[0][0] as string;
+    expect(mocks.broadcast).not.toHaveBeenCalled();
+    expect(mocks.emit).toHaveBeenCalledTimes(1);
+    const [emittedSocket, payload] = mocks.emit.mock.calls[0] as [unknown, string];
+    expect(emittedSocket).toBe(socket);
     expect(payload.endsWith(DELIMITER)).toBe(true);
     const parsed = JSON.parse(payload.slice(0, -DELIMITER.length));
     expect(parsed.type).toBe('connected');

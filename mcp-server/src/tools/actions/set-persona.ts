@@ -98,7 +98,7 @@ class SetPersonaTool extends ActionTool<Record<string, number>> {
    */
   async execute(args: z.infer<typeof this.inputSchema>): Promise<z.infer<typeof this.outputSchema>> {
     // Resolve turn and trim rationale
-    const { Rationale: rawRationale, Turn: sourceTurn, PlayerID, ...personaValues } = args;
+    const { Rationale: rawRationale, Turn: _sourceTurn, PlayerID, ...personaValues } = args;
     const Rationale = this.trimRationale(rawRationale);
     const turn = this.resolveSourceTurn(args);
 

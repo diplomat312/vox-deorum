@@ -60,7 +60,7 @@ class GetTechnologyTool extends DatabaseQueryTool<TechnologySummary, TechnologyR
    */
   protected async fetchSummaries(): Promise<TechnologySummary[]> {
     const db = gameDatabase.getDatabase();
-    var summaries = await db
+    const summaries = await db
       .selectFrom("Technologies as t")
       .leftJoin("Eras as e", "t.Era", "e.Type")
       .select(['t.Type', 't.Description as Name', 't.Help', 't.Cost', 'e.Type as Era'])

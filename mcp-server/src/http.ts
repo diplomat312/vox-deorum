@@ -193,11 +193,11 @@ export async function startHttpServer(setupSignalHandlers = true): Promise<() =>
   }
 
   // Start the server
-  const port = config.transport.port || 3000;
+  // ?? rather than ||, so a configured port of 0 (any free port) reaches listen().
+  const port = config.transport.port ?? 3000;
   const host = config.transport.host || '127.0.0.1';
 
   try {
-    await writeShutdownUrlFile(host, port);
     await mcpServer.initialize();
     // Register the tool catalog (kept out of server.ts's import graph; see tools/index.ts)
     registerDefaultTools(mcpServer);
@@ -212,6 +212,12 @@ export async function startHttpServer(setupSignalHandlers = true): Promise<() =>
       logger.info(`Streamable HTTP endpoint: http://${actualHost}:${actualPort}/mcp`);
       logger.info(`Health check: http://${actualHost}:${actualPort}/health`);
       logger.info(`Shutdown endpoint: POST http://${actualHost}:${actualPort}/shutdown`);
+
+      // Write the shutdown URL file only after the OS has assigned the actual port,
+      // so a dynamic port (0) resolves to the real bound port rather than 0.
+      void writeShutdownUrlFile(actualHost, actualPort).catch((error) => {
+        logger.warn(`Failed to write shutdown URL file: ${String(error)}`);
+      });
     });
 
     return shutdown;

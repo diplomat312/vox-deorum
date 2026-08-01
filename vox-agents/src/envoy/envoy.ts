@@ -85,7 +85,7 @@ function cloneModelMessage(message: ModelMessage): ModelMessage {
  * when that token is the last message. Override `getSpecialMessages` to extend or replace.
  */
 export const specialMessages: Record<string, string> = {
-  "{{{Greeting}}}": "Send a one-sentence greeting appropriate to your diplomatic relationship, adjusting tone to the situation. Use the \`send-message\` tool.",
+  "{{{Greeting}}}": "Send a one-sentence greeting appropriate to your diplomatic relationship, adjusting tone to the situation. Use the `send-message` tool.",
 };
 
 /**

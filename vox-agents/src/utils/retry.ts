@@ -69,7 +69,6 @@ export async function exponentialRetry<T>(
       let isTimedOut = false;
       let lastKnown = new Date();
       let timeoutReject: (reason: Error) => void;
-      let request: Promise<T> | undefined;
 
       const timeoutPromise = new Promise<never>((_, reject) => {
         timeoutReject = reject;
@@ -89,7 +88,7 @@ export async function exponentialRetry<T>(
             if (isTimedOut || hasCompleted) return;
             isTimedOut = true;
             // Build the message
-            let message = `[${source}] Function execution timed out after ${executionTimeout}ms (${executionTimeout / 60000} minutes). Last known activity: ${lastKnown.toLocaleTimeString('en-US', {
+            const message = `[${source}] Function execution timed out after ${executionTimeout}ms (${executionTimeout / 60000} minutes). Last known activity: ${lastKnown.toLocaleTimeString('en-US', {
               hour12: false,
               hour: '2-digit',
               minute: '2-digit',
@@ -107,7 +106,7 @@ export async function exponentialRetry<T>(
       
       // Start initial timeout
       resetTimeout(false);
-      request = fn(resetTimeout, attempt).then((value) => { hasCompleted = true; return value; });
+      const request = fn(resetTimeout, attempt).then((value) => { hasCompleted = true; return value; });
 
       // Race between the function execution and timeout
       const result = await Promise.race([

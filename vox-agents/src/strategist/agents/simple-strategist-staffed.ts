@@ -61,7 +61,7 @@ ${SimpleStrategistBase.briefingsResourcePrompt}`.trim()
    * Gets the initial messages for the conversation
    */
   public async getInitialMessages(parameters: StrategistParameters, input: unknown, context: VoxContext<StrategistParameters>): Promise<ModelMessage[]> {
-    var state = getRecentGameState(parameters)!;
+    const state = getRecentGameState(parameters)!;
     let briefingsContent: string;
     const militaryInstruction = parameters.workingMemory[briefingInstructionKeys.Military];
     const economyInstruction = parameters.workingMemory[briefingInstructionKeys.Economy];

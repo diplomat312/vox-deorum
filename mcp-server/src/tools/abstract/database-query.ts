@@ -137,7 +137,7 @@ export abstract class DatabaseQueryTool<
       
       // Apply fuzzy search if search term provided
       if (args.Search) {
-        let matches = search(args.Search, summaries, {
+        const matches = search(args.Search, summaries, {
           keySelector: (item: TSummary) => this.getSearchKeys(item),
           threshold: this.getSearchThreshold(),
           returnMatchData: true

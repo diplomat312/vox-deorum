@@ -140,7 +140,6 @@ export async function streamTextWithConcurrency<T extends Parameters<typeof stre
   // Wrap the streamText call with both concurrency limiting and exponential retry
   return limiter(async () => {
     let maxIteration = 0;
-    let toolCount = 0;
 
     // Convert system messages after the first non-system message to user messages
     if (modelConfig?.options?.systemPromptFirst && params.messages) {
@@ -157,11 +156,9 @@ export async function streamTextWithConcurrency<T extends Parameters<typeof stre
     return exponentialRetry(async (update, iteration) => {
       context.timeoutRefresh = () => {
         update();
-        toolCount++;
       }
       maxIteration = iteration;
-      toolCount = 0;
-      
+
       // Call streamText with all the original parameters
       // Modify onChunk to call the update function for retry timeout reset
       // Also discard late returns if a previous aborted attempt gets resurrected
@@ -199,7 +196,7 @@ export async function streamTextWithConcurrency<T extends Parameters<typeof stre
       const result = streamText(modifiedParams);
       const reader = result.fullStream.getReader();
       try {
-        while (true) {
+        for (;;) {
           const { done } = await reader.read();
           if (done) break;
           update(false);
@@ -220,7 +217,7 @@ export async function streamTextWithConcurrency<T extends Parameters<typeof stre
           }
         }
 
-        var response = {
+        const response = {
           ...result,
           steps,
         };

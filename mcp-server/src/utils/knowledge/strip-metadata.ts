@@ -65,7 +65,7 @@ export function stripMutableKnowledgeMetadata<T extends MutableKnowledge>(
   const stripped = stripTimedKnowledgeMetadata(obj);
   
   // Remove MutableKnowledge-specific fields except Key
-  const { Key, Version, IsLatest, Changes, ...rest } = stripped as any;
+  const { Key, Version: _Version, IsLatest: _IsLatest, Changes: _Changes, ...rest } = stripped as any;
   
   // Add Key back with optional rename
   if (keyFieldName)

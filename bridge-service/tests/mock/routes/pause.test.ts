@@ -40,16 +40,16 @@ describe('Pause Routes', () => {
   it('registers and unregisters paused players through the REST API', async () => {
     const registerResponse = await request(app).post('/external/pause-player/0').expect(200);
     expect(registerResponse.body.success).toBe(true);
-    expect(registerResponse.body.pausedPlayers).toEqual([0]);
+    expect(registerResponse.body.result.pausedPlayers).toEqual([0]);
 
     const listResponse = await request(app).get('/external/paused-players').expect(200);
     expect(listResponse.body.success).toBe(true);
-    expect(listResponse.body.pausedPlayers).toEqual([0]);
-    expect(listResponse.body.isGamePaused).toBe(false);
+    expect(listResponse.body.result.pausedPlayers).toEqual([0]);
+    expect(listResponse.body.result.isGamePaused).toBe(false);
 
     const unregisterResponse = await request(app).delete('/external/pause-player/0').expect(200);
     expect(unregisterResponse.body.success).toBe(true);
-    expect(unregisterResponse.body.pausedPlayers).toEqual([]);
+    expect(unregisterResponse.body.result.pausedPlayers).toEqual([]);
 
     expect(sentMessages).toEqual([
       { type: 'pause_player', playerID: 0 },
@@ -64,7 +64,7 @@ describe('Pause Routes', () => {
     const clearResponse = await request(app).delete('/external/paused-players').expect(200);
     expect(clearResponse.body).toEqual({
       success: true,
-      pausedPlayers: []
+      result: { pausedPlayers: [] }
     });
 
     expect(sentMessages.map(message => message.type)).toEqual([
@@ -75,15 +75,17 @@ describe('Pause Routes', () => {
   });
 
   it.each([
-    { playerId: -1, expectedSuccess: false },
-    { playerId: 0, expectedSuccess: true },
-    { playerId: 63, expectedSuccess: true },
-    { playerId: 64, expectedSuccess: false }
-  ])('validates pause-player boundaries for $playerId', async ({ playerId, expectedSuccess }) => {
+    { playerId: -1, expectedSuccess: false, expectedError: 'INVALID_ARGUMENTS' },
+    { playerId: 0, expectedSuccess: true, expectedError: undefined },
+    { playerId: 63, expectedSuccess: true, expectedError: undefined },
+    { playerId: 64, expectedSuccess: false, expectedError: 'INVALID_ARGUMENTS' }
+  ])('validates pause-player boundaries for $playerId', async ({ playerId, expectedSuccess, expectedError }) => {
     const registerResponse = await request(app).post(`/external/pause-player/${playerId}`).expect(200);
     expect(registerResponse.body.success).toBe(expectedSuccess);
+    expect(registerResponse.body.error?.code).toBe(expectedError);
 
     const unregisterResponse = await request(app).delete(`/external/pause-player/${playerId}`).expect(200);
     expect(unregisterResponse.body.success).toBe(expectedSuccess);
+    expect(unregisterResponse.body.error?.code).toBe(expectedError);
   });
 });

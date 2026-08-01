@@ -115,7 +115,7 @@ export function createAgentDealStatusRoutes(): Router {
   router.post(
     '/agents/chat/:chatId/close',
     async (
-      req: Request<{ chatId: string }, {}, { message?: string }>,
+      req: Request<{ chatId: string }, object, { message?: string }>,
       res: Response<GetChatResponse | ErrorResponse>,
     ): Promise<Response> => {
       const thread = chatThreadStore.get(req.params.chatId);
@@ -148,7 +148,7 @@ export function createAgentDealStatusRoutes(): Router {
   router.post(
     '/agents/chat/:chatId/deal/inspect',
     async (
-      req: Request<{ chatId: string }, {}, InspectDealRequest>,
+      req: Request<{ chatId: string }, object, InspectDealRequest>,
       res: Response<InspectDealResponse | ErrorResponse>,
     ): Promise<Response> => {
       const thread = resolveDealThread(req.params.chatId, res);
@@ -178,7 +178,7 @@ export function createAgentDealStatusRoutes(): Router {
   router.post(
     '/agents/chat/:chatId/deal/reject',
     async (
-      req: Request<{ chatId: string }, {}, DealRejectRequest>,
+      req: Request<{ chatId: string }, object, DealRejectRequest>,
       res: Response<GetChatResponse | ErrorResponse>,
     ): Promise<Response> => {
       const thread = resolveDealThread(req.params.chatId, res);
@@ -205,7 +205,7 @@ export function createAgentDealStatusRoutes(): Router {
   router.post(
     '/agents/chat/:chatId/deal/accept',
     async (
-      req: Request<{ chatId: string }, {}, DealAcceptRequest>,
+      req: Request<{ chatId: string }, object, DealAcceptRequest>,
       res: Response<GetChatResponse | ErrorResponse>,
     ): Promise<Response> => {
       const thread = resolveDealThread(req.params.chatId, res);

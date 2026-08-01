@@ -218,9 +218,9 @@ export class VoxContext<TParameters extends AgentParameters> {
     // MCP tools
     const rawMcpTools = await mcpClient.getTools();
     this.mcpToolMap = new Map(rawMcpTools.map(t => [t.name, t]));
-    var mcpTools = wrapMCPTools(rawMcpTools, this);
+    const mcpTools = wrapMCPTools(rawMcpTools, this);
 
-    for (var tool of Object.keys(mcpTools)) {
+    for (const tool of Object.keys(mcpTools)) {
       this.tools[tool] = mcpTools[tool];
     }
 
@@ -585,7 +585,7 @@ export class VoxContext<TParameters extends AgentParameters> {
           // Execute the agent using generateText
           // Get model config - agent's model or default, with overrides applied
           const modelConfig = agent.getModel(params, input, this.modelOverrides);
-          var system = await agent.getSystem(params, input, this);
+          const system = await agent.getSystem(params, input, this);
 
           // Auto-send model name via set-metadata when the strategist's model changes
           if (agent.name.includes("-strategist")) {
@@ -602,21 +602,21 @@ export class VoxContext<TParameters extends AgentParameters> {
           }
 
           if (system != "") {
-            var shouldStop = false;
-            var messages: ModelMessage[] = [{
+            let shouldStop = false;
+            let messages: ModelMessage[] = [{
               role: "system",
               content: system
             }];
 
             const initialMessages = await agent.getInitialMessages(params, input, this);
             messages.push(...initialMessages);
-            var allSteps: StepResult<ToolSet>[] = [];
-            var finalText = "";
+            const allSteps: StepResult<ToolSet>[] = [];
+            let finalText = "";
 
             // Count tokens
-            var inputTokens = 0;
-            var reasoningTokens = 0;
-            var outputTokens = 0;
+            let inputTokens = 0;
+            let reasoningTokens = 0;
+            let outputTokens = 0;
 
             // Execute steps in a loop, one at a time
             for (let stepCount = 0; !shouldStop; stepCount++) {

@@ -30,7 +30,7 @@ export function createTimedKnowledgeTable<T extends string>(
   db: Kysely<KnowledgeDatabase>,
   tableName: T
 ): CreateTableBuilder<T, 'ID' | 'Turn' | 'Key' | 'OwnerID' | 'KnownByIDs' | 'Payload' | 'IsLatest' | 'CreatedAt'> {
-  var schema = db.schema
+  let schema = db.schema
     .createTable(tableName)
     .ifNotExists()
     .addColumn('ID', 'integer', (col) => col.primaryKey().autoIncrement())

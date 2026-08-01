@@ -10,6 +10,7 @@
     "start": "npm run build && npm run start:dist",
     "start:dist": "node --inspect=7000 dist/index.js",
     "type-check": "tsc --noEmit",
+    "lint": "eslint src --ext .ts",
     "clean": "rimraf dist",
     "test": "cross-env USE_MOCK=true vitest run",
     "test:mock": "cross-env USE_MOCK=true vitest run",

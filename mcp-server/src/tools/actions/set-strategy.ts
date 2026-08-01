@@ -99,19 +99,19 @@ class SetStrategyTool extends ActionTool<SetStrategyResultType> {
    */
   async execute(args: z.infer<typeof this.inputSchema>): Promise<z.infer<typeof this.outputSchema>> {
     // Resolve turn and trim rationale
-    const { Rationale: rawRationale, Turn: sourceTurn, ...otherArgs } = args;
+    const { Rationale: rawRationale, Turn: _sourceTurn, ...otherArgs } = args;
     const Rationale = this.trimRationale(rawRationale);
     const turn = this.resolveSourceTurn(args);
 
     // Find the strategy ID from the string name
-    let grandStrategyId = retrieveEnumValue("GrandStrategy", otherArgs.GrandStrategy)
-    let economicStrategyIds = otherArgs.EconomicStrategies?.
+    const grandStrategyId = retrieveEnumValue("GrandStrategy", otherArgs.GrandStrategy)
+    const economicStrategyIds = otherArgs.EconomicStrategies?.
       map(s => retrieveEnumValue("EconomicStrategy", s)).filter(s => s !== -1);
-    let militaryStrategyIds = otherArgs.MilitaryStrategies?.
+    const militaryStrategyIds = otherArgs.MilitaryStrategies?.
       map(s => retrieveEnumValue("MilitaryStrategy", s)).filter(s => s !== -1);
 
     // Call the parent execute with the strategy ID
-    var result = await super.call(otherArgs.PlayerID, grandStrategyId, economicStrategyIds, militaryStrategyIds);
+    const result = await super.call(otherArgs.PlayerID, grandStrategyId, economicStrategyIds, militaryStrategyIds);
     if (result.Success) {
       const store = this.getStore();
       const lastRationale = (await store.getMutableKnowledge("StrategyChanges", otherArgs.PlayerID))?.Rationale ?? "Unknown";

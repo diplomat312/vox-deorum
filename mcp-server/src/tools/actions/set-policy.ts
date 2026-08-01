@@ -111,7 +111,8 @@ class SetPolicyTool extends ActionTool<SetPolicyResultType> {
    */
   async execute(args: z.infer<typeof this.inputSchema>): Promise<z.infer<typeof this.outputSchema>> {
     // Extract the arguments and trim rationale
-    var { PlayerID, Policy, Rationale: rawRationale, Turn: _sourceTurn } = args;
+    const { PlayerID, Rationale: rawRationale, Turn: _sourceTurn } = args;
+    let Policy = args.Policy;
     const Rationale = this.trimRationale(rawRationale);
     const turn = this.resolveSourceTurn(args);
 

@@ -133,6 +133,7 @@ export interface KnowledgeDatabase {
   PlayerOptions: PlayerOptions;
   TacticalZones: TacticalZones;
   DiplomaticMessages: DiplomaticMessage;
+  RelationshipChanges: RelationshipChange;
   // Mutable Knowledge
   PlayerSummaries: PlayerSummary;
   PlayerOpinions: PlayerOpinions;
@@ -142,7 +143,6 @@ export interface KnowledgeDatabase {
   StrategyChanges: StrategyChange;
   PolicyChanges: PolicyChange;
   ResearchChanges: ResearchChange;
-  RelationshipChanges: RelationshipChange;
   VictoryProgress: VictoryProgress;
   // Public Knowledge
   PlayerInformations: PlayerInformation;

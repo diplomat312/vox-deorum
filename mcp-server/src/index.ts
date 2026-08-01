@@ -27,7 +27,7 @@ const logger = createLogger('index');
  * Main function - Initialize and start the MCP server with selected transport
  *
  * Starts the MCP server using either stdio or HTTP transport based on configuration.
- * The server will expose game state tools and resources to MCP-compatible clients.
+ * The server will expose game state tools to MCP-compatible clients.
  *
  * @returns Promise that resolves when the server is started
  * @throws {Error} If an unknown transport type is configured

@@ -57,7 +57,7 @@ export function parseContextIdentifier(contextId: string): GameIdentifierInfo {
  */
 export function parseDatabaseIdentifier(databasePath: string, basePath?: string): GameIdentifierInfo {
   const nameWithoutExt = path.basename(databasePath, '.db');
-  let result: GameIdentifierInfo = parseContextIdentifier(nameWithoutExt);
+  const result: GameIdentifierInfo = parseContextIdentifier(nameWithoutExt);
 
   // Extract folder path if base path is provided
   if (basePath) {

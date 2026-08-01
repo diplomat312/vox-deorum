@@ -1,4 +1,4 @@
-# vox-agents — Envoys
+# vox-agents: Envoys
 
 Envoys are the agents a human actually talks to. Each AI civilization can field two of them:
 
@@ -7,7 +7,7 @@ Envoys are the agents a human actually talks to. Each AI civilization can field 
 
 Where [strategists](strategist.md) act once per turn, envoys live in chat threads. A single conversation can span many turns of the same game.
 
-The chat itself is carried by the web backend. The in-game chat surface and the dashboard's chat view both talk to the same `/api/agents` routes, which execute the envoy and stream its reply back over SSE (see [ui.md](ui.md)). On the game side, the mod only renders the results — the words come from here, as the civ5-mod [ui.md](../civ5-mod/ui.md) page notes from its side of the fence.
+The chat itself is carried by the web backend. The in-game chat surface and the dashboard's chat view both talk to the same `/api/agents` routes, which execute the envoy and stream its reply back over SSE (see [ui.md](ui.md)). On the game side the mod only renders the results; the words come from here, as the civ5-mod [ui.md](../civ5-mod/ui.md) page notes from its side.
 
 ## The Envoy base class
 
@@ -21,43 +21,48 @@ Those time annotations let replies be prefixed with `[Turn N]` markers and let t
 
 ### Special messages
 
-Envoys also understand **special messages**: triple-brace tokens like `{{{Greeting}}}` that the UI sends instead of user text to trigger a behavior — typically "introduce yourself in one sentence" when a chat is first opened. Each envoy declares which special messages it supports via `getSpecialMessages()`, and tools are disabled while one is being handled. The same mechanism drives the [telepathist's](telepathist.md) `{{{Initialize}}}` bootstrapping, since telepathists are envoys too.
+Envoys also understand **special messages**: triple-brace tokens like `{{{Greeting}}}` that the UI sends instead of user text to trigger a behavior, typically "introduce yourself in one sentence" when a chat is first opened. Each envoy declares which special messages it supports via `getSpecialMessages()`, and tools are disabled while one is being handled. The same mechanism drives the [telepathist's](telepathist.md) `{{{Initialize}}}` bootstrapping, since telepathists are envoys too.
 
 ## LiveEnvoy: chatting inside a running game
 
 `LiveEnvoy` (`src/envoy/live-envoy.ts`) binds an envoy to a live strategist session. Each chat opens its own [root run](overview.md) over the seat's base parameters at the session's live turn. The envoy therefore reasons about the current turn even when the strategist is still finishing an older queued turn, and it reuses the seat's cached game state and metadata without disturbing the strategist's run.
 
-It opens the conversation with the civilization's identity, the players it knows, and its current strategy. It exposes a `get-briefing` tool so the envoy can pull fresh military, economic, or diplomatic [briefings](support-agents.md) on demand instead of carrying the whole game state in context. Subclasses supply a `getHint()` — a standing reminder of who they are and who they are talking to.
+It opens the conversation with the civilization's identity, the players it knows, and its current strategy. It exposes a `get-briefing` tool so the envoy can pull fresh military, economic, or diplomatic [briefings](support-agents.md) on demand instead of carrying the whole game state in context. Subclasses supply a `getHint()`, a standing reminder of who they are and who they are talking to.
 
 Both concrete envoys share prompt building blocks (`src/envoy/context/envoy-prompts.ts`):
 
 - The fictional-world framing.
-- An explicit disclaimer that the envoy has **no decision-making power** — it cannot bind its leader to anything.
+- An explicit disclaimer that the envoy has **no decision-making power**: it cannot bind its leader to anything.
 - A communication style that matches the leader's personality while staying strategically vague about sensitive details.
-- Audience-aware framing — warm with allies, guarded or taunting with rivals, professionally courteous with neutrals.
+- Audience-aware framing: warm with allies, guarded or taunting with rivals, professionally courteous with neutrals.
 
 ### Spokesperson
 
-`Spokesperson` (`src/envoy/agents/spokesperson.ts`) is the civilization's public voice. It answers questions about its nation's positions and views, drawing on briefings and diplomatic history (`get-diplomatic-events`). It conveys existing positions rather than creating new ones, and it does not report back to anyone — a conversation with the spokesperson stays between you and it.
+`Spokesperson` (`src/envoy/agents/spokesperson.ts`) is the civilization's public voice. It answers questions about its nation's positions and views, drawing on briefings and diplomatic history (`get-diplomatic-events`). It conveys existing positions rather than creating new ones, and it does not report back to anyone. A conversation with the spokesperson stays between you and it.
 
 ### Diplomat
 
-`Diplomat` (`src/envoy/agents/diplomat.ts`) plays the same conversational role with one crucial addition: it is an intelligence collector. Alongside the spokesperson's tools it has `call-diplomatic-analyst`. When a conversation produces something noteworthy — an official proposal, a threat, a rumor, an observation — the diplomat files a report (content, situation context, and its own memo) to the [diplomatic analyst](support-agents.md).
+`Diplomat` (`src/envoy/agents/diplomat.ts`) plays the same conversational role with one crucial addition: it is an intelligence collector. Alongside the spokesperson's tools it has `call-diplomatic-analyst`. When a conversation produces something noteworthy (an official proposal, a threat, a rumor, an observation) the diplomat files a report to the [diplomatic analyst](support-agents.md), carrying the content, the situation context, and its own memo.
 
 That call is fire-and-forget. The handoff forks a detached root run that keeps the submitting diplomat's turn and survives cancellation of the chat. The analyst assesses the report in the background and decides independently whether to relay it to the leader, while the diplomat keeps talking without pause. The diplomat itself still has no authority to agree to anything.
 
 The distinction to keep in mind (and in any UI copy): **talk to a spokesperson to learn about a civilization; talk to a diplomat and the civilization may learn about you.**
 
-Diplomats also see the deal items the game currently allows each side to offer. This is conversational
-awareness only. Diplomats still hand deal construction and every accept, counter, or reject decision
-to the negotiator.
+### Deals and negotiation
+
+Diplomats see the deal items the game currently allows each side to offer, but that is conversational awareness only. Deal terms and every accept, counter, or reject decision belong to the negotiator (`src/envoy/agents/negotiator.ts`), which works against the ledger in `src/envoy/ledger/`. The full round trip, from an in-game panel through the MCP deal tools and back, is described in [diplomacy.md](../diplomacy.md).
 
 ## How a chat reaches an envoy
 
-A chat thread is created through `POST /api/agents/chat` with a live context ID, which attaches the thread to the player's existing `VoxContext`. Messages then arrive via `POST /api/agents/message`, which appends the user message to the thread, executes the thread's agent, and streams text, reasoning, and tool-call events back as SSE.
+A chat thread is created through `POST /api/agents/chat` with a live context ID, which attaches the thread to the player's existing `VoxContext`. Messages then arrive via `POST /api/agents/message`, which appends the user message to the thread, executes the thread's agent, and streams text, reasoning, and tool-call events back as SSE. Those handlers and the thread store live in `src/web/chat/` (see [ui.md](ui.md)).
 
-Each request runs in its own live-turn root run, so a client disconnecting cancels only that run, leaving any sibling strategist turn or other chat on the same seat untouched. The dashboard's chat view (and anything else speaking that API) renders the stream. The route details and the views live in [ui.md](ui.md).
+Each request runs in its own live-turn root run, so a client disconnecting cancels only that run, leaving any sibling strategist turn or other chat on the same seat untouched.
 
-In a diplomacy thread, `send-message` streams the model's raw Message argument as it arrives. Thread creation accepts only voices that require this tool, so a free-text reply cannot bypass archival. Once the call is complete, the tool removes any echoed turn and speaker prefix before appending the durable transcript row. The terminal path then removes transient model and tool traffic, inserts every row that committed during the turn into the in-memory cache, and reports those rows to the client. If a turn neither speaks nor takes a terminal action, it streams and archives the shared retry line. A close requested by the diplomat waits for terminal reconciliation so the close row is committed last.
+Two envoy tools carry the archival guarantees for diplomacy threads:
 
-The same thread machinery serves database-backed conversations after a game ends — that is the [telepathist](telepathist.md), an envoy whose "game state" is a recorded telemetry database rather than a live session.
+- `src/envoy/tools/send-message-tool.ts` defines `send-message`, the only way such a thread can speak. It streams the model's raw Message argument as it arrives, strips any echoed turn and speaker prefix, and appends the durable transcript row. Thread creation accepts only voices that require this tool, so a free-text reply cannot bypass archival.
+- `src/envoy/tools/close-conversation-tool.ts` defines `close-conversation`, which stages the close so its transcript row commits last, after the turn's other rows are reconciled.
+
+At the end of a turn, transient model and tool traffic is dropped, every row that committed during the turn is inserted into the in-memory cache, and those rows are reported to the client. A turn that neither speaks nor takes a terminal action streams and archives a shared retry line.
+
+The same thread machinery serves database-backed conversations after a game ends. That is the [telepathist](telepathist.md), an envoy whose "game state" is a recorded telemetry database rather than a live session.

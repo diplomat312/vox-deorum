@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { pauseManager } from '../../../src/services/pause-manager.js';
 import { dllConnector } from '../../../src/services/dll-connector.js';
-import { respondSuccess } from '../../../src/types/api.js';
+import { ErrorCode, respondError, respondSuccess } from '../../../src/types/api.js';
 
 describe('Pause Manager', () => {
   beforeEach(() => {
@@ -68,5 +68,21 @@ describe('Pause Manager', () => {
 
     expect(pauseManager.getPausedPlayers()).toEqual([]);
     expect(pauseManager.isGamePaused()).toBe(false);
+  });
+
+  describe('registerPausedPlayer', () => {
+    it('should not record the player id when the DLL send fails', () => {
+      vi.spyOn(dllConnector, 'sendNoWait').mockReturnValue(respondError(ErrorCode.DLL_DISCONNECTED));
+
+      expect(pauseManager.registerPausedPlayer(6)).toBe(false);
+      expect(pauseManager.getPausedPlayers()).toEqual([]);
+    });
+
+    it('should record the player id and return true when the DLL send succeeds', () => {
+      vi.spyOn(dllConnector, 'sendNoWait').mockReturnValue(respondSuccess());
+
+      expect(pauseManager.registerPausedPlayer(6)).toBe(true);
+      expect(pauseManager.getPausedPlayers()).toEqual([6]);
+    });
   });
 });

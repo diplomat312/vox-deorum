@@ -113,18 +113,22 @@ class PauseManager {
       return false;
     }
 
-    // Add to local state
-    this.pausedPlayerIds.add(playerId);
-    logger.info(`Player ${playerId} added to paused players list`);
-
-    // Send to DLL
+    // Tell the DLL first. Recording a registration the game never received would leave a
+    // stale id that the reconnect resync replays later, even though the caller was told
+    // the request failed.
     const message: PauseMessage = {
       type: 'pause_player',
       playerID: playerId
     };
     const result = dllConnector.sendNoWait(message);
+    if (!result.success) {
+      logger.warn(`Player ${playerId} not paused: ${result.error?.code ?? 'send failed'}`);
+      return false;
+    }
 
-    return result.success;
+    this.pausedPlayerIds.add(playerId);
+    logger.info(`Player ${playerId} added to paused players list`);
+    return true;
   }
 
   /**

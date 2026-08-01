@@ -104,6 +104,19 @@ jobs:
           Write-Host "Building version: $version"
           Write-Host "Installer will be: $installerName"
 
+      - name: Capture last commit message
+        id: commit_msg
+        shell: pwsh
+        run: |
+          # Read the message here, before the version bump below becomes the newest commit,
+          # so the tag and the release body carry the last real commit instead of "Release v...".
+          $message = git log -1 --pretty=%B --no-merges
+
+          # Hand it to later steps using the GitHub Actions multiline output format
+          echo "MESSAGE<<EOF" >> $env:GITHUB_OUTPUT
+          echo $message >> $env:GITHUB_OUTPUT
+          echo "EOF" >> $env:GITHUB_OUTPUT
+
       - name: Commit version updates (without pushing)
         if: ${{ github.event.inputs.dry_run != 'true' }}
         run: |
@@ -146,23 +159,13 @@ jobs:
               exit 1
           }
 
-      - name: Get latest commit message
-        id: commit_msg
-        shell: pwsh
-        run: |
-          # Get the full commit message (excluding any auto-commits)
-          $message = git log -1 --pretty=%B --no-merges
-
-          # Output using GitHub Actions multiline format
-          echo "MESSAGE<<EOF" >> $env:GITHUB_OUTPUT
-          echo $message >> $env:GITHUB_OUTPUT
-          echo "EOF" >> $env:GITHUB_OUTPUT
-
       - name: Push commit and tag
         if: ${{ github.event.inputs.dry_run != 'true' }}
+        env:
+          TAG_MESSAGE: ${{ steps.commit_msg.outputs.MESSAGE }}
         run: |
           git push origin main
-          git tag -a "${{ steps.version.outputs.VERSION }}" -m "${{ steps.commit_msg.outputs.MESSAGE }}"
+          git tag -a "${{ steps.version.outputs.VERSION }}" -m "$env:TAG_MESSAGE"
           git push origin "${{ steps.version.outputs.VERSION }}"
 
       - name: Create GitHub Release

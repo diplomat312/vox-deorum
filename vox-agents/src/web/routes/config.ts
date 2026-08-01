@@ -94,7 +94,7 @@ router.get('/check', async (_req: Request, res: Response<{ exists: boolean } | E
  * POST /api/config
  * Update configuration in config.json and .env
  */
-router.post('/', async (req: Request<{}, {}, Partial<ConfigResponse>>, res: Response<{ success: boolean } | ErrorResponse>) => {
+router.post('/', async (req: Request<object, object, Partial<ConfigResponse>>, res: Response<{ success: boolean } | ErrorResponse>) => {
   try {
     const { config, apiKeys } = req.body;
 

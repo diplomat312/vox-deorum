@@ -1,51 +1,62 @@
-# civ5-dll — Building & Deploying
+# civ5-dll: Building and Deploying
 
-You only need to build the DLL when you change the C++ gamecore. For Vox Deorum that mainly means the connection service in [connection.md](connection.md). Most day-to-day mod work is Lua, SQL, and XML, which you can edit and test without rebuilding.
+You only need to build the DLL when you change the C++ gamecore, which for Vox Deorum mainly means the [connection service](connection.md). Day-to-day mod work is Lua, SQL, and XML, which you can edit and test without rebuilding.
 
-The `civ5-dll` is a separate submodule with its own upstream history (Community Patch + Vox Populi) and its own detailed build and debugging documentation. This page explains *when and why* you build and deploy. The submodule's `docs/` and `DEVELOPMENT.md` give the exact steps. This page does not duplicate them, since they track upstream.
+`civ5-dll` is a submodule with its own upstream history (Community Patch and Vox Populi) and its own build and debugging documentation. This page covers when and why you build, and the one command you will normally run. The submodule's `docs/` and `DEVELOPMENT.md` carry the exact toolchain steps, which track upstream.
 
 ## What gets built
 
-The gamecore is a 32-bit (Win32/x86) C++ DLL built with the legacy **v90 platform toolset** — the Visual C++ 2008 compiler.
+The gamecore is a 32-bit (Win32/x86) C++ DLL built against the legacy **v90 platform toolset**, the Visual C++ 2008 compiler. A build produces `CvGameCore_Expansion2.dll` and a matching `.pdb`.
 
-## Build paths
+## The normal loop: build-and-copy.bat
 
-There are two supported ways to build.
+From the `civ5-dll` folder:
 
-| Path | Use it for | Requirements |
-| --- | --- | --- |
-| **Visual Studio + v90 toolset** | Building from the IDE | VS2019/2022 as host, plus **Visual C++ 2008 SP1** and **Visual C++ 2010 SP1** |
-| **Clang scripts** | Local clang builds and CI | `build_vp_clang.py` (local, against an installed VS2008) or `build_vp_clang_sdk.py` (CI, Windows SDK 7.0, no Visual Studio) |
+```powershell
+powershell -Command "& .\build-and-copy.bat"
+```
 
-For the Visual Studio path, both Visual C++ versions are required for different reasons:
+That script is the local build-and-deploy loop. It compiles with clang through `build_vp_clang_sdk.py`, then copies the resulting DLL and `.pdb` into your Civilization V mods directory, so a successful run leaves the game ready to launch.
+
+| Flag | Effect |
+| --- | --- |
+| *(none)* | Build Debug only. |
+| `--release` | Build Release only. |
+| `--both` | Build Debug, then Release, stopping at the first failure. |
+
+Where things land:
+
+- Build output: `clang-output\Debug\` or `clang-output\Release\`, alongside a `build.log`.
+- Deploy destination: the **`(1) Community Patch`** folder under `Documents\My Games\Sid Meier's Civilization 5\MODS`, replacing the DLL already there.
+- With `--both`, the DLL and `.pdb` are also copied into `..\scripts\debug` and `..\scripts\release` for the launch scripts.
+
+The script stops on a failed compile and prints the tail of `build.log` plus its last few `error:` lines, so start there when a build breaks. It also fails loudly if the built DLL is missing or the copy is refused; a missing `.pdb` is only a warning.
+
+`build_vp_clang_sdk.py` needs Windows SDK 7.0 with its VC9 components, plus `clang-cl` and `lld-link` on `PATH`. It takes one option of its own, `--config release|debug`, which is what the batch file sets.
+
+## Building from Visual Studio
+
+The submodule also supports building from the IDE with the v90 toolset. That path needs a modern Visual Studio (2019 or 2022) as the host, plus two older compilers for different reasons:
 
 - **Visual C++ 2008 SP1** supplies the actual compiler, CRT, and headers.
 - **Visual C++ 2010 SP1** supplies the MSBuild integration that lets a modern Visual Studio discover and drive the v90 toolset.
 
-The submodule's **[Build Toolchain Guide](../../../civ5-dll/docs/build-toolchain.md)** spells out why both are required, the archived installer download links, the install order, and the common errors (`MSB8020`, missing `<array>`, whole-program-optimization pauses). The clang scripts are the same ones CI uses; see the Alternative: Clang Build section of that guide.
+The submodule's **[Build Toolchain Guide](../../../civ5-dll/docs/build-toolchain.md)** explains why both are required, links the archived installers, gives the install order, and covers the common errors (`MSB8020`, missing `<array>`, whole-program-optimization pauses).
 
-CI builds with both compilers. Verify your changes compile cleanly — without new warnings — under MSVC and clang before submitting.
+CI builds with both compilers. Verify your changes compile cleanly, without new warnings, under MSVC and clang before submitting.
 
-## Deploying a build
+## Running a full session
 
-A successful build produces the gamecore `.dll` (and, for debug builds, a matching `.pdb`) in the project's build output. To deploy:
-
-1. Place the DLL into the **Community Patch Core** mod folder in your Civilization V mods directory, replacing the DLL already there.
-2. Launch the game with the mod loaded.
-
-For a full Vox Deorum session the DLL also needs the rest of the stack running — the bridge service, MCP server, and agents — so the connection service has a client to talk to. The [setup guide](../setup.md) covers bringing up the whole stack, and the Vox Deorum launch scripts wire it together.
+The DLL on its own has nothing to talk to. A real Vox Deorum session also needs the bridge service, MCP server, and agents running, so the connection service has a client. The [setup guide](../setup.md) covers bringing up the whole stack, and the Vox Deorum launch scripts wire it together.
 
 ## Debugging
 
-To debug the running DLL:
-
-1. Build the **Debug** configuration.
-2. Deploy the debug DLL and its `.pdb`.
-3. Start the game with the mod.
-4. Attach the Visual Studio debugger to the Civilization V process.
+1. Build the Debug configuration (the default) and let the script deploy the DLL and its `.pdb`.
+2. Start the game with the mod.
+3. Attach the Visual Studio debugger to the Civilization V process.
 
 From there you can set breakpoints in the gamecore and inspect crashes. The relevant submodule references:
 
-- **[DEVELOPMENT.md](../../../civ5-dll/DEVELOPMENT.md)** — the full debug-attach workflow, how to enable in-game logging for bug reports, and Visual Studio's CPU/memory diagnostic tools.
-- **[Minidump Guide](../../../civ5-dll/docs/minidumps.md)** — how to read the minidump the game writes when it crashes.
-- **[Database reference](../../../civ5-dll/docs/db.md)** — game-database schema questions.
+- **[DEVELOPMENT.md](../../../civ5-dll/DEVELOPMENT.md)**: the full debug-attach workflow, how to enable in-game logging for bug reports, and Visual Studio's CPU and memory diagnostic tools.
+- **[Minidump Guide](../../../civ5-dll/docs/minidumps.md)**: how to read the minidump the game writes when it crashes.
+- **[Database reference](../../../civ5-dll/docs/db.md)**: game-database schema questions.

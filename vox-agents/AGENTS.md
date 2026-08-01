@@ -5,13 +5,14 @@ Backend LLM agent framework. For UI development, see `ui/AGENTS.md`.
 ## Critical Conventions
 
 - **ESM**: Always use `.js` extensions in imports, even for `.ts` files (`"type": "module"`)
-- **Winston logger only** — never `console.log/error/warn` in production code (OK in tests)
+- **Winston logger only**: never `console.log/error/warn` in production code (OK in tests)
 - **MCP tools**: Always read `mcp-server/src/tools/index.ts` to know which tools actually exist
 - **Embedding models**: Set `options.embeddingSize` on model config. Use `embedder` alias in `config.llms`. Call `getEmbeddingModel()` from `utils/models/models.ts`
 - **Provider-agnostic**: Model config supports openrouter, openai, google, compatible services. Apply middleware based on model characteristics (e.g., gemma-3)
-- **Provider modules**: Provider-specific implementations live in `src/utils/models/providers/` and may import shared types or sibling helpers, but never `models.ts`.
+- **Provider modules**: Provider-specific implementations live in `src/utils/models/providers/` and may import shared types or sibling helpers, but never `models.ts`
+- **Config defaults**: `config.json` is gitignored. Effective values come from `src/utils/config/defaults.ts` merged by `src/utils/config/diff.ts`, loaded through `src/utils/config.ts`
 - **Use Map for registries** (players, handlers, etc.)
-- **Graceful cancellation** — each root run owns its `AbortController`; pass the active root's signal (resolved from `AsyncLocalStorage`) to async operations. `context.abort()` cancels every active root
+- **Graceful cancellation**: each root run owns its `AbortController`; pass the active root's signal (resolved from `AsyncLocalStorage`) to async operations. `context.abort()` cancels every active root
 
 ## Testing
 
@@ -41,21 +42,23 @@ Backend LLM agent framework. For UI development, see `ui/AGENTS.md`.
 
 ## Entry Points
 
-- `npm run dev` — Development with hot reload (index.ts)
-- `npm run strategist` — Strategist workflow (strategist/console.ts)
-- `npm run telepathist` — Telepathist console (telepathist/console.ts)
-- `npm run oracle -- -c <experiment.js>` — Oracle prompt replay (oracle/console.ts)
-- `npm run archivist -- -a <archive-path> -o <output.duckdb> [-n <limit>] [-m <model>]` — Archivist batch pipeline (archivist/console.ts)
+- `npm run dev`: Development with hot reload (index.ts)
+- `npm run strategist`: Strategist workflow (strategist/console.ts)
+- `npm run telepathist`: Telepathist console (telepathist/console.ts)
+- `npm run oracle -- -c <experiment.js>`: Oracle prompt replay (oracle/console.ts)
+- `npm run archivist -- -a <archive-path> -o <output.duckdb> [-n <limit>] [-m <model>]`: Archivist batch pipeline (archivist/console.ts)
 - Each workflow has a dedicated entry point with shared instrumentation (loaded via `--import`)
 
 ## Build
 
-- `npm run dev` — Development with hot reload (tsx)
-- `npm run build` — TypeScript compilation to dist/
-- `npm run type-check` — Type checking without emit
-- `npm run lint` — ESLint checks
+- `npm run dev`: Development with hot reload (tsx)
+- `npm run build`: TypeScript compilation to dist/
+- `npm run type-check`: Type checking without emit
+- `npm run lint`: ESLint checks
 
 ## Agent Architecture
+
+Classes registered in `agentRegistry` (`src/infra/agent-registry.ts`):
 
 ```
 VoxAgent (Base)
@@ -64,9 +67,13 @@ VoxAgent (Base)
 │   └── SpecializedBriefer (Military, Economy, Diplomacy)
 ├── Strategist (Strategic decisions)
 │   ├── NoneStrategist (Baseline)
-│   ├── SimpleStrategist (Direct)
-│   ├── SimpleStrategistBriefed (Single-briefer)
-│   └── SimpleStrategistStaffed (Multi-briefer collaborative)
+│   ├── NullStrategist (Neutral-reset baseline)
+│   ├── HumanStrategist (Human occupies the seat)
+│   └── SimpleStrategistBase (Shared turn loop)
+│       ├── SimpleStrategist (Direct)
+│       ├── SimpleStrategistBriefed (Single-briefer)
+│       └── SimpleStrategistStaffed (Multi-briefer collaborative)
+│           └── SimpleStrategistLearned (Adds episode retrieval)
 ├── Analyst (Fire-and-forget analysis)
 │   └── DiplomaticAnalyst (Intelligence gatekeeping)
 ├── Librarian (Database research)
@@ -77,8 +84,10 @@ VoxAgent (Base)
 │   │   └── Spokesperson (Official representative)
 │   └── Telepathist (Database-backed conversations)
 │       └── TalkativeTelepathist (Post-game analysis)
+├── Negotiator (Sole decider of deal terms)
+├── EpisodeRetriever (Programmatic episode lookup, no LLM)
 ├── Summarizer (Unified turn/phase summarization)
-└── Oracle (Counterfactual prompt replay)
+└── OracleAgent (Counterfactual prompt replay)
 ```
 
 ### Creating New Agents
@@ -107,7 +116,7 @@ src/utils/diplomacy/  constants.ts (cross-cutting constants)
 ```
 
 Dependency direction is `envoy/` → `utils/diplomacy/`; never the reverse. `tests/mock/{diplomacy,envoy,web}/`
-mirror these subfolders. No `index.ts` barrels — import the specific module.
+mirror these subfolders. No `index.ts` barrels: import the specific module.
 
 ## Dual Mode
 
@@ -117,7 +126,7 @@ mirror these subfolders. No `index.ts` barrels — import the specific module.
 ## Infrastructure
 
 ### ProcessManager (`src/infra/process-manager.ts`)
-Singleton signal handler (SIGINT, SIGTERM, SIGBREAK, SIGHUP). `processManager.register(name, hook)` — hooks execute in insertion order during shutdown. All console entry points register here.
+Singleton signal handler (SIGINT, SIGTERM, SIGBREAK, SIGHUP). `processManager.register(name, hook)`: hooks execute in insertion order during shutdown. All console entry points register here.
 
 ### ObsManager (`src/infra/obs-manager.ts`)
 Controls OBS Studio for recording/livestreaming via `obs-websocket-js` (WebSocket v5).
@@ -131,22 +140,22 @@ Wraps ObsManager to add segment-based recording driven by game render events.
 - Recording: segments start on `PlayerPanelSwitch`, stop 10s after first `AnimationStarted` (estimated end)
 - Livestream: pass-through to ObsManager
 - Writes `segments.jsonl` with faithful wall-clock timestamps per segment
-- Strategist session always calls through this — no mode branching needed
+- Strategist session always calls through this, so no mode branching is needed
 
 ### ProductionMode
 - `'none'` | `'test'` | `'livestream'` | `'recording'`
-- `isVisualMode(mode?)` — true for test/livestream/recording (play animations)
-- `isObsMode(mode?)` — true for livestream/recording (use OBS)
+- `isVisualMode(mode?)`: true for test/livestream/recording (play animations)
+- `isObsMode(mode?)`: true for livestream/recording (use OBS)
 
 ## Advanced Patterns
 
-- **Run model**: `execute()`/`callAgent()` require an active root run — open one with `withRun()` (or `forkRun()` for detached work). Read seat state through `baseParameters`/`currentParameters` (the active root's composed view); the old `lastParameter` field is gone. Run-model types live in `infra/vox-run.ts`
-- **Fire-and-forget agents**: Set `fireAndForget: true` — detaches via `forkRun()` into its own root run (independent signal and token sink), caller continues immediately
+- **Run model**: `execute()`/`callAgent()` require an active root run. Open one with `withRun()` (or `forkRun()` for detached work). Read seat state through `baseParameters`/`currentParameters` (the active root's composed view); the old `lastParameter` field is gone. Run-model types live in `infra/vox-run.ts`
+- **Fire-and-forget agents**: Set `fireAndForget: true`. Detaches via `forkRun()` into its own root run (independent signal and token sink), caller continues immediately
 - **Special messages**: `{{{MessageType}}}` triple-brace tokens trigger behaviors via `getSpecialMessages()` in Envoy subclasses
 - **Tool rescue middleware**: Extracts JSON tool calls from malformed LLM text responses via `toolRescueMiddleware()`
 - **Concurrency**: Per-model rate limiting via `streamTextWithConcurrency()` with semaphore-like tracking
 - **Global agent registry**: Singleton `agentRegistry` pre-registers all core agents. Import and call `.get(name)` to resolve
-- **Dual-database**: Telepathist uses read-only telemetry DB + read-write analysis DB via `createTelepathistParameters()`
+- **Dual-database**: Telepathist uses read-only telemetry DB plus read-write analysis DB via `createTelepathistParameters()`
 - **Archivist pipeline**: Phase A (extract/transform/write, no LLM), Phase B (select diverse landmarks), Phase C (generate summaries + embeddings). CLI flags: `--skip-telepathist`, `--skip-embeddings`, `--force`, `--model`
 - **game_outcomes table**: Populated in Phase A. Reader's `fetchOutcomes()` uses `LEAST(turn + horizon, max_turn)` for outcome turn capping
 - **TelepathistTool**: Abstract base for DB query tools with span hierarchy traversal helpers and `Summarizer` integration
@@ -161,9 +170,9 @@ Wraps ObsManager to add segment-based recording driven by game render events.
 ## Documentation Maintenance
 
 After each successful implementation, update relevant docs:
-- **AGENTS.md** — if new patterns or conventions were introduced
-- **README.md** — if public-facing interface changed
-- Keep docs concise — describe what exists, not implementation details that get outdated
+- **AGENTS.md** if new patterns or conventions were introduced
+- **README.md** if the public-facing interface changed
+- Keep docs concise. Describe what exists, not implementation details that get outdated
 
 ## Common Pitfalls
 

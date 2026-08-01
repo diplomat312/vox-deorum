@@ -107,7 +107,7 @@ ${SimpleBriefer.instructionFooter}`.trim()
    * Gets the initial messages for the conversation
    */
   public async getInitialMessages(parameters: StrategistParameters, input: string, _context: VoxContext<StrategistParameters>): Promise<ModelMessage[]> {
-    var state = getRecentGameState(parameters)!;
+    const state = getRecentGameState(parameters)!;
     const { YouAre, ...SituationData } = parameters.metadata || {};
     // Return the messages
     const messages: ModelMessage[] = [{
@@ -158,7 +158,7 @@ ${input}`.trim()
     }];
     // Send in the past briefing from the closest prior decision point (a turn that actually
     // has a briefing), so pacing's skipped turns don't render an "undefined" comparison.
-    var lastState = getLastBriefingState(parameters, getOffsetedTurn(parameters, -5), ["briefing"]);
+    const lastState = getLastBriefingState(parameters, getOffsetedTurn(parameters, -5), ["briefing"]);
     if (lastState) {
       messages.push({
         role: "user",

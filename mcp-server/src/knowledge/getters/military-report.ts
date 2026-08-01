@@ -38,7 +38,8 @@ export async function getMilitaryReport(
   if (!response.success || !response.result || response.result.length < 2)
     return null;
 
-  let [units, zones] = response.result;
+  let units = response.result[0];
+  const zones = response.result[1];
 
   // Get enum mappings for post-processing
   const unitTypes = enumMappings["UnitType"];

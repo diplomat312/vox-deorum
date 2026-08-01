@@ -262,7 +262,7 @@ Manually pause the game. Prevents auto-resume until manually resumed.
 **Success Response:**
 ```typescript
 {
-  "success": true
+  "success": true  // No result payload
 }
 ```
 
@@ -272,6 +272,9 @@ curl -X POST http://127.0.0.1:5000/external/pause \
   -H "Content-Type: application/json" \
   -d '{}'
 ```
+
+**Notes:**
+- Returns `INTERNAL_ERROR` when the pause mutex is unavailable (for example, the `windows-mutex-prebuilt` package is not installed)
 
 ### Resume Game (Manual)
 
@@ -284,7 +287,7 @@ Resume a manually paused game.
 **Success Response:**
 ```typescript
 {
-  "success": true
+  "success": true  // No result payload
 }
 ```
 
@@ -301,7 +304,9 @@ Automatically pause the game when a specific player's turn begins.
 ```typescript
 {
   "success": true,
-  "pausedPlayers": number[]  // Updated list of paused player IDs
+  "result": {
+    "pausedPlayers": number[]  // Updated list of paused player IDs
+  }
 }
 ```
 
@@ -317,6 +322,7 @@ curl -X POST http://127.0.0.1:5000/external/pause-player/0 \
 - Game auto-resumes when registered player's turn ends
 - Multiple players can be registered simultaneously
 - Auto-pause is synced with the DLL
+- An out-of-range `id` returns `INVALID_ARGUMENTS`; a failed DLL sync returns `DLL_DISCONNECTED`
 
 ### Unregister Player from Auto-Pause
 
@@ -331,9 +337,14 @@ Remove a player from auto-pause list.
 ```typescript
 {
   "success": true,
-  "pausedPlayers": number[]  // Updated list
+  "result": {
+    "pausedPlayers": number[]  // Updated list
+  }
 }
 ```
+
+**Notes:**
+- An out-of-range `id` returns `INVALID_ARGUMENTS`; a failed DLL sync returns `DLL_DISCONNECTED`
 
 ### Get Paused Players
 
@@ -345,8 +356,10 @@ Get the list of players registered for auto-pause and current game pause state.
 ```typescript
 {
   "success": true,
-  "pausedPlayers": number[],
-  "isGamePaused": boolean
+  "result": {
+    "pausedPlayers": number[],
+    "isGamePaused": boolean
+  }
 }
 ```
 
@@ -360,9 +373,37 @@ Remove all players from auto-pause list.
 ```typescript
 {
   "success": true,
-  "pausedPlayers": []
+  "result": {
+    "pausedPlayers": []
+  }
 }
 ```
+
+### Set Production Mode
+
+**POST** `/external/production-mode`
+
+Enable or disable production mode, which turns on the DLL's AI turn cooldown.
+
+**Request Body:**
+```typescript
+{
+  "enabled": boolean  // Truthy values enable production mode
+}
+```
+
+**Success Response:**
+```typescript
+{
+  "success": true,
+  "result": {
+    "productionMode": boolean  // Mode after the update
+  }
+}
+```
+
+**Notes:**
+- Production mode is re-synced with the DLL on reconnection
 
 ## Event Streaming
 

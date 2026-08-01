@@ -1,6 +1,6 @@
 /**
  * Main MCP server implementation with registration system
- * Singleton instance that manages resources and tools with self-registration
+ * Singleton instance that manages tools with self-registration
  */
 
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
@@ -26,7 +26,7 @@ const logger = createLogger('Server');
 const HEARTBEAT_INTERVAL_MS = 90_000;
 
 /**
- * MCP Server manager that handles resource and tool registration
+ * MCP Server manager that handles tool registration
  */
 export class MCPServer {
   private static instance: MCPServer;
@@ -132,7 +132,7 @@ export class MCPServer {
           // Otherwise wrap for backward compatibility
           return wrapResults(results);
         } catch (error: unknown) {
-          var message = `Error executing tool ${tool.name}: ${error instanceof Error ? error.message : "unknown"}`;
+          const message = `Error executing tool ${tool.name}: ${error instanceof Error ? error.message : "unknown"}`;
           logger.error(message, error);
           return {
             isError: true,

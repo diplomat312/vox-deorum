@@ -153,7 +153,7 @@ function loadConfig(): VoxAgentsConfig {
  * console.log(config.agent.name); // 'vox-agents'
  * ```
  */
-export let config = loadConfig();
+export const config = loadConfig();
 
 /**
  * Refresh the configuration by reloading from config.json and environment variables.
@@ -168,7 +168,7 @@ export function refreshConfig(): VoxAgentsConfig {
 
   // Clear existing properties (except those we're about to replace)
   for (const key in config) {
-    if (config.hasOwnProperty(key)) {
+    if (Object.prototype.hasOwnProperty.call(config, key)) {
       delete (config as any)[key];
     }
   }

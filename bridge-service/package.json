@@ -11,6 +11,7 @@
     "start:dist": "node dist/index.js",
     "start:mock": "cross-env USE_MOCK=true tsx tests/test-utils/start-mock-bridge.ts",
     "type-check": "tsc --noEmit",
+    "lint": "eslint src --ext .ts",
     "clean": "rimraf dist",
     "test": "cross-env USE_MOCK=true vitest run",
     "test:watch": "cross-env USE_MOCK=true vitest",

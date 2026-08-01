@@ -128,7 +128,7 @@ export function wrapMCPTool(tool: Tool, context: VoxContext<AgentParameters>): V
         if ((tool._meta as any)?.autoComplete) {
           ((tool._meta as any)?.autoComplete as string[]).forEach(
             key => {
-              var camelKey = camelCase(key);
+              let camelKey = camelCase(key);
               if (camelKey.endsWith("Id")) camelKey = camelKey.substring(0, camelKey.length - 2) + "ID";
               // Only auto-fill when the context actually has a value; never clobber
               // an explicitly-passed arg (e.g. get-events `Original: true`) with undefined.
@@ -195,7 +195,7 @@ export function wrapMCPTool(tool: Tool, context: VoxContext<AgentParameters>): V
  * ```
  */
 export function wrapMCPTools(tools: Tool[], context: VoxContext<AgentParameters>): ToolSet {
-  var results: Record<string, VercelTool> = {};
+  const results: Record<string, VercelTool> = {};
   tools.forEach(tool => results[tool.name] = wrapMCPTool(tool, context));
   return results;
 }

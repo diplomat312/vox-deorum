@@ -32,12 +32,12 @@ export async function getPlayerSummaries(saving: boolean = true): Promise<Select
   const store = knowledgeManager.getStore();
 
   // Process all summaries
-  for (var summary of response.result) {
+  for (const summary of response.result) {
     // Era names
     summary.Era = getEraName(summary.Era);
     // Quests
     if (summary.Quests) {
-      for (var key of Object.keys(summary.Quests)) {
+      for (const key of Object.keys(summary.Quests)) {
         const questLines = (summary.Quests[key] as string)
           .split("[NEWLINE]")
           .filter(line => line)
@@ -48,7 +48,7 @@ export async function getPlayerSummaries(saving: boolean = true): Promise<Select
         const quests: string[] = [];
         let currentQuest = "";
         let seenAsterick = false;
-        for (var line of questLines) {
+        for (const line of questLines) {
           const asterick = line.startsWith("*");
           if (!asterick && seenAsterick) {
             quests.push(currentQuest);

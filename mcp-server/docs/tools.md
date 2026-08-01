@@ -4,7 +4,7 @@ Concise reference for all 43 tools exposed by the MCP Server. Tools are organize
 
 ## Architecture
 
-- All tools extend abstract base classes (`DatabaseQueryTool`, `LuaFunctionTool`, `DynamicEventTool`) or `ToolBase` directly
+- All tools extend abstract base classes (`DatabaseQueryTool`, `LuaFunctionTool`, `ActionTool`, `DynamicEventTool`) or `ToolBase` directly
 - Factory pattern with lazy loading -- tools instantiated on first server init, cached afterward
 - Zod schemas for input/output validation with `.describe()` on each field
 - PlayerID range for major civs: 0-21 (`MaxMajorCivs - 1`). `post-notification` is the one exception: its recipient spans the full addressable player range 0-63 (`MaxPlayers - 1`) so a human watching from an observer slot can be notified.

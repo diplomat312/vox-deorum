@@ -193,6 +193,7 @@ export class DLLConnector extends EventEmitter {
         // Sanitize control characters that may not be properly escaped by the DLL
         // This escapes all control chars (0x00-0x1F) as Unicode escape sequences
         // TODO: Fix the DLL
+        // eslint-disable-next-line no-control-regex -- matching control characters is the point here
         const sanitized = message.trim().replace(/[\x00-\x1f]/g, (char) => {
           return '\\u' + ('0000' + char.charCodeAt(0).toString(16)).slice(-4);
         });

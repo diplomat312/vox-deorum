@@ -124,7 +124,7 @@ export function getModel(config: Model, options?: {
   /** The calling agent's completion tools, named by the required-tool-choice instruction. */
   completionTools?: string[];
 }): LanguageModel {
-  var result: LanguageModelV3;
+  let result: LanguageModelV3;
   // Terminology preset for the prompt-mode tool instructions (see resolveToolFraming):
   // 'action' for claude-code, 'tool' for everything else.
   const toolFraming: ToolCallFraming = resolveToolFraming(config);

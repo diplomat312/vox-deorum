@@ -139,11 +139,12 @@ class GetPlayersTool extends ToolBase {
    */
   async execute(args: z.infer<typeof this.inputSchema>): Promise<z.infer<typeof this.outputSchema>> {
     // Get static player information, current player summaries, opinions, and strategies in parallel
-    var [playerInfos, playerSummaries, playerOpinions] = await Promise.all([
+    const [initialPlayerInfos, playerSummaries, playerOpinions] = await Promise.all([
       readPublicKnowledgeBatch("PlayerInformations", getPlayerInformations),
       getPlayerSummaries(),
       readPlayerKnowledge(args.PlayerID, "PlayerOpinions", getPlayerOpinions)
     ]);
+    let playerInfos = initialPlayerInfos;
 
     // Sanity check: verify all players in summary have corresponding information
     // If any player is missing information, refresh and store it
@@ -312,10 +313,10 @@ function postProcessData(
 
   // Hide war weariness from relationships
   if (summary.Relationships && summary.IsMajor)
-    for (var player in summary.Relationships) {
+    for (const player in summary.Relationships) {
       summary.Relationships[player] = (summary.Relationships[player] as string[]).map(rel => {
         // Remove war weariness from war relationships (keep only the score)
-        const warRegex = /; War Weariness: -?[\d\.]+%/;
+        const warRegex = /; War Weariness: -?[\d.]+%/;
         return rel.replace(warRegex, "");
       });
     }

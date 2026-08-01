@@ -55,7 +55,7 @@ router.get('/databases', async (_req: Request, res: Response<TelemetryDatabasesR
     await fs.mkdir(telemetryDir, { recursive: true });
 
     // Recursive function to scan directories
-    async function scanDirectory(dir: string, baseDir: string) {
+    const scanDirectory = async (dir: string, baseDir: string): Promise<void> => {
       const entries = await fs.readdir(dir, { withFileTypes: true });
 
       for (const entry of entries) {
@@ -80,7 +80,7 @@ router.get('/databases', async (_req: Request, res: Response<TelemetryDatabasesR
           });
         }
       }
-    }
+    };
 
     // Start recursive scan from telemetry directory
     await scanDirectory(telemetryDir, telemetryDir);

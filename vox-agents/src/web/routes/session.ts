@@ -111,7 +111,7 @@ export function createSessionRoutes(): Router {
    * POST /api/session/start
    * Start a new game session with the specified configuration.
    */
-  router.post('/start', async (req: Request<{}, {}, StartSessionRequest>, res: Response<StartSessionResponse | ErrorResponse>) => {
+  router.post('/start', async (req: Request<object, object, StartSessionRequest>, res: Response<StartSessionResponse | ErrorResponse>) => {
     const { config } = req.body;
 
     if (!config) {
@@ -171,7 +171,7 @@ export function createSessionRoutes(): Router {
    * POST /api/session/save
    * Save a session configuration to a local file.
    */
-  router.post('/save', async (req: Request<{}, {}, SaveSessionConfigRequest>, res: Response<SaveSessionConfigResponse | ErrorResponse>) => {
+  router.post('/save', async (req: Request<object, object, SaveSessionConfigRequest>, res: Response<SaveSessionConfigResponse | ErrorResponse>) => {
     const { filename, config } = req.body;
 
     if (!filename) {
@@ -187,7 +187,7 @@ export function createSessionRoutes(): Router {
     }
 
     // Sanitize filename - remove path characters and ensure .json extension
-    const sanitizedName = filename.replace(/[\/\\:*?"<>|]/g, '_');
+    const sanitizedName = filename.replace(/[/\\:*?"<>|]/g, '_');
     const finalFilename = sanitizedName.endsWith('.json') ? sanitizedName : `${sanitizedName}.json`;
 
     try {
@@ -250,7 +250,7 @@ export function createSessionRoutes(): Router {
     }
 
     // Sanitize filename - remove path characters and ensure .json extension
-    const sanitizedName = filename.replace(/[\/\\:*?"<>|]/g, '_');
+    const sanitizedName = filename.replace(/[/\\:*?"<>|]/g, '_');
     const finalFilename = sanitizedName.endsWith('.json') ? sanitizedName : `${sanitizedName}.json`;
 
     try {

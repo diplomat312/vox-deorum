@@ -276,7 +276,7 @@ function fitMessageRow(row: Record<string, unknown>, mode: "append" | "prepend")
     wireBudget,
   });
 
-  let candidate = { ...row };
+  const candidate = { ...row };
   if (batchSize({ ...candidate, Content: truncationNotice }) > wireBudget && "Payload" in candidate) {
     delete candidate.Payload;
     logger.warn("Omitting an oversized diplomacy transcript payload from the in-game display", {

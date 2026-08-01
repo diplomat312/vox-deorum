@@ -87,7 +87,7 @@ Return JSON following this exact schema:
   public async getInitialMessages(
     parameters: StrategistParameters,
     input: string[],
-    context: VoxContext<StrategistParameters>
+    _context: VoxContext<StrategistParameters>
   ): Promise<ModelMessage[]> {
     // Format contexts as numbered list
     const formattedContexts = input

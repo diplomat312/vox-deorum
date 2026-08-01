@@ -71,7 +71,7 @@ export function createAgentDiscoveryRoutes(): Router {
   router.post(
     '/agents/chat',
     async (
-      req: Request<{}, {}, CreateChatRequest>,
+      req: Request<object, object, CreateChatRequest>,
       res: Response<CreateChatResponse | ErrorResponse>,
     ): Promise<Response> => {
       try {

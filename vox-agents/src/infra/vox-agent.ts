@@ -16,7 +16,7 @@ import { getValidCalls, hasOnlyTerminalCalls, isTerminalTool } from "../utils/to
 import { buildCompletionToolsNudge } from "../utils/tools/tool-names.js";
 import { buildRescuePrompt } from "../utils/models/text-cleaning.js";
 import { appendReminder } from "../utils/prompts/reminders.js";
-// @ts-ignore - jaison doesn't have type definitions
+// @ts-expect-error - jaison doesn't have type definitions
 import jaison from 'jaison';
 
 /**
@@ -224,7 +224,7 @@ export abstract class VoxAgent<TParameters extends AgentParameters, TInput = unk
    * @param parameters - The execution parameters
    * @returns Array of tool names that should be active, or undefined for all tools
    */
-  public getActiveTools(parameters: TParameters): string[] | undefined {
+  public getActiveTools(_parameters: TParameters): string[] | undefined {
     return [];
   }
   

@@ -5,6 +5,7 @@
 import { Router, Request, Response } from 'express';
 import { createLogger } from '../utils/logger.js';
 import { handleAPIError } from '../utils/api.js';
+import { ErrorCode, respondError, respondSuccess } from '../types/api.js';
 import { externalManager } from '../services/external-manager.js';
 import { ExternalFunctionRegistration } from '../types/external.js';
 import { pauseManager, MaxCivs } from '../services/pause-manager.js';
@@ -56,10 +57,10 @@ router.get('/functions', async (_req: Request, res: Response) => {
  */
 router.post('/pause', async (_req: Request, res: Response) => {
   await handleAPIError(res, '/external/pause', async () => {
-    const result = pauseManager.pauseGame();
-    return {
-      success: result
-    };
+    if (!pauseManager.pauseGame()) {
+      return respondError(ErrorCode.INTERNAL_ERROR, 'Failed to pause the game');
+    }
+    return respondSuccess();
   });
 });
 
@@ -68,10 +69,10 @@ router.post('/pause', async (_req: Request, res: Response) => {
  */
 router.post('/resume', async (_req: Request, res: Response) => {
   await handleAPIError(res, '/external/resume', async () => {
-    const result = pauseManager.resumeGame();
-    return {
-      success: result
-    };
+    if (!pauseManager.resumeGame()) {
+      return respondError(ErrorCode.INTERNAL_ERROR, 'Failed to resume the game');
+    }
+    return respondSuccess();
   });
 });
 
@@ -82,17 +83,16 @@ router.post('/pause-player/:id', async (req: Request, res: Response) => {
   await handleAPIError(res, '/external/pause-player/:id', async () => {
     const playerId = parseInt(req.params.id);
     if (isNaN(playerId) || playerId < 0 || playerId >= MaxCivs) {
-      return {
-        success: false,
-        error: 'Invalid player ID'
-      };
+      return respondError(ErrorCode.INVALID_ARGUMENTS, 'Invalid player ID');
     }
 
-    const result = pauseManager.registerPausedPlayer(playerId);
-    return {
-      success: result,
+    if (!pauseManager.registerPausedPlayer(playerId)) {
+      return respondError(ErrorCode.DLL_DISCONNECTED, `Failed to register player ${playerId} for auto-pause`);
+    }
+
+    return respondSuccess({
       pausedPlayers: pauseManager.getPausedPlayers()
-    };
+    });
   });
 });
 
@@ -103,17 +103,16 @@ router.delete('/pause-player/:id', async (req: Request, res: Response) => {
   await handleAPIError(res, '/external/pause-player/:id', async () => {
     const playerId = parseInt(req.params.id);
     if (isNaN(playerId) || playerId < 0 || playerId >= MaxCivs) {
-      return {
-        success: false,
-        error: 'Invalid player ID'
-      };
+      return respondError(ErrorCode.INVALID_ARGUMENTS, 'Invalid player ID');
     }
 
-    const result = pauseManager.unregisterPausedPlayer(playerId);
-    return {
-      success: result,
+    if (!pauseManager.unregisterPausedPlayer(playerId)) {
+      return respondError(ErrorCode.DLL_DISCONNECTED, `Failed to unregister player ${playerId} from auto-pause`);
+    }
+
+    return respondSuccess({
       pausedPlayers: pauseManager.getPausedPlayers()
-    };
+    });
   });
 });
 
@@ -122,11 +121,10 @@ router.delete('/pause-player/:id', async (req: Request, res: Response) => {
  */
 router.get('/paused-players', async (_req: Request, res: Response) => {
   await handleAPIError(res, '/external/paused-players', async () => {
-    return {
-      success: true,
+    return respondSuccess({
       pausedPlayers: pauseManager.getPausedPlayers(),
       isGamePaused: pauseManager.isGamePaused()
-    };
+    });
   });
 });
 
@@ -136,10 +134,9 @@ router.get('/paused-players', async (_req: Request, res: Response) => {
 router.delete('/paused-players', async (_req: Request, res: Response) => {
   await handleAPIError(res, '/external/paused-players', async () => {
     pauseManager.clearPausedPlayers();
-    return {
-      success: true,
-      pausedPlayers: []
-    };
+    return respondSuccess({
+      pausedPlayers: pauseManager.getPausedPlayers()
+    });
   });
 });
 
@@ -150,10 +147,9 @@ router.post('/production-mode', async (req: Request, res: Response) => {
   await handleAPIError(res, '/external/production-mode', async () => {
     const { enabled } = req.body;
     pauseManager.setProductionMode(!!enabled);
-    return {
-      success: true,
+    return respondSuccess({
       productionMode: pauseManager.isProductionMode()
-    };
+    });
   });
 });
 

@@ -8,7 +8,7 @@
  */
 
 import type { LanguageModelV3ToolCall } from '@ai-sdk/provider';
-// @ts-ignore - jaison doesn't have type definitions
+// @ts-expect-error - jaison doesn't have type definitions
 import jaison from 'jaison';
 import { createLogger } from '../../logger.js';
 import { normalizeKeysToSchema, type JsonSchemaNode } from '../../tools/normalize-keys.js';
@@ -412,7 +412,7 @@ export function rescueToolCallsFromText(
   if (!useJaison && text.indexOf("```json") !== -1) return { toolCalls: [], remainingText: text };
 
   // First check for markdown code blocks with ```json syntax
-  const codeBlockRegex = /\`\`\`json\s*\n([\s\S]*?)\n\`\`\`/;
+  const codeBlockRegex = /```json\s*\n([\s\S]*?)\n```/;
   const codeBlockMatch = text.match(codeBlockRegex);
 
   let jsonText: string;

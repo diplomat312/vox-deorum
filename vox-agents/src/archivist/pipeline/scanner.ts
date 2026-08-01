@@ -57,9 +57,6 @@ export async function scanArchive(
     experimentDirs.unshift('.'); // scan root as an implicit experiment
   }
 
-  let totalGames = 0;
-  let totalPlayers = 0;
-
   for (const experiment of experimentDirs) {
     const experimentPath = path.join(archivePath, experiment);
     let files: string[];
@@ -163,8 +160,6 @@ export async function scanArchive(
             gameDbPath,
             players,
           });
-          totalGames++;
-          totalPlayers += players.length;
         }
       } catch (error) {
         logger.error(`Error processing game ${gameId} in experiment ${experiment}`, { error });

@@ -9,7 +9,7 @@ export function stripTags(Text?: string) {
     Text = Text.replaceAll("[SPACE]", " ");
     Text = Text.replaceAll("[TAB]", " ");
     Text = Text.replaceAll("[ENDCOLOR]", "");
-    Text = Text.replaceAll(/\[LINK\=(.*?)\]/g, "");
+    Text = Text.replaceAll(/\[LINK=(.*?)\]/g, "");
     Text = Text.replaceAll("[\\LINK]", "");
     Text = Text.replaceAll(/\[ICON_([A-Z0-9)_]*?)\]/g, "");
     Text = Text.replaceAll(/\[COLOR_([A-Z_]*?)\]/g, "");

@@ -50,17 +50,17 @@ export class EventPipe {
         this.isServing = true;
 
         // Handle new client connections
-        ipc.server.on('connect', () => {
+        ipc.server.on('connect', (socket) => {
           this.connectedClientsCount++;
           logger.info(`Event pipe client connected (total: ${this.connectedClientsCount})`);
 
-          // Send welcome message using raw buffer format
+          // Send welcome message to only the connecting client, using raw buffer format
           const welcomeMessage = JSON.stringify({
             type: 'connected',
             timestamp: new Date().toISOString(),
             message: 'Connected to event pipe'
           });
-          ipc.server.broadcast(welcomeMessage + '!@#$%^!');
+          ipc.server.emit(socket, welcomeMessage + '!@#$%^!');
         });
 
         // Handle client disconnections

@@ -546,9 +546,13 @@ export class BridgeManager extends EventEmitter {
    */
   public async pausePlayer(playerId: number): Promise<boolean> {
     try {
-      await this.httpClient.post(`/external/pause-player/${playerId}`, undefined, { fast: true });
-      logger.info(`Player ${playerId} registered for auto-pause`);
-      return true;
+      const data = await this.httpClient.post<{ success: boolean; error?: { code: string; message: string } }>(`/external/pause-player/${playerId}`, undefined, { fast: true });
+      if (data.success) {
+        logger.info(`Player ${playerId} registered for auto-pause`);
+      } else {
+        logger.warn(`Failed to register player ${playerId} for auto-pause: ${data.error?.code} ${data.error?.message}`);
+      }
+      return data.success === true;
     } catch (error: unknown) {
       logger.warn(`Failed to register player ${playerId} for auto-pause:`, error);
       return false;
@@ -560,9 +564,13 @@ export class BridgeManager extends EventEmitter {
    */
   public async setProductionMode(enabled: boolean): Promise<boolean> {
     try {
-      await this.httpClient.post('/external/production-mode', { enabled }, { fast: true });
-      logger.info(`Production mode ${enabled ? 'enabled' : 'disabled'}`);
-      return true;
+      const data = await this.httpClient.post<{ success: boolean; error?: { code: string; message: string } }>('/external/production-mode', { enabled }, { fast: true });
+      if (data.success) {
+        logger.info(`Production mode ${enabled ? 'enabled' : 'disabled'}`);
+      } else {
+        logger.warn(`Failed to set production mode ${enabled ? 'enabled' : 'disabled'}: ${data.error?.code} ${data.error?.message}`);
+      }
+      return data.success === true;
     } catch (error: unknown) {
       logger.warn('Failed to set production mode:', error);
       return false;
@@ -574,9 +582,13 @@ export class BridgeManager extends EventEmitter {
    */
   public async resumePlayer(playerId: number): Promise<boolean> {
     try {
-      await this.httpClient.delete(`/external/pause-player/${playerId}`, { fast: true });
-      logger.info(`Player ${playerId} unregistered from auto-pause`);
-      return true;
+      const data = await this.httpClient.delete<{ success: boolean; error?: { code: string; message: string } }>(`/external/pause-player/${playerId}`, { fast: true });
+      if (data.success) {
+        logger.info(`Player ${playerId} unregistered from auto-pause`);
+      } else {
+        logger.error(`Failed to unregister player ${playerId} from auto-pause: ${data.error?.code} ${data.error?.message}`);
+      }
+      return data.success === true;
     } catch (error: unknown) {
       logger.error(`Failed to unregister player ${playerId} from auto-pause:`, error);
       return false;

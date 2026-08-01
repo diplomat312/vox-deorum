@@ -75,11 +75,11 @@ class GetMilitaryReportTool extends ToolBase {
     const results: Record<string, unknown> = {
       "Unit Stats": report.units || []
     };
-    for (var zoneID in report.zones) {
+    for (const zoneID in report.zones) {
       // Postprocessing zones
       const zone = report.zones[zoneID];
       const neighbors = zone.Neighbors && Array.isArray(zone.Neighbors) ?
-        (zone.Neighbors as number[]).filter((n: number) => report.zones.hasOwnProperty(String(n))) : [];
+        (zone.Neighbors as number[]).filter((n: number) => Object.prototype.hasOwnProperty.call(report.zones, String(n))) : [];
       const postprocessed = {
         ZoneValue: zone.Value,
         Dominance: zone.Dominance === "No Units" ? undefined : zone.Dominance,

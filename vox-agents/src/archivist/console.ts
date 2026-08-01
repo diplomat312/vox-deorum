@@ -314,7 +314,7 @@ async function workerLoop(
 ): Promise<WorkerStats> {
   const stats: WorkerStats = { processed: 0, skipped: 0, errors: 0, gamesProcessed: 0 };
 
-  while (true) {
+  for (;;) {
     // Check stop conditions before pulling next game
     if (shuttingdownAfter) {
       logger.info(`[${workerLabel}] Ctrl+A: stopping (no more games will be started)`);

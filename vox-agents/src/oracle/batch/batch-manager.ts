@@ -448,7 +448,7 @@ class BatchManager {
   private async pollBatch(batchId: string, provider: BatchProvider): Promise<void> {
     logger.info(`Polling batch ${batchId}...`);
 
-    while (true) {
+    for (;;) {
       // Wait before polling (delay-first so the batch has time to process)
       await setTimeout(this.pollInterval);
 

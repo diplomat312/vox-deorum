@@ -150,7 +150,7 @@ class SetFlavorsTool extends ActionTool<SetFlavorsResultType> {
     }
 
     // Call the parent execute with the converted flavors and grand strategy
-    let grandStrategyId = retrieveEnumValue("GrandStrategy", otherArgs.GrandStrategy)
+    const grandStrategyId = retrieveEnumValue("GrandStrategy", otherArgs.GrandStrategy)
     const result = await super.call(otherArgs.PlayerID, flavorsTable, grandStrategyId);
 
     if (result.Success) {
@@ -173,7 +173,7 @@ class SetFlavorsTool extends ActionTool<SetFlavorsResultType> {
 
       const changeDescriptions: string[] = [];
       // Add grand strategy change if provided
-      let previousGrandStrategy = retrieveEnumName("GrandStrategy", previous.GrandStrategy);
+      const previousGrandStrategy = retrieveEnumName("GrandStrategy", previous.GrandStrategy);
       if (otherArgs.GrandStrategy && previousGrandStrategy !== otherArgs.GrandStrategy) {
         changeDescriptions.push(`Grand Strategy: ${previousGrandStrategy} → ${otherArgs.GrandStrategy}`);
       }

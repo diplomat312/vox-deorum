@@ -76,7 +76,7 @@ ${SimpleStrategistBase.strategiesDescriptionPrompt}
 ${SimpleStrategistBase.victoryConditionsPrompt}
 ${SimpleStrategistBase.playersInfoPrompt}
 ${SimpleStrategistBase.briefingsResourcePrompt}
-${!!parameters.workingMemory[episodeRequestKey] ? SimpleStrategistLearned.episodesResourcePrompt : ""}`.trim()
+${parameters.workingMemory[episodeRequestKey] ? SimpleStrategistLearned.episodesResourcePrompt : ""}`.trim()
   }
 
   /**
