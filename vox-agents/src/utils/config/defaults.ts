@@ -32,37 +32,47 @@ export const defaultConfig: VoxAgentsConfig = {
     default: 'openai-compatible/gpt-oss-120b',
     'openai/gpt-5.6-sol': {
       provider: 'openai',
-      name: 'gpt-5.6-sol'
+      name: 'gpt-5.6-sol',
+      options: {
+        reasoningEffort: 'high'
+      }
     },
     'openai/gpt-5.6-terra': {
       provider: 'openai',
-      name: 'gpt-5.6-terra'
+      name: 'gpt-5.6-terra',
+      options: {
+        reasoningEffort: 'high'
+      }
     },
     'openai/gpt-5.6-luna': {
       provider: 'openai',
-      name: 'gpt-5.6-luna'
-    },
-    'openai/gpt-5.4-mini': {
-      provider: 'openai',
-      name: 'gpt-5.4-mini'
+      name: 'gpt-5.6-luna',
+      options: {
+        reasoningEffort: 'high'
+      }
     },
     'codex/gpt-5.6-sol': {
       provider: 'codex',
       name: 'gpt-5.6-sol',
       options: {
-        concurrencyLimit: 1
+        concurrencyLimit: 1,
+        reasoningEffort: 'high'
       }
     },
     'codex/gpt-5.6-terra': {
       provider: 'codex',
       name: 'gpt-5.6-terra',
       options: {
-        concurrencyLimit: 2
+        concurrencyLimit: 2,
+        reasoningEffort: 'high'
       }
     },
     'codex/gpt-5.6-luna': {
       provider: 'codex',
-      name: 'gpt-5.6-luna'
+      name: 'gpt-5.6-luna',
+      options: {
+        reasoningEffort: 'high'
+      }
     },
     'codex/gpt-5.4-mini': {
       provider: 'codex',
