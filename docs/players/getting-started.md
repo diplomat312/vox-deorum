@@ -1,41 +1,41 @@
 # Getting Started
 
-Vox Deorum lets you play Civilization V against opponents run by large language models such as GPT, Claude, and Gemini. The AI civilizations make their own strategic decisions and can talk to you in character. This page gets you from nothing to your first game.
+Vox Deorum lets you play Civilization V (Civ V) against opponents run by large language models (LLMs) such as GPT, Claude, and Gemini. The AI civilizations make their own strategic decisions and can talk to you in character. This page walks you through installing Vox Deorum and starting your first game.
 
-The path is short: install, add an API key, and launch. You do **not** need to install Steam, Node.js, or the mod files by hand. The installer takes care of all of that.
+The path is short: install, then launch. Civ V must already be installed through Steam; the installer handles the mods and other dependencies for you.
 
 ## What you need
 
 | Requirement | Details |
 | --- | --- |
 | Windows | Windows 10 or 11. |
-| Civilization V | Ideally with both expansions, *Gods & Kings* and *Brave New World*. Vox Deorum is built on the Community Patch and Vox Populi overhaul and is only tested with the full game. |
-| An LLM API key | A key from OpenAI, Anthropic, Google, OpenRouter, or another supported service. This powers the AI players, and most providers charge for usage. You can instead point Vox Deorum at a free local model; see [Configuration](configuration.md). |
+| [Civilization V](https://store.steampowered.com/app/8930/) | Already installed through Steam. Ideally with both expansions, *Gods & Kings* and *Brave New World*. Vox Deorum is built on the [Community Patch and Vox Populi](https://github.com/LoneGazebo/Community-Patch-DLL) overhaul and is only tested with the full game. |
+| An LLM API key | A key from OpenAI, Anthropic, Google, OpenRouter, or another supported service, which powers the AI players. Most providers charge for usage; you can instead point Vox Deorum at a free local model. See [Configuration](configuration.md). |
 
 ## Install
 
 1. **Download the installer.** Grab the newest release from the [releases page](https://github.com/CIVITAS-John/vox-deorum/releases).
-2. **Run the installer.** The setup wizard does the heavy lifting:
-   - Makes sure Steam is present, and installs it if it isn't.
-   - Checks that Civilization V is installed. If it can't find the game, it opens Steam so you can install it, then asks you to run the installer again.
-   - Installs the Vox Deorum game mods: the Community Patch, Vox Populi, the Vox Deorum mod itself, and the matching interface files.
-   - Installs a bundled copy of Node.js, which the AI services run on, so you don't have to set anything up yourself.
-   - Creates your settings file and opens it so you can paste in an API key.
-3. **Add your API key.** When the installer opens the settings file, paste in the key for your provider and save. If you skip this now, you can add it any time from the dashboard described below. See [Configuration](configuration.md) for where to get a key.
+2. **Run the installer.** It looks for your Steam and Civ V folders on its own, then installs everything Vox Deorum needs:
+   - The Vox Deorum game mods: the Community Patch, Vox Populi, the Vox Deorum mod itself, and the matching interface files.
+   - A bundled copy of Node.js for the AI services to run on, so you don't have to set it up yourself.
+
+   It asks you to confirm the Civ V folder, pre-filled if the search succeeded, and won't continue until you choose a valid one. The typical location is `Steam\steamapps\common\Sid Meier's Civilization V`.
+
+You'll add your API key at first launch (see below).
 
 ## First launch
 
 Start Vox Deorum from the **Start Menu** entry named *Vox Deorum*, or by running `scripts\vox-deorum.cmd` in the install folder.
 
-A console window opens and starts the three background services Vox Deorum needs, then opens its **dashboard** in your web browser (by default at `http://localhost:5555`).
+A console window opens and starts the background services, then brings up the dashboard in your web browser (by default at `http://localhost:5555`).
 
 **Leave the console window running.** Closing it shuts everything down. When you are done, follow the prompt in the console to stop cleanly.
 
 From the dashboard:
 
-1. Open the **Config** view and confirm your LLM API key is set. This is the same setting the installer asked about; you can add or change keys here without editing any files.
-2. Open the **Session** view and pick a game configuration: which civilizations the AI controls, and whether you play alongside it or just watch. Then **start the game**. Vox Deorum launches Civilization V with all the right mods already enabled, so you don't need to turn anything on in the game's own mod menu.
-3. Civilization V opens into your game. Play as you normally would. The AI civilizations are now driven by the language model, and when it is an AI's turn it reads the situation and steers its empire on its own.
+1. On a fresh install, the dashboard opens its **Settings** page automatically so you can paste in your provider's key. You can return here any time to add or change keys without editing any files.
+2. Open the **Play** page and set up your game: assign the AI to numbered player slots (the game picks each slot's civilization), choose whether you play alongside it or just watch, then start the game. Vox Deorum launches Civ V with the mods already enabled, so you don't need to touch the game's own mod menu.
+3. Civ V opens into your game. Play as you normally would: an LLM now drives the AI civilizations, and they steer their empires on their own each turn.
 
 That's it. You are playing. From here:
 

@@ -443,7 +443,7 @@ export class CodexProxyManager {
     if (this.openedDeviceLogins.get(child) === prompt) return;
     this.openedDeviceLogins.set(child, prompt);
     void this.dependencies.openLoginUrl(parsedUrl.href, this.dependencies.platform).catch((error) => {
-      this.dependencies.logger.warn(`Could not open Codex login in the default browser: ${errorMessage(error)}. Use the verification URL and code in the Codex proxy logs.`);
+      this.dependencies.logger.warn(`Could not open Codex login in the default browser: ${errorMessage(error)}. Open the verification URL from the Codex proxy logs to finish login.`);
     });
   }
 

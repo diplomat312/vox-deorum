@@ -1,44 +1,39 @@
 # Playing
 
-Once a game is running, the AI civilizations are no longer the stock Civilization V opponents. Each one you put under Vox Deorum's control is steered by a language model. This page describes what that feels like in practice: what the AI does, how to talk to it, and what to expect.
+Once a game is running, civilizations under Vox Deorum's control no longer run on Civ V's built-in AI. Each one is instead steered by a language model. This page describes what that feels like in practice: what the AI does, how to talk to it, and what to expect.
 
 ## What the AI does
 
-A normal Civ V opponent follows fixed rules. A Vox Deorum opponent **thinks about its situation each turn and decides how to play.**
+A normal Civ V opponent follows fixed rules. A Vox Deorum opponent **thinks about its situation and decides how to play**. The underlying software calls this AI a strategist, a term you may see in logs or configuration.
 
-Periodically, and immediately when something important happens such as a war declaration or a finished wonder, the AI for each language-model civilization looks at the whole board: its cities and military, the other players, how the victory race is going, and recent events. It then sets a direction for its empire: which victory to chase, what to research, which social policies to pursue, and how to feel about its neighbors.
+By default, each AI civilization re-evaluates every single turn. It looks at the whole board: its cities and military, the other players, how the victory race is going, and recent events. It then sets a direction for its empire: which victory to chase, what to research, which social policies to pursue, and how to feel about its neighbors.
 
-A few things are worth knowing about how this steering works:
-
-- **The AI guides, it doesn't micromanage.** It decides the *strategy*; the game's built-in tactical AI still moves individual units and runs the cities. The AI plays at the level of a human thinking "I should turn toward a science victory and make peace with my eastern neighbor," not "move this archer one tile."
-- **It doesn't decide every single turn.** Decisions are paced out. The AI commits to a course and holds it for a while, reconsidering on a schedule or whenever events demand it. On the turns in between, it is deliberately staying the course rather than ignoring you.
+- **The AI guides, it doesn't micromanage.** It plays at the level of a human thinking, "I should turn toward a science victory and make peace with my eastern neighbor," not "move this archer one tile." Unit-by-unit moves and city management stay with Civ V's built-in AI.
+- **Decisions can be paced out.** Instead of that every-turn default, a game can be set up so the AI decides only every few turns, holding its course until then, and optionally reconsidering early whenever something important happens: a war or peace declaration, a finished technology, an adopted policy or ideology, or an important message relayed by a diplomat. On the turns in between, it is deliberately staying the course, not ignoring you.
 - **Every decision has a reason.** When the AI changes direction, it records *why* in plain language. You see those rationales in the game (below), and you can review the full reasoning afterward in [Replay](replay.md).
 
 You can have the AI run several civilizations at once, play alongside it as a normal human player, or simply watch a game where every major civilization is AI-driven. This is set by the configuration you pick when you start the game.
 
 ## Seeing the AI's reasoning in-game
 
-Vox Deorum adds almost no new windows to the game. Instead it speaks through surfaces Civ V already has.
+Vox Deorum adds almost no new windows to the game, speaking instead through surfaces Civ V already has.
 
-- **The replay log.** As the AI makes its moves, it writes a short summary and the reasoning behind each one into the player's replay messages. Reviewing the game later, these read as a running account of *why* each civilization did what it did, not just the bare facts the game normally records.
-- **The top panel.** As decisions land, the game's top panel follows along, switching to show whichever civilization just acted, so your attention tracks whoever is currently making a move.
+- **The replay log.** As the AI makes its moves, it writes a short summary and the reasoning behind each one into the player's replay messages. When you review the game later, they read as a running account of *why* each civilization did what it did, not just the bare facts the game normally records.
+- **The top panel.** As decisions land, the game's top panel switches to whichever civilization just acted, so your attention follows whoever is making a move.
 
 ## Chatting with spokespersons
 
-Each AI civilization can field a **spokesperson**, a representative you can talk to in character from inside the game. Open a civilization's chat and ask it questions: what it thinks of you, how it sees the world, what its intentions are. It answers in the voice of its leader, warmly if you are allies, guardedly or with a sneer if you are rivals.
+Each AI civilization can field a **spokesperson**, who talks for it in character. Open a civilization's chat from inside the game and ask what it thinks of you, how it sees the world, what it intends to do. A civilization may instead field a **diplomat**, who plays the same role but also takes note: what you reveal in conversation may reach its leader and color how it treats you later.
 
-Two things to keep in mind.
+A spokesperson has no authority to agree to anything; it only conveys positions. Raise a deal with a diplomat, though, and it comes back with a concrete proposal on the game's own deal screen, which you can accept or decline.
 
-**A spokesperson conveys positions; it can't make deals.** It speaks for its civilization but has no authority to agree to anything. Real agreements still happen through the game's normal diplomacy screen. Think of it as talking *to* the nation, not negotiating a binding treaty.
+**Talk to a spokesperson to learn about a civilization; talk to a diplomat and the civilization may learn about you.**
 
-**Some conversations go both ways.** A plain spokesperson just talks, and what you say stays between you and it. But a civilization may instead put forward a **diplomat**, who plays the same conversational role *and quietly takes note*. Something you reveal in conversation, such as a threat, an offer, or a careless admission, can make its way back to that civilization's leader and color how it treats you later. The simple rule: **talk to a spokesperson to learn about a civilization; talk to a diplomat and the civilization may learn about you.**
-
-Conversations live in threads that persist as the game goes on. The spokesperson is aware of time passing; it knows which turn it is and that turns have gone by since you last spoke. The words come from the language model in real time, so replies stream in as they are written.
+Conversations live in threads that persist as the game goes on. The spokesperson keeps track of time along with you: it knows which turn it is, and that turns have gone by since you last spoke. The words come from the language model in real time, so replies stream in as they are written.
 
 ## What to expect
 
 - **The AI is genuinely making its own choices.** It can surprise you: change course, hold a grudge, pursue an unexpected victory. That unpredictability is the point.
-- **Responses take a moment.** Both the AI's turn decisions and a spokesperson's replies involve a call to the language model, so there is a short wait. Faster or local models reduce it; see [Configuration](configuration.md).
-- **Quality depends on the model.** A stronger model plays a sharper game and holds a better conversation than a small or local one. You choose the trade-off between quality, speed, and cost.
+- **Response speed and quality both depend on the model you choose.** Turn decisions and spokesperson replies alike call the language model, so expect a short wait each time; faster or local models cut that wait, while a stronger model plays a sharper game and holds a better conversation. See [Configuration](configuration.md) to weigh quality against speed and cost.
 
 If the AI seems stuck, a turn hangs, or chat doesn't respond, see [Troubleshooting](troubleshooting.md).

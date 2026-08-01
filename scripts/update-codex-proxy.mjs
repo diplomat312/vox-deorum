@@ -11,7 +11,7 @@ const targetPaths = {
   source: 'vox-agents/src/utils/models/providers/codex-proxy.ts',
   test: 'vox-agents/tests/mock/utils/providers/codex-proxy.test.ts',
   developerGuide: 'docs/developers/vox-agents/codex.md',
-  troubleshooting: 'docs/players/troubleshooting.md',
+  operations: 'docs/developers/operations.md',
 };
 const exactVersionPattern = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
 
@@ -78,7 +78,7 @@ async function main() {
 
   const sourcePattern = /export const codexProxyVersion = '([^']+)';/;
   const testPattern = /`codex-openai-proxy@([^`]+)`, 'serve'/;
-  const troubleshootingPattern = /npx --yes codex-openai-proxy@(\S+) serve/;
+  const operationsPattern = /npx --yes codex-openai-proxy@(\S+) serve/;
   const guidePattern = /The current pin is `codex-openai-proxy@([^`]+)`, which bundles `@openai\/codex@([^`]+)`\./;
 
   const sourcePath = targetPaths.source;
@@ -110,11 +110,11 @@ async function main() {
       `\`codex-openai-proxy@${targetVersion}\`, 'serve'`,
       files.test.path,
     ),
-    troubleshooting: replaceVersion(
-      files.troubleshooting.content,
-      troubleshootingPattern,
+    operations: replaceVersion(
+      files.operations.content,
+      operationsPattern,
       `npx --yes codex-openai-proxy@${targetVersion} serve`,
-      files.troubleshooting.path,
+      files.operations.path,
     ),
     developerGuide: replaceVersion(
       files.developerGuide.content,

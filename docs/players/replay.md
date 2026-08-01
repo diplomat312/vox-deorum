@@ -1,18 +1,15 @@
 # Replay
 
-Every Civilization V game you finish leaves behind a replay file, and Vox Deorum's games are no exception. The **Vox Deorum Replayer** is a web tool for rewatching those games, with empires rising and falling and borders shifting over the centuries, so you can review how a match unfolded, your play and the AI's alike.
+Every Civilization V game you finish leaves behind a replay file, Vox Deorum games included. The **Vox Deorum Replayer** is a browser-based tool for rewatching finished games, yours and the AI's alike. There is nothing to install.
 
-The Replayer is a separate, browser-based tool. There is nothing to install. You open it in your web browser and load a replay file:
+The Replayer is built for [Community Patch and Vox Populi](https://github.com/LoneGazebo/Community-Patch-DLL) games, the ruleset Vox Deorum uses, so your Vox Deorum replays load correctly. Plain, unmodded Civ V replays may not.
 
-1. Open the hosted viewer at <https://civitas-john.github.io/vox-deorum-replay/>.
-2. Load one of your `.Civ5Replay` files (see [Finding your replay files](#finding-your-replay-files)).
-3. Play it back with the keyboard (see [Watching a game](#watching-a-game)).
+To watch a replay:
 
-## Opening the Replayer
-
-Go to the hosted viewer at **<https://civitas-john.github.io/vox-deorum-replay/>**.
-
-It is built specifically for Community Patch and Vox Populi games, the same ruleset Vox Deorum uses, so your Vox Deorum games load correctly. Plain, unmodded Civ V replays may not.
+1. Open the Replayer at <https://civitas-john.github.io/vox-deorum-replay/>.
+2. [Find your replay file](#finding-your-replay-files).
+3. [Load it](#loading-a-game).
+4. [Play it back](#watching-a-game).
 
 ## Finding your replay files
 
@@ -24,16 +21,16 @@ Documents\My Games\Sid Meier's Civilization 5\Replays\
 
 ## Loading a game
 
-There are two ways to open a replay in the viewer:
+There are two ways to load a replay:
 
 - **Drag and drop.** Drag a `.Civ5Replay` file straight onto the Replayer page.
-- **Direct link.** Point the viewer at a hosted file with a URL like `?file=<url>&turn=<number>`. This is handy for sharing a specific moment with someone else.
+- **Direct link.** Point the Replayer at a hosted file with a URL like `?file=<url>&turn=<number>`, which is handy for sharing a specific moment with someone else.
 
-The viewer ships with a few example replays of AI games if you'd like to see what it looks like before loading your own.
+The Replayer also ships with a few example replays of AI games, in case you want to see it in action before loading your own.
 
 ## Watching a game
 
-Once a replay is loaded, you can play it back turn by turn and watch the map evolve:
+Once a replay is loaded, play it back turn by turn to watch the map evolve:
 
 | Control | Action |
 | --- | --- |
@@ -44,4 +41,4 @@ Once a replay is loaded, you can play it back turn by turn and watch the map evo
 
 ## Reviewing the AI's reasoning
 
-The Replayer shows you *what* happened on the map. If you also want to know *why* the AI made its moves, remember that during the game each AI civilization records the reasoning behind its decisions into the replay log (see [Playing](playing.md)). Reviewing a finished game therefore gives you both the events and, in the log, the thinking behind them.
+The Replayer shows you *what* happened on the map. For the *why*, each AI civilization records the reasoning behind its decisions into the replay log as the game runs (see [Playing](playing.md)). Reviewing a finished game therefore gives you both the events and the thinking behind them.

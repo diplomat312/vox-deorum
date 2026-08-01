@@ -34,6 +34,16 @@ Each writes two rotating files alongside its console output: `error.log` (errors
 
 Vox Agents additionally streams every log line to its web dashboard over SSE. That live view, along with the rest of the tracing and dashboard story, is covered in [vox-agents/observability.md](vox-agents/observability.md) and isn't repeated here.
 
+## Running the Codex proxy in the foreground
+
+When Codex login or startup misbehaves, run the managed proxy by hand in a terminal so you can watch its structured stderr directly instead of digging through what Vox Deorum captures.
+
+```text
+npx --yes codex-openai-proxy@0.1.0-rc.15 serve --root C:\absolute\temporary\codex-root --port 8787 --log-level debug --request-timeout 300000ms --shutdown-timeout 10000ms
+```
+
+This mirrors the invocation vox-agents builds, including `--log-level debug`, which turns on the proxy's redacted diagnostics. The version pin is kept current by `npm run update:codex-proxy`, so don't edit it by hand here. Do not configure an API key for the proxy: the adapter passes an inert `local` placeholder to satisfy the OpenAI-compatible client, it is not a credential. See [vox-agents/codex.md](vox-agents/codex.md) for the pin-update workflow.
+
 ## Attaching a debugger
 
 Two of the three services open a Node inspector port from certain npm scripts (check each `package.json` if this drifts):

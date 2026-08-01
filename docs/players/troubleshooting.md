@@ -1,95 +1,82 @@
 # Troubleshooting
 
-Common problems and how to fix them. If your issue isn't here, the [Configuration](configuration.md) and [Getting Started](getting-started.md) pages cover most setup details.
+Common problems and how to fix them, roughly in the order you'll meet them. If your issue isn't here, check [Playing](playing.md), [Configuration](configuration.md), and [Getting Started](getting-started.md). Configuration is also where provider, credential, and API key are explained.
 
 | Symptom | Most likely fix |
 | --- | --- |
-| Dashboard doesn't open | Wait a few seconds, then open `http://localhost:5555` by hand; keep the console window open. |
-| AI does nothing / turn stuck | Make sure the game isn't paused. |
-| Missing or invalid API key error | Set a valid key in the Config view, or complete Codex device login. |
-| AI stops responding mid-game | Let the game finish reloading; Vox Deorum reconnects on its own. |
-| Looks like normal Civ V | Start games from the dashboard's Session view, not Civ V's menu. |
-| Installer can't find Civ V | Install Civilization V through Steam, then re-run the installer. |
-| Slow or costly responses | Switch to a smaller, faster, or local model. |
-| Spokesperson chat doesn't reply | Check provider credentials, that the game is running, and the console for errors. |
+| Installer can't find Civilization V | Install Civ V through Steam first, then confirm the game folder when the installer asks. |
+| Dashboard doesn't open in the browser | Wait a few seconds, then open `http://localhost:5555` by hand; keep the console window open. |
+| Missing or invalid API key error | Set a valid key on the Settings page, or complete ChatGPT device login for Codex. |
+| Codex login doesn't start or finish | Open the login link yourself if no browser opened; the one-time code is never in the logs. |
+| Mod doesn't seem active / looks like normal Civ V | Start games from the dashboard's Play page, not Civ V's own menu. |
+| Turn or AI looks frozen (game running) | Make sure the game isn't paused. |
+| Game crashed or connection lost mid-game | Vox Deorum reconnects and relaunches on its own; wait it out. |
+| Spokesperson chat doesn't reply | Confirm your credential works and the game is running; check the console for errors. |
+| Responses are slow or cost too much | Switch to a smaller, faster, or local model. |
+
+## The installer couldn't find Civilization V
+
+Install Civilization V through Steam first, then run the Vox Deorum installer. It always asks you to confirm the game's folder: pre-filled if it detected one, otherwise blank so you can browse to it. See [Getting Started](getting-started.md) for the full walkthrough, including the typical folder path.
 
 ## The dashboard doesn't open in my browser
 
-When you launch Vox Deorum, a console window opens and starts the background services, then the dashboard should open at `http://localhost:5555`.
+See [Getting Started: First launch](getting-started.md#first-launch) for the normal startup sequence. If the dashboard still doesn't show up:
 
-- Give it a few seconds. The services take a moment to come up the first time.
-- If the page never appears, open that address in your browser by hand.
-- **Keep the console window open.** Closing it stops everything. To shut down cleanly, follow the prompt in the console rather than closing the window.
-- If the dashboard still won't load, another program may be using the port, or the services failed to start. Close any leftover Vox Deorum console windows and launch again.
-
-## The AI isn't doing anything, or a turn seems stuck
-
-The single most common cause is that **the game is paused.** While the game is paused, it can't answer the AI's requests, so the AI looks frozen. Make sure the game is actually running, not sitting on a pause or a blocking pop-up, and it will pick up again.
-
-If it's still stuck:
-
-- Check the console window for errors.
-- Make sure your provider credential is valid (see below). Without a working model, the AI can't make decisions.
-- Larger models simply take longer to think. A slow response isn't always a stuck one.
+- Give it a few seconds. If the page never appears, open `http://localhost:5555` in your browser by hand.
+- **Keep the console window open.** Closing it stops everything; shut down through its prompt instead.
+- Still nothing? Close any leftover Vox Deorum console windows and launch again.
 
 ## I get errors about a missing or invalid API key
 
 API-backed providers cannot run without a working LLM key. Codex uses ChatGPT login instead.
 
-- Open the dashboard's **Config view** and confirm a key is filled in for your provider.
-- Make sure you pasted the **whole** key with no extra spaces before or after it.
-- Confirm the key is still active and has credit in your provider's own account dashboard.
+- Open the dashboard's **Settings** page and paste in the entire key for your provider, with no extra spaces.
+- On your provider's billing page, confirm the key is still active and has credit.
 
 See [Configuration](configuration.md) for where to get keys and how to choose a provider.
 
-## Codex does not start or finish login
+## Codex login doesn't start or finish
 
-Codex is downloaded and started only on its first request. Check the Vox Deorum logs for the specific failure:
+See [Configuration: Using Codex with ChatGPT](configuration.md#using-codex-with-chatgpt) for how ChatGPT device login normally works. If it goes wrong:
 
-- Vox Deorum opens the ChatGPT device-login page in your browser. Enter the one-time code shown in the logs. If the browser does not appear, open the logged verification URL yourself. Finish login within the proxy's fixed five-minute deadline. Restarting Vox Deorum reuses a completed Codex login.
-- If the configured port is occupied, Vox Deorum starts the proxy on the next free port instead, scanning ten ports from `CODEX_PROXY_PORT` upward and logging each one it skips. It does not adopt an existing listener because the proxy health endpoints do not identify its version or capabilities. Only when every scanned port is occupied does startup fail, and then you need to stop one of those services or change `CODEX_PROXY_PORT`.
-- If Vox Deorum times out while login is still active, raise `CODEX_PROXY_STARTUP_TIMEOUT`, restart the request, and finish the proxy login within five minutes.
+- **Browser never opened.** Open the login link from the console window yourself, or restart Vox Deorum to open the browser again. The logs only ever show that verification URL, never the one-time code.
+- **Port busy.** Vox Deorum moves to the next free port by itself; startup fails only if every nearby port is taken. Advanced users can change the starting port with `CODEX_PROXY_PORT`.
+- **Taking too long.** Vox Deorum waits up to five minutes by default; advanced users can raise `CODEX_PROXY_STARTUP_TIMEOUT`.
 
-For foreground diagnosis, run the command below from a console and keep its structured stderr visible:
-
-```text
-npx --yes codex-openai-proxy@0.1.0-rc.15 serve --root C:\absolute\temporary\codex-root --port 8787 --request-timeout 300000ms --shutdown-timeout 10000ms
-```
-
-Do not configure a proxy API key. The adapter's `local` value is an inert placeholder for the OpenAI-compatible client, not a credential.
-
-## The AI stops responding partway through a game
-
-This usually means Vox Deorum briefly lost its connection to the game, for instance because the game was closed, restarted, or mid-load. Vox Deorum reconnects automatically and keeps retrying, so:
-
-- If you closed or reloaded the game, let it finish coming back up. Play resumes on its own.
-- If the game crashed, relaunch it. The AI picks up roughly where it left off.
-- A persistent disconnect usually points to the game itself having quit. Check that Civilization V is still running.
+If login still fails, the [developer guide](../developers/operations.md) covers running the proxy by hand for diagnosis.
 
 ## The mod doesn't seem active, or it looks like normal Civ V
 
-Start your games from the dashboard's **Session view**, not from Civ V's main menu. When you start from the dashboard, Vox Deorum launches the game with all the right mods already enabled. Launching the game on its own won't bring in the AI.
+Start your games from the dashboard's **Play** page, not Civ V's main menu: that's what enables the mods. Launching Civ V on its own won't bring in the AI.
 
-If you ran the installer but the game still can't find the mods at all, re-run the installer. It reinstalls the mod files and clears the game's cached data so changes take effect.
+If the game still can't find the mods after installing, re-run the installer. It reinstalls the mod files and clears the game's cached localization text.
 
-## The installer couldn't find Civilization V
+## The AI isn't doing anything, or a turn seems stuck
 
-The installer checks for Civ V through Steam. If it can't find the game, it opens Steam so you can install it, then asks you to run the installer again once the download finishes. Install Civilization V (the full edition with both expansions is recommended), then re-run the Vox Deorum installer.
+The most common cause is that **the game is paused**. A paused game can't answer the AI's requests, so everything looks frozen. Check that it isn't sitting on a pause menu or a blocking pop-up.
 
-## Responses are slow, or the game is costing more than I expected
+If it's still stuck:
 
-Both are usually about the model you've chosen. Every AI decision and every spokesperson reply is a call to your LLM provider, which takes time and, on paid models, money.
+- Check the console window for errors.
+- Make sure your provider credential is valid (see above); without a working model, the AI can't decide anything.
+- A slow response isn't always a stuck one; larger models take longer to think.
 
-- Switch to a smaller or faster model in the dashboard's Config view.
-- Have the AI control fewer civilizations.
-- Run a **local model** to remove the per-turn cost entirely.
+## The AI stops responding partway through a game
 
-See [Configuration](configuration.md) for the full rundown on models, cost, and local setups.
+This is different from the frozen turn above: the game has crashed or Vox Deorum has lost its connection, rather than the game just being paused. Vox Deorum handles most of it on its own:
+
+- After a brief disconnect, it reconnects and retries by itself.
+- After a crash, it automatically relaunches Civilization V with the latest autosave, up to three times.
+- Step in yourself only if Vox Deorum gives up after those attempts, or if the game was set up to wait for you.
 
 ## Chatting with a spokesperson doesn't respond
 
-Spokesperson replies come from the language model in real time, so they stream in after a short delay. If nothing comes back:
+Spokesperson replies stream in from the language model in real time, so expect a short delay. If nothing comes back:
 
-- Confirm your API key is valid, or that Codex device login completed (see above).
+- Confirm your API key is valid, or that ChatGPT device login completed (see above).
 - Make sure the game is running and not paused.
 - Check the console window for provider errors such as an exhausted quota or an unreachable endpoint.
+
+## Responses are slow, or the game is costing more than I expected
+
+Both usually come down to the model. Try a smaller, faster, or local one, or have the AI control fewer civilizations. See [Configuration: Controlling cost](configuration.md#controlling-cost) for the full rundown.
