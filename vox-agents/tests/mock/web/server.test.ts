@@ -15,7 +15,7 @@ vi.mock('../../../src/utils/models/mcp-client.js', async () => {
   return helper.mockMcpClientModule();
 });
 
-import { app } from '../../../src/web/server.js';
+import { app, shutdownWebServer, startWebServer } from '../../../src/web/server.js';
 import config from '../../../src/utils/config.js';
 import { installMockMcpClient } from '../../helpers/mock-mcp-client.js';
 
@@ -58,6 +58,18 @@ describe('web server', () => {
     expect(response.body).toEqual({ error: 'API endpoint not found' });
   });
 
+  it('rejects API requests whose Host header is not loopback', async () => {
+    const response = await request(app).get('/api/health').set('Host', 'dashboard.test');
+
+    expect(response.status).toBe(403);
+  });
+
+  it('rejects cross-origin shutdown requests', async () => {
+    const response = await request(app).post('/shutdown').set('Origin', 'https://attacker.test');
+
+    expect(response.status).toBe(403);
+  });
+
   it('uses the SPA fallback when the UI has not been built', async () => {
     vi.spyOn(fs, 'existsSync').mockReturnValue(false);
 
@@ -68,5 +80,22 @@ describe('web server', () => {
       error: 'UI not built',
       details: 'Run "npm run build" in ui/ directory to build the frontend',
     });
+  });
+
+  it('binds the dashboard server to the loopback interface', async () => {
+    const server = {
+      address: () => ({ address: '127.0.0.1', port: 7654 }),
+      on: vi.fn(),
+      close: (callback: (error?: Error) => void) => callback(),
+      closeAllConnections: vi.fn(),
+    };
+    const listen = vi.spyOn(app, 'listen').mockImplementation(((_port: number, _host: string, callback: () => void) => {
+      queueMicrotask(callback);
+      return server;
+    }) as never);
+
+    await expect(startWebServer()).resolves.toBe(7654);
+    expect(listen).toHaveBeenCalledWith(config.webui.port, '127.0.0.1', expect.any(Function));
+    await expect(shutdownWebServer()).resolves.toBeUndefined();
   });
 });

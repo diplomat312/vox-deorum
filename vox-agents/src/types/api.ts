@@ -97,6 +97,54 @@ export interface ConfigResponse {
   apiKeys: Record<string, string>;
 }
 
+/** A model discovered from a provider, normalized for configuration selection. */
+export interface DiscoveredModel {
+  /** Stable provider-qualified identifier. */
+  id: string;
+  /** Provider-native model name. */
+  name: string;
+  /** Configuration options inferred from established model rules. */
+  recommendedOptions?: import('./config.js').LLMConfig['options'];
+}
+
+/** Categorizes a model-discovery failure for the configuration UI. */
+export type DiscoveryErrorKind = 'missing-credential' | 'unsupported' | 'auth' | 'provider' | 'network';
+
+/** Request body for provider model discovery. */
+export interface DiscoverModelsRequest {
+  provider: string;
+  credentials?: Record<string, string>;
+}
+
+/** Successful response from the provider model-discovery endpoint. */
+export interface DiscoverModelsResponse {
+  provider: string;
+  models: DiscoveredModel[];
+}
+
+/** Typed error response from the provider model-discovery endpoint. */
+export interface DiscoveryErrorResponse {
+  error: string;
+  kind: DiscoveryErrorKind;
+}
+
+/** Response from the current runtime configuration check. */
+export interface ConfigCheckResponse {
+  configured: boolean;
+}
+
+/** Response after starting or checking the interactive Codex login flow. */
+export interface CodexLoginResponse {
+  state: 'stopped' | 'starting' | 'ready';
+}
+
+/** Current availability of the Codex local proxy and ChatGPT login. */
+export interface CodexStatusResponse {
+  state: 'stopped' | 'starting' | 'ready';
+  login: { verificationUrl: string; userCode: string } | null;
+  error: string | null;
+}
+
 // ============================================================================
 // Session API Response Types
 // ============================================================================

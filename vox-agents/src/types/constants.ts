@@ -144,3 +144,27 @@ export const apiKeyFields: ApiKeyField[] = [
     helpTooltip: 'Enter the API key if your OpenAI-compatible endpoint requires authentication'
   }
 ];
+
+/** Reports whether a provider-qualified model ID can be synthesized by the model registry. */
+export function isSynthesizableModelId(modelId: string): boolean {
+  const separator = modelId.indexOf('/');
+  if (separator <= 0 || separator === modelId.length - 1) return false;
+  const provider = modelId.slice(0, separator);
+  const modelName = modelId.slice(separator + 1);
+  if (modelName.trim().length === 0) return false;
+  return llmProviders.some((candidate) => candidate.value === provider);
+}
+
+/** Credential fields used by each provider's model-discovery request. */
+export const providerCredentials: Record<string, { required: readonly string[]; optional?: readonly string[] }> = {
+  openai: { required: ['OPENAI_API_KEY'] },
+  anthropic: { required: ['ANTHROPIC_API_KEY'] },
+  google: { required: ['GOOGLE_GENERATIVE_AI_API_KEY'] },
+  openrouter: { required: ['OPENROUTER_API_KEY'] },
+  chutes: { required: ['CHUTES_API_KEY'] },
+  synthetic: { required: ['SYNTHETIC_API_KEY'] },
+  'openai-compatible': { required: ['OPENAI_COMPATIBLE_URL'], optional: ['OPENAI_COMPATIBLE_API_KEY'] },
+  'claude-code': { required: [] },
+  codex: { required: [] },
+  aws: { required: [] },
+};

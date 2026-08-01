@@ -26,10 +26,30 @@ import { requiredToolChoiceMiddleware } from './providers/required-tool-choice.j
 import type { ModelRuntimeIdentity } from './providers/host-tools.js';
 import type { ToolCallFraming } from './tool-rescue/types.js';
 import { Agent } from 'undici';
+import { createLogger } from '../logger.js';
+import { synthesizeModelConfig } from './rules.js';
 
 export type { ModelRuntimeIdentity } from './providers/host-tools.js';
 
 dotenv.config();
+
+/** Records synthesized IDs already announced during this process. */
+const loggedSynthesizedIds = new Set<string>();
+
+/** Records unknown IDs already warned about during this process. */
+const warnedUnknownIds = new Set<string>();
+
+/** Model-resolution diagnostics without configuration values or credentials. */
+const modelsLogger = createLogger('models');
+
+/** Applies the caller's reasoning override to an explicit or synthesized model configuration. */
+function applyReasoning(model: Model, reasoning?: ReasoningEffort | 'default'): Model {
+  if (!reasoning || (reasoning === 'default' && model.options?.reasoningEffort)) return model;
+  return {
+    ...model,
+    options: { ...model.options, reasoningEffort: reasoning === 'default' ? 'medium' : reasoning },
+  };
+}
 
 /**
  * Get a LLM model config by name.
@@ -57,30 +77,30 @@ export function getModelConfig(
     if (typeof override === 'string') {
       return getModelConfig(override, reasoning, overrides);
     }
-    // It's a Model object - apply reasoning if needed
-    if (reasoning && (reasoning !== 'default' || !override.options?.reasoningEffort)) {
-      return {
-        ...override,
-        options: { ...override.options, reasoningEffort: reasoning === 'default' ? 'medium' : reasoning }
-      };
-    }
-    return override;
+    return applyReasoning(override, reasoning);
   }
 
   // Fall back to config.llms
   const model = config.llms[name];
   if (!model) {
     if (name === "default") throw new Error("The assignment for `default` is not found. Please check your settings!")
+    const synthesized = synthesizeModelConfig(name);
+    if (synthesized) {
+      if (!loggedSynthesizedIds.has(name)) {
+        loggedSynthesizedIds.add(name);
+        modelsLogger.info(`Synthesized model configuration for '${name}'.`);
+      }
+      return applyReasoning(synthesized, reasoning);
+    }
+    if (!warnedUnknownIds.has(name)) {
+      warnedUnknownIds.add(name);
+      modelsLogger.warn(`Unknown model configuration '${name}', falling back to 'default'.`);
+    }
     return getModelConfig("default", reasoning);
   }
   if (typeof(model) === "string") {
     return getModelConfig(model, reasoning);
-  } else if (reasoning && (reasoning !== 'default' || !model.options?.reasoningEffort)) {
-    return {
-      ...model,
-      options: { ...model.options, reasoningEffort: reasoning === 'default' ? 'medium' : reasoning }
-    };
-  } else return model;
+  } else return applyReasoning(model, reasoning);
 }
 
 
@@ -296,6 +316,8 @@ export function getModel(config: Model, options?: {
  * // Returns: { openrouter: { reasoning: { effort: 'medium' } } }
  */
 export function buildProviderOptions(model: Model, runtimeIdentity?: ModelRuntimeIdentity): ProviderMetadata {
+  // Model-name defaults are assigned by rules.ts; request-time reasoning and provider
+  // translation intentionally remain here where the adapters serialize them.
   let result: ProviderMetadata;
 
   const isVertexAnthropic = model.provider === 'google' && model.name.startsWith('claude-');

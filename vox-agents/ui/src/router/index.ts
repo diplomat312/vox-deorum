@@ -9,8 +9,8 @@ const router = createRouter({
       component: () => import('../views/SessionView.vue'),
       beforeEnter: async () => {
         try {
-          const { exists } = await api.checkEnvFile();
-          return exists ? '/session' : '/config';
+          const { configured } = await api.checkSetupStatus();
+          return configured ? '/session' : '/config?setup=1';
         } catch {
           return '/session';
         }

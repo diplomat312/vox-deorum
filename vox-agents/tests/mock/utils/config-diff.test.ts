@@ -119,6 +119,15 @@ describe('mergeConfigWithDefaults', () => {
     expect(defaults.llms.fancy).toEqual({ provider: 'openai', name: 'gpt-4' });
   });
 
+  it('should ignore a stale deletion tombstone for an unknown default model', () => {
+    const defaults = makeDefaults();
+
+    const merged = mergeConfigWithDefaults({ llms: { 'removed/provider-model': null } }, defaults);
+
+    expect(merged).toEqual(defaults);
+    expect(merged.llms).not.toBe(defaults.llms);
+  });
+
   it('should round-trip: merge(diff(full)) reconstructs the full config', () => {
     const defaults = makeDefaults();
     const full = cloneConfig(defaults);

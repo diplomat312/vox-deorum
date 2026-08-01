@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue';
+import { ref, onMounted, computed, watch } from 'vue';
+import { useRoute } from 'vue-router';
 import Button from 'primevue/button';
 import Message from 'primevue/message';
 import ProgressSpinner from 'primevue/progressspinner';
@@ -12,6 +13,7 @@ import ApiKeysSection from '../components/config/ApiKeysSection.vue';
 import ModelDefinitions from '../components/config/ModelDefinitions.vue';
 import PathSettingsSection from '../components/config/PathSettingsSection.vue';
 import ModelOptionsDialog from '../components/config/ModelOptionsDialog.vue';
+import SetupWizard from '../components/config/SetupWizard.vue';
 import {
   parseLLMConfig,
   buildLLMConfig,
@@ -26,6 +28,8 @@ const error = ref<string | null>(null);
 const success = ref(false);
 const apiKeys = ref<Record<string, string>>({});
 const config = ref<VoxAgentsConfig | null>(null);
+const setupWizardVisible = ref(false);
+const route = useRoute();
 
 // LLM Configuration State
 const agentMappings = ref<AgentMapping[]>([]);
@@ -42,18 +46,58 @@ const confirm = useConfirm();
 const modelOptionsVisible = ref(false);
 const editingModel = ref<LLMConfig | null>(null);
 
+/** Rebuild the editable LLM form state from one complete LLM configuration. */
+function rehydrateLlmForm(llms: VoxAgentsConfig['llms']): void {
+  const { mappings, definitions, embedder } = parseLLMConfig(llms);
+  agentMappings.value = mappings;
+  embedderModel.value = embedder;
+  modelDefinitions.value = definitions.map(definition => ({
+    ...definition,
+    options: definition.options || {}
+  }));
+}
+
+/** Retain non-LLM configuration separately from the editable LLM form state. */
+function storeNonLlmConfig(updatedConfig: VoxAgentsConfig): void {
+  config.value = { ...updatedConfig, llms: {} };
+}
+
+/** Build a complete configuration from the current non-LLM and editable LLM state. */
+function buildCurrentConfig(): VoxAgentsConfig | null {
+  if (!config.value) return null;
+  return {
+    ...config.value,
+    llms: buildLLMConfig(agentMappings.value, modelDefinitions.value, embedderModel.value)
+  };
+}
+
+/** Provide the setup wizard with the current editable configuration, including unsaved LLM changes. */
+const wizardConfig = computed(() => buildCurrentConfig());
+
 // Computed available chat models for agent dropdowns (excludes embedding models)
 const availableModels = computed(() => {
-  return modelDefinitions.value
+  const options = modelDefinitions.value
     .filter(m => !m.options?.embeddingSize && m.id)
     .map(m => ({ label: m.id!, value: m.id! }));
+  const known = new Set(options.map(option => option.value));
+  for (const modelId of agentMappings.value.map(mapping => mapping.model)) {
+    if (modelId && !known.has(modelId)) {
+      options.push({ label: modelId, value: modelId });
+      known.add(modelId);
+    }
+  }
+  return options;
 });
 
 // Computed available embedding models for the embedder dropdown
 const embeddingModels = computed(() => {
-  return modelDefinitions.value
+  const options = modelDefinitions.value
     .filter(m => m.options?.embeddingSize && m.id)
     .map(m => ({ label: m.id!, value: m.id! }));
+  if (embedderModel.value && !options.some(option => option.value === embedderModel.value)) {
+    options.push({ label: embedderModel.value, value: embedderModel.value });
+  }
+  return options;
 });
 
 // Computed agent types from dynamic registry
@@ -78,6 +122,14 @@ const agentTypes = computed(() => {
 onMounted(async () => {
   await Promise.all([loadConfig(), loadAgents()]);
 });
+
+watch(
+  () => route.query.setup,
+  setup => {
+    if (setup === '1') setupWizardVisible.value = true;
+  },
+  { immediate: true }
+);
 
 // Load agents from server
 async function loadAgents() {
@@ -105,18 +157,8 @@ async function loadConfig() {
     }
     apiKeys.value = loadedKeys;
 
-    // Parse LLM configuration
-    const { mappings, definitions, embedder } = parseLLMConfig(data.config.llms || {});
-    agentMappings.value = mappings;
-    embedderModel.value = embedder;
-    // Ensure all model definitions have an options object
-    modelDefinitions.value = definitions.map(def => ({
-      ...def,
-      options: def.options || {}
-    }));
-
-    // Keep other parts
-    config.value = data.config;
+    rehydrateLlmForm(data.config.llms || {});
+    storeNonLlmConfig(data.config);
   } catch (err: any) {
     error.value = err.message || 'Failed to load configuration';
     console.error('Error loading config:', err);
@@ -195,10 +237,8 @@ async function saveConfig() {
     );
 
     // Build the updated config with LLM settings
-    const updatedConfig = {
-      ...config.value!,
-      llms: buildLLMConfig(agentMappings.value, modelDefinitions.value, embedderModel.value)
-    };
+    const updatedConfig = buildCurrentConfig();
+    if (!updatedConfig) return;
 
     await api.updateCurrentConfig({
       apiKeys: nonEmptyKeys,
@@ -216,6 +256,17 @@ async function saveConfig() {
     saving.value = false;
   }
 }
+
+/** Retain non-LLM edits emitted by the path settings section. */
+function updatePathSettings(updatedConfig: VoxAgentsConfig): void {
+  storeNonLlmConfig(updatedConfig);
+}
+
+/** Rehydrate the editable form immediately after the setup wizard saves a configuration. */
+function updateWizardConfig(updatedConfig: VoxAgentsConfig): void {
+  rehydrateLlmForm(updatedConfig.llms);
+  storeNonLlmConfig(updatedConfig);
+}
 </script>
 
 <template>
@@ -228,6 +279,13 @@ async function saveConfig() {
         <ProgressSpinner v-if="loading" style="width: 24px; height: 24px" />
       </div>
       <div class="page-header-controls">
+        <Button
+          label="Setup wizard"
+          icon="pi pi-sparkles"
+          text
+          @click="setupWizardVisible = true"
+          :disabled="loading || saving"
+        />
         <Button
           label="Reload"
           icon="pi pi-refresh"
@@ -260,7 +318,7 @@ async function saveConfig() {
 
     <ApiKeysSection v-model="apiKeys" />
 
-    <PathSettingsSection v-if="config" :config="config" @update:config="config = $event" />
+    <PathSettingsSection v-if="config" :config="config" @update:config="updatePathSettings" />
 
     <AgentModelMappings
       v-model:mappings="agentMappings"
@@ -280,6 +338,14 @@ async function saveConfig() {
       v-model:visible="modelOptionsVisible"
       :model="editingModel"
       @apply="applyModelOptions"
+    />
+
+    <SetupWizard
+      v-model:visible="setupWizardVisible"
+      :apiKeys="apiKeys"
+      :config="wizardConfig"
+      @update:apiKeys="apiKeys = $event"
+      @update:config="updateWizardConfig"
     />
   </div>
 </template>

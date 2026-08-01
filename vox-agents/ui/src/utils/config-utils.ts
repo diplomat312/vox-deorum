@@ -3,6 +3,10 @@
  */
 
 import type { AgentMapping, LLMConfig } from '../utils/types';
+import { isSynthesizableModelId } from '../utils/types';
+
+/** Re-export the shared model-ID rule for existing configuration utility callers. */
+export { isSynthesizableModelId };
 
 /**
  * Parse LLM configuration from config.llms into mappings and definitions
@@ -135,7 +139,7 @@ export function validateMappings(
     }
     if (!mapping.model) {
       errors.push(`Model is required for agent "${mapping.agent}"`);
-    } else if (!availableModels.has(mapping.model)) {
+    } else if (!availableModels.has(mapping.model) && !isSynthesizableModelId(mapping.model)) {
       errors.push(`Model "${mapping.model}" used by agent "${mapping.agent}" does not exist`);
     }
   }

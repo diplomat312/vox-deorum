@@ -452,13 +452,39 @@ describe('CodexProxyManager startup', () => {
     })}\n`;
     child.stderr.emit('data', prompt);
     child.stderr.emit('data', prompt);
+    expect(manager.loginPrompt).toEqual({
+      verificationUrl: 'https://auth.openai.com/codex/device',
+      userCode: 'ABCD-1234',
+    });
     child.exitCode = 1;
     child.emit('exit', 1);
+    expect(manager.loginPrompt).toBeUndefined();
     child.stderr.emit('data', prompt.replace('ABCD-1234', 'WXYZ-5678'));
 
     expect(openLoginUrl).toHaveBeenCalledOnce();
     expect(openLoginUrl).toHaveBeenCalledWith('https://auth.openai.com/codex/device', process.platform);
     expect(JSON.stringify(logger.info.mock.calls)).not.toContain('ABCD-1234');
+  });
+
+  it('should clear the login prompt when readiness completes', async () => {
+    const child = createChild();
+    const prompt = `${JSON.stringify({
+      event: 'device_code_login_started',
+      verification_url: 'https://auth.openai.com/codex/device',
+      user_code: 'ABCD-1234',
+    })}\n`;
+    const fetch = vi.fn()
+      .mockRejectedValueOnce(new TypeError('connection refused'))
+      .mockImplementationOnce(async () => {
+        child.stderr.emit('data', prompt);
+        return response(200, { status: 'ready' });
+      });
+    const manager = createManager(fetch, vi.fn(() => child));
+
+    await manager.ensureCodexProxy();
+
+    expect(manager.state).toBe('ready');
+    expect(manager.loginPrompt).toBeUndefined();
   });
 
   it('should treat proxy-root creation failure as terminal', async () => {

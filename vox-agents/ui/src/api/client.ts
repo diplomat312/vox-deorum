@@ -28,6 +28,12 @@ import type {
   SessionConfig,
   // Config types
   ConfigResponse,
+  DiscoverModelsRequest,
+  DiscoverModelsResponse,
+  DiscoveryErrorResponse,
+  ConfigCheckResponse,
+  CodexLoginResponse,
+  CodexStatusResponse,
   ErrorResponse,
   UploadResponse,
   Span,
@@ -50,6 +56,18 @@ import type {
   DealMessagesResponse
 } from '../utils/types';
 import type { TextStreamPart, ToolSet } from 'ai';
+
+/** Categories returned by model discovery so the wizard can explain the next action. */
+export type ModelDiscoveryErrorKind = DiscoveryErrorResponse['kind'];
+
+/** Preserve the server's discovery category while retaining a normal Error interface. */
+export class ModelDiscoveryError extends Error {
+  /** Create a categorized model-discovery failure. */
+  constructor(message: string, public readonly kind: ModelDiscoveryErrorKind) {
+    super(message);
+    this.name = 'ModelDiscoveryError';
+  }
+}
 
 /** The `connected` SSE event payload: fired post-commit; for a deal turn it carries the committed row. */
 type ConnectedData = Omit<ChatConnectedEvent, 'rows'>;
@@ -403,12 +421,53 @@ class ApiClient {
     );
   }
 
-  /**
-   * Check if .env file exists
-   * @returns Object with exists boolean
-   */
-  async checkEnvFile(): Promise<{ exists: boolean }> {
-    return this.fetchJson<{ exists: boolean }>(
+  /** Validate provider credentials and list models available to the current user. */
+  async discoverModels(
+    provider: string,
+    credentials?: Record<string, string>
+  ): Promise<DiscoverModelsResponse> {
+    const request: DiscoverModelsRequest = { provider, ...(credentials ? { credentials } : {}) };
+    let response: Response;
+    try {
+      response = await fetch(`${this.baseUrl}/api/config/models`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(request)
+      });
+    } catch (error) {
+      throw new ModelDiscoveryError(
+        error instanceof Error ? error.message : 'The provider could not be reached.',
+        'network'
+      );
+    }
+    if (!response.ok) {
+      const fallback = `Request failed: ${response.statusText}`;
+      try {
+        const failure = await response.json() as DiscoveryErrorResponse;
+        throw new ModelDiscoveryError(failure.error || fallback, failure.kind || 'provider');
+      } catch (error) {
+        if (error instanceof ModelDiscoveryError) throw error;
+        throw new ModelDiscoveryError(fallback, 'provider');
+      }
+    }
+    return response.json() as Promise<DiscoverModelsResponse>;
+  }
+
+  /** Start the browser-assisted ChatGPT sign-in flow. */
+  async startCodexLogin(): Promise<CodexLoginResponse> {
+    return this.fetchJson<CodexLoginResponse>(`${this.baseUrl}/api/config/codex/login`, {
+      method: 'POST'
+    });
+  }
+
+  /** Read the current browser-assisted ChatGPT sign-in state. */
+  async getCodexLoginStatus(): Promise<CodexStatusResponse> {
+    return this.fetchJson<CodexStatusResponse>(`${this.baseUrl}/api/config/codex/status`);
+  }
+
+  /** Check whether the installation has a usable onboarding configuration. */
+  async checkSetupStatus(): Promise<ConfigCheckResponse> {
+    return this.fetchJson<ConfigCheckResponse>(
       `${this.baseUrl}/api/config/check`
     );
   }

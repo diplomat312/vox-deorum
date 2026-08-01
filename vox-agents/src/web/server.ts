@@ -3,7 +3,7 @@
  * Provides REST API and SSE endpoints for telemetry, logs, sessions, and agent chat
  */
 
-import express, { Request, Response } from 'express';
+import express, { NextFunction, Request, Response } from 'express';
 import cors from 'cors';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -18,6 +18,7 @@ import { createAgentRoutes } from './routes/agent.js';
 import sessionRoutes from './routes/session.js';
 import { processManager } from '../infra/process-manager.js';
 import type { HealthStatus, ErrorResponse } from '../types/index.js';
+import { isAllowedDashboardRequest, isAllowedLoopbackOrigin } from './origin.js';
 
 // Get __dirname in ESM
 const __filename = fileURLToPath(import.meta.url);
@@ -35,6 +36,24 @@ let activeServer: ReturnType<typeof app.listen> | null = null;
 let heartbeatInterval: ReturnType<typeof setInterval> | null = null;
 let activePort: number | null = null;
 
+/** Resolves the browser-origin CORS policy using the middleware callback contract. */
+function allowLoopbackCorsOrigin(
+  origin: string | undefined,
+  callback: (error: Error | null, allowed?: boolean) => void,
+): void {
+  callback(null, isAllowedLoopbackOrigin(origin));
+}
+
+/** Rejects browser and Host-header requests that do not identify the loopback dashboard. */
+function requireAllowedDashboardRequest(req: Request, res: Response<ErrorResponse>, next: NextFunction): void {
+  if (!isAllowedDashboardRequest(req.hostname, req.get('origin'))) {
+    res.status(403).json({ error: 'This request is not allowed to access the local dashboard.' });
+    return;
+  }
+  next();
+}
+
+/** Returns a loopback hostname suitable for the local shutdown URL. */
 function getShutdownHost(host: string): string {
   if (host === '0.0.0.0' || host === '::' || host === '::1' || host === 'localhost') {
     return '127.0.0.1';
@@ -82,9 +101,12 @@ export async function shutdownWebServer(): Promise<void> {
 }
 
 // Middleware setup
-app.use(cors());
+app.use(cors({ origin: allowLoopbackCorsOrigin }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// Protect every API and shutdown route from cross-origin and DNS-rebinding requests.
+app.use(['/api', '/shutdown'], requireAllowedDashboardRequest);
 
 // Serve static files from dist-ui directory (production build)
 const staticPath = path.join(__dirname, '../../dist-ui');
@@ -169,7 +191,7 @@ app.get('*', (_req: Request, res: Response<ErrorResponse>) => {
 /** Try to listen on the given port. Resolves with the port on success, null on EADDRINUSE. */
 function tryListen(port: number): Promise<number | null> {
   return new Promise((resolve, reject) => {
-    const server = app.listen(port, () => {
+    const server = app.listen(port, '127.0.0.1', () => {
       const address = server.address();
       const actualHost = typeof address === 'object' && address ? address.address : '127.0.0.1';
       const actualPort = typeof address === 'object' && address ? address.port : port;

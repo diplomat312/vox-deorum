@@ -2,7 +2,7 @@
 
 The AI civilizations in Vox Deorum are powered by a large language model, and you decide which one. This page covers providers, credentials, models, cost, and running a model locally for free.
 
-**The short version:** open the **Settings** page in the dashboard (`http://localhost:5555`, opened automatically when you launch Vox Deorum), configure a provider, and pick a model. Most hosted providers need an API key. Codex uses your ChatGPT login instead.
+**The short version:** follow the four-step **Setup** wizard in the dashboard (`http://localhost:5555`, opened automatically when you launch Vox Deorum). Choose how to connect, provide a key or sign in, validate the connection, and choose a model. Most hosted providers need an API key. Codex uses your ChatGPT login instead.
 
 ## Provider, model, and API key
 
@@ -20,9 +20,9 @@ Vox Deorum works with any of these providers, and you can mix several in one gam
 | --- | --- | --- |
 | OpenAI | GPT models | <https://platform.openai.com/api-keys> |
 | Anthropic | Claude models | <https://console.anthropic.com/settings/keys> |
-| Claude Code | Claude models through your own installation of Anthropic's coding tool; relevant only if you already use it | Your local Claude Code login, no key needed in the dashboard |
+| Claude Code | Claude models through your installed Anthropic coding app; relevant only if you already use it | Your signed-in Claude Code app, no key needed in the dashboard |
 | Google AI | Gemini models | <https://aistudio.google.com/apikey> |
-| AWS Bedrock | Claude and other models hosted on AWS | Your AWS credentials; see AWS's [Bedrock setup guide](https://docs.aws.amazon.com/bedrock/latest/userguide/getting-started-api.html) |
+| AWS Bedrock | Claude and other models hosted on AWS; configured manually in Settings rather than through the Setup wizard | Your AWS credentials; see AWS's [Bedrock setup guide](https://docs.aws.amazon.com/bedrock/latest/userguide/getting-started-api.html) |
 | OpenRouter | One account that resells many providers' models | <https://openrouter.ai/keys> |
 | Chutes.ai | A marketplace reselling open-source models | <https://chutes.ai/> |
 | Synthetic.new | A marketplace reselling open-source models | <https://synthetic.new/> |
@@ -31,17 +31,17 @@ Vox Deorum works with any of these providers, and you can mix several in one gam
 
 If you're just starting out and want the widest selection from one account, OpenRouter is simplest. Otherwise, pick the provider whose models you want.
 
-## Setting provider credentials
+## Connecting a provider
 
-Open the Settings page, paste your key into the matching field, and save. Codex needs no key here; it uses your ChatGPT login instead (see [Using Codex with ChatGPT](#using-codex-with-chatgpt)).
+On a fresh install, Vox Deorum opens the Setup wizard automatically. It asks how you want to connect and collects the needed key or account sign-in. API-backed providers and local servers validate the connection by fetching their current model lists. Codex uses bundled choices and validates your ChatGPT account through its proxy. Claude Code also uses bundled choices, but listing them does not verify that the app is installed or signed in. Authentication, network, and provider errors are shown in the wizard so you can correct the problem before continuing. Keys stay on your own machine and go only to the provider you're using.
 
-Keys stay on your own machine and go only to the provider you're using.
+Codex completes ChatGPT device login inside the dashboard. Claude Code uses the app already installed and signed in on your computer. For a local OpenAI-compatible provider, the wizard checks the server address you supply. AWS Bedrock remains an advanced setup that you configure manually on the Settings page.
 
-On a fresh install, Vox Deorum opens this page automatically at first launch; see [Getting Started](getting-started.md#first-launch).
+The Settings page is also the advanced editor for credentials, providers, and model options. Its **Setup wizard** button lets you repeat the guided flow at any time. See [Getting Started](getting-started.md#first-launch) for where setup fits into the first launch.
 
 ## Choosing a model
 
-The Settings page lists the available models. The choice always comes down to the same three-way trade-off:
+After connecting, the Setup wizard lists models. API-backed providers and local servers report their current lists, while Codex and Claude Code use bundled choices. The choice always comes down to the same three-way trade-off:
 
 | Model type | Strengths | Costs |
 | --- | --- | --- |
@@ -49,7 +49,7 @@ The Settings page lists the available models. The choice always comes down to th
 | Smaller / faster models | Cheaper, quicker | Lower quality of play |
 | Local models | Free to run, private | Limited by your own hardware |
 
-You can assign different models to different jobs right on the Settings page. Per-civilization models are possible too, say a strong model for the main opponents and something cheap for the minor ones, but those mean editing the game configuration file by hand; see the [developer overview](../developers/vox-agents/overview.md#models-and-configuration) if you want to go that deep.
+When you save, the wizard silently applies the recommended settings Vox Deorum knows for that model. The full built-in model list remains available in Settings, which also lets you assign different models to different jobs. Per-civilization models are possible too, say a strong model for the main opponents and something cheap for the minor ones, but those mean editing the game configuration file by hand; see the [developer overview](../developers/vox-agents/overview.md#models-and-configuration) if you want to go that deep.
 
 A mid-tier model from your chosen provider is a sensible starting point. Move up or down once you've seen how it plays.
 
@@ -64,15 +64,15 @@ Every AI decision and every spokesperson reply is a call to the provider. **A ga
 
 ## Running local models
 
-If you'd rather not pay per turn, or want to play fully offline, run a model on your own machine with a tool such as [Ollama](https://ollama.com) or [LM Studio](https://lmstudio.ai), or any other server that exposes an OpenAI-compatible endpoint. Add that endpoint on the Settings page as an OpenAI-compatible provider, then select your local model like any other.
+If you'd rather not pay per turn, or want to play fully offline, run a model on your own machine with a tool such as [Ollama](https://ollama.com) or [LM Studio](https://lmstudio.ai), or any other server that exposes an OpenAI-compatible endpoint. Choose the local option in the Setup wizard and enter that endpoint. Vox Deorum checks the server, fetches its models, and lets you select one. You can edit the endpoint later in Settings.
 
 Expect a trade-off: local models are free and private, but one small enough to run comfortably on a typical PC won't play as sharply as a large hosted model, and speed depends on your hardware. That's fine for casual play; for the strongest opponents, a hosted model still has the edge.
 
 ## Using Codex with ChatGPT
 
-Common Codex models are already listed on the Settings page, and you can also set the provider to `codex` with any model name your ChatGPT account has access to. The first time you use it, Codex sets itself up in the background, which can take a little longer than usual.
+Common Codex models are already listed on the Settings page, and you can also set the provider to `codex` with any model name your ChatGPT account has access to. The Setup wizard validates the ChatGPT account through the Codex proxy. The first time you use it, Codex sets itself up in the background, which can take a little longer than usual.
 
-Vox Deorum reuses an existing ChatGPT login when it can; otherwise the device-login page opens in your browser. The logs show only the verification URL, never the one-time code. If the browser doesn't open, you'll find that URL in the console window, and restarting Vox Deorum tries the login again.
+Vox Deorum reuses an existing ChatGPT login when it can. Otherwise the Setup wizard opens or links the device-login page, displays the verification URL and user code in the dashboard, and waits for authentication before validating the account through the proxy. The verification URL can also appear in the logs, but the one-time user code is never written there. If the browser doesn't open, use the link shown in the wizard; restarting Vox Deorum tries the login again.
 
 Codex's own web, file, and command activity shows up in the dashboard as progress, but it's not a move in the game.
 
@@ -82,4 +82,4 @@ Login trouble? See [Troubleshooting](troubleshooting.md#codex-login-doesnt-start
 
 ## If something doesn't work
 
-Missing credentials, Codex login trouble, and unreachable endpoints are the most common setup problems. See [Troubleshooting](troubleshooting.md) for the specific symptoms and fixes.
+Invalid credentials, Codex login trouble, and unreachable providers or local endpoints are the most common setup problems. See [Troubleshooting](troubleshooting.md) for the specific symptoms and fixes.

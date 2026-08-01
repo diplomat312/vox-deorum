@@ -6,8 +6,8 @@ Common problems and how to fix them, roughly in the order you'll meet them. If y
 | --- | --- |
 | Installer can't find Civilization V | Install Civ V through Steam first, then confirm the game folder when the installer asks. |
 | Dashboard doesn't open in the browser | Wait a few seconds, then open `http://localhost:5555` by hand; keep the console window open. |
-| Missing or invalid API key error | Set a valid key on the Settings page, or complete ChatGPT device login for Codex. |
-| Codex login doesn't start or finish | Open the login link yourself if no browser opened; the one-time code is never in the logs. |
+| Setup rejects a key or cannot load models | Use the wizard's authentication, network, or provider message to correct the key or connection. |
+| Codex login doesn't start or finish | Use the device link and user code shown in the dashboard; the one-time user code is never written to the logs. |
 | Mod doesn't seem active / looks like normal Civ V | Start games from the dashboard's Play page, not Civ V's own menu. |
 | Turn or AI looks frozen (game running) | Make sure the game isn't paused. |
 | Game crashed or connection lost mid-game | Vox Deorum reconnects and relaunches on its own; wait it out. |
@@ -26,20 +26,22 @@ See [Getting Started: First launch](getting-started.md#first-launch) for the nor
 - **Keep the console window open.** Closing it stops everything; shut down through its prompt instead.
 - Still nothing? Close any leftover Vox Deorum console windows and launch again.
 
-## I get errors about a missing or invalid API key
+## Setup rejects my key or cannot load models
 
-API-backed providers cannot run without a working LLM key. Codex uses ChatGPT login instead.
+The Setup wizard validates an API-backed provider by using the key to fetch its current models. It distinguishes authentication failures from network and provider errors, so start with the message shown there.
 
-- Open the dashboard's **Settings** page and paste in the entire key for your provider, with no extra spaces.
+- Re-enter the entire key with no extra spaces, then try validation again.
 - On your provider's billing page, confirm the key is still active and has credit.
+- For a network or provider error, confirm you are online and check whether the provider is having an outage.
+- For a local OpenAI-compatible model, confirm the local server is running and that its address is correct.
 
-See [Configuration](configuration.md) for where to get keys and how to choose a provider.
+You can reopen the guided flow with the **Setup wizard** button on the Settings page. Codex uses ChatGPT login rather than an API key, and Claude Code uses the installed and signed-in app. See [Configuration](configuration.md) for provider details.
 
 ## Codex login doesn't start or finish
 
-See [Configuration: Using Codex with ChatGPT](configuration.md#using-codex-with-chatgpt) for how ChatGPT device login normally works. If it goes wrong:
+See [Configuration: Using Codex with ChatGPT](configuration.md#using-codex-with-chatgpt) for how ChatGPT device login normally works. The device link and user code appear in the dashboard. The verification URL can also appear in the logs, but the one-time user code is never written there. If it goes wrong:
 
-- **Browser never opened.** Open the login link from the console window yourself, or restart Vox Deorum to open the browser again. The logs only ever show that verification URL, never the one-time code.
+- **Browser never opened.** Open the device link from the Setup wizard yourself, enter the user code shown there, or restart Vox Deorum to begin again.
 - **Port busy.** Vox Deorum moves to the next free port by itself; startup fails only if every nearby port is taken. Advanced users can change the starting port with `CODEX_PROXY_PORT`.
 - **Taking too long.** Vox Deorum waits up to five minutes by default; advanced users can raise `CODEX_PROXY_STARTUP_TIMEOUT`.
 

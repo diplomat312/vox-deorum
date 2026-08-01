@@ -59,7 +59,7 @@ class FakeEventSource {
   }
 }
 
-import { api } from '@/api/client'
+import { api, ModelDiscoveryError } from '@/api/client'
 
 function mockFetch(impl: (url: string, options?: RequestInit) => Promise<Response> | Response) {
   const fn = vi.fn(impl as any)
@@ -140,6 +140,45 @@ describe('ApiClient REST methods', () => {
         }) as Response,
     )
     await expect(api.getHealth()).rejects.toThrow('plain text failure')
+  })
+
+  it('checks whether setup is configured', async () => {
+    const fetchFn = mockFetch(() => jsonResponse({ configured: true }))
+
+    await expect(api.checkSetupStatus()).resolves.toEqual({ configured: true })
+    expect(fetchFn).toHaveBeenCalledWith('http://localhost:5555/api/config/check', undefined)
+  })
+
+  it('posts provider credentials for model discovery', async () => {
+    const fetchFn = mockFetch(() => jsonResponse({
+      provider: 'openrouter',
+      models: [{ id: 'openrouter/model', name: 'model' }],
+    }))
+    await api.discoverModels('openrouter', { OPENROUTER_API_KEY: 'secret' })
+
+    const [url, options] = fetchFn.mock.calls[0]! as [string, RequestInit]
+    expect(url).toBe('http://localhost:5555/api/config/models')
+    expect(options.method).toBe('POST')
+    expect(JSON.parse(options.body as string)).toEqual({
+      provider: 'openrouter',
+      credentials: { OPENROUTER_API_KEY: 'secret' },
+    })
+  })
+
+  it('preserves the discovery error category from the server', async () => {
+    mockFetch(() => jsonResponse({ error: 'check the key', kind: 'auth' }, false, 'Unauthorized'))
+
+    const error = await api.discoverModels('openrouter', {}).catch(caught => caught)
+    expect(error).toBeInstanceOf(ModelDiscoveryError)
+    expect(error).toMatchObject({ message: 'check the key', kind: 'auth' })
+  })
+
+  it('categorizes a failed discovery fetch as a network error', async () => {
+    mockFetch(() => Promise.reject(new Error('offline')))
+
+    const error = await api.discoverModels('openrouter', {}).catch(caught => caught)
+    expect(error).toBeInstanceOf(ModelDiscoveryError)
+    expect(error).toMatchObject({ message: 'offline', kind: 'network' })
   })
 })
 

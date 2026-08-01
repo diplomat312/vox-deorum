@@ -49,6 +49,12 @@ export const codexProxyPortScanLimit = 10;
 /** The explicit lifecycle states exposed for focused tests and diagnostics. */
 export type CodexProxyState = 'stopped' | 'starting' | 'ready';
 
+/** The non-secret device-login details the dashboard may show to the operator. */
+export interface CodexLoginPrompt {
+  verificationUrl: string;
+  userCode: string;
+}
+
 /** A child surface that keeps the manager independent from Node's concrete ChildProcess. */
 export interface CodexProxyChild {
   pid?: number;
@@ -203,6 +209,7 @@ export class CodexProxyManager {
   private readonly stderrBuffers = new Map<CodexProxyChild, string>();
   private readonly openedDeviceLogins = new Map<CodexProxyChild, string>();
   private readonly ownedChildren = new Set<CodexProxyChild>();
+  private loginPromptValue: CodexLoginPrompt | undefined;
 
   /** Creates a manager with production defaults or controlled test doubles. */
   constructor(dependencies: CodexProxyDependencies = {}) {
@@ -234,6 +241,13 @@ export class CodexProxyManager {
   /** Returns the port the owned proxy actually serves, which a port scan may have moved. */
   get activePort(): number {
     return this.activePortValue ?? this.getConfig().port;
+  }
+
+  /** Returns the current non-secret device-login prompt, if authentication is waiting. */
+  get loginPrompt(): CodexLoginPrompt | undefined {
+    if (!this.loginPromptValue) return undefined;
+    const { verificationUrl, userCode } = this.loginPromptValue;
+    return { verificationUrl, userCode };
   }
 
   /** Ensures the shared proxy is authenticated, while allowing one caller to abandon only its wait. */
@@ -442,6 +456,7 @@ export class CodexProxyManager {
     const prompt = `${parsedUrl.href}\n${userCode}`;
     if (this.openedDeviceLogins.get(child) === prompt) return;
     this.openedDeviceLogins.set(child, prompt);
+    this.loginPromptValue = { verificationUrl: parsedUrl.href, userCode };
     void this.dependencies.openLoginUrl(parsedUrl.href, this.dependencies.platform).catch((error) => {
       this.dependencies.logger.warn(`Could not open Codex login in the default browser: ${errorMessage(error)}. Open the verification URL from the Codex proxy logs to finish login.`);
     });
@@ -508,6 +523,7 @@ export class CodexProxyManager {
   /** Installs an owned ready state only if its startup generation remains current. */
   private installReady(generation: number): void {
     if (this.stopped || generation !== this.generation) throw new CodexProxyError('Codex proxy startup was superseded.', true);
+    this.loginPromptValue = undefined;
     this.stateValue = 'ready';
     this.dependencies.logger.info('Codex proxy is ready.');
   }
@@ -543,6 +559,7 @@ export class CodexProxyManager {
     this.generation += 1;
     this.child = undefined;
     this.stateValue = 'stopped';
+    this.loginPromptValue = undefined;
   }
 
   /** Resolves this manager's injected environment once, after application configuration has loaded. */
