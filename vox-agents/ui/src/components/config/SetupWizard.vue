@@ -436,10 +436,6 @@ onUnmounted(invalidatePendingWork);
     :dismissableMask="!saving"
     @hide="closeWizard"
   >
-    <template #header>
-      <p class="setup-wizard-eyebrow">Setup wizard</p>
-    </template>
-
     <div class="setup-wizard-progress" aria-label="Setup progress">
       <span :aria-current="currentStep === 'path' ? 'step' : undefined">1. Connection</span>
       <span :aria-current="currentStep === 'credentials' ? 'step' : undefined">2. Account</span>
@@ -449,7 +445,7 @@ onUnmounted(invalidatePendingWork);
 
     <section v-if="currentStep === 'path'" class="setup-wizard-step">
       <div class="setup-wizard-heading">
-        <h3>Step 1 of 4 · How will you power your AI opponents?</h3>
+        <h3>Setup Step 1 of 4 · How will you power your AI opponents?</h3>
         <p>Pick the option that matches what you already have. Nothing is selected for you.</p>
       </div>
 
@@ -503,7 +499,7 @@ onUnmounted(invalidatePendingWork);
 
     <section v-else-if="currentStep === 'credentials'" class="setup-wizard-step">
       <div class="setup-wizard-heading">
-        <h3>Step 2 of 4 · {{ credentialsHeading }}</h3>
+        <h3>Setup Step 2 of 4 · {{ credentialsHeading }}</h3>
         <p v-if="selectedProvider === 'openai-compatible'">
           Start Ollama or LM Studio first, then enter the address it shows.
         </p>
@@ -587,8 +583,7 @@ onUnmounted(invalidatePendingWork);
 
     <section v-else-if="currentStep === 'models'" class="setup-wizard-step">
       <div class="setup-wizard-heading">
-        <h3>Step 3 of 4 · Pick the model your AI opponents will use</h3>
-        <p v-if="selectedProvider === 'openai-compatible'">These AIs are available on this PC.</p>
+        <h3>Setup Step 3 of 4 · Pick the model your AI opponents will use</h3>
         <p v-else>Your account works. Choose the AI Vox Deorum should use by default.</p>
       </div>
       <div class="setup-wizard-field">
@@ -608,7 +603,7 @@ onUnmounted(invalidatePendingWork);
 
     <section v-else class="setup-wizard-step">
       <div class="setup-wizard-heading">
-        <h3>Step 4 of 4 · Ready to play</h3>
+        <h3>Setup Step 4 of 4 · Ready to play</h3>
         <p>Review these choices before Vox Deorum writes them to this PC.</p>
       </div>
       <div class="setup-wizard-summary">
