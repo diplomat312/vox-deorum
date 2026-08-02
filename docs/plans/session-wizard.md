@@ -21,9 +21,10 @@ configuration files, most of them research artifacts (`gemma-4-standard-fixed-pe
 **New Config** opens an editor written in engine vocabulary. Nothing in that screen tells the player:
 
 - that **seat 0 is theirs** when *Observe* is off, and must be left out of `llmPlayers`;
-- that the **highest configured seat number sets the total civilization count** — and therefore the map size
-  (`computePlayerCount` = `max(seat)+1`, rounded up to even → `calculateWorldSize`). Wanting 8 civilizations
-  with 3 agentic ones means writing an entry at seat 7;
+- that the **highest configured seat number determines the requested civilization count** and therefore the
+  map size (`computePlayerCount` = `max(seat)+1`; the launcher rounds an odd count up before creating slots).
+  The wizard offers only even counts, so the civilization count and map-size preview agree. Wanting 8
+  civilizations with 3 agentic ones means writing an entry at seat 7;
 - that seats present in `llmPlayers` as `none-strategist` still play as VPAI but **become conversable** — a
   diplomacy chat requires an active seat context
   ([`factory.ts:129-133`](../../vox-agents/src/web/chat/factory.ts#L129-L133)), so unlisted civilizations
@@ -66,11 +67,10 @@ button, and the empty-state call to action.
 │      You take one civilization, exactly as in normal Civ V. The rival   │
 │      civilizations are run by agentic AI.                               │
 │                                                                         │
-│  ( ) Watch the agentic AI play                                          │
-│      Every civilization is agentic AI and the game plays itself. The    │
-│      best way to see how it thinks before you face it.                  │
+│  ( ) Watch AI self-play                                                 │
+│      The game plays itself, with agentic AI and/or Vox Populi AI.       │
 │                                                                         │
-│  ( ) Direct a civilization the way the agentic AI does      [advanced]  │
+│  ( ) Direct a civilization like an agent                    [advanced]  │
 │      You set the strategy each decision turn and Civ V handles the      │
 │      units and cities. i.e. you compete as if an agent.                 │
 │                                                                         │
@@ -90,7 +90,7 @@ button, and the empty-state call to action.
 │  Step 2 of 4 · Who is in the game?                                      │
 │                                                                         │
 │  Civilizations in the game                                              │
-│    2 ─────────●──────────── 12          8 civilizations · Standard map  │
+│    2 ─────────●──────────── 12  [step 2] 8 civilizations · Standard map │
 │                                                                         │
 │  How many of them are agentic AI?                                       │
 │    1 ────●───────────────── 7           3 of the 7 rivals               │
@@ -110,10 +110,13 @@ The map-size readout comes from the same thresholds the launcher uses
 ([`vox-civilization.ts:126-133`](../../vox-agents/src/infra/vox-civilization.ts#L126-L133)), so what the
 player is promised is what Civ V is told.
 
+The civilization-count slider has a minimum of 2, a maximum of 12, and a step of 2, so it offers only even
+values.
+
 **Seat generation** (the rules the wizard exists to hide):
 
 ```
-C = civilizations (2…12), L = agentic AI count
+C = civilizations (2, 4, 6, 8, 10, or 12), L = agentic AI count
 firstAgenticSeat = role === 'play' ? 1 : 0      // seat 0 is the human's in play mode
 
 seats[firstAgenticSeat … firstAgenticSeat+L-1] = { strategist: style, pacing }
@@ -121,8 +124,8 @@ if role === 'direct'  seats[C-1] = { strategist: 'human-strategist', mode: 'Flav
 every remaining seat in [firstAgenticSeat … C-1] = { strategist: 'none-strategist' }
 ```
 
-Every seat is always populated — no opt-out. That both anchors the invariant `max(seat) === C-1` (so
-`computePlayerCount` yields exactly `C` and the map size matches the preview) and makes every civilization
+Every seat is always populated, with no opt-out. That anchors the invariant `max(seat) === C-1`: because `C`
+is even, `computePlayerCount` yields exactly `C`, the map size matches the preview, and every civilization is
 conversable.
 
 ### Step 3 — The minds
@@ -199,20 +202,23 @@ Model   [ My default — gpt-5-mini                                     ▾ ]
   ([`discovery.ts:37-40`](../../vox-agents/src/utils/models/discovery.ts#L37-L40)), so no credential ever
   crosses to the browser. A provider that fails discovery is dropped from the list, not fatal, and named in
   the response so the wizard can say "OpenRouter didn't answer".
-- The list is fetched when step 3 opens, behind a spinner, and falls back to the `config.llms` keys (minus the
-  `default` alias and any `options.embeddingSize` entry) if the whole call fails.
+- The list is fetched when step 3 opens, behind a spinner. If discovery fully fails, it falls back only to
+  literal object model definitions in global `config.llms` whose `options.embeddingSize` is unset. It excludes
+  every string alias or mapping, including `default`, `embedder`, and agent mappings.
 
 Choosing the default writes no `llms` at all. Choosing a specific model writes `llms: { default: "<id>" }` on
-each agentic seat, which reaches every agent in that seat's context: `VoxAgent.getModel` resolves through
-`getModelConfig(agentName, tier, overrides)`, and an agent with no per-agent entry falls through to
-`getModelConfig("default", …, overrides)`, where the seat override is found
-([`models.ts:71-110`](../../vox-agents/src/utils/models/models.ts#L71-L110)).
+each agentic seat. `VoxAgent.getModel` selects the model reference before calling the existing
+`getModelConfig`, preserving its recursive alias and model-ID resolution. Its selection order is: per-seat
+agent entry, per-seat `default`, global agent mapping, then global `default`. A seat `default` therefore applies
+to every normal `VoxAgent` in that seat context, including nested briefing and diplomacy agents, unless a
+per-seat entry for that agent overrides it. `agentModelReference` uses the same selection order for preflight.
 
-When the chosen model has no `config.llms` definition yet, saving also adds one — `{ provider, name,
-options: recommendedOptions }`, exactly as the model wizard's `selectedModelDefinition` does — so the id the
-seat references always resolves, with the registry's recommended options applied. One caveat worth knowing: an
-explicit agent→model mapping on the Settings page (`config.llms["simple-strategist"] = …`) is consulted before
-the `default` fallback and therefore wins over the wizard's per-seat choice.
+The selected provider-qualified ID is stored only as `PlayerConfig.llms.default`; the session wizard never
+changes Settings or writes a new global `config.llms` definition. `PlayerConfig.llms` remains optional, so an
+existing seat without it continues to use the global agent mapping and global default. `StrategistSession`
+preflight calls `ensureModelsResolved` before launch. A catalogue hit registers the model in memory with its
+recommended options for that run, a reachable catalogue miss rejects the ID, and a discovery failure falls
+back to the existing supported-ID synthesis. No global definition is required.
 
 ### Step 4 — Confirm
 
@@ -372,58 +378,64 @@ The net effect: **one question, asked once, in the start dialog.**
 | --- | --- |
 | [`src/types/config.ts`](../../vox-agents/src/types/config.ts) | `SessionConfig.description?: string`; `gameMode` becomes optional and launch-time only |
 | [`src/strategist/console.ts`](../../vox-agents/src/strategist/console.ts) | `--load` / `--wait` become the sole source of `gameMode`, defaulting to `start`; warn once when a loaded file still carries one |
-| [`src/infra/vox-agent.ts`](../../vox-agents/src/infra/vox-agent.ts) | optional `displayName?: string` on the base class (`Strategist` already declares it abstract); `offeredInSetup = false` beside `diplomacyOnly` |
+| [`src/infra/vox-agent.ts`](../../vox-agents/src/infra/vox-agent.ts) | optional `displayName?: string` on the base class (`Strategist` already declares it abstract); `offeredInSetup = false` beside `diplomacyOnly`; select the model reference in the order per-seat agent entry, per-seat `default`, global agent mapping, global `default`, then pass it to the existing `getModelConfig` |
+| [`src/utils/models/resolution.ts`](../../vox-agents/src/utils/models/resolution.ts) | make `agentModelReference` use the same reference-selection order for preflight; retain the existing provider-qualified ID verification and in-memory registration in `ensureModelsResolved` |
 | [`src/strategist/agents/simple-strategist.ts`](../../vox-agents/src/strategist/agents/simple-strategist.ts), [`simple-strategist-staffed.ts`](../../vox-agents/src/strategist/agents/simple-strategist-staffed.ts) | `offeredInSetup = true` |
-| [`src/types/api.ts`](../../vox-agents/src/types/api.ts) | `AgentInfo.displayName?` + `offeredInSetup?`; `StartSessionRequest.gameMode`; `SessionConfigsResponse` entries gain `filename` and `updatedAt`; `DiscoveredModel` entries gain their `provider` for grouping |
+| [`src/types/api.ts`](../../vox-agents/src/types/api.ts) | `AgentInfo.displayName?` + `offeredInSetup?`; `StartSessionRequest.gameMode`; `SessionConfigsResponse` entries gain `filename` and `updatedAt`, plus a sanitized `globalLlms` map with no API keys; `DiscoveredModel` entries gain their `provider` for grouping |
 | [`src/web/chat/discovery.ts`](../../vox-agents/src/web/chat/discovery.ts) | return `displayName` and `offeredInSetup` in `/api/agents` |
-| [`src/web/routes/config.ts`](../../vox-agents/src/web/routes/config.ts) | new `GET /api/config/models` — merge `discoverModels` across configured providers (all required env credentials present, or the provider is named by a `config.llms` entry), dropping and reporting failures |
-| [`src/web/routes/session.ts`](../../vox-agents/src/web/routes/session.ts) | return `filename` + mtime, sorted newest first; `/start` takes `gameMode` from the request; `/save` strips `gameMode` before writing |
+| [`src/web/routes/config.ts`](../../vox-agents/src/web/routes/config.ts) | new `GET /api/config/models` — merge `discoverModels` across configured providers (all required env credentials present, or the provider is named by a `config.llms` entry), dropping and reporting failures; on complete discovery failure, return only non-embedding literal object model definitions from global `config.llms`, never aliases or mappings |
+| [`src/web/routes/session.ts`](../../vox-agents/src/web/routes/session.ts) | return `filename` + mtime, sorted newest first, and the sanitized global `llms` map needed to describe effective models; `/start` takes `gameMode` from the request; `/save` strips `gameMode` before writing |
 | `vox-agents/configs/` | move research configs to `configs/experiments/`; add `description` to the retained starters |
 
 ### Frontend
 
 | File | Change |
 | --- | --- |
-| `ui/src/utils/session-summary.ts` *(new)* | pure module: `buildSeats(answers)`, `describeConfig(config, agents)` → `{ role, civCount, mapSize, agenticCount, styleLabel, paceLabel, sentence, seatRows }`, where `seatRows` carries each seat's role, style, and model and collapses adjacent identical seats into ranges. Single source for the wizard's confirm step, the list columns and expander, and the tests |
-| `ui/src/components/session/GameSetupWizard.vue` *(new)* | the four-step dialog; loads `/api/agents` (filtered to `offeredInSetup`), `/api/agents/pacing-interruptions`, and `/api/config/models` for the style, interruption, and model dropdowns; reuses the `setup-wizard-*` classes already in `styles/config.css`; emits the saved config so the host can open `GameModeDialog` |
-| [`SessionConfigList.vue`](../../vox-agents/ui/src/components/session/SessionConfigList.vue) | new columns (Mode / Civs / Map / Agentic AI / Pace), expander row, search/sort, `⋯` menu, new empty state |
-| [`SessionView.vue`](../../vox-agents/ui/src/views/SessionView.vue) | host the wizard; open it on `?setup=game`; chain wizard save → `GameModeDialog` → `startSession(config, gameMode)` instead of splicing `gameMode` into the config |
+| `ui/src/utils/session-summary.ts` *(new)* | pure module: `buildSeats(answers)`, `describeConfig(config, agents, globalLlms)` → `{ role, civCount, mapSize, agenticCount, styleLabel, paceLabel, sentence, seatRows }`, where `seatRows` carries each seat's role, style, and the strategist's effective model. It resolves references with the same precedence and follows aliases, then collapses adjacent identical seats into ranges. Single source for the wizard's confirm step, the list columns and expander, and the tests |
+| `ui/src/components/session/GameSetupWizard.vue` *(new)* | the four-step dialog; its civilization-count slider has minimum 2, maximum 12, and step 2; receives the agent list and global LLM mappings from its host, filters styles to `offeredInSetup`, and loads `/api/agents/pacing-interruptions` and `/api/config/models` for the interruption and model dropdowns; reuses the `setup-wizard-*` classes already in `styles/config.css`; emits the saved config so the host can open `GameModeDialog`. A selected provider-qualified model is written only to each agentic seat's `llms.default` |
+| [`SessionConfigList.vue`](../../vox-agents/ui/src/components/session/SessionConfigList.vue) | accept the agent list and global LLM mappings used by `describeConfig`; add the new columns (Mode / Civs / Map / Agentic AI / Pace), expander row, search/sort, `⋯` menu, and empty state |
+| [`SessionView.vue`](../../vox-agents/ui/src/views/SessionView.vue) | host the wizard; open it on `?setup=game`; load `/api/agents` once and pass it with `globalLlms` from `GET /api/session/configs` to the list and wizard, without calling `GET /api/config` because that response includes API keys; chain wizard save → `GameModeDialog` → `startSession(config, gameMode)` instead of splicing `gameMode` into the config |
+| `ui/src/api/client.ts` | preserve `globalLlms` in the typed session-config response and add the typed `GET /api/config/models` call used by the game wizard |
 | [`config/SetupWizard.vue`](../../vox-agents/ui/src/components/config/SetupWizard.vue) | final redirect `/session` → `/session?setup=game`, chaining model setup into game setup |
 | [`ConfigDialog.vue`](../../vox-agents/ui/src/components/session/ConfigDialog.vue) | add the Description field; drop `gameMode` from the new-config template; remains the advanced editor |
 
 ### Tests
 
-- `ui/tests/mock/utils/session-summary.test.ts` — seat generation per role, the `max(seat) === C-1` invariant,
-  full-seat population, column cells and sentence rendering, and `seatRows` against a mixed config: differing
-  per-seat styles and models must not collapse, matching ones must.
-- `ui/tests/mock/components/session/GameSetupWizard.test.ts` — step navigation, the config generated for each
-  role, styles filtered to `offeredInSetup`, the interruption and model dropdowns (default → no `llms`,
-  explicit choice → `llms: { default }` plus a `config.llms` definition when the model is new), Save-only vs
-  Save & Play (save then hand off to the start dialog).
+- `ui/tests/mock/utils/session-summary.test.ts` — seat generation per role using only 2, 4, 6, 8, 10, and 12
+  civilizations, the `max(seat) === C-1` invariant, full-seat population, column cells and sentence rendering,
+  effective strategist-model precedence and alias resolution, and `seatRows` against a mixed config: differing
+  per-seat styles and effective models must not collapse, matching ones must.
+- `ui/tests/mock/components/session/GameSetupWizard.test.ts` — step navigation, the civilization-count slider's
+  2 to 12 range and step of 2, the config generated for each role, styles filtered to `offeredInSetup`, the
+  interruption and model dropdowns (default → no `llms`, explicit choice → `llms: { default }` only), Save-only
+  vs Save & Play (save then hand off to the start dialog).
 - Update `SessionConfigList.test.ts`, `ConfigView.test.ts`, and `router/index.test.ts` for `?setup=game`.
-- `tests/mock/web/routes/routes.test.ts` — new configs payload fields, agent `displayName` /
-  `offeredInSetup`, `GET /api/config/models` (which providers count as configured, and that one provider's
-  failure does not sink the merged list), and `gameMode`: `/save` strips it, `/start` takes it from the
-  request, a file that still carries one is ignored.
+- Model-resolution tests: `VoxAgent.getModel` and `agentModelReference` select per-seat agent entry,
+  per-seat default, global agent mapping, then global default, while `getModelConfig` continues recursive alias
+  and model-ID resolution; `ensureModelsResolved` registers a selected provider-qualified model only in memory
+  and preflight rejects reachable catalogue misses while preserving supported-ID synthesis when discovery
+  fails.
+- `tests/mock/web/routes/routes.test.ts` — new configs payload fields, including the sanitized `globalLlms`
+  map; agent `displayName` / `offeredInSetup`; `GET /api/config/models` (which providers count as configured,
+  that one provider's failure does not sink the merged list, and complete failure returns only non-embedding
+  literal object model definitions, never string aliases or mappings); and `gameMode`: `/save` strips it,
+  `/start` takes it from the request, a file that still carries one is ignored.
 
 ### Verification
 
 `npm run type-check` in `vox-agents/ui`, both vitest suites, then a manual first-run pass: delete `config.json`
-and `.env`, launch, walk model setup → game setup → start dialog, and confirm Civ V opens with the promised
-number of civilizations and map size.
+and `.env`, launch, walk model setup → game setup → start dialog, and confirm Civ V opens with the selected
+even civilization count and promised map size.
 
 ## Open questions
 
 1. **Cost multipliers.** The 1× / 4× labels are derived from each style's sub-agent fan-out; worth confirming
    against a real trace before shipping the numbers.
-2. **Settings mappings outrank the wizard's model choice.** An agent→model mapping saved on the Settings page
-   is resolved before a seat's `llms: { default }` override, so a player who set one there and then picks a
-   different model in the wizard gets the Settings one. Worth a note under the dropdown if it proves confusing.
-3. **Moving research configs.** Any personal scripts passing `--config gemma-4-standard-fixed-per-5.json`
+2. **Moving research configs.** Any personal scripts passing `--config gemma-4-standard-fixed-per-5.json`
    would need the `experiments/` prefix.
-4. **Per-seat models.** The wizard sets one model for all agentic civilizations, though the list and confirm
+3. **Per-seat models.** The wizard sets one model for all agentic civilizations, though the list and confirm
    panel render per-seat styles and models correctly. Mixed-model games remain a hand-edit; a per-seat picker
    in the advanced editor would be a natural follow-up.
-5. **Ignoring a stored `gameMode`.** Research configs that relied on `"gameMode": "wait"` will now start a new
+4. **Ignoring a stored `gameMode`.** Research configs that relied on `"gameMode": "wait"` will now start a new
    game unless `--wait` is passed. The warning names the file, but it is a behavior change for existing
    command lines.
