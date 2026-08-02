@@ -584,7 +584,7 @@ onUnmounted(invalidatePendingWork);
     <section v-else-if="currentStep === 'models'" class="setup-wizard-step">
       <div class="setup-wizard-heading">
         <h3>Setup Step 3 of 4 · Pick the model your AI opponents will use</h3>
-        <p v-else>Your account works. Choose the AI Vox Deorum should use by default.</p>
+        <p>Your account works. Choose the AI Vox Deorum should use by default.</p>
       </div>
       <div class="setup-wizard-field">
         <InputText id="setup-model-filter" v-model="modelFilter" placeholder="Search by AI model name" />
