@@ -5,13 +5,12 @@
  */
 
 import { config } from '../config.js';
-import type { Model } from '../../types/index.js';
+import type { Model, ModelSize } from '../../types/config.js';
 import { isSynthesizableModelId } from '../../types/constants.js';
 import { createLogger } from '../logger.js';
 import { DiscoveryError, discoverModels, isStaticCatalogProvider } from './discovery.js';
 import { parseModelReference } from './model-reference.js';
 import type { DiscoveredModel } from '../../types/api.js';
-import type { ModelSize } from './models.js';
 
 /** In-memory, process-lifetime configurations verified by provider discovery. */
 const runtimeModels = new Map<string, Model>();

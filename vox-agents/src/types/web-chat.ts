@@ -6,7 +6,7 @@
 
 import type { CreateChatRequest, PlayerAssignment } from './api.js';
 import type { EnvoyThread, ParticipantIdentity } from './chat.js';
-import type { ModelSize } from '../utils/models/models.js';
+import type { ModelSize } from './config.js';
 import type { TranscriptPushMessage } from '../utils/diplomacy/transcript/transcript-utils.js';
 import type { DealTranscriptMessage } from '../../../mcp-server/dist/utils/deal-schema.js';
 

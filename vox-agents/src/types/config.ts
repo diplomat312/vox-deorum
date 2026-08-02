@@ -122,6 +122,9 @@ export interface VoxAgentsConfig {
  */
 export type Model = LLMConfig;
 
+/** Selectable model sizes for agents without an explicit model assignment. */
+export type ModelSize = 'default' | 'small';
+
 /**
  * Agent-to-model mapping
  * Maps an agent name to a model identifier
