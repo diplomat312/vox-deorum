@@ -587,8 +587,7 @@ onUnmounted(invalidatePendingWork);
         <p v-else>Your account works. Choose the AI Vox Deorum should use by default.</p>
       </div>
       <div class="setup-wizard-field">
-        <label for="setup-model-filter">Filter AIs</label>
-        <InputText id="setup-model-filter" v-model="modelFilter" placeholder="Search by name" />
+        <InputText id="setup-model-filter" v-model="modelFilter" placeholder="Search by AI model name" />
       </div>
       <div class="setup-wizard-model-list" role="radiogroup" aria-label="Available AIs">
         <label v-for="model in filteredModels" :key="model.id" class="setup-wizard-model">
