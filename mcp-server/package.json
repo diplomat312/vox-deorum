@@ -8,7 +8,7 @@
     "dev": "tsx watch src/index.ts",
     "build": "node ../node_modules/typescript/bin/tsc",
     "start": "npm run build && npm run start:dist",
-    "start:dist": "node --inspect=7000 dist/index.js",
+    "start:dist": "node --inspect=0 dist/index.js",
     "type-check": "tsc --noEmit",
     "lint": "eslint src --ext .ts",
     "clean": "rimraf dist",

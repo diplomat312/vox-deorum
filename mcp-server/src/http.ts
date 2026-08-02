@@ -41,6 +41,7 @@ export async function startHttpServer(setupSignalHandlers = true): Promise<() =>
   const mcpServer = MCPServer.getInstance();
   const app = express();
   const httpServer = createServer(app);
+  let ready = false;
   let shuttingDown = false;
 
   // Disable nagles
@@ -61,7 +62,7 @@ export async function startHttpServer(setupSignalHandlers = true): Promise<() =>
   // Health check endpoint
   app.get('/health', (_req, res) => {
     res.json({
-      status: 'healthy',
+      status: ready ? 'healthy' : 'initializing',
       server: config.server.name,
       version: config.server.version,
       transport: 'http',
@@ -86,6 +87,7 @@ export async function startHttpServer(setupSignalHandlers = true): Promise<() =>
           logger.info('HTTP server closed');
           resolve();
         });
+        httpServer.closeAllConnections();
       });
 
       await mcpServer.close();
@@ -112,6 +114,23 @@ export async function startHttpServer(setupSignalHandlers = true): Promise<() =>
 
   // Map to store transports by session ID
   const transports: { [sessionId: string]: StreamableHTTPServerTransport } = {};
+
+  // Reject MCP traffic until all managers and tools are initialized.
+  app.use('/mcp', (_req, res, next) => {
+    if (ready) {
+      next();
+      return;
+    }
+
+    res.set('Retry-After', '2').status(503).json({
+      jsonrpc: '2.0',
+      error: {
+        code: -32001,
+        message: 'MCP server is initializing',
+      },
+      id: null,
+    });
+  });
 
   // Handle POST requests for client-to-server communication
   app.post('/mcp', async (req, res) => {
@@ -197,32 +216,60 @@ export async function startHttpServer(setupSignalHandlers = true): Promise<() =>
   const port = config.transport.port ?? 3000;
   const host = config.transport.host || '127.0.0.1';
 
+  httpServer.keepAliveTimeout = 3600000;
+
   try {
+    await new Promise<void>((resolve, reject) => {
+      const onError = (error: NodeJS.ErrnoException) => {
+        if (error.code === 'EADDRINUSE') {
+          reject(new Error(`MCP HTTP server could not listen on ${host}:${port}: address is already in use. This is likely an orphaned mcp-server process.`, { cause: error }));
+          return;
+        }
+
+        reject(error);
+      };
+
+      httpServer.once('error', onError);
+      httpServer.listen(port, host, () => {
+        httpServer.off('error', onError);
+        const address = httpServer.address();
+        const actualHost = typeof address === 'object' && address ? address.address : host;
+        const actualPort = typeof address === 'object' && address ? address.port : port;
+
+        logger.info(`MCP HTTP server listening on http://${actualHost}:${actualPort}`);
+        logger.info(`Streamable HTTP endpoint: http://${actualHost}:${actualPort}/mcp`);
+        logger.info(`Health check: http://${actualHost}:${actualPort}/health`);
+        logger.info(`Shutdown endpoint: POST http://${actualHost}:${actualPort}/shutdown`);
+
+        // Write the shutdown URL file only after the OS has assigned the actual port,
+        // so a dynamic port (0) resolves to the real bound port rather than 0.
+        void writeShutdownUrlFile(actualHost, actualPort).catch((error) => {
+          logger.warn(`Failed to write shutdown URL file: ${String(error)}`);
+        });
+        resolve();
+      });
+    });
+
     await mcpServer.initialize();
     // Register the tool catalog (kept out of server.ts's import graph; see tools/index.ts)
     registerDefaultTools(mcpServer);
-
-    httpServer.keepAliveTimeout = 3600000;
-    httpServer.listen(port, host, () => {
-      const address = httpServer.address();
-      const actualHost = typeof address === 'object' && address ? address.address : host;
-      const actualPort = typeof address === 'object' && address ? address.port : port;
-
-      logger.info(`MCP HTTP server listening on http://${actualHost}:${actualPort}`);
-      logger.info(`Streamable HTTP endpoint: http://${actualHost}:${actualPort}/mcp`);
-      logger.info(`Health check: http://${actualHost}:${actualPort}/health`);
-      logger.info(`Shutdown endpoint: POST http://${actualHost}:${actualPort}/shutdown`);
-
-      // Write the shutdown URL file only after the OS has assigned the actual port,
-      // so a dynamic port (0) resolves to the real bound port rather than 0.
-      void writeShutdownUrlFile(actualHost, actualPort).catch((error) => {
-        logger.warn(`Failed to write shutdown URL file: ${String(error)}`);
-      });
-    });
+    ready = true;
 
     return shutdown;
   } catch (error) {
     logger.error('Failed to start HTTP server:', error);
+    httpServer.closeAllConnections();
+
+    if (httpServer.listening) {
+      await new Promise<void>((resolve) => {
+        httpServer.close(() => resolve());
+      });
+    }
+
+    if (process.env.NODE_ENV !== 'test') {
+      process.exit(1);
+    }
+
     throw error;
   }
 }

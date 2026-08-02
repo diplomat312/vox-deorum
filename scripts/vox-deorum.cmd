@@ -125,6 +125,12 @@ set "VOX_SHUTDOWN_URL="
 set "KILL_CIV_MODE="
 set "CIV_PID="
 
+:: Refuse to start when a prior service is still listening on a required port.
+call :check_port_free 5000 "Bridge Service"
+if errorlevel 1 goto :startup_failed
+call :check_port_free 4000 "MCP Server"
+if errorlevel 1 goto :startup_failed
+
 :: Start Bridge Service
 echo [1/3] Starting Bridge Service (%BRIDGE_COMMAND%)...
 powershell -Command "$env:BRIDGE_SHUTDOWN_URL_FILE='%BRIDGE_URL_FILE%'; $p = Start-Process cmd -WorkingDirectory '%~dp0..\bridge-service' -ArgumentList '/c','npm run %BRIDGE_COMMAND%' -PassThru; $p.Id" > "%BRIDGE_PID_FILE%"
@@ -154,26 +160,42 @@ echo        Started with PID: %VOX_PID%
 echo.
 echo [INFO] Waiting for shutdown URLs...
 
-call :wait_for_url_file "%BRIDGE_URL_FILE%" "Bridge Service" 60
+call :wait_for_url_file "%BRIDGE_URL_FILE%" "Bridge Service" 60 "%BRIDGE_PID%"
 if errorlevel 1 goto :startup_failed
 set /p BRIDGE_SHUTDOWN_URL=<"%BRIDGE_URL_FILE%"
 call :extract_port "%BRIDGE_SHUTDOWN_URL%"
 set "BRIDGE_PORT=!EXTRACTED_PORT!"
 echo        Bridge Service URL: %BRIDGE_SHUTDOWN_URL%
 
-call :wait_for_url_file "%MCP_URL_FILE%" "MCP Server" 60
+call :wait_for_url_file "%MCP_URL_FILE%" "MCP Server" 60 "%MCP_PID%"
 if errorlevel 1 goto :startup_failed
 set /p MCP_SHUTDOWN_URL=<"%MCP_URL_FILE%"
 call :extract_port "%MCP_SHUTDOWN_URL%"
 set "MCP_PORT=!EXTRACTED_PORT!"
 echo        MCP Server URL: %MCP_SHUTDOWN_URL%
 
-call :wait_for_url_file "%VOX_URL_FILE%" "Vox Agents" 90
+call :wait_for_url_file "%VOX_URL_FILE%" "Vox Agents" 90 "%VOX_PID%"
 if errorlevel 1 goto :startup_failed
 set /p VOX_SHUTDOWN_URL=<"%VOX_URL_FILE%"
 call :extract_port "%VOX_SHUTDOWN_URL%"
 set "VOX_PORT=!EXTRACTED_PORT!"
 echo        Shutdown URL: %VOX_SHUTDOWN_URL%
+
+call :is_pid_running "%BRIDGE_PID%"
+if errorlevel 1 (
+    echo [ERROR] Bridge Service (PID: %BRIDGE_PID%) exited before startup completed.
+    goto :startup_failed
+)
+call :is_pid_running "%MCP_PID%"
+if errorlevel 1 (
+    echo [ERROR] MCP Server (PID: %MCP_PID%) exited before startup completed.
+    goto :startup_failed
+)
+call :is_pid_running "%VOX_PID%"
+if errorlevel 1 (
+    echo [ERROR] Vox Agents (PID: %VOX_PID%) exited before startup completed.
+    goto :startup_failed
+)
 
 echo ========================================
 echo All services started successfully!
@@ -236,12 +258,18 @@ exit /b 0
 set "WAIT_FILE=%~1"
 set "WAIT_NAME=%~2"
 set /a WAIT_LIMIT=%~3
+set "WAIT_PID=%~4"
 set /a WAIT_COUNT=0
 :wait_for_url_file_loop
 if exist "%WAIT_FILE%" (
     set "WAIT_VALUE="
     set /p WAIT_VALUE=<"%WAIT_FILE%"
     if defined WAIT_VALUE exit /b 0
+)
+call :is_pid_running "%WAIT_PID%"
+if errorlevel 1 (
+    echo [ERROR] %WAIT_NAME% (PID: %WAIT_PID%) exited before publishing its shutdown URL.
+    exit /b 2
 )
 if !WAIT_COUNT! GEQ !WAIT_LIMIT! (
     echo [ERROR] Timed out waiting for %WAIT_NAME% shutdown URL file: %WAIT_FILE%
@@ -250,6 +278,20 @@ if !WAIT_COUNT! GEQ !WAIT_LIMIT! (
 timeout /t 1 /nobreak >nul
 set /a WAIT_COUNT+=1
 goto :wait_for_url_file_loop
+
+:check_port_free
+set "CHECK_PORT=%~1"
+set "CHECK_NAME=%~2"
+set "CHECK_OWNER_PID="
+set "CHECK_OWNER_NAME=unknown"
+for /f "tokens=1" %%a in ('powershell -NoProfile -Command "Get-NetTCPConnection -State Listen -LocalPort %CHECK_PORT% -ErrorAction SilentlyContinue ^| Select-Object -First 1 -ExpandProperty OwningProcess"') do set "CHECK_OWNER_PID=%%a"
+if not defined CHECK_OWNER_PID exit /b 0
+for /f "tokens=1 delims=," %%a in ('tasklist /FI "PID eq %CHECK_OWNER_PID%" /FO CSV /NH 2^>nul') do set "CHECK_OWNER_NAME=%%~a"
+
+echo [ERROR] Port %CHECK_PORT% required by %CHECK_NAME% is already in use.
+echo [ERROR] Owning process: %CHECK_OWNER_NAME% (PID: %CHECK_OWNER_PID%)
+echo [INFO] Stop it manually, then rerun this launcher: taskkill /PID %CHECK_OWNER_PID% /T /F
+exit /b 1
 
 :extract_port
 set "URL_VALUE=%~1"

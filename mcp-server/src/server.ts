@@ -270,19 +270,33 @@ export class MCPServer {
     await this.databaseManager.initialize();
     await this.knowledgeManager.initialize();
     
-    // Check Bridge Service health
+    // Check Bridge Service health with a bounded retry while the bridge starts.
+    let health;
     try {
-      const health = await this.bridgeManager.checkHealth();
-      logger.info('Bridge Service health:', health);
-      
-      // Connect to event stream (tries event pipe first if enabled, falls back to SSE)
-      if (config.bridgeService.eventPipe?.enabled) {
-        this.bridgeManager.connectEventPipe();
-      } else {
-        this.bridgeManager.connectSSE();
+      for (let attempt = 1; attempt <= 20; attempt++) {
+        try {
+          health = await this.bridgeManager.checkHealth();
+          break;
+        } catch (error) {
+          if (attempt === 20) {
+            throw error;
+          }
+
+          logger.warn(`Bridge Service health check failed (attempt ${attempt}/20), retrying in 3 seconds`);
+          await setTimeout(3_000);
+        }
       }
     } catch (error: unknown) {
       throw new Error('Failed to connect to Bridge Service: ' + (error instanceof Error ? error.message : "unknown error"), { cause: error });
+    }
+
+    logger.info('Bridge Service health:', health);
+
+    // Connect to event stream (tries event pipe first if enabled, falls back to SSE)
+    if (config.bridgeService.eventPipe?.enabled) {
+      this.bridgeManager.connectEventPipe();
+    } else {
+      this.bridgeManager.connectSSE();
     }
     
     // Tool registration is performed by the transport bootstrap (stdio.ts / http.ts) via
