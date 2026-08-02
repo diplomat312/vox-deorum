@@ -2,7 +2,8 @@
 
 > Design for a guided **game** setup flow, complementing the existing **model** setup wizard
 > ([`SetupWizard.vue`](../../vox-agents/ui/src/components/config/SetupWizard.vue)), plus a rework of the
-> session configuration list so a player can tell what each configuration does.
+> session configuration list so a player can tell what each configuration does. Model resolution builds on
+> the [two-tier model defaults plan](model-tiers.md) (`default` / `small` size aliases).
 
 ## Vocabulary
 
@@ -134,11 +135,11 @@ conversable.
 │  Step 3 of 4 · How do the agentic AI civilizations think?               │
 │                                                                         │
 │  Style                                                                  │
-│   (•) Simple LLM Strategist                     1× cost  [recommended]  │
+│   (•) Simple LLM Strategist                                             │
 │       Reads the board and sets a direction each decision turn.          │
-│   ( ) Staffed LLM Strategist                    ≈4× cost                │
-│       Military, economic and diplomatic advisers report in parallel.    │
-│       The sharpest play, and the most expensive.                        │
+│   ( ) Staffed LLM Strategist                                            │
+│       Military, economic and diplomatic advisers report in parallel     │
+│       on the routine model, briefing the strategist on the main one.    │
 │                                                                         │
 │  Pace    Re-think every [ 5 ] turns, reacting to [ Important events ▾ ] │
 │                                                                         │
@@ -169,8 +170,10 @@ filters on `offeredInSetup` and renders whatever comes back in registry order. O
 one-line change in the agent that owns it, with no UI edit at all.
 
 Labels come from each agent's `displayName` (`"Simple LLM Strategist"`, `"Vox Populi AI"`…), which already
-exists on the classes but is not returned by `GET /api/agents` today. Relative cost reflects each style's
-sub-agent fan-out, shown as a multiplier rather than a promise.
+exists on the classes but is not returned by `GET /api/agents` today. The list carries no cost multipliers
+and no recommendation badge — the first offered style is simply preselected. What actually distinguishes the
+staffed style is in its description: its advisers run on the routine (`small`) model and brief a strategist
+thinking on the main (`default`) one, per the [two-tier model defaults plan](model-tiers.md).
 
 **Pace is one line: a number and a dropdown.** It writes `pacing: { everyTurns, interruption }` on every
 generated agentic seat. The interruption options come from `GET /api/agents/pacing-interruptions` — the same
@@ -182,7 +185,7 @@ limited to what is already written into `config.llms`. A player who signed in wi
 setup should be able to pick any of that provider's models here without a detour through Settings.
 
 A new `GET /api/config/models` walks the *configured* providers and merges their catalogues, grouped by
-provider, with the resolved default pinned to the top:
+provider, with the resolved main (`default`) model pinned to the top as "My default":
 
 ```
 Model   [ My default — gpt-5-mini                                     ▾ ]
@@ -204,18 +207,22 @@ Model   [ My default — gpt-5-mini                                     ▾ ]
   the response so the wizard can say "OpenRouter didn't answer".
 - The list is fetched when step 3 opens, behind a spinner. If discovery fully fails, it falls back only to
   literal object model definitions in global `config.llms` whose `options.embeddingSize` is unset. It excludes
-  every string alias or mapping, including `default`, `embedder`, and agent mappings.
+  every string alias or mapping, including `default`, `small`, `embedder`, `summarizer`, and agent mappings.
 
-Choosing the default writes no `llms` at all. Choosing a specific model writes `llms: { default: "<id>" }` on
-each agentic seat. `VoxAgent.getModel` selects the model reference before calling the existing
-`getModelConfig`, preserving its recursive alias and model-ID resolution. Its selection order is: per-seat
-agent entry, per-seat `default`, global agent mapping, then global `default`. A seat `default` therefore applies
-to every normal `VoxAgent` in that seat context, including nested briefing and diplomacy agents, unless a
-per-seat entry for that agent overrides it. `agentModelReference` uses the same selection order for preflight.
+Choosing "My default" writes no `llms` at all. Choosing a specific model writes `llms: { default: "<id>" }`
+on each agentic seat — the seat's main model. `VoxAgent.getModel` selects the model reference before calling
+the existing `getModelConfig`, preserving its recursive alias and model-ID resolution. Its selection order is
+the two-tier chain from the [two-tier model defaults plan](model-tiers.md): per-seat agent entry, then the
+size alias matching the agent's declared `modelSize`, per seat then globally, with small-size agents falling
+back to `default` only when `small` is defined nowhere. A seat `default` therefore drives the seat's
+reasoning-heavy agents — the strategist and its diplomacy voices — while small-size agents such as the
+staffed advisers keep the global routine model unless the seat pins them explicitly. `agentModelReference`
+uses the same selection order for preflight.
 
 The selected provider-qualified ID is stored only as `PlayerConfig.llms.default`; the session wizard never
 changes Settings or writes a new global `config.llms` definition. `PlayerConfig.llms` remains optional, so an
-existing seat without it continues to use the global agent mapping and global default. `StrategistSession`
+existing seat without it continues to use the global chain: agent mapping, then size alias (`small` falling
+back to `default`). `StrategistSession`
 preflight calls `ensureModelsResolved` before launch. A catalogue hit registers the model in memory with its
 recommended options for that run, a reachable catalogue miss rejects the ID, and a discovery failure falls
 back to the existing supported-ID synthesis. No global definition is required.
@@ -378,7 +385,7 @@ The net effect: **one question, asked once, in the start dialog.**
 | --- | --- |
 | [`src/types/config.ts`](../../vox-agents/src/types/config.ts) | `SessionConfig.description?: string`; `gameMode` becomes optional and launch-time only |
 | [`src/strategist/console.ts`](../../vox-agents/src/strategist/console.ts) | `--load` / `--wait` become the sole source of `gameMode`, defaulting to `start`; warn once when a loaded file still carries one |
-| [`src/infra/vox-agent.ts`](../../vox-agents/src/infra/vox-agent.ts) | optional `displayName?: string` on the base class (`Strategist` already declares it abstract); `offeredInSetup = false` beside `diplomacyOnly`; select the model reference in the order per-seat agent entry, per-seat `default`, global agent mapping, global `default`, then pass it to the existing `getModelConfig` |
+| [`src/infra/vox-agent.ts`](../../vox-agents/src/infra/vox-agent.ts) | optional `displayName?: string` on the base class (`Strategist` already declares it abstract); `offeredInSetup = false` beside `diplomacyOnly`; select the model reference through the two-tier chain (per-seat agent entry, then size alias, per seat then globally, `small` falling back to `default` — introduced by the [two-tier model defaults plan](model-tiers.md)), then pass it to the existing `getModelConfig` |
 | [`src/utils/models/resolution.ts`](../../vox-agents/src/utils/models/resolution.ts) | make `agentModelReference` use the same reference-selection order for preflight; retain the existing provider-qualified ID verification and in-memory registration in `ensureModelsResolved` |
 | [`src/strategist/agents/simple-strategist.ts`](../../vox-agents/src/strategist/agents/simple-strategist.ts), [`simple-strategist-staffed.ts`](../../vox-agents/src/strategist/agents/simple-strategist-staffed.ts) | `offeredInSetup = true` |
 | [`src/types/api.ts`](../../vox-agents/src/types/api.ts) | `AgentInfo.displayName?` + `offeredInSetup?`; `StartSessionRequest.gameMode`; `SessionConfigsResponse` entries gain `filename` and `updatedAt`, plus a sanitized `globalLlms` map with no API keys; `DiscoveredModel` entries gain their `provider` for grouping |
@@ -407,12 +414,12 @@ The net effect: **one question, asked once, in the start dialog.**
   per-seat styles and effective models must not collapse, matching ones must.
 - `ui/tests/mock/components/session/GameSetupWizard.test.ts` — step navigation, the civilization-count slider's
   2 to 12 range and step of 2, the config generated for each role, styles filtered to `offeredInSetup`, the
-  interruption and model dropdowns (default → no `llms`, explicit choice → `llms: { default }` only), Save-only
-  vs Save & Play (save then hand off to the start dialog).
+  interruption and model dropdowns ("My default" → no `llms`, explicit choice → `llms: { default }` only),
+  Save-only vs Save & Play (save then hand off to the start dialog).
 - Update `SessionConfigList.test.ts`, `ConfigView.test.ts`, and `router/index.test.ts` for `?setup=game`.
-- Model-resolution tests: `VoxAgent.getModel` and `agentModelReference` select per-seat agent entry,
-  per-seat default, global agent mapping, then global default, while `getModelConfig` continues recursive alias
-  and model-ID resolution; `ensureModelsResolved` registers a selected provider-qualified model only in memory
+- Model-resolution tests: `VoxAgent.getModel` and `agentModelReference` select through the two-tier chain
+  (per-seat agent entry, then size alias, per seat then globally, `small` falling back to `default`), while
+  `getModelConfig` continues recursive alias and model-ID resolution; `ensureModelsResolved` registers a selected provider-qualified model only in memory
   and preflight rejects reachable catalogue misses while preserving supported-ID synthesis when discovery
   fails.
 - `tests/mock/web/routes/routes.test.ts` — new configs payload fields, including the sanitized `globalLlms`
@@ -429,13 +436,11 @@ even civilization count and promised map size.
 
 ## Open questions
 
-1. **Cost multipliers.** The 1× / 4× labels are derived from each style's sub-agent fan-out; worth confirming
-   against a real trace before shipping the numbers.
-2. **Moving research configs.** Any personal scripts passing `--config gemma-4-standard-fixed-per-5.json`
+1. **Moving research configs.** Any personal scripts passing `--config gemma-4-standard-fixed-per-5.json`
    would need the `experiments/` prefix.
-3. **Per-seat models.** The wizard sets one model for all agentic civilizations, though the list and confirm
+2. **Per-seat models.** The wizard sets one model for all agentic civilizations, though the list and confirm
    panel render per-seat styles and models correctly. Mixed-model games remain a hand-edit; a per-seat picker
    in the advanced editor would be a natural follow-up.
-4. **Ignoring a stored `gameMode`.** Research configs that relied on `"gameMode": "wait"` will now start a new
+3. **Ignoring a stored `gameMode`.** Research configs that relied on `"gameMode": "wait"` will now start a new
    game unless `--wait` is passed. The warning names the file, but it is a behavior change for existing
    command lines.
