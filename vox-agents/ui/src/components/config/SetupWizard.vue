@@ -34,6 +34,7 @@ const selectedDoor = ref<SetupDoor | null>(null);
 const selectedProvider = ref('');
 const enteredCredentials = ref<Record<string, string>>({});
 const discoveredModels = ref<DiscoveredModel[]>([]);
+const recommendedTiers = ref<{ default?: string; small?: string }>({});
 const selectedModelId = ref('');
 const modelFilter = ref('');
 const discoveryPending = ref(false);
@@ -117,6 +118,11 @@ const selectedModel = computed(() =>
   discoveredModels.value.find(model => model.id === selectedModelId.value) ?? null
 );
 
+const recommendedSmallModel = computed(() => {
+  const id = recommendedTiers.value.small;
+  return id ? discoveredModels.value.find(model => model.id === id) ?? null : null;
+});
+
 const discoveryStatusCopy = computed(() => {
   const provider = selectedProviderLabel.value || 'This service';
   switch (discoveryErrorKind.value) {
@@ -147,6 +153,7 @@ function resetWizard(): void {
   selectedProvider.value = '';
   enteredCredentials.value = { ...props.apiKeys };
   discoveredModels.value = [];
+  recommendedTiers.value = {};
   selectedModelId.value = '';
   modelFilter.value = '';
   discoveryPending.value = false;
@@ -202,7 +209,10 @@ async function discoverSelectedModels(): Promise<void> {
     const response = await api.discoverModels(selectedProvider.value, selectedCredentials());
     if (!props.visible || generation !== wizardGeneration) return;
     discoveredModels.value = [...response.models].sort((left, right) => left.id.localeCompare(right.id));
-    selectedModelId.value = '';
+    recommendedTiers.value = response.recommendedTiers ?? {};
+    selectedModelId.value = discoveredModels.value.some(model => model.id === recommendedTiers.value.default)
+      ? recommendedTiers.value.default ?? ''
+      : '';
     modelFilter.value = '';
     currentStep.value = 'models';
     discoveryPending.value = false;
@@ -331,10 +341,11 @@ function nonEmptySelectedCredentials(): Record<string, string> {
   );
 }
 
-/** Build a selected model entry while retaining an explicit curated definition when one exists. */
-function selectedModelDefinition(model: DiscoveredModel): LLMConfig {
+/** Build a selected model entry while retaining an explicit configured entry when one exists. */
+function selectedModelDefinition(model: DiscoveredModel): LLMConfig | string {
   const existing = props.config?.llms[model.id];
-  if (existing && typeof existing !== 'string') {
+  if (typeof existing === 'string') return existing;
+  if (existing) {
     const options = { ...(model.recommendedOptions ?? {}), ...(existing.options ?? {}) };
     return {
       ...existing,
@@ -358,12 +369,16 @@ async function saveSetup(): Promise<void> {
   saving.value = true;
   saveError.value = '';
   const modelDefinition = selectedModelDefinition(model);
+  const smallModel = recommendedSmallModel.value;
   const updatedConfig: VoxAgentsConfig = {
     ...props.config,
     llms: {
       ...props.config.llms,
       [model.id]: modelDefinition,
-      default: model.id
+      default: model.id,
+      ...(smallModel
+        ? { [smallModel.id]: selectedModelDefinition(smallModel), small: smallModel.id }
+        : {})
     }
   };
   const savedKeys = Object.fromEntries(
@@ -597,7 +612,10 @@ onUnmounted(invalidatePendingWork);
         <p>Review these choices before Vox Deorum writes them to this PC.</p>
       </div>
       <div class="setup-wizard-summary">
-        <p><strong>AI:</strong> {{ selectedModel?.name }} ({{ selectedModel?.id }})</p>
+        <p><strong>Main AI:</strong> {{ selectedModel?.name }} ({{ selectedModel?.id }})</p>
+        <p v-if="recommendedSmallModel">
+          <strong>Routine AI:</strong> {{ recommendedSmallModel.name }} ({{ recommendedSmallModel.id }}) (summaries and reports)
+        </p>
         <p><strong>Account:</strong> {{ selectedProviderLabel }}</p>
         <p>You can change these choices anytime in Settings.</p>
       </div>

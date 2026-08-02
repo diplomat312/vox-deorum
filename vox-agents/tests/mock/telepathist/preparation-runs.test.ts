@@ -18,6 +18,10 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 // --- Module mocks (declared before importing the code under test) ----------------------------
 
+const modelMocks = vi.hoisted(() => ({
+  summarizerModelName: vi.fn(() => 'test-model'),
+}));
+
 vi.mock('../../../src/telepathist/tools/get-situation.js', () => ({
   GetSituationTool: vi.fn().mockImplementation(() => ({
     // Must contain '## ' so the "no meaningful data" skip does not trigger.
@@ -49,8 +53,8 @@ vi.mock('../../../src/telepathist/preparation/instructions.js', () => ({
       : undefined,
 }));
 
-vi.mock('../../../src/utils/models/models.js', () => ({
-  getModelConfig: () => ({ name: 'test-model' }),
+vi.mock('../../../src/telepathist/summarizer.js', () => ({
+  summarizerModelName: modelMocks.summarizerModelName,
 }));
 
 import { prepareTurnSummaries } from '../../../src/telepathist/preparation/turn-preparation.js';
@@ -91,6 +95,7 @@ function makeDb(tableRows: Record<string, unknown[]>) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  modelMocks.summarizerModelName.mockReturnValue('test-model');
 });
 
 describe('prepareTurnSummaries run model', () => {
@@ -123,6 +128,7 @@ describe('prepareTurnSummaries run model', () => {
     const exceeded = await prepareTurnSummaries(parameters, ctx.asContext() as any);
 
     expect(exceeded.size).toBe(0);
+    expect(modelMocks.summarizerModelName).toHaveBeenCalledWith(ctx.modelOverrides);
     // One root opened per turn, each overriding only `turn`.
     expect(ctx.withRun).toHaveBeenCalledTimes(availableTurns.length);
     for (const call of ctx.withRun.mock.calls) {
@@ -231,6 +237,7 @@ describe('preparePhaseSummaries run model', () => {
 
     await preparePhaseSummaries(parameters, ctx.asContext() as any);
 
+    expect(modelMocks.summarizerModelName).toHaveBeenCalledWith(ctx.modelOverrides);
     // Three phase roots, each overriding `turn` to its phase end turn.
     expect(ctx.withRun).toHaveBeenCalledTimes(3);
     expect([...seenTurns].sort((a, b) => a - b)).toEqual([10, 20, 25]);

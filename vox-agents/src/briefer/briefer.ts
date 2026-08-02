@@ -15,6 +15,9 @@ import { StrategistParameters } from "../strategist/strategy-parameters.js";
  * @class
  */
 export abstract class Briefer<TInput = string> extends VoxAgent<StrategistParameters, TInput, string> {
+  /** Briefers summarize state using the routine model. */
+  public modelSize = 'small' as const;
+
   /**
    * Post-processes the output before returning it.
    * Override this method to modify the output after getOutput.

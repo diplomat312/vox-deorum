@@ -8,10 +8,9 @@
 import pLimit from 'p-limit';
 import { TelepathistParameters } from '../telepathist-parameters.js';
 import { VoxContext } from '../../infra/vox-context.js';
-import { SummarizerInput } from '../summarizer.js';
+import { SummarizerInput, summarizerModelName } from '../summarizer.js';
 import { phaseSummarySchema, buildPhaseSummaryInstruction, parseSummaryMarkdown } from './instructions.js';
 import { exponentialRetry } from '../../utils/retry.js';
-import { getModelConfig } from '../../utils/models/models.js';
 
 /** Size of each phase in turns for summarization */
 const phaseSize = 10;
@@ -25,7 +24,7 @@ export async function preparePhaseSummaries(
   parameters: TelepathistParameters,
   context: VoxContext<TelepathistParameters>
 ): Promise<void> {
-  const model = getModelConfig('summarizer', undefined, context.modelOverrides).name;
+  const model = summarizerModelName(context.modelOverrides);
   const logger = context.logger.child({ gameID: parameters.gameID, playerID: parameters.playerID, civ: parameters.civilizationName, model });
 
   const existingPhases = await parameters.telepathistDb

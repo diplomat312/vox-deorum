@@ -31,7 +31,7 @@ import {
 } from '../../utils/telemetry/identifier-parser.js';
 import { VoxSpanExporter } from '../../utils/telemetry/vox-exporter.js';
 import { createLogger } from '../../utils/logger.js';
-import { agentModelReference, ensureModelsResolved } from '../../utils/models/resolution.js';
+import { ensureModelsResolved, selectModelReference } from '../../utils/models/resolution.js';
 import {
   civIdentity,
   displayIdentity,
@@ -255,8 +255,15 @@ export function createChatThreadFactory(
       voicedID = identifier.playerID;
       voicedIdentity = civIdentity(existingContext, voicedID);
     } else {
+      // Preflight failures are model-configuration errors (alias cycles, dangling aliases,
+      // unknown models), not database failures: surface their actionable message instead of
+      // the database-initialization label below.
       try {
-        await ensureModelsResolved([agentModelReference(requestedAgentName)]);
+        await ensureModelsResolved([selectModelReference(requestedAgentName, agent.modelSize)]);
+      } catch (error) {
+        throw new ChatOpenError(400, error instanceof Error ? error.message : String(error));
+      }
+      try {
         const telepathist = await dependencies.createTelepathistContext(source.databasePath, id);
         effectiveContextId = telepathist.contextId;
         gameID = telepathist.gameID;

@@ -202,6 +202,27 @@ describe('config routes', () => {
       expect(routeMocks.discoverModels).toHaveBeenCalledWith('openai', { OPENAI_API_KEY: 'request-key' });
     });
 
+    it('returns server-selected tier recommendations only when the catalog matches a rule', async () => {
+      routeMocks.discoverModels.mockResolvedValue([
+        { id: 'codex/gpt-5.6-terra', name: 'gpt-5.6-terra' },
+        { id: 'codex/gpt-5.6-luna', name: 'gpt-5.6-luna' },
+      ]);
+
+      const matched = await request(app).post('/api/config/models').send({ provider: 'codex' });
+
+      expect(matched.status).toBe(200);
+      expect(matched.body).toMatchObject({
+        provider: 'codex',
+        recommendedTiers: { default: 'codex/gpt-5.6-terra', small: 'codex/gpt-5.6-luna' },
+      });
+
+      routeMocks.discoverModels.mockResolvedValue([{ id: 'openai/gpt-test', name: 'gpt-test' }]);
+      const unmatched = await request(app).post('/api/config/models').send({ provider: 'openai' });
+
+      expect(unmatched.status).toBe(200);
+      expect(unmatched.body).not.toHaveProperty('recommendedTiers');
+    });
+
     it('rejects a DNS-rebinding browser request before discovering models', async () => {
       routeMocks.discoverModels.mockResolvedValue([]);
 

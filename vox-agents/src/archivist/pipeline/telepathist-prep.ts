@@ -11,6 +11,7 @@ import { createLogger } from '../../utils/logger.js';
 import type { GameIdentifierInfo } from '../../utils/telemetry/identifier-parser.js';
 import { VoxContext } from '../../infra/vox-context.js';
 import { prepareTurnSummaries } from '../../telepathist/preparation/turn-preparation.js';
+import { summarizerModelReference } from '../../telepathist/summarizer.js';
 import { createTelepathistParameters, TelepathistParameters } from '../../telepathist/telepathist-parameters.js';
 import { ensureModelsResolved } from '../../utils/models/resolution.js';
 
@@ -44,6 +45,12 @@ export async function prepareTelepathist(
   let parameters: TelepathistParameters | undefined;
   let context: VoxContext<TelepathistParameters> | undefined;
 
+  // Verify the summarizer's model before the try below: its catch is for per-player prep
+  // failures, and a model-configuration error (alias cycle, dangling alias, unknown model)
+  // caught there would silently degrade every player's summaries to null text fields.
+  const modelOverrides: Record<string, string> = modelOverride ? { summarizer: modelOverride } : {};
+  await ensureModelsResolved([summarizerModelReference(modelOverrides)], modelOverrides);
+
   try {
     // Opens telemetry DB (read-only) + telepathist DB (read-write, created if absent)
     parameters = await createTelepathistParameters(telemetryDbPath, parsedId);
@@ -57,8 +64,6 @@ export async function prepareTelepathist(
     // Minimal VoxContext — no registerTools() needed.
     // The summarizer agent only needs the agent registry (auto-initialized on import)
     // and model config from env vars. No MCP connection required.
-    if (modelOverride) await ensureModelsResolved([modelOverride]);
-    const modelOverrides: Record<string, string> = modelOverride ? { summarizer: modelOverride } : {};
     context = new VoxContext(modelOverrides, `archivist-${gameId}-${playerId}`);
     // Transfer parameter ownership to the context: prepareTurnSummaries fans out per-turn roots
     // via withRun({ overrides: { turn } }) with no own `parameters`, so they compose over this

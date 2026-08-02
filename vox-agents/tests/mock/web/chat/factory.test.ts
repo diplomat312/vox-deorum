@@ -4,12 +4,12 @@ const modelMocks = vi.hoisted(() => ({
   ensureModelsResolved: vi.fn(async () => undefined),
   // Stubbed rather than real so the assertion does not depend on whether a local
   // config.json happens to assign the agent a model.
-  agentModelReference: vi.fn((name: string) => `resolved:${name}`),
+  selectModelReference: vi.fn((name: string, size: string) => `resolved:${name}:${size}`),
 }));
 
 vi.mock('../../../../src/utils/models/resolution.js', () => ({
   ensureModelsResolved: modelMocks.ensureModelsResolved,
-  agentModelReference: modelMocks.agentModelReference,
+  selectModelReference: modelMocks.selectModelReference,
   getRuntimeModel: vi.fn(() => undefined),
 }));
 import type { VoxContext } from '../../../../src/infra/vox-context.js';
@@ -40,7 +40,7 @@ function createDependencies(
   const threads = new Map<string, EnvoyThread>();
   const dependencies: ChatThreadFactoryDependencies<VoxContext<StrategistParameters>> = {
     getContext: () => undefined,
-    getAgent: () => ({ diplomacyOnly: false, speaksOnlyViaSendMessage: true }),
+    getAgent: () => ({ diplomacyOnly: false, speaksOnlyViaSendMessage: true, modelSize: 'default' }),
     getAssignments: () => undefined,
     getThread: (threadId) => threads.get(threadId),
     setThread: (thread) => {
@@ -65,7 +65,7 @@ function createDependencies(
 
 beforeEach(() => {
   modelMocks.ensureModelsResolved.mockClear();
-  modelMocks.agentModelReference.mockClear();
+  modelMocks.selectModelReference.mockClear();
 });
 
 describe('chat thread factory', () => {
@@ -97,7 +97,10 @@ describe('chat thread factory', () => {
         identity: { name: 'Arabia', leader: 'Harun al-Rashid' },
       };
       const createTelepathistContext = vi.fn(async () => telepathist);
-      const { dependencies, threads } = createDependencies({ createTelepathistContext });
+      const { dependencies, threads } = createDependencies({
+        createTelepathistContext,
+        getAgent: () => ({ diplomacyOnly: false, speaksOnlyViaSendMessage: true, modelSize: 'small' }),
+      });
       const factory = createChatThreadFactory(dependencies);
 
       const thread = await factory.openOrdinaryChat({
@@ -110,8 +113,8 @@ describe('chat thread factory', () => {
         'fixtures/archive-game-player-4.db',
         'ordinary-thread',
       );
-      expect(modelMocks.agentModelReference).toHaveBeenCalledWith('talkative-telepathist');
-      expect(modelMocks.ensureModelsResolved).toHaveBeenCalledWith(['resolved:talkative-telepathist']);
+      expect(modelMocks.selectModelReference).toHaveBeenCalledWith('talkative-telepathist', 'small');
+      expect(modelMocks.ensureModelsResolved).toHaveBeenCalledWith(['resolved:talkative-telepathist:small']);
       expect(thread).toMatchObject({
         id: 'ordinary-thread',
         agent: 4,
@@ -194,7 +197,7 @@ describe('chat thread factory', () => {
     it('should reject a voice that can answer without send-message', async () => {
       const { dependencies } = createDependencies({
         getContext: () => fakeContext(),
-        getAgent: () => ({ diplomacyOnly: false, speaksOnlyViaSendMessage: false }),
+        getAgent: () => ({ diplomacyOnly: false, speaksOnlyViaSendMessage: false, modelSize: 'default' }),
       });
       const factory = createChatThreadFactory(dependencies);
 

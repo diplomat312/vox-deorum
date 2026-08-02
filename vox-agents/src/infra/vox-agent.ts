@@ -11,7 +11,7 @@ import { createLogger } from "../utils/logger.js";
 import { z, ZodObject } from "zod";
 import { Model, ReasoningEffort } from "../types/index.js";
 import { VoxContext } from "./vox-context.js";
-import { getModelConfig, resolveToolFraming } from "../utils/models/models.js";
+import { getModelConfig, type ModelSize, resolveToolFraming, selectModelReference } from "../utils/models/models.js";
 import { getValidCalls, hasOnlyTerminalCalls, isTerminalTool } from "../utils/tools/terminal-tools.js";
 import { buildCompletionToolsNudge } from "../utils/tools/tool-names.js";
 import { buildRescuePrompt } from "../utils/models/text-cleaning.js";
@@ -197,6 +197,9 @@ export abstract class VoxAgent<TParameters extends AgentParameters, TInput = unk
    */
   protected reasoningTier?: ReasoningEffort | 'default';
 
+  /** Size alias this agent uses when it has no explicit model assignment. */
+  public modelSize: ModelSize = 'default';
+
   /**
    * Gets the language model to use for this agent execution.
    * Can return undefined to use the default model from VoxContext.
@@ -205,7 +208,7 @@ export abstract class VoxAgent<TParameters extends AgentParameters, TInput = unk
    * @returns The language model to use, or undefined for default
    */
   public getModel(_parameters: TParameters, _input: TInput, overrides: Record<string, Model | string>): Model {
-    return getModelConfig(this.name, this.reasoningTier, overrides);
+    return getModelConfig(selectModelReference(this.name, this.modelSize, overrides), this.reasoningTier, overrides);
   }
   
   /**

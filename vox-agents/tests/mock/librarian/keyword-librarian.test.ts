@@ -50,6 +50,16 @@ describe('KeywordLibrarian.getModel', () => {
     const model = librarian.getModel(params, [], { 'keyword-librarian': override });
     expect(model.options?.reasoningEffort).toBe('low');
   });
+
+  it('uses the routine model when the librarian has no explicit assignment', () => {
+    const model = librarian.getModel(params, [], {
+      default: { provider: 'openai', name: 'main-model' },
+      small: { provider: 'openai', name: 'routine-model' },
+    });
+
+    expect(model.name).toBe('routine-model');
+    expect(model.options?.reasoningEffort).toBe('low');
+  });
 });
 
 describe('KeywordLibrarian.getOutput', () => {

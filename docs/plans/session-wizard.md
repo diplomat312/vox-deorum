@@ -216,8 +216,8 @@ the two-tier chain from the [two-tier model defaults plan](model-tiers.md): per-
 size alias matching the agent's declared `modelSize`, per seat then globally, with small-size agents falling
 back to `default` only when `small` is defined nowhere. A seat `default` therefore drives the seat's
 reasoning-heavy agents — the strategist and its diplomacy voices — while small-size agents such as the
-staffed advisers keep the global routine model unless the seat pins them explicitly. `agentModelReference`
-uses the same selection order for preflight.
+staffed advisers keep the global routine model unless the seat pins them explicitly. Preflight uses the
+same `selectModelReference` implementation, shared through `resolution.ts`.
 
 The selected provider-qualified ID is stored only as `PlayerConfig.llms.default`; the session wizard never
 changes Settings or writes a new global `config.llms` definition. `PlayerConfig.llms` remains optional, so an
@@ -386,7 +386,7 @@ The net effect: **one question, asked once, in the start dialog.**
 | [`src/types/config.ts`](../../vox-agents/src/types/config.ts) | `SessionConfig.description?: string`; `gameMode` becomes optional and launch-time only |
 | [`src/strategist/console.ts`](../../vox-agents/src/strategist/console.ts) | `--load` / `--wait` become the sole source of `gameMode`, defaulting to `start`; warn once when a loaded file still carries one |
 | [`src/infra/vox-agent.ts`](../../vox-agents/src/infra/vox-agent.ts) | optional `displayName?: string` on the base class (`Strategist` already declares it abstract); `offeredInSetup = false` beside `diplomacyOnly`; select the model reference through the two-tier chain (per-seat agent entry, then size alias, per seat then globally, `small` falling back to `default` — introduced by the [two-tier model defaults plan](model-tiers.md)), then pass it to the existing `getModelConfig` |
-| [`src/utils/models/resolution.ts`](../../vox-agents/src/utils/models/resolution.ts) | make `agentModelReference` use the same reference-selection order for preflight; retain the existing provider-qualified ID verification and in-memory registration in `ensureModelsResolved` |
+| [`src/utils/models/resolution.ts`](../../vox-agents/src/utils/models/resolution.ts) | preflight shares `selectModelReference` (defined here, re-exported by `models.ts`); retain the existing provider-qualified ID verification and in-memory registration in `ensureModelsResolved` |
 | [`src/strategist/agents/simple-strategist.ts`](../../vox-agents/src/strategist/agents/simple-strategist.ts), [`simple-strategist-staffed.ts`](../../vox-agents/src/strategist/agents/simple-strategist-staffed.ts) | `offeredInSetup = true` |
 | [`src/types/api.ts`](../../vox-agents/src/types/api.ts) | `AgentInfo.displayName?` + `offeredInSetup?`; `StartSessionRequest.gameMode`; `SessionConfigsResponse` entries gain `filename` and `updatedAt`, plus a sanitized `globalLlms` map with no API keys; `DiscoveredModel` entries gain their `provider` for grouping |
 | [`src/web/chat/discovery.ts`](../../vox-agents/src/web/chat/discovery.ts) | return `displayName` and `offeredInSetup` in `/api/agents` |
@@ -417,7 +417,7 @@ The net effect: **one question, asked once, in the start dialog.**
   interruption and model dropdowns ("My default" → no `llms`, explicit choice → `llms: { default }` only),
   Save-only vs Save & Play (save then hand off to the start dialog).
 - Update `SessionConfigList.test.ts`, `ConfigView.test.ts`, and `router/index.test.ts` for `?setup=game`.
-- Model-resolution tests: `VoxAgent.getModel` and `agentModelReference` select through the two-tier chain
+- Model-resolution tests: `VoxAgent.getModel` and preflight select through the shared two-tier chain
   (per-seat agent entry, then size alias, per seat then globally, `small` falling back to `default`), while
   `getModelConfig` continues recursive alias and model-ID resolution; `ensureModelsResolved` registers a selected provider-qualified model only in memory
   and preflight rejects reachable catalogue misses while preserving supported-ID synthesis when discovery

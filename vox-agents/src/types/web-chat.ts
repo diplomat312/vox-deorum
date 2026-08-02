@@ -6,6 +6,7 @@
 
 import type { CreateChatRequest, PlayerAssignment } from './api.js';
 import type { EnvoyThread, ParticipantIdentity } from './chat.js';
+import type { ModelSize } from '../utils/models/models.js';
 import type { TranscriptPushMessage } from '../utils/diplomacy/transcript/transcript-utils.js';
 import type { DealTranscriptMessage } from '../../../mcp-server/dist/utils/deal-schema.js';
 
@@ -25,6 +26,7 @@ export interface ChatThreadStoreDependencies {
 export interface ChatAgentDescriptor {
   diplomacyOnly?: boolean;
   speaksOnlyViaSendMessage?: boolean;
+  modelSize?: ModelSize;
 }
 
 /** A context created for a database-backed ordinary chat. */

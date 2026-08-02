@@ -34,7 +34,7 @@ import path from 'node:path';
 import { VoxSpanExporter } from "../utils/telemetry/vox-exporter.js";
 import { startWebServer } from "../web/server.js";
 import { processManager } from "../infra/process-manager.js";
-import { agentModelReference, ensureModelsResolved } from '../utils/models/resolution.js';
+import { ensureModelsResolved, selectModelReference } from '../utils/models/resolution.js';
 
 const logger = createLogger('Telepathist');
 
@@ -96,7 +96,7 @@ processManager.register('telemetry', async () => {
  */
 async function main() {
   // Verify the selected agent's model before opening the web server or databases.
-  await ensureModelsResolved([agentModelReference(agentName)]);
+  await ensureModelsResolved([selectModelReference(agentName, agentDef?.modelSize)]);
   await startWebServer();
 
   // Parse database identifier for game/player info

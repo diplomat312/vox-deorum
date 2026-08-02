@@ -120,6 +120,7 @@ export interface DiscoverModelsRequest {
 export interface DiscoverModelsResponse {
   provider: string;
   models: DiscoveredModel[];
+  recommendedTiers?: { default?: string; small?: string };
 }
 
 /** Typed error response from the provider model-discovery endpoint. */

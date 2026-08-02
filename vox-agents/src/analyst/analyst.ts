@@ -34,6 +34,9 @@ export interface AnalystInput {
  * @class
  */
 export abstract class Analyst<TInput extends AnalystInput = AnalystInput> extends VoxAgent<StrategistParameters, TInput, string> {
+  /** Analysts triage reports using the routine model. */
+  public modelSize = 'small' as const;
+
   /**
    * Allow the LLM to decide when to call tools
    */

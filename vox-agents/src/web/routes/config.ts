@@ -14,6 +14,7 @@ import { loadVoxConfig, refreshConfig } from '../../utils/config.js';
 import { defaultConfig } from '../../utils/config/defaults.js';
 import { computeConfigDiff } from '../../utils/config/diff.js';
 import { discoverModels, DiscoveryError } from '../../utils/models/discovery.js';
+import { recommendTierModels } from '../../utils/models/rules.js';
 import { codexProxyManager, ensureCodexProxy } from '../../utils/models/providers/codex-proxy.js';
 import { providerCredentials } from '../../types/constants.js';
 import { isAllowedDashboardRequest } from '../origin.js';
@@ -144,7 +145,12 @@ router.post('/models', async (
   }
   try {
     const models = await discoverModels(req.body.provider, req.body.credentials ?? {});
-    res.json({ provider: req.body.provider, models });
+    const recommendedTiers = recommendTierModels(req.body.provider, models);
+    res.json({
+      provider: req.body.provider,
+      models,
+      ...(recommendedTiers === undefined ? {} : { recommendedTiers }),
+    });
   } catch (error) {
     if (error instanceof DiscoveryError) {
       res.status(error.status).json({ error: error.message, kind: error.kind });

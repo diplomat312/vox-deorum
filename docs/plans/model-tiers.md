@@ -1,6 +1,6 @@
 # Two-tier model defaults
 
-> Split the global model default into two size aliases — `default` for reasoning-heavy work,
+> Split the global model default into two size aliases: `default` for reasoning-heavy work,
 > `small` for reasoning-light work. `default` keeps exactly its current meaning and remains the one
 > required `config.llms` entry; `small` is new and optional, falling back to `default`. No
 > migration: every existing config already resolves correctly. Prerequisite for the
@@ -64,19 +64,23 @@ agents opt in to `small`. Set once on base classes where the whole family is lig
 ### Resolution order
 
 A shared selector picks the *reference*; the existing `getModelConfig` then resolves it with its
-recursive alias and model-ID logic, completely unchanged — its parameter default, required-key
-error, and unknown-reference fallback already point at `default`. An agent resolves for its own
-size first, scope-major, and a small agent only then falls back to the main model:
+recursive alias and model-ID logic, completely unchanged. Its parameter default, required-key
+error, and unknown-reference fallback already point at `default`. Explicit agent assignments are
+checked at both scopes before size aliases, which preserves existing configuration behavior. A
+small agent only falls back to the main model after both `small` scopes are absent:
 
 ```
 first defined key wins (small-size agent):
-  1. seat llms:    agent name  →  small
-  2. global llms:  agent name  →  small
-  3. fallback:     seat `default`  →  global `default`
+  1. seat llms:    agent name
+  2. global llms:  agent name
+  3. seat llms:    small
+  4. global llms:  small
+  5. fallback:     seat `default`, then global `default`
 
 first defined key wins (default-size agent):
-  1. seat llms:    agent name  →  default
-  2. global llms:  agent name  →  default
+  1. seat llms:    agent name
+  2. global llms:  agent name
+  3. fallback:     seat `default`, then global `default`
 ```
 
 ```ts
@@ -97,18 +101,20 @@ The explicit-override guarantees, stated as invariants:
 4. **The wizards never rewrite explicit entries.** They only set the aliases and the model
    definitions they name.
 
-`agentModelReference` in [`resolution.ts`](../../vox-agents/src/utils/models/resolution.ts) takes
-the same chain (callers pass the agent's `modelSize` — the registry is not imported there, to avoid
-the cycle documented in `resolve-negotiator.ts`). `ensureModelsResolved` preflight additionally
-verifies the global and per-seat `small` values when defined, so a typo in the alias fails before
-launch, not mid-game.
+`selectModelReference` lives in
+[`resolution.ts`](../../vox-agents/src/utils/models/resolution.ts) and is re-exported by
+`models.ts`, so runtime selection and preflight verification share one implementation and cannot
+disagree on the selected reference (callers pass the agent's `modelSize` — the registry is not
+imported there, to avoid the cycle documented in `resolve-negotiator.ts`). `ensureModelsResolved`
+preflight additionally verifies the global and per-seat `small` values when defined, so a typo in
+the alias fails before launch, not mid-game.
 
-The `summarizer` lookups outside `VoxAgent.getModel`
-([`summarizer.ts`](../../vox-agents/src/telepathist/summarizer.ts),
+The `summarizer` lookups outside `VoxAgent.getModel` go through `summarizerModelReference` /
+`summarizerModelName` in [`summarizer.ts`](../../vox-agents/src/telepathist/summarizer.ts) (used by
 [`phase-preparation.ts`](../../vox-agents/src/telepathist/preparation/phase-preparation.ts),
-[`turn-preparation.ts`](../../vox-agents/src/telepathist/preparation/turn-preparation.ts)) call the
-selector with size `'small'`, so an explicit `summarizer` entry still wins and an unset one falls
-`summarizer → small → default`.
+[`turn-preparation.ts`](../../vox-agents/src/telepathist/preparation/turn-preparation.ts), and the
+archivist prep preflight), which call the selector with the Summarizer's own size, so an explicit
+`summarizer` entry still wins and an unset one falls `summarizer → small → default`.
 
 A side effect worth keeping: because the selector picks a defined key before `getModelConfig` runs,
 agent names without entries no longer take the "Unknown model configuration, falling back to
@@ -131,6 +137,8 @@ discovery route includes it in the response as `recommendedTiers`, so the recomm
 computed server-side next to the other model rules and no credential logic moves. The synthetic
 IDs are service-side aliases that should always be listed; the rule matches the catalog rather
 than assuming, so if they are ever absent the provider simply degrades to no-rule behavior.
+Model size and reasoning effort remain separate: every discovered GPT-5.6 model, including Luna,
+is recommended with high reasoning effort by default.
 
 ### Model setup wizard
 
@@ -170,14 +178,14 @@ the style. The style options carry no cost multipliers.
 | File | Change |
 | --- | --- |
 | [`src/infra/vox-agent.ts`](../../vox-agents/src/infra/vox-agent.ts) | `modelSize: 'default' \| 'small' = 'default'` beside `reasoningTier`; `getModel` resolves through `selectModelReference` |
-| [`src/utils/models/models.ts`](../../vox-agents/src/utils/models/models.ts) | `selectModelReference(name, size, overrides)` — the chain above; `getModelConfig` untouched |
-| [`src/utils/models/resolution.ts`](../../vox-agents/src/utils/models/resolution.ts) | `agentModelReference` gains the size parameter and the chain; `ensureModelsResolved` ids include defined `small` at both scopes |
+| [`src/utils/models/models.ts`](../../vox-agents/src/utils/models/models.ts) | re-exports `selectModelReference`; `getModelConfig` untouched |
+| [`src/utils/models/resolution.ts`](../../vox-agents/src/utils/models/resolution.ts) | `selectModelReference(name, size, overrides)` — the chain above, shared by runtime and preflight; `ensureModelsResolved` ids include defined `small` at both scopes |
 | [`src/utils/models/rules.ts`](../../vox-agents/src/utils/models/rules.ts) | `tierRules` + `recommendTierModels(provider, models)` |
 | [`src/web/routes/config.ts`](../../vox-agents/src/web/routes/config.ts) | discovery response gains `recommendedTiers` |
 | [`src/types/api.ts`](../../vox-agents/src/types/api.ts) | `recommendedTiers?: { default?: string; small?: string }` on the discovery response |
 | [`src/briefer/briefer.ts`](../../vox-agents/src/briefer/briefer.ts), [`src/analyst/analyst.ts`](../../vox-agents/src/analyst/analyst.ts), [`src/librarian/librarian.ts`](../../vox-agents/src/librarian/librarian.ts) | `modelSize = 'small'` on the base classes |
 | [`src/envoy/agents/spokesperson.ts`](../../vox-agents/src/envoy/agents/spokesperson.ts), [`src/telepathist/summarizer.ts`](../../vox-agents/src/telepathist/summarizer.ts), [`src/telepathist/episode-retriever.ts`](../../vox-agents/src/telepathist/episode-retriever.ts) | `modelSize = 'small'` |
-| [`src/telepathist/preparation/phase-preparation.ts`](../../vox-agents/src/telepathist/preparation/phase-preparation.ts), [`turn-preparation.ts`](../../vox-agents/src/telepathist/preparation/turn-preparation.ts) | summarizer model lookups go through the selector with size `'small'` |
+| [`src/telepathist/preparation/phase-preparation.ts`](../../vox-agents/src/telepathist/preparation/phase-preparation.ts), [`turn-preparation.ts`](../../vox-agents/src/telepathist/preparation/turn-preparation.ts) | summarizer model lookups use `summarizerModelName` from `summarizer.ts` |
 | [`ui/src/components/config/SetupWizard.vue`](../../vox-agents/ui/src/components/config/SetupWizard.vue) | preselect the recommended main model; save `default` (+ `small` when recommended) as above; confirm copy names both |
 | `ui/src/api/client.ts`, `ui/src/utils/types.ts` | `recommendedTiers` in the typed discovery response |
 

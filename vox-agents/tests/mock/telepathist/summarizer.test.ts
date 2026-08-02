@@ -31,8 +31,10 @@ const summarizer = agentRegistry.get('summarizer') as any;
  */
 function makeFakeTelepathistDb() {
   const store = new Map<string, { result: string }>();
+  const inserts: Array<{ model?: string }> = [];
   return {
     store,
+    inserts,
     selectFrom() {
       let key: string | undefined;
       const chain: any = {
@@ -56,6 +58,7 @@ function makeFakeTelepathistDb() {
         },
         onConflict: (_cb: any) => chain,
         async execute() {
+          inserts.push(values);
           if (values && !store.has(values.cacheKey)) {
             store.set(values.cacheKey, { result: values.result });
           }
@@ -192,6 +195,21 @@ describe('Summarizer', () => {
   });
 
   describe('summarizeWithCache', () => {
+    it.each([
+      ['an explicit summarizer assignment', { summarizer: { provider: 'openai', name: 'explicit-summarizer' } }, 'explicit-summarizer'],
+      ['the routine alias when summarizer is unassigned', { small: { provider: 'openai', name: 'routine-model' } }, 'routine-model'],
+      ['the main alias when neither summarizer nor routine is assigned', { default: { provider: 'openai', name: 'main-model' } }, 'main-model'],
+    ])('records %s on a cache miss', async (_description, overrides, expectedModel) => {
+      const params = makeTelepathistParameters();
+      const input: SummarizerInput = { text: 'data', instruction: 'do it' };
+      ctx.modelOverrides = overrides as any;
+      ctx.callAgent.mockResolvedValue('summary text');
+
+      await summarizeWithCache(input, params, ctx.asContext() as any);
+
+      expect((params.telepathistDb as any).inserts[0].model).toBe(expectedModel);
+    });
+
     it('stores a cache miss by invoking callAgent', async () => {
       const params = makeTelepathistParameters();
       const input: SummarizerInput = { text: 'data', instruction: 'do it' };

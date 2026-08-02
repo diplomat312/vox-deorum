@@ -19,6 +19,9 @@ import { worldContext, noDecisionPower, communicationStyle, audienceSection } fr
  * @class
  */
 export class Spokesperson extends LiveEnvoy {
+  /** The spokesperson recites known status using the routine model. */
+  public modelSize = 'small' as const;
+
   /**
    * The name identifier for this agent
    */

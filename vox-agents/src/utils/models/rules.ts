@@ -7,6 +7,7 @@
 
 import type { LLMConfig } from '../../types/index.js';
 import { isSynthesizableModelId } from '../../types/constants.js';
+import type { DiscoveredModel } from '../../types/api.js';
 
 /** A case-insensitive provider and native-name rule that contributes model options. */
 export interface ModelRule {
@@ -42,6 +43,38 @@ export const modelRules: ModelRule[] = [
   { match: /gemma-3/i, options: { toolMiddleware: 'gemma' } },
   { match: /embedder/i, options: { embeddingSize: 4096 } },
 ];
+
+/** A provider-specific pair of catalog-name rules for main and routine models. */
+interface TierRule {
+  provider: string;
+  default: RegExp;
+  small: RegExp;
+}
+
+/** Preferred main and routine models, matched in provider catalog order. */
+export const tierRules: TierRule[] = [
+  { provider: 'codex', default: /terra/i, small: /luna/i },
+  { provider: 'claude-code', default: /^sonnet$/i, small: /^haiku$/i },
+  // Synthetic tier IDs are exact service-side aliases, matched verbatim and case-sensitively.
+  { provider: 'synthetic', default: /^syn:large:text$/, small: /^syn:small:text$/ },
+];
+
+/** Returns a provider's available main and routine model recommendations. */
+export function recommendTierModels(
+  provider: string,
+  models: DiscoveredModel[],
+): { default?: string; small?: string } | undefined {
+  const rule = tierRules.find((candidate) => candidate.provider === provider);
+  if (!rule) return undefined;
+
+  const defaultModel = models.find((model) => rule.default.test(model.name));
+  const smallModel = models.find((model) => rule.small.test(model.name));
+  if (!defaultModel && !smallModel) return undefined;
+  return {
+    ...(defaultModel === undefined ? {} : { default: defaultModel.id }),
+    ...(smallModel === undefined ? {} : { small: smallModel.id }),
+  };
+}
 
 /** Applies all matching model-name rules without translating request-time provider options. */
 export function applyModelRules(provider: string, name: string): LLMConfig['options'] | undefined {

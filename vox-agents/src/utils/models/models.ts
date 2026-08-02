@@ -32,6 +32,10 @@ import { parseModelReference } from './model-reference.js';
 import { getRuntimeModel } from './resolution.js';
 
 export type { ModelRuntimeIdentity } from './providers/host-tools.js';
+export { selectModelReference } from './resolution.js';
+
+/** Selectable model sizes for agents without an explicit model assignment. */
+export type ModelSize = 'default' | 'small';
 
 dotenv.config();
 

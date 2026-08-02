@@ -11,6 +11,7 @@ import { createLogger } from '../logger.js';
 import { DiscoveryError, discoverModels, isStaticCatalogProvider } from './discovery.js';
 import { parseModelReference } from './model-reference.js';
 import type { DiscoveredModel } from '../../types/api.js';
+import type { ModelSize } from './models.js';
 
 /** In-memory, process-lifetime configurations verified by provider discovery. */
 const runtimeModels = new Map<string, Model>();
@@ -46,29 +47,46 @@ function getCatalog(provider: string): Promise<DiscoveredModel[]> {
 }
 
 /**
- * Returns the model reference an agent name resolves to.
+ * Selects an agent's model reference before normal alias and model-ID resolution.
+ * Explicit agent assignments take precedence over size aliases across both seat
+ * and global scopes; `getModelConfig` handles the final default fallback.
  *
- * An agent name is not itself a model reference: agents resolve through their own
- * name (see `VoxAgent.getModel`), and an agent with no `llms` assignment runs on
- * `default`. Preflight must therefore verify the assignment when one exists and
- * `default` when it does not, rather than treating the bare agent name as a model.
+ * An agent name is not itself a model reference, so preflight must verify the
+ * selected assignment rather than treating the bare agent name as a model.
+ * Runtime selection (`VoxAgent.getModel`, via the `models.ts` re-export) and
+ * preflight share this single implementation so they cannot disagree on the
+ * selected reference. Callers pass the agent's `modelSize` — the agent registry
+ * is not imported here, to avoid the cycle documented in `resolve-negotiator.ts`.
  */
-export function agentModelReference(name: string, overrides?: Record<string, Model | string>): string {
-  return (overrides?.[name] ?? config.llms[name]) === undefined ? 'default' : name;
+export function selectModelReference(
+  name: string,
+  size: ModelSize = 'default',
+  overrides?: Record<string, Model | string>,
+): string {
+  if (overrides?.[name] !== undefined) return name;
+  if (config.llms[name] !== undefined) return name;
+  if (overrides?.[size] !== undefined) return size;
+  if (config.llms[size] !== undefined) return size;
+  return 'default';
 }
 
-/** Follows configured aliases until reaching a model, a missing key, or a cycle. */
+/** Follows configured aliases until reaching a model or missing key, and rejects cycles. */
 function resolveAlias(name: string, overrides?: Record<string, Model | string>): string | undefined {
   const visited = new Set<string>();
+  const path: string[] = [];
   let current = name;
-  while (!visited.has(current)) {
+  while (true) {
+    if (visited.has(current)) {
+      path.push(current);
+      throw new Error(`Cannot resolve model alias '${name}': alias cycle detected (${path.join(' -> ')}).`);
+    }
     visited.add(current);
+    path.push(current);
     const definition = overrides?.[current] ?? config.llms[current];
     if (definition === undefined) return current;
     if (typeof definition !== 'string') return undefined;
     current = definition;
   }
-  return undefined;
 }
 
 /** Ranks likely catalog IDs without an edit-distance dependency. */
@@ -96,7 +114,16 @@ export async function ensureModelsResolved(
   ids: Iterable<string | Model | undefined>,
   overrides?: Record<string, Model | string>,
 ): Promise<void> {
-  for (const id of ids) {
+  // Validate every effective alias chain before limiting provider discovery to requested IDs.
+  const effectiveKeys = new Set([...Object.keys(config.llms), ...Object.keys(overrides ?? {})]);
+  for (const key of effectiveKeys) resolveAlias(key, overrides);
+
+  // Agents resolve size aliases lazily (`selectModelReference`), so a session may rely on a
+  // size alias that no requested id names: verify each defined one at both scopes. This list
+  // must grow with `ModelSize`.
+  const references = [...ids, config.llms.small, overrides?.small];
+
+  for (const id of references) {
     if (typeof id !== 'string') continue;
     const resolvedAlias = resolveAlias(id, overrides);
     if (resolvedAlias === undefined) continue;

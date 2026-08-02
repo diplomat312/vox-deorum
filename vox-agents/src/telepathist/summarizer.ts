@@ -12,7 +12,11 @@ import { VoxAgent } from '../infra/vox-agent.js';
 import { TelepathistParameters } from './telepathist-parameters.js';
 import { VoxContext } from '../infra/vox-context.js';
 import { createLogger } from '../utils/logger.js';
-import { getModelConfig } from '../utils/models/models.js';
+import type { Model } from '../types/index.js';
+import { getModelConfig, type ModelSize, selectModelReference } from '../utils/models/models.js';
+
+/** Historical summaries use the routine model; shared with the lookups outside `Summarizer.getModel`. */
+const summarizerSize: ModelSize = 'small';
 
 /**
  * Shared historian guidelines reused across summarization instructions.
@@ -66,6 +70,7 @@ ${inquiry}`;
 export class Summarizer extends VoxAgent<TelepathistParameters, SummarizerInput, string> {
   readonly name = 'summarizer';
   readonly description = 'General-purpose summarizer for historical data';
+  public modelSize = summarizerSize;
 
   public async getSystem(
     params: TelepathistParameters,
@@ -92,6 +97,16 @@ ${summarizerGuidelines}`.trim();
       content
     }];
   }
+}
+
+/** Selects the model reference for summarizer work performed outside `VoxAgent.getModel`. */
+export function summarizerModelReference(overrides?: Record<string, Model | string>): string {
+  return selectModelReference('summarizer', summarizerSize, overrides);
+}
+
+/** Resolves the model name recorded on summary cache rows and preparation log labels. */
+export function summarizerModelName(overrides?: Record<string, Model | string>): string {
+  return getModelConfig(summarizerModelReference(overrides), undefined, overrides).name;
 }
 
 const cacheLogger = createLogger('SummarizerCache');
@@ -137,7 +152,7 @@ export async function summarizeWithCache(
       .values({
         cacheKey,
         result,
-        model: getModelConfig('summarizer', undefined, context.modelOverrides).name,
+        model: summarizerModelName(context.modelOverrides),
         createdAt: Date.now()
       })
       .onConflict((oc) => oc.column('cacheKey').doNothing())

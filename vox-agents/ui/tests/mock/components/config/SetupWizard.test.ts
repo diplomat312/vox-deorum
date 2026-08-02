@@ -223,24 +223,107 @@ describe('SetupWizard', () => {
     expect(visibilityEvents[visibilityEvents.length - 1]).toEqual([false]);
   });
 
-  it('retains explicit Codex defaults while adding discovered model rules', async () => {
+  it('preselects recommended tiers, saves both aliases, and names them on confirmation', async () => {
     api.getCodexLoginStatus.mockResolvedValue({ state: 'ready', login: null, error: null });
     api.discoverModels.mockResolvedValue({
       provider: 'codex',
-      models: [{
-        id: 'codex/gpt-5.6-sol',
-        name: 'gpt-5.6-sol',
-        recommendedOptions: { concurrencyLimit: 1 },
-      }],
+      models: [
+        {
+          id: 'codex/gpt-5.6-terra',
+          name: 'gpt-5.6-terra',
+          recommendedOptions: { concurrencyLimit: 1 },
+        },
+        {
+          id: 'codex/gpt-5.6-luna',
+          name: 'gpt-5.6-luna',
+          recommendedOptions: { reasoningEffort: 'high' },
+        },
+      ],
+      recommendedTiers: { default: 'codex/gpt-5.6-terra', small: 'codex/gpt-5.6-luna' },
+    });
+    const wrapper = mountWizard();
+
+    await choosePath(wrapper, 'subscription', 'codex');
+    await flushPromises();
+    expect((wrapper.find('input[value="codex/gpt-5.6-terra"]').element as HTMLInputElement).checked).toBe(true);
+    await clickButton(wrapper, 'Next');
+
+    expect(wrapper.text()).toContain('Main AI: gpt-5.6-terra (codex/gpt-5.6-terra)');
+    expect(wrapper.text()).toContain('Routine AI: gpt-5.6-luna (codex/gpt-5.6-luna) (summaries and reports)');
+    await clickButton(wrapper, 'Save & start playing');
+    await flushPromises();
+
+    expect(api.updateCurrentConfig).toHaveBeenCalledWith({
+      config: expect.objectContaining({
+        llms: {
+          ...config.llms,
+          'codex/gpt-5.6-terra': {
+            provider: 'codex',
+            name: 'gpt-5.6-terra',
+            options: { concurrencyLimit: 1 },
+          },
+          'codex/gpt-5.6-luna': {
+            provider: 'codex',
+            name: 'gpt-5.6-luna',
+            options: { reasoningEffort: 'high' },
+          },
+          default: 'codex/gpt-5.6-terra',
+          small: 'codex/gpt-5.6-luna',
+        },
+      }),
+    });
+  });
+
+  it('saves only the selected default when discovery has no recommended tiers', async () => {
+    api.discoverModels.mockResolvedValue({
+      provider: 'openrouter',
+      models: [{ id: 'openrouter/model-a', name: 'Model A' }],
+    });
+    const wrapper = mountWizard();
+
+    await discoverOpenRouter(wrapper);
+    expect((wrapper.find('input[value="openrouter/model-a"]').element as HTMLInputElement).checked).toBe(false);
+    await wrapper.find('input[value="openrouter/model-a"]').setValue(true);
+    await clickButton(wrapper, 'Next');
+    await clickButton(wrapper, 'Save & start playing');
+    await flushPromises();
+
+    const savedLlms = api.updateCurrentConfig.mock.calls[0]![0].config.llms;
+    expect(savedLlms.default).toBe('openrouter/model-a');
+    expect(savedLlms).not.toHaveProperty('small');
+  });
+
+  it('retains explicit Codex definitions while adding recommended model tiers', async () => {
+    api.getCodexLoginStatus.mockResolvedValue({ state: 'ready', login: null, error: null });
+    api.discoverModels.mockResolvedValue({
+      provider: 'codex',
+      models: [
+        {
+          id: 'codex/gpt-5.6-terra',
+          name: 'gpt-5.6-terra',
+          recommendedOptions: { concurrencyLimit: 1 },
+        },
+        {
+          id: 'codex/gpt-5.6-luna',
+          name: 'gpt-5.6-luna',
+          recommendedOptions: { concurrencyLimit: 2, reasoningEffort: 'high' },
+        },
+      ],
+      recommendedTiers: { default: 'codex/gpt-5.6-terra', small: 'codex/gpt-5.6-luna' },
     });
     const retainedConfig = {
       ...config,
       llms: {
         ...config.llms,
-        'codex/gpt-5.6-sol': {
+        'codex/gpt-5.6-terra': {
           provider: 'codex',
-          name: 'curated-sol',
+          name: 'curated-terra',
           options: { reasoningEffort: 'high' as const },
+        },
+        'codex/gpt-5.6-luna': {
+          provider: 'codex',
+          name: 'curated-luna',
+          options: { reasoningEffort: 'low' as const },
         },
         unrelated: { provider: 'openai', name: 'other-model' },
       },
@@ -249,19 +332,62 @@ describe('SetupWizard', () => {
 
     await choosePath(wrapper, 'subscription', 'codex');
     await flushPromises();
-    await wrapper.find('input[value="codex/gpt-5.6-sol"]').setValue(true);
     await clickButton(wrapper, 'Next');
     await clickButton(wrapper, 'Save & start playing');
     await flushPromises();
 
     const savedLlms = api.updateCurrentConfig.mock.calls[0]![0].config.llms;
-    expect(savedLlms['codex/gpt-5.6-sol']).toEqual({
+    expect(savedLlms['codex/gpt-5.6-terra']).toEqual({
       provider: 'codex',
-      name: 'curated-sol',
+      name: 'curated-terra',
       options: { concurrencyLimit: 1, reasoningEffort: 'high' },
     });
+    expect(savedLlms['codex/gpt-5.6-luna']).toEqual({
+      provider: 'codex',
+      name: 'curated-luna',
+      options: { concurrencyLimit: 2, reasoningEffort: 'low' },
+    });
+    expect(savedLlms.default).toBe('codex/gpt-5.6-terra');
+    expect(savedLlms.small).toBe('codex/gpt-5.6-luna');
     expect(savedLlms.unrelated).toEqual({ provider: 'openai', name: 'other-model' });
-    expect(savedLlms['codex/gpt-5.6-sol']).not.toHaveProperty('id');
+    expect(savedLlms['codex/gpt-5.6-terra']).not.toHaveProperty('id');
+    expect(savedLlms['codex/gpt-5.6-luna']).not.toHaveProperty('id');
+  });
+
+  it('retains string aliases for discovered tier models when setup runs again', async () => {
+    api.getCodexLoginStatus.mockResolvedValue({ state: 'ready', login: null, error: null });
+    api.discoverModels.mockResolvedValue({
+      provider: 'codex',
+      models: [
+        { id: 'codex/gpt-5.6-terra', name: 'gpt-5.6-terra' },
+        { id: 'codex/gpt-5.6-luna', name: 'gpt-5.6-luna' },
+      ],
+      recommendedTiers: { default: 'codex/gpt-5.6-terra', small: 'codex/gpt-5.6-luna' },
+    });
+    const retainedConfig = {
+      ...config,
+      llms: {
+        ...config.llms,
+        'codex/gpt-5.6-terra': 'curated-main',
+        'codex/gpt-5.6-luna': 'curated-routine',
+        'curated-main': { provider: 'codex', name: 'gpt-5.6-terra' },
+        'curated-routine': { provider: 'codex', name: 'gpt-5.6-luna' },
+        unrelated: 'existing',
+      },
+    } as VoxAgentsConfig;
+    const wrapper = mountWizard({}, retainedConfig);
+
+    await choosePath(wrapper, 'subscription', 'codex');
+    await flushPromises();
+    await clickButton(wrapper, 'Next');
+    await clickButton(wrapper, 'Save & start playing');
+    await flushPromises();
+
+    expect(api.updateCurrentConfig.mock.calls[0]![0].config.llms).toEqual({
+      ...retainedConfig.llms,
+      default: 'codex/gpt-5.6-terra',
+      small: 'codex/gpt-5.6-luna',
+    });
   });
 
   it('preserves non-empty API-key drafts when the selected service has no credential fields', async () => {

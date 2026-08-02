@@ -19,6 +19,9 @@ import { StrategistParameters } from "../strategist/strategy-parameters.js";
  * @class
  */
 export abstract class Librarian extends VoxAgent<StrategistParameters, string[], string[]> {
+  /** Librarians extract and retrieve information using the routine model. */
+  public modelSize = 'small' as const;
+
   // Minimal base class - just defines the type structure
   // Subclasses handle all implementation details
 }

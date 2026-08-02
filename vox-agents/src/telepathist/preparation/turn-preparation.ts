@@ -10,10 +10,9 @@ import { TelepathistParameters } from '../telepathist-parameters.js';
 import { VoxContext } from '../../infra/vox-context.js';
 import { GetSituationTool } from '../tools/get-situation.js';
 import { GetDecisionTool } from '../tools/get-decision.js';
-import { SummarizerInput } from '../summarizer.js';
+import { SummarizerInput, summarizerModelName } from '../summarizer.js';
 import { turnSummarySchema, buildTurnSummaryInstruction, parseSummaryMarkdown } from './instructions.js';
 import { exponentialRetry } from '../../utils/retry.js';
-import { getModelConfig } from '../../utils/models/models.js';
 
 /**
  * Generates turn summaries for all turns that don't already have them.
@@ -26,7 +25,7 @@ export async function prepareTurnSummaries(
   parameters: TelepathistParameters,
   context: VoxContext<TelepathistParameters>
 ): Promise<Set<number>> {
-  const model = getModelConfig('summarizer', undefined, context.modelOverrides).name;
+  const model = summarizerModelName(context.modelOverrides);
   const logger = context.logger.child({ gameID: parameters.gameID, playerID: parameters.playerID, civ: parameters.civilizationName, model });
 
   const existingSummaries = await parameters.telepathistDb

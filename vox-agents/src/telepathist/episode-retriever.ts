@@ -22,6 +22,8 @@ export class EpisodeRetriever extends VoxAgent<TelepathistParameters, EnvoyThrea
   readonly name = 'episode-retriever';
   readonly description = 'Retrieve historical episode cases from the archive for any game turn';
   public tags = ['telepathist'];
+  /** Episode retrieval uses the routine model when its model setting is inspected. */
+  public modelSize = 'small' as const;
   public programmatic = true;
 
   public async getSystem(): Promise<string> {
