@@ -62,10 +62,21 @@ describe('codex proxy command configuration', () => {
       command: 'C:\\Program Files\\node\\npx.cmd',
       args: [
         '--yes', 'proxy', 'serve', '--root', 'C:\\Temp & Files\\vox', '--port', '9123',
-        '--log-level', 'debug',
+        '--log-level', 'info',
+        '--login', 'device-code',
         '--request-timeout', '31000ms', '--shutdown-timeout', '10000ms',
       ],
     });
+  });
+
+  it('should raise the proxy log level only when Winston would keep debug records', () => {
+    expect(getCodexProxyConfig({}).logLevel).toBe('info');
+    expect(getCodexProxyConfig({ LOG_LEVEL: 'verbose' }).logLevel).toBe('info');
+    expect(getCodexProxyConfig({ LOG_LEVEL: 'debug' }).logLevel).toBe('debug');
+    expect(getCodexProxyConfig({ LOG_LEVEL: 'silly' }).logLevel).toBe('debug');
+    expect(buildCodexProxyCommand(getCodexProxyConfig({ LOG_LEVEL: 'debug' })).args).toEqual(
+      expect.arrayContaining(['--log-level', 'debug']),
+    );
   });
 });
 
@@ -431,7 +442,30 @@ describe('CodexProxyManager startup', () => {
     expect(output).not.toContain('secret-value');
   });
 
-  it('should open each new device-login prompt while keeping its code redacted in structured logs', async () => {
+  it('should demote readiness and health request records to debug regardless of their own level', async () => {
+    const child = createChild();
+    const logger = { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() };
+    const manager = createManager(
+      vi.fn()
+        .mockRejectedValueOnce(new TypeError('connection refused'))
+        .mockResolvedValue(response(200, { status: 'ready' })),
+      vi.fn(() => child),
+      { logger },
+    );
+
+    await manager.ensureCodexProxy();
+    const record = (path: string) => `${JSON.stringify({ level: 'info', event: 'http_request', method: 'GET', path, status: 503 })}\n`;
+    child.stderr.emit('data', record('/ready'));
+    child.stderr.emit('data', record('/health'));
+    child.stderr.emit('data', record('/v1/chat/completions'));
+
+    const debugPaths = logger.debug.mock.calls.map((call) => call[1]?.path);
+    expect(debugPaths).toEqual(['/ready', '/health']);
+    const infoPaths = logger.info.mock.calls.filter((call) => call[0] === 'Codex proxy:').map((call) => call[1]?.path);
+    expect(infoPaths).toEqual(['/v1/chat/completions']);
+  });
+
+  it('should open and announce each new device-login prompt while keeping the structured record redacted', async () => {
     const child = createChild();
     const openLoginUrl = vi.fn(async () => undefined);
     const logger = { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() };
@@ -463,7 +497,14 @@ describe('CodexProxyManager startup', () => {
 
     expect(openLoginUrl).toHaveBeenCalledOnce();
     expect(openLoginUrl).toHaveBeenCalledWith('https://auth.openai.com/codex/device', process.platform);
-    expect(JSON.stringify(logger.info.mock.calls)).not.toContain('ABCD-1234');
+    const announcements = logger.info.mock.calls.filter((call) => typeof call[0] === 'string' && call[0].includes('Codex sign-in required'));
+    expect(announcements).toHaveLength(1);
+    expect(announcements[0][0]).toContain('https://auth.openai.com/codex/device');
+    expect(announcements[0][0]).toContain('ABCD-1234');
+    const forwarded = logger.info.mock.calls.filter((call) => call[0] === 'Codex proxy:');
+    expect(JSON.stringify(forwarded)).toContain('[redacted]');
+    expect(JSON.stringify(forwarded)).not.toContain('ABCD-1234');
+    expect(JSON.stringify(logger.info.mock.calls)).not.toContain('WXYZ-5678');
   });
 
   it('should clear the login prompt when readiness completes', async () => {

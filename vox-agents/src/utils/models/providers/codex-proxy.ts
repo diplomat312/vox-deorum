@@ -70,6 +70,7 @@ export interface CodexProxyConfig {
   port: number;
   command: string;
   root: string;
+  logLevel: 'debug' | 'info';
   requestTimeoutMs: number;
   startupTimeoutMs: number;
   shutdownTimeoutMs: number;
@@ -138,6 +139,8 @@ export function getCodexProxyConfig(env: NodeJS.ProcessEnv = process.env): Codex
     port,
     command: optionalEnvironmentValue(env.CODEX_PROXY_COMMAND) ?? codexProxyCommandDefault,
     root,
+    // Winston only keeps debug records at these levels, so a chattier proxy would waste IPC volume.
+    logLevel: ['debug', 'silly'].includes((env.LOG_LEVEL ?? '').trim().toLowerCase()) ? 'debug' : 'info',
     requestTimeoutMs: parseDuration('CODEX_PROXY_REQUEST_TIMEOUT', optionalEnvironmentValue(env.CODEX_PROXY_REQUEST_TIMEOUT), codexProxyRequestTimeoutDefault),
     startupTimeoutMs: parseDuration('CODEX_PROXY_STARTUP_TIMEOUT', optionalEnvironmentValue(env.CODEX_PROXY_STARTUP_TIMEOUT), codexProxyStartupTimeoutDefault),
     shutdownTimeoutMs: codexProxyShutdownTimeoutDefault,
@@ -186,8 +189,9 @@ export function buildCodexProxyCommand(config: CodexProxyConfig): { command: str
       'serve',
       '--root', config.root,
       '--port', String(config.port),
-      // Debug logging enables the proxy's redacted app-server diagnostics.
-      '--log-level', 'debug',
+      '--log-level', config.logLevel,
+      // Device-code sign-in stays completable from another device when vox-agents runs remotely.
+      '--login', 'device-code',
       '--request-timeout', `${config.requestTimeoutMs}ms`,
       '--shutdown-timeout', `${config.shutdownTimeoutMs}ms`,
     ],
@@ -457,6 +461,8 @@ export class CodexProxyManager {
     if (this.openedDeviceLogins.get(child) === prompt) return;
     this.openedDeviceLogins.set(child, prompt);
     this.loginPromptValue = { verificationUrl: parsedUrl.href, userCode };
+    // Deliberately unredacted: the operator needs the one-time code to finish sign-in from any device.
+    this.dependencies.logger.info(`Codex sign-in required: open ${parsedUrl.href} and enter code ${userCode}.`);
     void this.dependencies.openLoginUrl(parsedUrl.href, this.dependencies.platform).catch((error) => {
       this.dependencies.logger.warn(`Could not open Codex login in the default browser: ${errorMessage(error)}. Open the verification URL from the Codex proxy logs to finish login.`);
     });
@@ -719,9 +725,11 @@ async function openLoginUrl(url: string, platform: NodeJS.Platform): Promise<voi
 /** Sends structured proxy stderr records to the matching Winston method without leaking credentials. */
 function logProxyRecord(logger: Pick<ReturnType<typeof createLogger>, 'debug' | 'info' | 'warn' | 'error'>, record: unknown): void {
   const safe = redactProxyRecord(record);
-  const level = isRecord(record) && typeof record.level === 'string' && ['debug', 'info', 'warn', 'error'].includes(record.level)
+  // Readiness and health probes arrive every 250ms during startup; older proxies still emit them at info.
+  const demoted = isRecord(record) && record.event === 'http_request' && (record.path === '/ready' || record.path === '/health');
+  const level = !demoted && isRecord(record) && typeof record.level === 'string' && ['debug', 'info', 'warn', 'error'].includes(record.level)
     ? record.level as 'debug' | 'info' | 'warn' | 'error'
-    : 'info';
+    : demoted ? 'debug' : 'info';
   logger[level]('Codex proxy:', safe);
 }
 
