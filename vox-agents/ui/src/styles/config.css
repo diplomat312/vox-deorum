@@ -143,8 +143,8 @@
 }
 
 .setup-wizard-dialog .p-dialog-header {
-  padding-right: 0;
-  padding-bottom: 0;
+  padding-right: 0.6rem;
+  padding-bottom: 0.3rem;
 }
 
 .setup-wizard-dialog .p-dialog-content {
@@ -270,7 +270,6 @@
 
 .setup-wizard-info {
   flex: 0 0 auto;
-  padding: 0.3rem;
   border: 0;
   background: transparent;
   color: var(--p-text-muted-color);

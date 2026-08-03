@@ -60,7 +60,7 @@ const doorOptions: Array<{ value: SetupDoor; title: string }> = [
 const serviceOptions: Record<Exclude<SetupDoor, 'local'>, Array<{ label: string; value: string }>> = {
   subscription: [
     { label: 'ChatGPT', value: 'codex' },
-    { label: 'Claude Code', value: 'claude-code' },
+    { label: 'Claude', value: 'claude-code' },
     { label: 'Synthetic.new', value: 'synthetic' },
     { label: 'Chutes.ai', value: 'chutes' }
   ],
@@ -469,21 +469,21 @@ onUnmounted(invalidatePendingWork);
             type="button"
             class="setup-wizard-info"
             aria-label="About subscriptions"
-            v-tooltip.top="'Subscriptions are flat monthly plans. ChatGPT and Claude sign in. Synthetic and Chutes use a plan key.'"
+            v-tooltip.top="'Flat monthly plans from ChatGPT, Claude, etc.'"
           ><i class="pi pi-info-circle" /></button>
           <button
             v-else-if="door.value === 'api'"
             type="button"
             class="setup-wizard-info"
             aria-label="About API accounts"
-            v-tooltip.top="'API accounts are pay per use. OpenRouter offers many AIs through one account.'"
+            v-tooltip.top="'You pay for what you use.'"
           ><i class="pi pi-info-circle" /></button>
           <button
             v-else
             type="button"
             class="setup-wizard-info"
             aria-label="About running AI locally"
-            v-tooltip.top="'Local AI needs no account, but it needs a powerful PC and usually provides weaker play.'"
+            v-tooltip.top="'Run your LLMs locally with llama.cpp, etc.'"
           ><i class="pi pi-info-circle" /></button>
         </div>
       </div>
