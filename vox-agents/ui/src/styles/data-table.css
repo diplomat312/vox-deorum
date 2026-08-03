@@ -70,6 +70,7 @@
   padding-right: 0.5rem;
 }
 
+.col-fixed-40  { flex: 0 0 40px; }
 .col-fixed-60  { flex: 0 0 60px; }
 .col-fixed-80  { flex: 0 0 80px; }
 .col-fixed-100 { flex: 0 0 100px; }
@@ -138,6 +139,84 @@
   color: var(--p-text-secondary-color);
 }
 
+/* Optional controls that refine a table without taking space from its title toolbar. */
+.table-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.5rem 0;
+}
+
+.table-sort-control {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.table-scroll {
+  overflow-x: auto;
+}
+
+.table-scroll .data-table {
+  min-width: 720px;
+}
+
+/* Expanded table details preserve the same card treatment as their parent table. */
+.table-expander-row {
+  padding: 0 0.5rem 0.5rem;
+  border-bottom: 1px solid var(--p-content-border-color);
+  background: var(--p-content-hover-background);
+}
+
+.table-expander-content {
+  padding: 0.75rem;
+  border: 1px solid var(--p-content-border-color);
+  border-radius: var(--p-border-radius);
+  background: var(--p-content-background);
+}
+
+.table-expander-content > p:first-child {
+  margin-top: 0;
+}
+
+.table-expander-content > p:last-child {
+  margin-bottom: 0;
+}
+
+.table-seat-summary-header,
+.table-seat-summary-row {
+  display: grid;
+  grid-template-columns: 80px minmax(100px, 1fr) minmax(100px, 1fr) minmax(120px, 1fr);
+  gap: 0.5rem;
+  padding: 0.35rem 0;
+}
+
+.table-seat-summary-scroll {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.table-seat-summary {
+  min-width: 424px;
+}
+
+.table-seat-summary-header {
+  border-bottom: 1px solid var(--p-content-border-color);
+  font-weight: 600;
+}
+
+.table-config-file {
+  margin-top: 0.75rem;
+}
+
+.table-config-file pre {
+  overflow-x: auto;
+  padding: 0.75rem;
+  border: 1px solid var(--p-content-border-color);
+  background: var(--p-content-hover-background);
+}
+
 /* Responsive adjustments */
 @media (max-width: 768px) {
   .table-header,
@@ -149,6 +228,11 @@
   .col-fixed-150,
   .col-fixed-200 {
     flex: 0 0 100px;
+  }
+
+  .table-toolbar {
+    align-items: stretch;
+    flex-direction: column;
   }
 }
 

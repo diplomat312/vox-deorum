@@ -20,6 +20,8 @@ import { z } from 'zod';
 import { EventEmitter } from 'node:events';
 
 const logger = createLogger('MCPClient');
+const connectTimeoutMs = 3_600_000;
+const readinessPollIntervalMs = 200;
 
 /**
  * Schema for Vox Deorum game event notifications
@@ -86,6 +88,7 @@ export class MCPClient extends EventEmitter {
   private connectPromise: Promise<void> | null = null;
   private dispatcher?: Dispatcher;
   private connectionPool: Pool | undefined;
+  private healthUrl: URL | undefined;
 
   constructor() {
     super();
@@ -99,6 +102,7 @@ export class MCPClient extends EventEmitter {
    * @private
    */
   private initializeClient() {
+    this.healthUrl = undefined;
     this.client = new Client(
       {
         name: config.agent.name,
@@ -158,16 +162,18 @@ export class MCPClient extends EventEmitter {
             'ETIMEDOUT'
           ],
           statusCodes: [500, 502, 503, 504, 429],  // Standard retry status codes
-          methods: ['GET', 'POST', 'HEAD', 'OPTIONS', 'PUT', 'DELETE', 'TRACE']  // Include POST
+          methods: ['GET', 'HEAD', 'OPTIONS']
         }
       );
       // Global pooling for HTTP requests
       const mcpUrl = new URL(transportConfig.endpoint!);
+      this.healthUrl = new URL('/health', mcpUrl);
       this.transport = new StreamableHTTPClientTransport(mcpUrl, {
         fetch: (url, init) => {
           init = init ?? {};
-          init.dispatcher = this.dispatcher;
-          return fetch(url, init);
+          const method = (init.method ?? 'GET').toUpperCase();
+          const dispatcher = method === 'POST' ? this.connectionPool : this.dispatcher;
+          return fetch(url, { ...init, dispatcher });
         },
         // SDK default maxRetries is 2, which is far too aggressive given Civ V
         // sessions routinely run for hours. We let the transport reconnect
@@ -270,17 +276,94 @@ export class MCPClient extends EventEmitter {
    * Internal connection logic, called by connect() with deduplication.
    */
   private async _doConnect(): Promise<void> {
+    const abortController = new AbortController();
+    const timeout = globalThis.setTimeout(() => abortController.abort(), connectTimeoutMs);
+
     try {
       logger.info('Connecting to MCP server...');
+      const deadline = Date.now() + connectTimeoutMs;
+
+      if (this.healthUrl && this.connectionPool) {
+        await this.waitForHttpReadiness(deadline, abortController.signal);
+      }
+
+      const remainingTimeout = deadline - Date.now();
+      if (remainingTimeout <= 0) {
+        throw this.createConnectTimeoutError();
+      }
+
       await this.client.connect(this.transport, {
-        timeout: 3600000 // 60 minutes retry to MCP server
+        timeout: remainingTimeout
       });
       this.isConnected = true;
       logger.info('Successfully connected to MCP server');
     } catch (error) {
+      if (abortController.signal.aborted) {
+        throw this.createConnectTimeoutError();
+      }
       logger.error('Failed to connect to MCP server:', error);
       throw error;
+    } finally {
+      globalThis.clearTimeout(timeout);
     }
+  }
+
+  /**
+   * Wait until the HTTP MCP server reports that initialization is complete.
+   */
+  private async waitForHttpReadiness(deadline: number, signal: AbortSignal): Promise<void> {
+    const healthUrl = this.healthUrl;
+    const connectionPool = this.connectionPool;
+    if (!healthUrl || !connectionPool) return;
+
+    while (!signal.aborted) {
+      if (Date.now() >= deadline) {
+        throw this.createConnectTimeoutError();
+      }
+
+      try {
+        const response = await fetch(healthUrl, {
+          dispatcher: connectionPool,
+          signal,
+        });
+
+        if (response.ok) {
+          const health = await response.json() as { status?: unknown };
+          if (health.status === 'healthy') {
+            return;
+          }
+        } else {
+          await response.body?.cancel();
+        }
+      } catch (error) {
+        if (signal.aborted) {
+          throw this.createConnectTimeoutError();
+        }
+      }
+
+      const remainingDelay = deadline - Date.now();
+      if (remainingDelay <= 0) {
+        throw this.createConnectTimeoutError();
+      }
+
+      try {
+        await setTimeout(Math.min(readinessPollIntervalMs, remainingDelay), undefined, { signal });
+      } catch (error) {
+        if (signal.aborted) {
+          throw this.createConnectTimeoutError();
+        }
+        throw error;
+      }
+    }
+
+    throw this.createConnectTimeoutError();
+  }
+
+  /**
+   * Create the shared timeout error used for HTTP readiness and MCP connection attempts.
+   */
+  private createConnectTimeoutError(): Error {
+    return new Error(`MCP connection timed out after ${connectTimeoutMs}ms`);
   }
   /**
    * Disconnect from the MCP server.

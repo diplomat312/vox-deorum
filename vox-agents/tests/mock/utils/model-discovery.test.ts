@@ -144,9 +144,9 @@ describe('discoverModels', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     await expect(discoverModels('claude-code', {})).resolves.toEqual([
-      { id: 'claude-code/sonnet', name: 'sonnet', recommendedOptions: { concurrencyLimit: 1 } },
-      { id: 'claude-code/opus', name: 'opus', recommendedOptions: { concurrencyLimit: 1 } },
-      { id: 'claude-code/haiku', name: 'haiku', recommendedOptions: { concurrencyLimit: 1 } },
+      { id: 'claude-code/sonnet', provider: 'claude-code', name: 'sonnet', recommendedOptions: { concurrencyLimit: 1 } },
+      { id: 'claude-code/opus', provider: 'claude-code', name: 'opus', recommendedOptions: { concurrencyLimit: 1 } },
+      { id: 'claude-code/haiku', provider: 'claude-code', name: 'haiku', recommendedOptions: { concurrencyLimit: 1 } },
     ]);
     expect(fetchMock).not.toHaveBeenCalled();
     expect(isStaticCatalogProvider('claude-code')).toBe(true);
@@ -161,8 +161,8 @@ describe('discoverModels', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     await expect(discoverModels('codex', {})).resolves.toEqual([
-      { id: 'codex/gpt-5.6-sol', name: 'gpt-5.6-sol', recommendedOptions: { concurrencyLimit: 1, reasoningEffort: 'high' } },
-      { id: 'codex/gpt-5.4-mini', name: 'gpt-5.4-mini' },
+      { id: 'codex/gpt-5.6-sol', provider: 'codex', name: 'gpt-5.6-sol', recommendedOptions: { concurrencyLimit: 1, reasoningEffort: 'high' } },
+      { id: 'codex/gpt-5.4-mini', provider: 'codex', name: 'gpt-5.4-mini' },
     ]);
     expect(codexMocks.ensureCodexProxy).toHaveBeenCalledTimes(1);
     expect(fetchMock).toHaveBeenCalledWith('http://127.0.0.1:9123/v1/models', expect.any(Object));

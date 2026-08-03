@@ -1,5 +1,5 @@
 # Dependencies
-experiments/
+/experiments/
 node_modules/
 npm-debug.log*
 yarn-debug.log*
@@ -53,8 +53,6 @@ temp/
 # Custom configuration files
 config.json
 configs/**/*.json
-!configs/observe-*.json
-!configs/play-*.json
 
 /telemetry/
 

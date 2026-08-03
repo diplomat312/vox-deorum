@@ -18,12 +18,11 @@ It then reacts to MCP notifications until the game ends:
 
 ### Configuration
 
-Sessions are configured by JSON files in `vox-agents/configs/` (`StrategistSessionConfig`). The essentials:
+Sessions are configured by JSON files in `vox-agents/configs/` (`StrategistSessionConfig`). The top level contains curated starters; `vox-agents/configs/experiments/` contains research and recording configurations. The essentials:
 
 | Field | Purpose |
 | --- | --- |
 | `llmPlayers` | Maps player IDs to strategist (and optionally model) assignments, deciding which agent plays whom. |
-| `gameMode` | How the game comes up: `start` generates a new game, `load` loads a save, and `wait` leaves launching to a human and waits for the DLL to connect. |
 | `autoPlay` | Selects the usage mode. See below. |
 | `repetition` | Plays several games in sequence for reproducible multi-game experiments. See below. |
 | `production` | Controls animation and recording behavior. See [media.md](media.md). |
@@ -32,7 +31,7 @@ Sessions are configured by JSON files in `vox-agents/configs/` (`StrategistSessi
 
 **Repetition.** Combined with seed and seating randomization, `repetition` supports reproducible multi-game experiments. Configured random seeds are written into Civ's `config.ini` before launch by `VoxCivilization` (`src/infra/vox-civilization.ts`), which also captures the previous values and restores them afterward. `StrategistSession` then verifies the seeds Civ actually reports against the ones requested, and records both for auditability. When a new-game config omits `randomSeeds`, the seed settings are written as zero for that launch, so stale fixed seeds in the user's `config.ini` do not carry over. Player seating can rotate between runs.
 
-Command-line flags override the file: `--config`/`-c`, `--load`/`-l` and `--wait`/`-w` (which select the `load` and `wait` game modes), `--players`/`-p`, `--strategist`/`-s`, `--autoPlay`/`-a`, `--repetition`/`-r`, and `--seed`.
+Start mode is supplied at launch, not persisted in a configuration: `--load`/`-l` selects a save, `--wait`/`-w` waits for manual start, and the default is a new game. Other command-line flags are `--config`/`-c`, `--players`/`-p`, `--strategist`/`-s`, `--autoPlay`/`-a`, `--repetition`/`-r`, and `--seed`.
 
 ### Crash recovery
 

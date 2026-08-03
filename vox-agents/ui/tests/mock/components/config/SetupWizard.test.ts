@@ -218,7 +218,7 @@ describe('SetupWizard', () => {
       }),
     });
     expect(api.updateCurrentConfig.mock.calls[0]![0].config.llms['openrouter/new-model']).not.toHaveProperty('id');
-    expect(push).toHaveBeenCalledWith('/session');
+    expect(push).toHaveBeenCalledWith('/session?setup=game');
     const visibilityEvents = wrapper.emitted('update:visible') ?? [];
     expect(visibilityEvents[visibilityEvents.length - 1]).toEqual([false]);
   });
@@ -431,7 +431,7 @@ describe('SetupWizard', () => {
     api.updateCurrentConfig.mockResolvedValue({ success: true });
     await clickButton(wrapper, 'Save & start playing');
     await flushPromises();
-    expect(push).toHaveBeenCalledWith('/session');
+    expect(push).toHaveBeenCalledWith('/session?setup=game');
     expect(wrapper.emitted('update:visible')).toEqual([[false]]);
   });
 

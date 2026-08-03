@@ -15,7 +15,7 @@ import type {
   TraceSpansResponse,
   // Session management types
   SessionStatusResponse,
-  StrategistSessionConfig,
+  SessionConfigsResponse,
   StartSessionRequest,
   StartSessionResponse,
   SaveSessionConfigRequest,
@@ -31,6 +31,7 @@ import type {
   DiscoverModelsRequest,
   DiscoverModelsResponse,
   DiscoveryErrorResponse,
+  ConfiguredModelsResponse,
   ConfigCheckResponse,
   CodexLoginResponse,
   CodexStatusResponse,
@@ -317,16 +318,17 @@ class ApiClient {
   /**
    * Get list of available session configuration files
    */
-  async getSessionConfigs(): Promise<{ configs: StrategistSessionConfig[] }> {
-    return this.fetchJson<{ configs: StrategistSessionConfig[] }>(`${this.baseUrl}/api/session/configs`);
+  async getSessionConfigs(): Promise<SessionConfigsResponse> {
+    return this.fetchJson<SessionConfigsResponse>(`${this.baseUrl}/api/session/configs`);
   }
 
   /**
    * Start a new session with configuration
    * @param config Full session configuration object
+   * @param gameMode Launch mode selected for this session run
    */
-  async startSession(config: SessionConfig): Promise<StartSessionResponse> {
-    const request: StartSessionRequest = { config };
+  async startSession(config: SessionConfig, gameMode: StartSessionRequest['gameMode']): Promise<StartSessionResponse> {
+    const request: StartSessionRequest = { config, gameMode };
     return this.fetchJson<StartSessionResponse>(`${this.baseUrl}/api/session/start`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -527,6 +529,11 @@ class ApiClient {
       metadata: { ...message.metadata, datetime: new Date(message.metadata.datetime) }
     }));
     return thread;
+  }
+
+  /** Get models that the configured providers can currently reach. */
+  async getConfigModels(): Promise<ConfiguredModelsResponse> {
+    return this.fetchJson<ConfiguredModelsResponse>(`${this.baseUrl}/api/config/models`);
   }
 
   /**

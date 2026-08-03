@@ -55,6 +55,9 @@ export abstract class VoxAgent<TParameters extends AgentParameters, TInput = unk
    */
   abstract readonly description: string;
 
+  /** Optional player-facing name for agent-selection controls. */
+  public displayName?: string;
+
   /**
    * Tags for categorizing and filtering agents (e.g., ["chat", "strategist", "briefer"])
    */
@@ -70,6 +73,9 @@ export abstract class VoxAgent<TParameters extends AgentParameters, TInput = unk
    * an ordinary chat.
    */
   public diplomacyOnly = false;
+
+  /** Whether the game setup wizard offers this agent as a strategist style. */
+  public offeredInSetup = false;
 
   /**
    * Generic capability flag: when true, this agent speaks ONLY through an explicit tool (the live

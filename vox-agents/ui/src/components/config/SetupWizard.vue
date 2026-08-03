@@ -393,7 +393,7 @@ async function saveSetup(): Promise<void> {
     emit('update:config', updatedConfig);
     emit('update:apiKeys', { ...props.apiKeys, ...savedKeys });
     dialogVisible.value = false;
-    await router.push('/session');
+    await router.push('/session?setup=game');
   } catch (error) {
     saveError.value = error instanceof Error ? error.message : 'Setup could not be saved.';
   } finally {

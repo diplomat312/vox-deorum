@@ -38,6 +38,10 @@ import { chatThreadStore } from '../../../../src/web/chat/store.js';
 import { agentRegistry } from '../../../../src/infra/agent-registry.js';
 import { contextRegistry } from '../../../../src/infra/context-registry.js';
 import { pacingInterruptionRegistry } from '../../../../src/strategist/pacing/registry.js';
+import { SimpleStrategist } from '../../../../src/strategist/agents/simple-strategist.js';
+import { SimpleStrategistBriefed } from '../../../../src/strategist/agents/simple-strategist-briefed.js';
+import { SimpleStrategistLearned } from '../../../../src/strategist/agents/simple-strategist-learned.js';
+import { SimpleStrategistStaffed } from '../../../../src/strategist/agents/simple-strategist-staffed.js';
 import { VoxSpanExporter } from '../../../../src/utils/telemetry/vox-exporter.js';
 import { parseContextIdentifier } from '../../../../src/utils/telemetry/identifier-parser.js';
 
@@ -210,6 +214,42 @@ describe('agent routes', () => {
       const res = await request(app).get('/api/agents');
       expect(res.status).toBe(200);
       expect(res.body.agents[0].diplomacyOnly).toBe(true);
+    });
+
+    it('surfaces setup display metadata from the agent registry', async () => {
+      vi.spyOn(agentRegistry, 'getAll').mockReturnValue([
+        {
+          name: 'simple-strategist',
+          displayName: 'Simple LLM Strategist',
+          description: 'makes strategic decisions',
+          tags: ['strategist'],
+          offeredInSetup: true,
+        },
+      ] as never);
+
+      const res = await request(app).get('/api/agents');
+
+      expect(res.status).toBe(200);
+      expect(res.body.agents[0]).toMatchObject({
+        displayName: 'Simple LLM Strategist',
+        offeredInSetup: true,
+      });
+    });
+
+    it('offers exactly the supported built-in strategist styles in game setup', async () => {
+      vi.spyOn(agentRegistry, 'getAll').mockReturnValue([
+        new SimpleStrategist(),
+        new SimpleStrategistBriefed(),
+        new SimpleStrategistStaffed(),
+        new SimpleStrategistLearned(),
+      ] as never);
+
+      const res = await request(app).get('/api/agents');
+
+      expect(res.status).toBe(200);
+      expect(res.body.agents.filter((agent: { offeredInSetup: boolean }) => agent.offeredInSetup)
+        .map((agent: { name: string }) => agent.name))
+        .toEqual(['simple-strategist', 'simple-strategist-staffed']);
     });
 
     it('defaults tags to an empty array when an agent omits them', async () => {

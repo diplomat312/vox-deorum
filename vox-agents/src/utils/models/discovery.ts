@@ -51,6 +51,7 @@ function model(provider: string, name: string): DiscoveredModel {
   const recommendedOptions = applyModelRules(provider, name);
   return {
     id: `${provider}/${name}`,
+    provider,
     name,
     ...(recommendedOptions === undefined ? {} : { recommendedOptions }),
   };

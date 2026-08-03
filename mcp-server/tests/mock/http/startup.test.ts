@@ -160,6 +160,90 @@ describe('HTTP startup lifecycle', () => {
     }
   });
 
+  it('lets a Vox Agents connection started during initialization complete after readiness', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'mcp-http-vox-agent-startup-'));
+    const shutdownFile = join(directory, 'shutdown-url.txt');
+    process.env.MCP_SHUTDOWN_URL_FILE = shutdownFile;
+    vi.resetModules();
+
+    const { config } = await import('../../../src/utils/config.js');
+    config.transport.host = '127.0.0.1';
+    config.transport.port = 0;
+    const { MCPServer } = await import('../../../src/server.js');
+    const deferred = createDeferred();
+    vi.spyOn(MCPServer.prototype, 'initialize').mockImplementation(() => deferred.promise);
+    vi.spyOn(MCPServer.prototype, 'close').mockResolvedValue();
+    const { startHttpServer } = await import('../../../src/http.js');
+    const { config: agentsConfig } = await import('../../../../vox-agents/src/utils/config.js');
+    const originalTransport = { ...agentsConfig.mcpServer.transport };
+
+    const startPromise = startHttpServer(false);
+    let client: import('../../../../vox-agents/src/utils/models/mcp-client.js').MCPClient | undefined;
+    let singletonClient: import('../../../../vox-agents/src/utils/models/mcp-client.js').MCPClient | undefined;
+
+    try {
+      const shutdownUrl = await readPublishedShutdownUrl(shutdownFile);
+      agentsConfig.mcpServer.transport = {
+        type: 'http',
+        endpoint: shutdownUrl.replace('/shutdown', '/mcp'),
+      };
+      const { MCPClient, mcpClient } = await import('../../../../vox-agents/src/utils/models/mcp-client.js');
+      singletonClient = mcpClient;
+      client = new MCPClient();
+      const internals = client as unknown as {
+        connectionPool: { dispatch: (...args: never[]) => unknown };
+        dispatcher: { dispatch: (...args: never[]) => unknown };
+        transport: { _fetch: (url: URL, init: RequestInit) => Promise<Response> };
+      };
+      const poolDispatch = vi.spyOn(
+        internals.connectionPool,
+        'dispatch',
+      );
+      const retryDispatch = vi.spyOn(internals.dispatcher, 'dispatch');
+      const postResponse = await internals.transport._fetch(new URL(agentsConfig.mcpServer.transport.endpoint!), {
+        method: 'POST',
+        body: JSON.stringify({ jsonrpc: '2.0', method: 'initialize', id: 1 }),
+      });
+      await postResponse.body?.cancel();
+      expect(postResponse.status).toBe(503);
+      expect(poolDispatch).toHaveBeenCalledOnce();
+      expect(retryDispatch).not.toHaveBeenCalled();
+
+      poolDispatch.mockClear();
+      const connection = client.connect();
+      let connectionState = 'pending';
+      void connection.then(
+        () => { connectionState = 'fulfilled'; },
+        () => { connectionState = 'rejected'; },
+      );
+
+      await vi.waitFor(() => expect(poolDispatch).toHaveBeenCalled());
+      await setTimeout(300);
+      expect(connectionState).toBe('pending');
+
+      deferred.resolve();
+      await startPromise;
+      await connection;
+      expect(client.connected).toBe(true);
+    } finally {
+      try {
+        agentsConfig.mcpServer.transport = originalTransport;
+        if (client) {
+          await client.disconnect();
+          await (client as unknown as { connectionPool?: { close: () => Promise<void> } }).connectionPool?.close();
+        }
+        await (singletonClient as unknown as { connectionPool?: { close: () => Promise<void> } } | undefined)
+          ?.connectionPool?.close();
+      } finally {
+        try {
+          await stopStartedServer(deferred, startPromise);
+        } finally {
+          await rm(directory, { recursive: true, force: true });
+        }
+      }
+    }
+  });
+
   it('closes keep-alive connections when shutdown arrives during initialization', async () => {
     const directory = await mkdtemp(join(tmpdir(), 'mcp-http-shutdown-'));
     const shutdownFile = join(directory, 'shutdown-url.txt');

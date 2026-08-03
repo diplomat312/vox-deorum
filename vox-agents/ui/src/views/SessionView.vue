@@ -1,10 +1,12 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, computed } from 'vue';
+import { ref, onMounted, onUnmounted, watch } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 import Message from 'primevue/message';
 import { useConfirm } from 'primevue/useconfirm';
 import { useToast } from 'primevue/usetoast';
 import ActiveSessionPanel from '../components/session/ActiveSessionPanel.vue';
 import ConfigDialog from '../components/session/ConfigDialog.vue';
+import GameSetupWizard from '../components/session/GameSetupWizard.vue';
 import GameModeDialog from '../components/session/GameModeDialog.vue';
 import PlayersSummaryDialog from '../components/session/PlayersSummaryDialog.vue';
 import SessionConfigList from '../components/session/SessionConfigList.vue';
@@ -20,22 +22,36 @@ import {
   resumeSession,
   startSessionPolling
 } from '../stores/session';
-import type { ConfigDialogMode, StrategistSessionConfig } from '../utils/types';
+import type {
+  AgentInfo,
+  ConfigDialogMode,
+  SessionConfigEntry,
+  StrategistSessionConfig,
+  VoxAgentsConfig
+} from '../utils/types';
 
 /**
  * Session Control view for managing game sessions and configurations
  */
 
 // Local state
-const configs = ref<StrategistSessionConfig[]>([]);
+const configs = ref<SessionConfigEntry[]>([]);
+const agents = ref<AgentInfo[]>([]);
+const globalLlms = ref<VoxAgentsConfig['llms']>({});
 const loadingConfigs = ref(false);
 const configError = ref<string | null>(null);
+const loadingAgents = ref(false);
+const agentCatalogueWarning = ref<string | null>(null);
+const highlightedConfigName = ref<string | null>(null);
 
 // Dialog state
 const showConfigDialog = ref(false);
 const configDialogMode = ref<ConfigDialogMode>('add');
 const editingConfig = ref<StrategistSessionConfig | undefined>(undefined);
 const editingConfigName = ref('');
+
+// Game setup wizard state
+const showGameSetupWizard = ref(false);
 
 // Game mode dialog state
 const showGameModeDialog = ref(false);
@@ -51,6 +67,8 @@ let releaseSessionPolling: (() => void) | null = null;
 // Services
 const confirm = useConfirm();
 const toast = useToast();
+const route = useRoute();
+const router = useRouter();
 
 /**
  * Load configurations from server
@@ -62,10 +80,27 @@ async function loadConfigs() {
   try {
     const response = await api.getSessionConfigs();
     configs.value = response.configs;
+    globalLlms.value = response.globalLlms;
   } catch (caught) {
     configError.value = caught instanceof Error ? caught.message : 'Failed to load configurations';
   } finally {
     loadingConfigs.value = false;
+  }
+}
+
+/** Load the agent catalogue once for session summaries and the game setup wizard. */
+async function loadAgents() {
+  loadingAgents.value = true;
+  agentCatalogueWarning.value = null;
+  try {
+    const response = await api.getAgents();
+    agents.value = response.agents;
+  } catch (caught) {
+    agentCatalogueWarning.value = caught instanceof Error
+      ? `Game setup styles are unavailable: ${caught.message}`
+      : 'Game setup styles are unavailable. Reload the page before creating a guided game.';
+  } finally {
+    loadingAgents.value = false;
   }
 }
 
@@ -86,13 +121,7 @@ async function startSessionWithGameMode(mode: GameMode) {
   startingSession.value = true;
 
   try {
-    // Create a copy of the config with the selected game mode
-    const configWithMode = {
-      ...pendingConfig.value,
-      gameMode: mode
-    };
-
-    await api.startSession(configWithMode);
+    await api.startSession(pendingConfig.value, mode);
     await fetchFreshSessionStatus();
     toast.add({
       severity: 'success',
@@ -176,8 +205,7 @@ function confirmStopSession() {
  * Delete a configuration with confirmation
  */
 function confirmDeleteConfig(config: StrategistSessionConfig) {
-  // Use config name to derive filename
-  const configFilename = `${config.name}.json`;
+  const configFilename = configs.value.find(entry => entry.name === config.name)?.filename ?? `${config.name}.json`;
 
   confirm.require({
     message: `Are you sure you want to delete configuration "${config.name}"?`,
@@ -277,11 +305,35 @@ async function handleConfigSave(name: string, config: StrategistSessionConfig) {
   }
 }
 
+/** Refresh saved configurations and continue to launch when the wizard requested it. */
+async function handleWizardSaved(config: StrategistSessionConfig, play: boolean): Promise<void> {
+  await loadConfigs();
+  highlightedConfigName.value = config.name;
+  if (play) showGameModeSelection(config);
+}
+
+/** Return from guided setup to the advanced editor when setup styles are unavailable. */
+function openAdvancedFromGameSetup(): void {
+  showGameSetupWizard.value = false;
+  openConfigDialog('add');
+}
+
+/** Open game setup from the model wizard handoff once, then remove the trigger query. */
+function openRequestedGameSetup(): void {
+  if (route.query.setup !== 'game') return;
+  showGameSetupWizard.value = true;
+  const query = { ...route.query };
+  delete query.setup;
+  void router.replace({ query });
+}
+
+watch(() => route.query.setup, openRequestedGameSetup, { immediate: true });
+
 
 // Initialize on mount
 onMounted(async () => {
   releaseSessionPolling = startSessionPolling();
-  await loadConfigs();
+  await Promise.all([loadConfigs(), loadAgents()]);
 });
 
 // Cleanup on unmount
@@ -313,17 +365,36 @@ onUnmounted(() => {
       {{ sessionError }}
     </Message>
 
+    <Message v-if="agentCatalogueWarning" severity="warn" :closable="false" class="mb-4">
+      {{ agentCatalogueWarning }}
+    </Message>
+
     <SessionConfigList
       :configs="configs"
+      :agents="agents"
+      :global-llms="globalLlms"
       :loading="loadingConfigs"
       :error="configError"
       :session-active="!!sessionStatus?.active"
       :starting-session="startingSession"
-      @create="openConfigDialog('add')"
+      :highlighted-config-name="highlightedConfigName"
+      @create="showGameSetupWizard = true"
+      @advanced-create="openConfigDialog('add')"
       @start="showGameModeSelection"
       @edit="openConfigDialog('edit', $event)"
       @duplicate="duplicateConfig"
       @delete="confirmDeleteConfig"
+    />
+
+    <GameSetupWizard
+      v-model:visible="showGameSetupWizard"
+      :agents="agents"
+      :agents-loading="loadingAgents"
+      :agents-error="agentCatalogueWarning"
+      :global-llms="globalLlms"
+      @saved="handleWizardSaved"
+      @retry-agents="loadAgents"
+      @advanced="openAdvancedFromGameSetup"
     />
 
     <!-- Configuration Dialog -->

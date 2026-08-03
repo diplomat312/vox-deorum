@@ -9,13 +9,14 @@ import { Router, Request, Response } from 'express';
 import { sessionRegistry } from '../../infra/session-registry.js';
 import { runStrategistLoop } from '../../strategist/loop.js';
 import { resolveMaxRepetitions } from '../../strategist/repetition.js';
-import { SessionConfig, StrategistSessionConfig } from '../../types/config.js';
+import { Model, SessionConfig, StrategistSessionConfig } from '../../types/config.js';
 import { createLogger } from '../../utils/logger.js';
-import { getConfigsDir } from '../../utils/config.js';
+import { config, getConfigsDir } from '../../utils/config.js';
 import fs from 'fs/promises';
 import path from 'path';
 import type {
   SessionStatusResponse,
+  SessionConfigEntry,
   SessionConfigsResponse,
   StartSessionRequest,
   StartSessionResponse,
@@ -33,6 +34,45 @@ import { mcpClient } from '../../utils/models/mcp-client.js';
 import { unwrapMcpResponse } from '../../utils/models/mcp-response.js';
 
 const logger = createLogger('webui:session-routes');
+const warnedLegacyGameModeFiles = new Set<string>();
+
+type SessionConfigPayload = SessionConfig & Partial<Pick<SessionConfigEntry, 'filename' | 'updatedAt'>>;
+
+/** Returns global LLM definitions stripped to the fields needed for model display and resolution. */
+function sanitizedGlobalLlms(): Record<string, Model | string> {
+  return Object.fromEntries(Object.entries(config.llms).map(([name, definition]) => [
+    name,
+    typeof definition === 'string'
+      ? definition
+      : { provider: definition.provider, name: definition.name },
+  ]));
+}
+
+/** Reports whether a request value is one of the supported launch modes. */
+function isGameMode(value: unknown): value is NonNullable<StartSessionRequest['gameMode']> {
+  return value === 'start' || value === 'load' || value === 'wait';
+}
+
+/** Removes launch-time and API-only fields before a config is run or persisted. */
+function cleanSessionConfig(config: SessionConfigPayload): SessionConfig {
+  const {
+    gameMode: _gameMode,
+    filename: _filename,
+    updatedAt: _updatedAt,
+    ...cleaned
+  } = config;
+  return cleaned;
+}
+
+/** Removes a legacy saved launch mode and warns once for each affected configuration file. */
+function cleanListedSessionConfig(config: StrategistSessionConfig, filename: string): StrategistSessionConfig {
+  const { gameMode: _gameMode, ...cleaned } = config;
+  if (Object.hasOwn(config, 'gameMode') && !warnedLegacyGameModeFiles.has(filename)) {
+    warnedLegacyGameModeFiles.add(filename);
+    logger.warn(`Ignoring legacy gameMode in ${filename}; choose the launch mode when starting the session.`);
+  }
+  return cleaned;
+}
 
 /**
  * Create session management routes.
@@ -72,7 +112,7 @@ export function createSessionRoutes(): Router {
       try {
         await fs.access(configDir);
       } catch {
-        const response: SessionConfigsResponse = { configs: [] };
+        const response: SessionConfigsResponse = { configs: [], globalLlms: sanitizedGlobalLlms() };
         res.json(response);
         return;
       }
@@ -86,19 +126,27 @@ export function createSessionRoutes(): Router {
           .map(async filename => {
             try {
               const filePath = path.join(configDir, filename);
-              const content = await fs.readFile(filePath, 'utf-8');
+              const [content, stats] = await Promise.all([fs.readFile(filePath, 'utf-8'), fs.stat(filePath)]);
               const config = JSON.parse(content) as SessionConfig;
-              // Add filename (without .json) as the config name
-              config.name = filename.replace('.json', '');
-              return config;
+              if (config.type !== undefined && config.type !== 'strategist') return undefined;
+              if (!('llmPlayers' in config) || typeof config.llmPlayers !== 'object') return undefined;
+              const strategistConfig = cleanListedSessionConfig(config as StrategistSessionConfig, filename);
+              return {
+                ...strategistConfig,
+                name: filename.replace('.json', ''),
+                type: 'strategist',
+                filename,
+                updatedAt: stats.mtime.toISOString(),
+              } satisfies SessionConfigEntry;
             } catch (error) {
               logger.warn(`Failed to parse config file ${filename}:`, error);
               return undefined;
             }
           })
-      )).filter((c): c is SessionConfig => c !== undefined);
+      )).filter((entry): entry is SessionConfigEntry => entry !== undefined)
+        .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
 
-      const response: SessionConfigsResponse = { configs };
+      const response: SessionConfigsResponse = { configs, globalLlms: sanitizedGlobalLlms() };
       res.json(response);
     } catch (error) {
       logger.error('Failed to list configs', { error });
@@ -112,10 +160,16 @@ export function createSessionRoutes(): Router {
    * Start a new game session with the specified configuration.
    */
   router.post('/start', async (req: Request<object, object, StartSessionRequest>, res: Response<StartSessionResponse | ErrorResponse>) => {
-    const { config } = req.body;
+    const { config: requestedConfig, gameMode = 'start' } = req.body;
 
-    if (!config) {
+    if (!requestedConfig) {
       const errorResponse: ErrorResponse = { error: 'Config object required' };
+      res.status(400).json(errorResponse);
+      return;
+    }
+
+    if (!isGameMode(gameMode)) {
+      const errorResponse: ErrorResponse = { error: 'gameMode must be start, load, or wait' };
       res.status(400).json(errorResponse);
       return;
     }
@@ -128,6 +182,8 @@ export function createSessionRoutes(): Router {
     }
 
     try {
+      const config = { ...cleanSessionConfig(requestedConfig as SessionConfigPayload), gameMode };
+
       // Ensure config has the required type
       if (!config.type) {
         config.type = 'strategist';
@@ -186,6 +242,8 @@ export function createSessionRoutes(): Router {
       return;
     }
 
+    const configToSave = cleanSessionConfig(config as SessionConfigPayload);
+
     // Sanitize filename - remove path characters and ensure .json extension
     const sanitizedName = filename.replace(/[/\\:*?"<>|]/g, '_');
     const finalFilename = sanitizedName.endsWith('.json') ? sanitizedName : `${sanitizedName}.json`;
@@ -200,13 +258,13 @@ export function createSessionRoutes(): Router {
       }
 
       // Validate the config has minimum required fields
-      if (!config.type) {
-        config.type = 'strategist';
+      if (!configToSave.type) {
+        configToSave.type = 'strategist';
       }
 
       // Additional validation for strategist configs
-      if (config.type === 'strategist') {
-        const strategistConfig = config as StrategistSessionConfig;
+      if (configToSave.type === 'strategist') {
+        const strategistConfig = configToSave as StrategistSessionConfig;
         if (!strategistConfig.llmPlayers || typeof strategistConfig.llmPlayers !== 'object') {
           const errorResponse: ErrorResponse = { error: 'Strategist config must include llmPlayers configuration' };
           res.status(400).json(errorResponse);
@@ -215,11 +273,11 @@ export function createSessionRoutes(): Router {
       }
 
       // Set the config name based on filename (without .json)
-      config.name = finalFilename.replace('.json', '');
+      configToSave.name = finalFilename.replace('.json', '');
 
       // Write the config file
       const configPath = path.join(configDir, finalFilename);
-      await fs.writeFile(configPath, JSON.stringify(config, null, 2), 'utf-8');
+      await fs.writeFile(configPath, JSON.stringify(configToSave, null, 2), 'utf-8');
 
       logger.info(`Saved configuration to ${finalFilename}`);
 

@@ -23,7 +23,8 @@ import { SessionStatus, PlayerAssignment } from "../types/api.js";
 import { SeatingStateManager } from "../utils/game/seating/state.js";
 import type { ObservedSeating, SeatingClaim } from "../utils/game/seating/types.js";
 import { getMetadata, setMetadata } from "../utils/game/metadata.js";
-import { ensureModelsResolved } from '../utils/models/resolution.js';
+import { agentRegistry } from '../infra/agent-registry.js';
+import { ensureModelsResolved, selectModelReference } from '../utils/models/resolution.js';
 import {
   autoPlayTurnLimit,
   buildNonFreshTransitionLua,
@@ -116,9 +117,11 @@ export class StrategistSession extends VoxSession<StrategistSessionConfig> {
       this.onStateChange('starting');
       sessionRegistry.register(this);
 
-      // Verify model references before launching Civ V, so a typo fails before a live turn.
+      // Verify the same model reference each strategist will resolve at runtime before launching Civ V.
       for (const playerConfig of Object.values(this.config.llmPlayers)) {
-        await ensureModelsResolved(Object.values(playerConfig.llms ?? {}), playerConfig.llms);
+        const strategist = agentRegistry.get(playerConfig.strategist);
+        const reference = selectModelReference(playerConfig.strategist, strategist?.modelSize, playerConfig.llms);
+        await ensureModelsResolved([reference], playerConfig.llms);
       }
 
       const luaScript = this.config.gameMode === 'start' ? 'StartGame.lua' :

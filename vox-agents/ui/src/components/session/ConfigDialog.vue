@@ -1,13 +1,13 @@
 <script setup lang="ts">
 /**
  * Configuration dialog component for creating and editing session configurations.
- * Provides a form interface for setting up session parameters including game mode,
- * auto-play settings, and player LLM assignments.
+ * Provides a form interface for setting up auto-play settings and player LLM assignments.
  */
 
 import { ref, computed, watch, onMounted } from 'vue';
 import Dialog from 'primevue/dialog';
 import InputText from 'primevue/inputtext';
+import Textarea from 'primevue/textarea';
 import Checkbox from 'primevue/checkbox';
 import Button from 'primevue/button';
 import Card from 'primevue/card';
@@ -47,7 +47,7 @@ const localConfig = ref<StrategistSessionConfig>({
   name: '',
   type: 'strategist',
   autoPlay: false,
-  gameMode: 'wait',
+  description: '',
   llmPlayers: {}
 });
 
@@ -72,6 +72,15 @@ const isEditMode = computed(() => props.mode === 'edit');
 
 const hasRunControlError = computed(() => validateRunControls(runControlState.value) !== null);
 
+/** Drop list-endpoint metadata so it cannot be written into a configuration file. */
+function plainConfig(config: StrategistSessionConfig): StrategistSessionConfig {
+  const { filename: _filename, updatedAt: _updatedAt, ...sessionConfig } = config as StrategistSessionConfig & {
+    filename?: string;
+    updatedAt?: string;
+  };
+  return sessionConfig;
+}
+
 // Watch for prop changes to update local state
 watch(() => props.visible, (newVal) => {
   if (newVal) {
@@ -81,7 +90,7 @@ watch(() => props.visible, (newVal) => {
         name: `session-${new Date().toISOString().slice(0, 10)}`,
         type: 'strategist',
         autoPlay: false,
-        gameMode: 'wait',
+        description: '',
         llmPlayers: {
           1: {
             strategist: strategistOptions.value[0]?.value || '',
@@ -94,7 +103,7 @@ watch(() => props.visible, (newVal) => {
       runControlState.value = hydrateRunControls(localConfig.value);
     } else if (props.config) {
       // Copy config for editing
-      localConfig.value = JSON.parse(JSON.stringify(props.config));
+      localConfig.value = JSON.parse(JSON.stringify(plainConfig(props.config)));
       hydratePacing(
         localConfig.value,
         interruptionOptions.value.map(option => option.value),
@@ -117,7 +126,7 @@ function updatePlayers(players: StrategistSessionConfig['llmPlayers']): void {
 function handleSave() {
   if (hasRunControlError.value) return;
 
-  const configToSave: StrategistSessionConfig = JSON.parse(JSON.stringify(localConfig.value));
+  const configToSave: StrategistSessionConfig = plainConfig(JSON.parse(JSON.stringify(localConfig.value)));
   cleanDefaultPacing(configToSave);
   applyRunControls(configToSave, runControlState.value);
 
@@ -217,6 +226,17 @@ onMounted(() => {
                 v-model="localName"
                 :disabled="isEditMode"
                 placeholder="Enter configuration name"
+                class="config-name-input"
+              />
+            </div>
+            <div class="field-row">
+              <label for="configDescription">Description:</label>
+              <Textarea
+                id="configDescription"
+                v-model="localConfig.description"
+                placeholder="Describe what this game is for"
+                autoResize
+                rows="2"
                 class="config-name-input"
               />
             </div>

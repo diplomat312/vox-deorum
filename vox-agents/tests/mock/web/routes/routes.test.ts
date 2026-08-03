@@ -37,7 +37,12 @@ vi.mock('../../../../src/utils/config.js', async (importOriginal) => {
 const routeMocks = vi.hoisted(() => ({
   discoverModels: vi.fn(),
   ensureCodexProxy: vi.fn(),
+  logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn(), debug: vi.fn() },
   proxy: { state: 'stopped', loginPrompt: undefined as unknown },
+}));
+
+vi.mock('../../../../src/utils/logger.js', () => ({
+  createLogger: vi.fn(() => routeMocks.logger),
 }));
 
 vi.mock('../../../../src/utils/models/discovery.js', () => {
@@ -62,7 +67,7 @@ vi.mock('../../../../src/utils/models/mcp-client.js', async () => {
 
 import configRoutes from '../../../../src/web/routes/config.js';
 import sessionRoutes from '../../../../src/web/routes/session.js';
-import { loadVoxConfig, refreshConfig, getConfigsDir } from '../../../../src/utils/config.js';
+import { config, loadVoxConfig, refreshConfig, getConfigsDir } from '../../../../src/utils/config.js';
 import { runStrategistLoop } from '../../../../src/strategist/loop.js';
 import { sessionRegistry } from '../../../../src/infra/session-registry.js';
 import { installMockMcpClient, structuredResult } from '../../../helpers/mock-mcp-client.js';
@@ -77,6 +82,7 @@ function makeApp() {
 }
 
 const app = makeApp();
+const originalLlms = structuredClone(config.llms);
 
 beforeEach(() => {
   vi.restoreAllMocks();
@@ -86,6 +92,10 @@ beforeEach(() => {
   (loadVoxConfig as Mock).mockReturnValue({ llms: { default: defaultConfig.llms.default } });
   routeMocks.discoverModels.mockReset();
   routeMocks.ensureCodexProxy.mockReset().mockResolvedValue(undefined);
+  routeMocks.logger.error.mockReset();
+  routeMocks.logger.warn.mockReset();
+  routeMocks.logger.info.mockReset();
+  routeMocks.logger.debug.mockReset();
   routeMocks.proxy.state = 'stopped';
   routeMocks.proxy.loginPrompt = undefined;
   for (const key of [
@@ -96,6 +106,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllEnvs();
+  config.llms = structuredClone(originalLlms);
 });
 
 describe('config routes', () => {
@@ -278,6 +289,91 @@ describe('config routes', () => {
       expect(res.status).toBe(400);
       expect(res.body.kind).toBe('unsupported');
       expect(routeMocks.discoverModels).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('GET /api/config/models', () => {
+    it('skips unchanged built-in model definitions without their credentials', async () => {
+      config.llms = structuredClone(defaultConfig.llms);
+      routeMocks.discoverModels.mockResolvedValue([]);
+
+      const res = await request(app).get('/api/config/models');
+
+      expect(res.status).toBe(200);
+      expect(routeMocks.discoverModels).not.toHaveBeenCalled();
+      expect(res.body.failures).toEqual([]);
+    });
+
+    it.each(['codex', 'claude-code', 'aws'])('discovers a user-added no-key %s provider', async (provider) => {
+      config.llms = {
+        ...structuredClone(defaultConfig.llms),
+        [`${provider}/custom`]: { provider, name: 'custom' },
+      };
+      routeMocks.discoverModels.mockResolvedValue([
+        { id: `${provider}/custom`, provider, name: 'custom' },
+      ]);
+
+      const res = await request(app).get('/api/config/models');
+
+      expect(res.status).toBe(200);
+      expect(routeMocks.discoverModels).toHaveBeenCalledTimes(1);
+      expect(routeMocks.discoverModels).toHaveBeenCalledWith(provider, {});
+    });
+
+    it('discovers a provider named by a provider-qualified global alias', async () => {
+      config.llms = { default: 'codex/gpt-main' };
+      routeMocks.discoverModels.mockResolvedValue([
+        { id: 'codex/gpt-main', provider: 'codex', name: 'gpt-main' },
+      ]);
+
+      const res = await request(app).get('/api/config/models');
+
+      expect(res.status).toBe(200);
+      expect(routeMocks.discoverModels).toHaveBeenCalledWith('codex', {});
+      expect(res.body.models).toEqual([{ id: 'codex/gpt-main', provider: 'codex', name: 'gpt-main' }]);
+    });
+
+    it('merges configured provider catalogs and retains failures from other providers', async () => {
+      config.llms = {
+        default: 'openai/gpt-main',
+        'openai/gpt-main': { provider: 'openai', name: 'gpt-main' },
+        'openrouter/backup': { provider: 'openrouter', name: 'backup' },
+      };
+      vi.stubEnv('OPENAI_API_KEY', 'configured-key');
+      routeMocks.discoverModels.mockImplementation(async (provider) => {
+        if (provider === 'openai') {
+          return [{ id: 'openai/gpt-main', provider: 'openai', name: 'gpt-main' }];
+        }
+        throw new Error('catalog unavailable');
+      });
+
+      const res = await request(app).get('/api/config/models');
+
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({
+        defaultModel: { id: 'openai/gpt-main', provider: 'openai', name: 'gpt-main' },
+        models: [{ id: 'openai/gpt-main', provider: 'openai', name: 'gpt-main' }],
+        failures: ['openrouter: catalog unavailable'],
+      });
+      expect(routeMocks.discoverModels).toHaveBeenCalledWith('openai', {});
+      expect(routeMocks.discoverModels).toHaveBeenCalledWith('openrouter', {});
+    });
+
+    it('falls back to literal non-embedding definitions when every catalog lookup fails', async () => {
+      config.llms = {
+        default: 'openai/gpt-main',
+        'openai/gpt-main': { provider: 'openai', name: 'gpt-main' },
+        'openai/embedder': { provider: 'openai', name: 'embedder', options: { embeddingSize: 1536 } },
+        mainAlias: 'openai/gpt-main',
+      };
+      routeMocks.discoverModels.mockRejectedValue(new Error('offline'));
+
+      const res = await request(app).get('/api/config/models');
+
+      expect(res.status).toBe(200);
+      expect(res.body.models).toEqual([{ id: 'openai/gpt-main', provider: 'openai', name: 'gpt-main' }]);
+      expect(res.body.failures).toEqual(['openai: offline']);
+      expect(res.body.models).not.toContainEqual(expect.objectContaining({ name: 'embedder' }));
     });
   });
 
@@ -479,30 +575,74 @@ describe('session routes', () => {
 
   describe('GET /api/session/configs', () => {
     it('returns [] when the configs directory does not exist', async () => {
+      config.llms = structuredClone(defaultConfig.llms);
       vi.spyOn(fs, 'access').mockRejectedValue(new Error('ENOENT'));
       const res = await request(app).get('/api/session/configs');
       expect(res.status).toBe(200);
-      expect(res.body).toEqual({ configs: [] });
+      expect(res.body.configs).toEqual([]);
+      expect(res.body.globalLlms).toEqual({
+        default: 'openai-compatible/gpt-oss-120b',
+        'openai-compatible/gpt-oss-120b': { provider: 'openai-compatible', name: 'gpt-oss-120b' },
+        'openai-compatible/embedder': { provider: 'openai-compatible', name: 'embedder' },
+        embedder: 'openai-compatible/embedder',
+      });
     });
 
-    it('lists parseable .json configs, skipping seating files and bad JSON', async () => {
+    it('lists parseable configs newest first with file metadata and sanitized global models', async () => {
+      config.llms = {
+        default: 'openai/gpt-main',
+        'openai/gpt-main': { provider: 'openai', name: 'gpt-main', options: { apiKey: 'secret' } as never },
+      };
       vi.spyOn(fs, 'access').mockResolvedValue(undefined as never);
       vi.spyOn(fs, 'readdir').mockResolvedValue([
-        'good.json',
+        'older.json',
+        'newer.json',
+        'narrator.json',
         'game.seating.json',
         'broken.json',
         'notes.txt',
       ] as never);
       vi.spyOn(fs, 'readFile').mockImplementation(async (p: never) => {
-        if (String(p).includes('good.json')) return JSON.stringify({ type: 'strategist' });
+        if (String(p).includes('older.json')) return JSON.stringify({ type: 'strategist', llmPlayers: {} });
+        if (String(p).includes('newer.json')) return JSON.stringify({ type: 'strategist', llmPlayers: {} });
+        if (String(p).includes('narrator.json')) return JSON.stringify({ type: 'narrator', llmPlayers: {} });
         return '{ not valid json';
       });
+      vi.spyOn(fs, 'stat').mockImplementation(async (p: never) => ({
+        mtime: new Date(String(p).includes('newer.json') ? '2026-02-02T00:00:00.000Z' : '2026-02-01T00:00:00.000Z'),
+      }) as never);
 
       const res = await request(app).get('/api/session/configs');
 
       expect(res.status).toBe(200);
-      expect(res.body.configs).toHaveLength(1);
-      expect(res.body.configs[0].name).toBe('good');
+      expect(res.body.configs).toMatchObject([
+        { name: 'newer', filename: 'newer.json', updatedAt: '2026-02-02T00:00:00.000Z' },
+        { name: 'older', filename: 'older.json', updatedAt: '2026-02-01T00:00:00.000Z' },
+      ]);
+      expect(res.body.globalLlms).toEqual({
+        default: 'openai/gpt-main',
+        'openai/gpt-main': { provider: 'openai', name: 'gpt-main' },
+      });
+    });
+
+    it('strips a legacy launch mode and warns only once for its file', async () => {
+      vi.spyOn(fs, 'access').mockResolvedValue(undefined as never);
+      vi.spyOn(fs, 'readdir').mockResolvedValue(['legacy.json'] as never);
+      vi.spyOn(fs, 'readFile').mockResolvedValue(JSON.stringify({
+        type: 'strategist',
+        gameMode: 'wait',
+        llmPlayers: {},
+      }) as never);
+      vi.spyOn(fs, 'stat').mockResolvedValue({ mtime: new Date('2026-08-01T00:00:00.000Z') } as never);
+
+      const first = await request(app).get('/api/session/configs');
+      const second = await request(app).get('/api/session/configs');
+
+      expect(first.status).toBe(200);
+      expect(first.body.configs[0]).not.toHaveProperty('gameMode');
+      expect(second.body.configs[0]).not.toHaveProperty('gameMode');
+      expect(routeMocks.logger.warn).toHaveBeenCalledTimes(1);
+      expect(routeMocks.logger.warn).toHaveBeenCalledWith(expect.stringContaining('legacy.json'));
     });
   });
 
@@ -531,13 +671,41 @@ describe('session routes', () => {
       expect(res.body.error).toMatch(/llmPlayers/i);
     });
 
-    it('starts the strategist loop for a valid config', async () => {
+    it('rejects an invalid launch mode before starting the strategist loop', async () => {
+      (runStrategistLoop as Mock).mockClear();
+      vi.spyOn(sessionRegistry, 'hasActiveSession').mockReturnValue(false);
+
+      const res = await request(app)
+        .post('/api/session/start')
+        .send({ config: { llmPlayers: { 0: {} } }, gameMode: 'resume' });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toMatch(/gameMode/i);
+      expect(runStrategistLoop).not.toHaveBeenCalled();
+    });
+
+    it('starts the strategist loop with the request game mode, not a stored mode', async () => {
+      (runStrategistLoop as Mock).mockClear();
       vi.spyOn(sessionRegistry, 'hasActiveSession').mockReturnValue(false);
       const res = await request(app)
         .post('/api/session/start')
-        .send({ config: { llmPlayers: { 0: {} } } });
+        .send({
+          config: {
+            llmPlayers: { 0: {} },
+            gameMode: 'wait',
+            filename: 'listed.json',
+            updatedAt: '2026-08-01T12:00:00.000Z',
+          },
+          gameMode: 'load',
+        });
       expect(res.status).toBe(200);
       expect(runStrategistLoop).toHaveBeenCalledTimes(1);
+      expect(runStrategistLoop).toHaveBeenCalledWith(expect.objectContaining({
+        config: expect.objectContaining({ gameMode: 'load' }),
+      }));
+      const runtimeConfig = (runStrategistLoop as Mock).mock.calls[0]![0].config;
+      expect(runtimeConfig).not.toHaveProperty('filename');
+      expect(runtimeConfig).not.toHaveProperty('updatedAt');
     });
   });
 
@@ -554,18 +722,34 @@ describe('session routes', () => {
       expect(res.body.error).toMatch(/config/i);
     });
 
-    it('saves a sanitized .json file and echoes the final name', async () => {
+    it('saves a sanitized .json file without launch or list metadata', async () => {
       vi.spyOn(fs, 'access').mockResolvedValue(undefined as never);
       const writeFile = vi.spyOn(fs, 'writeFile').mockResolvedValue(undefined as never);
 
       const res = await request(app)
         .post('/api/session/save')
-        .send({ filename: 'my/cfg', config: { type: 'strategist', llmPlayers: { 0: {} } } });
+        .send({
+          filename: 'my/cfg',
+          config: {
+            type: 'strategist',
+            gameMode: 'wait',
+            filename: 'old.json',
+            updatedAt: '2026-08-01T12:00:00.000Z',
+            llmPlayers: { 0: {} },
+          },
+        });
 
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
       expect(res.body.filename).toBe('my_cfg.json');
-      expect(writeFile).toHaveBeenCalled();
+      expect(writeFile).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.not.stringContaining('"gameMode"'),
+        'utf-8',
+      );
+      const savedConfig = JSON.parse(String(writeFile.mock.calls[0]![1]));
+      expect(savedConfig).not.toHaveProperty('filename');
+      expect(savedConfig).not.toHaveProperty('updatedAt');
     });
   });
 

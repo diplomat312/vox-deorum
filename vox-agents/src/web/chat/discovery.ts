@@ -39,9 +39,11 @@ export function createAgentDiscoveryRoutes(): Router {
       try {
         const agents: AgentInfo[] = agentRegistry.getAll().map((agent) => ({
           name: agent.name,
+          displayName: agent.displayName,
           description: agent.description,
           tags: agent.tags || [],
           diplomacyOnly: agent.diplomacyOnly,
+          offeredInSetup: agent.offeredInSetup,
         }));
         res.json({ agents });
       } catch (error) {

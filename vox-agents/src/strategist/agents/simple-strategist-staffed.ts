@@ -29,6 +29,9 @@ export class SimpleStrategistStaffed extends SimpleStrategistBase {
 
   readonly displayName = "Staffed LLM Strategist";
 
+  /** Offer this staffed strategist style in the game setup wizard. */
+  public offeredInSetup = true;
+
   /**
    * Human-readable description of what this agent does
    */

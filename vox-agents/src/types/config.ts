@@ -153,14 +153,17 @@ export interface SessionConfig {
   /** Configuration name (typically derived from filename) */
   name: string;
 
+  /** Optional player-facing explanation of what this configuration is for. */
+  description?: string;
+
   /** Session type identifier */
   type: SessionType;
 
   /** Whether to automatically continue playing when it's the AI's turn */
   autoPlay: boolean;
 
-  /** How to start the game session */
-  gameMode: 'start' | 'load' | 'wait';
+  /** Launch-time game mode. This is supplied for each run and is not persisted. */
+  gameMode?: 'start' | 'load' | 'wait';
 
   /**
    * Number of games to play in sequence (optional).

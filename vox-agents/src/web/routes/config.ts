@@ -9,11 +9,13 @@ import { Router, Request, Response } from 'express';
 import fs from 'fs/promises';
 import path from 'path';
 import dotenv from 'dotenv';
+import { isDeepStrictEqual } from 'node:util';
 import { createLogger } from '../../utils/logger.js';
-import { loadVoxConfig, refreshConfig } from '../../utils/config.js';
+import { config, loadVoxConfig, refreshConfig } from '../../utils/config.js';
 import { defaultConfig } from '../../utils/config/defaults.js';
 import { computeConfigDiff } from '../../utils/config/diff.js';
 import { discoverModels, DiscoveryError } from '../../utils/models/discovery.js';
+import { getModelConfig } from '../../utils/models/models.js';
 import { recommendTierModels } from '../../utils/models/rules.js';
 import { codexProxyManager, ensureCodexProxy } from '../../utils/models/providers/codex-proxy.js';
 import { providerCredentials } from '../../types/constants.js';
@@ -22,11 +24,13 @@ import type {
   CodexLoginResponse,
   CodexStatusResponse,
   ConfigCheckResponse,
+  ConfiguredModelsResponse,
   ConfigResponse,
   DiscoverModelsRequest,
   DiscoverModelsResponse,
   DiscoveryErrorResponse,
   ErrorResponse,
+  Model,
   VoxAgentsConfig,
 } from '../../types/index.js';
 
@@ -44,6 +48,45 @@ function hasConfiguredCredential(): boolean {
   return Object.values(providerCredentials).some(({ required }) =>
     required.some((key) => Boolean(process.env[key]?.trim()))
   );
+}
+
+/** Reports whether an effective LLM entry is unchanged from the shipped default registry. */
+function isUnchangedDefaultLlm(name: string, definition: Model | string): boolean {
+  const defaultDefinition = defaultConfig.llms[name];
+  return defaultDefinition !== undefined && isDeepStrictEqual(definition, defaultDefinition);
+}
+
+/** Returns providers with complete credentials or a user-configured model definition. */
+function configuredProviders(): string[] {
+  const credentialProviders = Object.entries(providerCredentials)
+    .filter(([, credentials]) => credentials.required.length > 0
+      && credentials.required.every((key) => Boolean(process.env[key]?.trim())))
+    .map(([provider]) => provider);
+  const configuredModelProviders = Object.entries(config.llms)
+    .flatMap(([name, definition]) => {
+      if (isUnchangedDefaultLlm(name, definition)) return [];
+      if (typeof definition !== 'string') return [definition.provider];
+      const separator = definition.indexOf('/');
+      return separator > 0 ? [definition.slice(0, separator)] : [];
+    });
+  return [...new Set([...credentialProviders, ...configuredModelProviders])];
+}
+
+/** Converts a saved model definition into a response-safe discovered-model record. */
+function configuredModel(definition: Model): NonNullable<ConfiguredModelsResponse['defaultModel']> {
+  return {
+    id: `${definition.provider}/${definition.name}`,
+    provider: definition.provider,
+    name: definition.name,
+  };
+}
+
+/** Returns literal, non-embedding global model definitions when every catalog lookup fails. */
+function fallbackModels(): ConfiguredModelsResponse['models'] {
+  return Object.values(config.llms).flatMap((definition) => {
+    if (typeof definition === 'string' || definition.options?.embeddingSize !== undefined) return [];
+    return [configuredModel(definition)];
+  });
 }
 
 /** Validates the narrow JSON shape accepted by the model-discovery route. */
@@ -159,6 +202,41 @@ router.post('/models', async (
     logger.error('Error discovering models', error);
     res.status(502).json({ error: 'Could not discover models', kind: 'network' });
   }
+});
+
+/**
+ * GET /api/config/models
+ * Discover models from every configured provider without exposing credentials.
+ */
+router.get('/models', async (req: Request, res: Response<ConfiguredModelsResponse | ErrorResponse>) => {
+  if (!isAllowedDashboardRequest(req.hostname, req.get('origin'))) {
+    res.status(403).json({ error: 'This browser origin is not allowed to discover models.' });
+    return;
+  }
+
+  const providers = configuredProviders();
+  const results = await Promise.all(providers.map(async (provider) => {
+    try {
+      return { provider, models: await discoverModels(provider, {}) };
+    } catch (error) {
+      return { provider, error: errorMessage(error) };
+    }
+  }));
+  const successful = results.filter((result): result is { provider: string; models: ConfiguredModelsResponse['models'] } => 'models' in result);
+  const failures = results.flatMap((result) => 'error' in result ? [`${result.provider}: ${result.error}`] : []);
+
+  let defaultModel: ConfiguredModelsResponse['defaultModel'];
+  try {
+    defaultModel = configuredModel(getModelConfig('default'));
+  } catch (error) {
+    logger.warn(`Could not resolve the configured default model: ${errorMessage(error)}`);
+  }
+
+  res.json({
+    ...(defaultModel === undefined ? {} : { defaultModel }),
+    models: successful.length === 0 ? fallbackModels() : successful.flatMap((result) => result.models),
+    failures,
+  });
 });
 
 /** Starts Codex authentication without holding the dashboard request open. */

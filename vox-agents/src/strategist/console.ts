@@ -18,6 +18,7 @@ import { setTimeout } from 'node:timers/promises';
 import { parseArgs } from 'node:util';
 import * as readline from 'node:readline';
 import * as path from 'node:path';
+import * as fs from 'node:fs';
 import { startWebServer } from "../web/server.js";
 import { processManager } from "../infra/process-manager.js";
 import { mergeRandomSeeds, parseSeedArgument, validateRandomSeeds, validateRandomSeedsList } from "../utils/game/random-seeds.js";
@@ -80,7 +81,6 @@ const defaultConfig: StrategistSessionConfig = {
     1: { strategist: "simple-strategist" }
   },
   autoPlay: false,
-  gameMode: 'start',
   repetition: 1
 };
 
@@ -88,11 +88,7 @@ const defaultConfig: StrategistSessionConfig = {
 const cmdOverrides: Partial<StrategistSessionConfig> = {};
 let seedOverride: RandomSeedsConfig | undefined;
 
-if (isLoadMode) {
-  cmdOverrides.gameMode = 'load';
-} else if (isWaitMode) {
-  cmdOverrides.gameMode = 'wait';
-}
+const gameMode = isLoadMode ? 'load' : isWaitMode ? 'wait' : 'start';
 
 if (values.players || values.strategist) {
   const strategist = (values.strategist as string) || "simple-strategist";
@@ -143,12 +139,31 @@ if (values.seed !== undefined) {
   }
 }
 
-// Load configuration from file with command line overrides
-const sessionConfig: StrategistSessionConfig = loadConfigFromFile(
-  path.join(getConfigsDir(), configFile),
+/** Reports whether a saved configuration still carries the removed launch-time field. */
+function hasLegacyGameMode(configPath: string): boolean {
+  try {
+    const parsed: unknown = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+    return typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)
+      && Object.hasOwn(parsed, 'gameMode');
+  } catch {
+    return false;
+  }
+}
+
+const configPath = path.join(getConfigsDir(), configFile);
+if (hasLegacyGameMode(configPath)) {
+  logger.warn(`Ignoring legacy gameMode in ${configFile}; use --load or --wait to choose the launch mode.`);
+}
+
+// Load configuration from file with command line overrides, then set the CLI-only launch mode.
+const sessionConfig: StrategistSessionConfig = {
+  ...loadConfigFromFile(
+    configPath,
   defaultConfig,
   cmdOverrides
-);
+  ),
+  gameMode,
+};
 
 try {
   // Validate config-file seeds before applying CLI overrides. This catches bad

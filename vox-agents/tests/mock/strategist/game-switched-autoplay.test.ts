@@ -14,6 +14,11 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { installMockMcpClient, textResult, structuredResult } from '../../helpers/mock-mcp-client.js';
 
+const modelMocks = vi.hoisted(() => ({
+  ensureModelsResolved: vi.fn(async () => undefined),
+  selectModelReference: vi.fn(),
+}));
+
 vi.mock('../../../src/utils/models/mcp-client.js', async () => {
   const helper = await import('../../helpers/mock-mcp-client.js');
   return helper.mockMcpClientModule();
@@ -25,13 +30,22 @@ vi.mock('../../../src/infra/vox-civilization.js', () => ({
     killGame: vi.fn(async () => {}),
     restoreRandomSeeds: vi.fn(async () => {}),
     updateSkipAnimations: vi.fn(async () => {}),
+    setAiObserver: vi.fn(),
+    startGame: vi.fn(async () => false),
   },
+}));
+
+vi.mock('../../../src/utils/models/resolution.js', () => ({
+  ensureModelsResolved: modelMocks.ensureModelsResolved,
+  selectModelReference: modelMocks.selectModelReference,
 }));
 
 // Make the session's settle waits instant (post-player-creation and strategic-view delays).
 vi.mock('node:timers/promises', () => ({ setTimeout: () => Promise.resolve() }));
 
 import { StrategistSession } from '../../../src/strategist/strategist-session.js';
+import { agentRegistry } from '../../../src/infra/agent-registry.js';
+import { voxCivilization } from '../../../src/infra/vox-civilization.js';
 import {
   autoPlayTurnLimit,
   buildStrategicViewLua,
@@ -40,6 +54,8 @@ import {
 let mcp: ReturnType<typeof installMockMcpClient>;
 beforeEach(() => {
   mcp = installMockMcpClient();
+  modelMocks.ensureModelsResolved.mockClear();
+  modelMocks.selectModelReference.mockReset();
   mcp.respondWith('set-metadata', textResult(true));
   mcp.respondWith('pause-game', textResult(true));
   mcp.respondWith('lua-executor', structuredResult({ Success: true }));
@@ -121,6 +137,28 @@ describe('handleGameSwitched autoplay reconciliation', () => {
 
     await gameSwitched(s, 215);
     expect(mcp.calls('lua-executor')).toHaveLength(before);
+  });
+});
+
+describe('model preflight', () => {
+  it('uses strategist metadata to preflight the selected reference, not every seat override', async () => {
+    const overrides = { default: 'openai/selected', 'unused-agent': 'openai/unused' };
+    modelMocks.selectModelReference.mockReturnValue('openai/selected');
+    vi.spyOn(agentRegistry, 'get').mockReturnValue({ modelSize: 'small' } as never);
+    vi.mocked(voxCivilization.startGame).mockResolvedValue(false);
+
+    const s = new StrategistSession({
+      name: 'preflight',
+      type: 'strategist',
+      autoPlay: false,
+      gameMode: 'start',
+      llmPlayers: { 0: { strategist: 'selected-strategist', llms: overrides } },
+    }, {} as never, null);
+
+    await expect(s.start()).rejects.toThrow('Failed to start Civilization V');
+
+    expect(modelMocks.selectModelReference).toHaveBeenCalledWith('selected-strategist', 'small', overrides);
+    expect(modelMocks.ensureModelsResolved).toHaveBeenCalledWith(['openai/selected'], overrides);
   });
 });
 

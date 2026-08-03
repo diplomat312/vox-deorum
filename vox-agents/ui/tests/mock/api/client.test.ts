@@ -99,12 +99,19 @@ describe('ApiClient REST methods', () => {
 
   it('POSTs startSession with a JSON body and content-type', async () => {
     const fetchFn = mockFetch(() => jsonResponse({}))
-    await api.startSession({ type: 'strategist' } as never)
+    await api.startSession({ type: 'strategist' } as never, 'start')
     const [url, options] = fetchFn.mock.calls[0]! as [string, any]
     expect(url).toBe('http://localhost:5555/api/session/start')
     expect(options.method).toBe('POST')
     expect(options.headers['Content-Type']).toBe('application/json')
-    expect(JSON.parse(options.body)).toEqual({ config: { type: 'strategist' } })
+    expect(JSON.parse(options.body)).toEqual({ config: { type: 'strategist' }, gameMode: 'start' })
+  })
+
+  it('GETs the configured-provider model catalogue', async () => {
+    const fetchFn = mockFetch(() => jsonResponse({ models: [], failures: [] }))
+
+    await expect(api.getConfigModels()).resolves.toEqual({ models: [], failures: [] })
+    expect(fetchFn).toHaveBeenCalledWith('http://localhost:5555/api/config/models', undefined)
   })
 
   it('DELETEs a session config with an encoded filename', async () => {

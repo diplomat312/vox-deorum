@@ -101,6 +101,8 @@ export interface ConfigResponse {
 export interface DiscoveredModel {
   /** Stable provider-qualified identifier. */
   id: string;
+  /** Provider that exposes this model. */
+  provider: string;
   /** Provider-native model name. */
   name: string;
   /** Configuration options inferred from established model rules. */
@@ -121,6 +123,16 @@ export interface DiscoverModelsResponse {
   provider: string;
   models: DiscoveredModel[];
   recommendedTiers?: { default?: string; small?: string };
+}
+
+/** Model catalog assembled from every provider configured for this installation. */
+export interface ConfiguredModelsResponse {
+  /** Resolved main model from the global `default` mapping, when available. */
+  defaultModel?: DiscoveredModel;
+  /** Models discovered from configured providers. */
+  models: DiscoveredModel[];
+  /** Provider discovery failures that did not prevent other catalogs from loading. */
+  failures: string[];
 }
 
 /** Typed error response from the provider model-discovery endpoint. */
@@ -216,12 +228,16 @@ export interface UploadResponse {
 export interface AgentInfo {
   /** Name of the agent */
   name: string;
+  /** Optional player-facing name for agent-selection controls. */
+  displayName?: string;
   /** Description of what the agent does */
   description: string;
   /** Tags for categorizing/filtering agents */
   tags: string[];
   /** When true, this agent only operates in diplomacy mode (no ordinary observer/telepathist chat). */
   diplomacyOnly?: boolean;
+  /** When true, the game setup wizard offers this agent as a strategist style. */
+  offeredInSetup?: boolean;
 }
 
 /**
@@ -434,7 +450,7 @@ export interface DealMessagesResponse {
 // Session Management API Response Types
 // ============================================================================
 
-import type { SessionConfig } from './config.js';
+import type { Model, SessionConfig, StrategistSessionConfig } from './config.js';
 
 /** Session state enumeration */
 export type SessionState = 'starting' | 'running' | 'stopping' | 'stopped' | 'recovering' | 'error';
@@ -498,9 +514,18 @@ export interface SessionStatusResponse {
 /**
  * GET /api/session/configs response
  */
+export interface SessionConfigEntry extends StrategistSessionConfig {
+  /** Exact configuration filename, including the .json extension. */
+  filename: string;
+  /** File modification time as an ISO 8601 timestamp. */
+  updatedAt: string;
+}
+
 export interface SessionConfigsResponse {
   /** Available session configurations */
-  configs: SessionConfig[];
+  configs: SessionConfigEntry[];
+  /** Global model aliases and definitions, with no credential-bearing fields. */
+  globalLlms: Record<string, Model | string>;
 }
 
 /**
@@ -509,6 +534,8 @@ export interface SessionConfigsResponse {
 export interface StartSessionRequest {
   /** Session configuration object */
   config: SessionConfig;
+  /** Launch-time mode, defaulting to a fresh game when omitted by an older client. */
+  gameMode?: 'start' | 'load' | 'wait';
 }
 
 /**

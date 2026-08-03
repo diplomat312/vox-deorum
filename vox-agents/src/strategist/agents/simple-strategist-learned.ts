@@ -27,6 +27,9 @@ const episodeRequestKey = "episode-request";
  * @class
  */
 export class SimpleStrategistLearned extends SimpleStrategistStaffed {
+  /** Keep the research-oriented learned strategist out of the guided game setup. */
+  public override offeredInSetup = false;
+
   /**
    * The name identifier for this agent
    */
