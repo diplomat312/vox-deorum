@@ -142,9 +142,12 @@
   max-height: calc(100vh - 2rem);
 }
 
-.setup-wizard-dialog .p-dialog-content {
+.setup-wizard-dialog .p-dialog-header {
   padding-right: 0;
   padding-bottom: 0;
+}
+
+.setup-wizard-dialog .p-dialog-content {
   color: var(--p-text-color);
 }
 
