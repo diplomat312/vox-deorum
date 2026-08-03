@@ -143,8 +143,8 @@
 }
 
 .setup-wizard-dialog .p-dialog-header {
-  padding-right: 0.6rem;
-  padding-bottom: 0.3rem;
+  padding-right: 0;
+  padding-bottom: 0;
 }
 
 .setup-wizard-dialog .p-dialog-content {
