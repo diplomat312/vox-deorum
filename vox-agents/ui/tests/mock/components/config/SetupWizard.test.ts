@@ -26,7 +26,7 @@ vi.mock('vue-router', () => ({ useRouter: () => ({ push }) }));
 const DialogStub = defineComponent({
   props: ['visible'],
   emits: ['update:visible', 'hide'],
-  template: '<div class="dialog-stub"><slot name="header" /><slot /><slot name="footer" /></div>',
+  template: '<div class="dialog-stub"><header class="dialog-header"><slot name="header" /></header><main class="dialog-content"><slot /></main><footer><slot name="footer" /></footer></div>',
 });
 
 const InputTextStub = defineComponent({
@@ -108,6 +108,13 @@ describe('SetupWizard', () => {
 
   afterEach(() => {
     vi.useRealTimers();
+  });
+
+  it('renders setup progress in the dialog header', () => {
+    const wrapper = mountWizard();
+
+    expect(wrapper.get('.dialog-header .setup-wizard-progress').text()).toContain('1. Connection');
+    expect(wrapper.find('.dialog-content .setup-wizard-progress').exists()).toBe(false);
   });
 
   it('requires a door and service before progressing', async () => {

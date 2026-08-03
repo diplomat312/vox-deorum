@@ -97,6 +97,18 @@ describe('SessionConfigList', () => {
       .toBe('Every 5 turns, and on important events');
   });
 
+  it('offers the setup wizard and direct configuration editor as the only toolbar actions', async () => {
+    const wrapper = mountList([makeConfig()]);
+    const buttons = wrapper.get('.p-toolbar').findAll('button');
+
+    expect(buttons.map(button => button.text())).toEqual(['Setup Wizard', 'New Configuration']);
+    await buttons[0]!.trigger('click');
+    await buttons[1]!.trigger('click');
+
+    expect(wrapper.emitted('create')).toHaveLength(1);
+    expect(wrapper.emitted('advancedCreate')).toHaveLength(1);
+  });
+
   it('expands the per-seat summary, shows the saved file shape, and runs metadata-free overflow actions', async () => {
     const config = makeConfig();
     const { filename: _filename, updatedAt: _updatedAt, ...plainConfig } = config;
@@ -105,7 +117,7 @@ describe('SessionConfigList', () => {
     await wrapper.get('button[data-icon="pi pi-chevron-right"]').trigger('click');
     expect(wrapper.text()).toContain('Seat');
     expect(wrapper.text()).toContain('1-2');
-    expect(wrapper.text()).toContain('Updated');
+    expect(wrapper.text()).not.toContain('Updated');
     expect(wrapper.get('[role="table"][aria-label="Seats in standard-game"]')).toBeTruthy();
 
     await wrapper.get('button[data-icon="pi pi-ellipsis-v"]').trigger('click');
@@ -181,7 +193,9 @@ describe('SessionConfigList', () => {
   it('emits create from the empty state', async () => {
     const wrapper = mountList([]);
 
-    await wrapper.get('button[data-icon="pi pi-plus"]').trigger('click');
+    const emptyStateButton = wrapper.findAll('button').find(button => button.text() === 'Set up a game');
+    if (!emptyStateButton) throw new Error('Missing empty-state setup action.');
+    await emptyStateButton.trigger('click');
 
     expect(wrapper.emitted('create')).toHaveLength(1);
   });

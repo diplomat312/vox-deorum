@@ -52,7 +52,7 @@ files.
 
 ## The wizard — four steps
 
-Entered from: the model wizard's completion redirect (`/session?setup=game`), the list's **New Configuration**
+Entered from: the model wizard's completion redirect (`/session?setup=game`), the list's **Setup Wizard**
 button, and the empty-state call to action.
 
 ### Step 1 — Your role
@@ -286,7 +286,7 @@ of the rows and lives in the expander.
 
 ```
 ┌ Game Configurations ────────────────────────────────────────────────────────────────┐
-│ [ 🔍 Search…        ]  Sort: Recent ▾     [ + New Configuration ]  [ Advanced ▾ ]   │
+│ [ 🔍 Search…        ]  Sort: Recent ▾     [ Setup Wizard ]  [ + New Configuration ] │
 ├────────────────────────────┬────────┬──────┬──────────┬─────────────┬──────┬────────┤
 │ Name                       │ Mode   │ Civs │ Map      │ Agentic AI  │ Pace │ Actions│
 ├────────────────────────────┼────────┼──────┼──────────┼─────────────┼──────┼────────┤

@@ -436,12 +436,14 @@ onUnmounted(invalidatePendingWork);
     :dismissableMask="!saving"
     @hide="closeWizard"
   >
-    <div class="setup-wizard-progress" aria-label="Setup progress">
-      <span :aria-current="currentStep === 'path' ? 'step' : undefined">1. Connection</span>
-      <span :aria-current="currentStep === 'credentials' ? 'step' : undefined">2. Account</span>
-      <span :aria-current="currentStep === 'models' ? 'step' : undefined">3. AI</span>
-      <span :aria-current="currentStep === 'confirm' ? 'step' : undefined">4. Confirm</span>
-    </div>
+    <template #header>
+      <div class="setup-wizard-progress" aria-label="Setup progress">
+        <span :aria-current="currentStep === 'path' ? 'step' : undefined">1. Connection</span>
+        <span :aria-current="currentStep === 'credentials' ? 'step' : undefined">2. Account</span>
+        <span :aria-current="currentStep === 'models' ? 'step' : undefined">3. AI</span>
+        <span :aria-current="currentStep === 'confirm' ? 'step' : undefined">4. Confirm</span>
+      </div>
+    </template>
 
     <section v-if="currentStep === 'path'" class="setup-wizard-step">
       <div class="setup-wizard-heading">

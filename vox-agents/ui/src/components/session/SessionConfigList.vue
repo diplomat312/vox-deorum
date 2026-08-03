@@ -39,7 +39,6 @@ const sortOrder = ref<'recent' | 'name'>('recent');
 const expandedConfigNames = ref(new Set<string>());
 const actionConfig = ref<SessionConfigEntry | null>(null);
 const actionMenu = ref<{ toggle(event: Event): void } | null>(null);
-const advancedMenu = ref<{ toggle(event: Event): void } | null>(null);
 const visibleFileConfigName = ref<string | null>(null);
 let searchTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -98,11 +97,6 @@ function openActionMenu(event: Event, config: SessionConfigEntry): void {
   actionMenu.value?.toggle(event);
 }
 
-/** Open the advanced-editor menu without adding a second permanent toolbar button. */
-function openAdvancedMenu(event: Event): void {
-  advancedMenu.value?.toggle(event);
-}
-
 /** Run one overflow-menu action when a configuration is selected. */
 function runAction(action: 'edit' | 'duplicate' | 'view' | 'delete'): void {
   const config = actionConfig.value;
@@ -125,10 +119,6 @@ const actionItems = computed<MenuItem[]>(() => [
   { label: 'Delete', icon: 'pi pi-trash', command: () => runAction('delete') }
 ]);
 
-const advancedItems: MenuItem[] = [
-  { label: 'New advanced configuration', icon: 'pi pi-plus', command: () => emit('advancedCreate') }
-];
-
 /** Make role values written for generation readable in the session table. */
 function roleLabel(role: WizardRole): string {
   return role.charAt(0).toUpperCase() + role.slice(1);
@@ -138,17 +128,6 @@ function roleLabel(role: WizardRole): string {
 function modeLabel(summary: ReturnType<typeof describeConfig>, config: SessionConfigEntry): string {
   const role = roleLabel(summary.role);
   return typeof config.repetition === 'number' && config.repetition > 1 ? `${role} ×${config.repetition}` : role;
-}
-
-/** Render file modification time without implying the configuration was played then. */
-function updatedLabel(updatedAt: string): string {
-  const updated = new Date(updatedAt);
-  const elapsedMs = Date.now() - updated.getTime();
-  if (Number.isNaN(elapsedMs) || elapsedMs < 0) return `Updated ${updatedAt}`;
-  const elapsedDays = Math.floor(elapsedMs / 86_400_000);
-  if (elapsedDays === 0) return 'Updated today';
-  if (elapsedDays === 1) return 'Updated yesterday';
-  return `Updated ${elapsedDays} days ago`;
 }
 
 /** List configuration flags that affect a run without crowding the main table row. */
@@ -185,18 +164,17 @@ onUnmounted(() => {
       <template #end>
         <div class="flex gap-2">
           <Button
+            icon="pi pi-sparkles"
+            label="Setup Wizard"
+            text
+            @click="$emit('create')"
+          />
+          <Button
             icon="pi pi-plus"
             label="New Configuration"
             severity="success"
             size="small"
-            @click="$emit('create')"
-          />
-          <Button
-            icon="pi pi-angle-down"
-            label="Advanced"
-            severity="secondary"
-            size="small"
-            @click="openAdvancedMenu($event)"
+            @click="$emit('advancedCreate')"
           />
         </div>
       </template>
@@ -294,7 +272,7 @@ onUnmounted(() => {
               <div class="table-expander-content" role="cell" aria-colspan="8">
                 <p>{{ config.description || summary.sentence }}</p>
                 <SeatSummaryTable :seat-rows="summary.seatRows" :ariaLabel="`Seats in ${config.name}`" />
-                <p class="text-small text-muted">{{ [...configFlags(config), updatedLabel(config.updatedAt)].join(' · ') }}</p>
+                <p v-if="configFlags(config).length" class="text-small text-muted">{{ configFlags(config).join(' · ') }}</p>
                 <details v-if="visibleFileConfigName === config.name" class="table-config-file" open>
                   <summary>Configuration file</summary>
                   <pre>{{ configFile(config) }}</pre>
@@ -310,6 +288,5 @@ onUnmounted(() => {
       </div>
     </div>
     <Menu ref="actionMenu" :model="actionItems" popup />
-    <Menu ref="advancedMenu" :model="advancedItems" popup />
   </div>
 </template>

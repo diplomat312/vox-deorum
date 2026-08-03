@@ -14,14 +14,18 @@ const { api, confirm } = vi.hoisted(() => ({
 vi.mock('@/api/client', async importOriginal => ({ ...(await importOriginal<typeof import('@/api/client')>()), api }));
 vi.mock('primevue/useconfirm', () => ({ useConfirm: () => confirm }));
 
-const DialogStub = defineComponent({ props: ['visible'], emits: ['update:visible'], template: '<div><slot name="header" /><slot /><slot name="footer" /></div>' });
+const DialogStub = defineComponent({
+  props: ['visible'],
+  emits: ['update:visible'],
+  template: '<div><header class="dialog-header"><slot name="header" /></header><main class="dialog-content"><slot /></main><footer><slot name="footer" /></footer></div>',
+});
 const SelectStub = defineComponent({
   props: ['modelValue', 'options', 'optionLabel', 'optionValue', 'optionGroupLabel', 'optionGroupChildren'], emits: ['update:modelValue'],
   template: '<select :value="modelValue" @change="$emit(\'update:modelValue\', $event.target.value)"><template v-for="option in options" :key="option[optionValue] ?? option[optionGroupLabel]"><optgroup v-if="optionGroupChildren && option[optionGroupChildren]" :label="option[optionGroupLabel]"><option v-for="child in option[optionGroupChildren]" :key="child[optionValue]" :value="child[optionValue]">{{ child[optionLabel] }}</option></optgroup><option v-else :value="option[optionValue]">{{ option[optionLabel] }}</option></template></select>',
 });
 const SliderStub = defineComponent({
-  props: ['modelValue', 'min', 'max', 'step'], emits: ['update:modelValue'],
-  template: '<input type="range" :value="modelValue" :min="min" :max="max" :step="step" @input="$emit(\'update:modelValue\', Number($event.target.value))">',
+  props: ['modelValue', 'min', 'max', 'step', 'ariaLabelledby'], emits: ['update:modelValue'],
+  template: '<input type="range" :value="modelValue" :min="min" :max="max" :step="step" :aria-labelledby="ariaLabelledby" @input="$emit(\'update:modelValue\', Number($event.target.value))">',
 });
 
 const agents: SetupAgent[] = [
@@ -62,6 +66,10 @@ describe('GameSetupWizard', () => {
 
   it('uses the four steps and loads choice catalogues when minds opens', async () => {
     const wrapper = mountWizard();
+
+    expect(wrapper.get('.dialog-header .setup-wizard-progress').text()).toContain('1. Your role');
+    expect(wrapper.find('.dialog-content .setup-wizard-progress').exists()).toBe(false);
+    expect(wrapper.text()).not.toContain('Set up a game');
     await click(wrapper, 'Next');
     await click(wrapper, 'Next');
     await flushPromises();
@@ -146,16 +154,22 @@ describe('GameSetupWizard', () => {
     expect(wrapper.findAll('.p-btn').find(button => button.text() === 'Next')?.attributes('disabled')).toBeUndefined();
   });
 
-  it('exposes an even Slider and protects the direct seat', async () => {
+  it('uses sliders for civilization counts and protects the direct seat', async () => {
     const wrapper = mountWizard();
     await wrapper.find('input[value="direct"]').setValue(true);
     await click(wrapper, 'Next');
     const civs = wrapper.find('#wizard-civs');
+    const agentic = wrapper.find('#wizard-agentic');
     expect(civs.attributes('min')).toBe('2');
     expect(civs.attributes('max')).toBe('12');
     expect(civs.attributes('step')).toBe('2');
+    expect(agentic.attributes('min')).toBe('1');
+    expect(agentic.attributes('max')).toBe('7');
+    expect(agentic.attributes('step')).toBe('1');
+    expect(civs.attributes('aria-labelledby')).toBe('wizard-civs-label');
+    expect(agentic.attributes('aria-labelledby')).toBe('wizard-agentic-label');
     await civs.setValue('8');
-    await wrapper.find('#wizard-agentic').setValue('7');
+    await agentic.setValue('7');
     await click(wrapper, 'Next');
     await flushPromises();
     await click(wrapper, 'Next');
@@ -217,7 +231,7 @@ describe('GameSetupWizard', () => {
 
     expect(wrapper.text()).toContain('View file');
     expect(wrapper.text()).toContain('"llmPlayers"');
-    expect(wrapper.text()).toContain('Every 5 turns, and on important events');
+    expect(wrapper.text()).not.toContain('3 × Simple LLM Strategist. Every 5 turns, and on important events.');
   });
 
   it('uses the server-canonical filename when emitting the saved configuration', async () => {

@@ -305,15 +305,13 @@ watch(offeredStrategists, options => {
 <template>
   <Dialog :visible="visible" modal class="setup-wizard-dialog" @update:visible="close">
     <template #header>
-      <span>Set up a game</span>
+      <div class="setup-wizard-progress" aria-label="Game setup progress">
+        <span :aria-current="step === 1 ? 'step' : undefined">1. Your role</span>
+        <span :aria-current="step === 2 ? 'step' : undefined">2. The world</span>
+        <span :aria-current="step === 3 ? 'step' : undefined">3. The minds</span>
+        <span :aria-current="step === 4 ? 'step' : undefined">4. Confirm</span>
+      </div>
     </template>
-
-    <div class="setup-wizard-progress">
-      <span :aria-current="step === 1 ? 'step' : undefined">1. Your role</span>
-      <span :aria-current="step === 2 ? 'step' : undefined">2. The world</span>
-      <span :aria-current="step === 3 ? 'step' : undefined">3. The minds</span>
-      <span :aria-current="step === 4 ? 'step' : undefined">4. Confirm</span>
-    </div>
 
     <section v-if="step === 1" class="setup-wizard-step">
       <div class="setup-wizard-heading"><h2>How do you want to play?</h2><p>Vox Deorum can run rivals, the whole game, or your strategic decisions.</p></div>
@@ -321,18 +319,22 @@ watch(offeredStrategists, options => {
         <legend>Choose your role</legend>
         <label v-for="choice in roleOptions" :key="choice.value" class="setup-wizard-choice">
           <input v-model="role" name="wizard-role" type="radio" :value="choice.value">
-          <span><strong>{{ choice.label }}</strong><small>{{ choice.description }}</small><small v-if="choice.badge">{{ choice.badge }}</small></span>
+          <span>
+            <strong>{{ choice.label }}</strong>
+            <small>{{ choice.description }}</small>
+            <small v-if="choice.badge">{{ choice.badge }}</small>
+          </span>
         </label>
       </fieldset>
     </section>
 
     <section v-else-if="step === 2" class="setup-wizard-step">
       <div class="setup-wizard-heading"><h2>Who is in the game?</h2><p>{{ civCount }} civilizations on a {{ summary?.mapSize ?? 'selected' }} map.</p></div>
-      <div class="setup-wizard-field"><label for="wizard-civs">Civilizations in the game: {{ civCount }}</label><Slider id="wizard-civs" v-model="civCount" :min="2" :max="12" :step="2" /></div>
-      <div class="setup-wizard-field"><label for="wizard-agentic">How many are agentic AI?</label><InputNumber id="wizard-agentic" v-model="agenticCount" :min="1" :max="maxAgenticCount" :min-fraction-digits="0" :max-fraction-digits="0" /></div>
+      <div class="setup-wizard-field"><label id="wizard-civs-label">Civilizations in the game: {{ civCount }}</label><Slider id="wizard-civs" v-model="civCount" :min="2" :max="12" :step="2" ariaLabelledby="wizard-civs-label" /></div>
+      <div class="setup-wizard-field"><label id="wizard-agentic-label">Agentic AI civilizations: {{ agenticCount }}</label><Slider id="wizard-agentic" v-model="agenticCount" :min="1" :max="maxAgenticCount" :step="1" ariaLabelledby="wizard-agentic-label" /></div>
       <p v-if="numericValidationError" class="setup-wizard-error">{{ numericValidationError }}</p>
       <div v-if="summary" class="setup-wizard-summary">
-        <p>{{ summary.sentence }}</p>
+        <p class="mb-3">{{ summary.sentence }}</p>
         <SeatSummaryTable :seat-rows="summary.seatRows" ariaLabel="Game seats" />
       </div>
     </section>
@@ -382,7 +384,7 @@ watch(offeredStrategists, options => {
       <div class="setup-wizard-field"><label for="wizard-name">Name</label><InputText id="wizard-name" v-model="name" /></div>
       <div class="setup-wizard-field"><label for="wizard-description">Description</label><InputText id="wizard-description" v-model="description" /></div>
       <div v-if="summary" class="setup-wizard-summary">
-        <p>{{ summary.sentence }}</p><p>{{ summary.styleLabel }}. {{ summary.paceTooltip }}.</p>
+        <p class="mb-3">{{ summary.sentence }}</p>
         <SeatSummaryTable :seat-rows="summary.seatRows" ariaLabel="Game seats" />
         <details class="table-config-file"><summary>View file</summary><pre>{{ generatedConfigJson }}</pre></details>
       </div>
