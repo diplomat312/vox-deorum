@@ -123,16 +123,29 @@ jobs:
           git add version.json release.txt README.md scripts/bootstrap.cmd scripts/installer.iss
           git commit -m "Release ${{ steps.version.outputs.VERSION }}"
 
-      - name: Install Inno Setup
+      - name: Ensure Inno Setup is available
+        shell: pwsh
         run: |
-          Write-Host "Downloading Inno Setup 6..."
-          $installerPath = "$env:TEMP\innosetup.exe"
-          Invoke-WebRequest -Uri "https://jrsoftware.org/download.php/is.exe" -OutFile $installerPath
+          $compilerPaths = @(
+            "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+            "$env:ProgramFiles\Inno Setup 6\ISCC.exe"
+          )
+          $compilerPath = $compilerPaths | Where-Object { Test-Path $_ } | Select-Object -First 1
 
-          Write-Host "Installing Inno Setup 6 silently..."
-          Start-Process -FilePath $installerPath -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/SP-" -Wait
+          if (-not $compilerPath) {
+            Write-Host "Installing Inno Setup 6 with Chocolatey..."
+            choco install innosetup --version=6.7.1 --yes --no-progress
+            if ($LASTEXITCODE -ne 0) {
+              throw "Chocolatey failed to install Inno Setup 6 with exit code $LASTEXITCODE."
+            }
+            $compilerPath = $compilerPaths | Where-Object { Test-Path $_ } | Select-Object -First 1
+          }
 
-          Write-Host "Inno Setup installed successfully"
+          if (-not $compilerPath) {
+            throw "Inno Setup 6 compiler was not found after installation."
+          }
+
+          Write-Host "Using Inno Setup compiler at: $compilerPath"
 
       - name: Build installer
         shell: cmd
