@@ -183,17 +183,17 @@ echo        Shutdown URL: %VOX_SHUTDOWN_URL%
 
 call :is_pid_running "%BRIDGE_PID%"
 if errorlevel 1 (
-    echo [ERROR] Bridge Service (PID: %BRIDGE_PID%) exited before startup completed.
+    echo [ERROR] Bridge Service ^(PID: %BRIDGE_PID%^) exited before startup completed.
     goto :startup_failed
 )
 call :is_pid_running "%MCP_PID%"
 if errorlevel 1 (
-    echo [ERROR] MCP Server (PID: %MCP_PID%) exited before startup completed.
+    echo [ERROR] MCP Server ^(PID: %MCP_PID%^) exited before startup completed.
     goto :startup_failed
 )
 call :is_pid_running "%VOX_PID%"
 if errorlevel 1 (
-    echo [ERROR] Vox Agents (PID: %VOX_PID%) exited before startup completed.
+    echo [ERROR] Vox Agents ^(PID: %VOX_PID%^) exited before startup completed.
     goto :startup_failed
 )
 
@@ -268,7 +268,7 @@ if exist "%WAIT_FILE%" (
 )
 call :is_pid_running "%WAIT_PID%"
 if errorlevel 1 (
-    echo [ERROR] %WAIT_NAME% (PID: %WAIT_PID%) exited before publishing its shutdown URL.
+    echo [ERROR] %WAIT_NAME% ^(PID: %WAIT_PID%^) exited before publishing its shutdown URL.
     exit /b 2
 )
 if !WAIT_COUNT! GEQ !WAIT_LIMIT! (
@@ -343,8 +343,10 @@ set /a EXIT_COUNT+=1
 goto :wait_for_exit_loop
 
 :is_pid_running
-tasklist /FI "PID eq %~1" /NH 2>nul | findstr /R /C:"^[ ]*%~1 " >nul
-exit /b %errorlevel%
+for /f "tokens=2 delims=," %%a in ('tasklist /FI "PID eq %~1" /FO CSV /NH 2^>nul') do (
+    if "%%~a"=="%~1" exit /b 0
+)
+exit /b 1
 
 :cleanup_temp_files
 del "%BRIDGE_PID_FILE%" 2>nul

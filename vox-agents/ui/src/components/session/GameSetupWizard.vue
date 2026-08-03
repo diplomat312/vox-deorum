@@ -316,7 +316,6 @@ watch(offeredStrategists, options => {
     <section v-if="step === 1" class="setup-wizard-step">
       <div class="setup-wizard-heading"><h2>How do you want to play?</h2><p>Vox Deorum can run rivals, the whole game, or your strategic decisions.</p></div>
       <fieldset class="setup-wizard-choices border-none p-0 m-0">
-        <legend>Choose your role</legend>
         <label v-for="choice in roleOptions" :key="choice.value" class="setup-wizard-choice">
           <input v-model="role" name="wizard-role" type="radio" :value="choice.value">
           <span>
