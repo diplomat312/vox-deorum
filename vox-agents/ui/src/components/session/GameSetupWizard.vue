@@ -319,9 +319,11 @@ watch(offeredStrategists, options => {
         <label v-for="choice in roleOptions" :key="choice.value" class="setup-wizard-choice">
           <input v-model="role" name="wizard-role" type="radio" :value="choice.value">
           <span>
-            <strong>{{ choice.label }}</strong>
+            <span class="setup-wizard-choice-title">
+              <strong>{{ choice.label }}</strong>
+              <small v-if="choice.badge">{{ choice.badge }}</small>
+            </span>
             <small>{{ choice.description }}</small>
-            <small v-if="choice.badge">{{ choice.badge }}</small>
           </span>
         </label>
       </fieldset>
@@ -362,7 +364,7 @@ watch(offeredStrategists, options => {
         <div class="setup-wizard-field"><label for="wizard-pace">Re-think every turns</label><InputNumber id="wizard-pace" v-model="everyTurns" :min="1" :min-fraction-digits="0" :max-fraction-digits="0" /></div>
         <div class="setup-wizard-field"><label for="wizard-interruption">React to</label><Select id="wizard-interruption" v-model="interruption" :options="interruptions" option-label="label" option-value="value" /></div>
         <div class="setup-wizard-field"><label for="wizard-model">Model</label><Select id="wizard-model" v-model="modelId" :options="modelOptions" option-group-label="label" option-group-children="items" option-label="label" option-value="value" /></div>
-        <div v-if="summary" class="setup-wizard-summary"><p>{{ agenticCount }} agentic AI civilizations deciding every {{ everyTurns }} turns is roughly {{ decisionEstimate }} decisions across a full game, plus conversation replies.</p></div>
+        <div v-if="summary" class="setup-wizard-summary"><p>{{ agenticCount }} agentic civilizations deciding every {{ everyTurns }} turns is ~{{ decisionEstimate }} decisions across a full game.</p></div>
         <p v-if="numericValidationError" class="setup-wizard-error">{{ numericValidationError }}</p>
         <ProgressSpinner v-if="loadingChoices" class="setup-wizard-spinner" />
         <div v-if="pacingError" class="setup-wizard-error-panel" role="status">

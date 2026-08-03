@@ -143,6 +143,8 @@
 }
 
 .setup-wizard-dialog .p-dialog-content {
+  padding-right: 0;
+  padding-bottom: 0;
   color: var(--p-text-color);
 }
 
@@ -250,6 +252,12 @@
 
 .setup-wizard-choice > label {
   cursor: pointer;
+}
+
+.setup-wizard-choice-title {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
 }
 
 .setup-wizard-choice input,
