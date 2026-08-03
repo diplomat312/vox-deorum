@@ -6,8 +6,8 @@ import type { AgentInfo, SessionConfigEntry, VoxAgentsConfig } from '@/utils/typ
 import { ButtonStub, TagStub, ToolbarStub } from '../../../helpers/stubs.js';
 
 const agents: AgentInfo[] = [
-  { name: 'simple-strategist', displayName: 'Simple LLM Strategist', description: 'A direct strategist', tags: ['strategist'] },
-  { name: 'none-strategist', displayName: 'Vox Populi AI', description: 'The Civ V AI', tags: ['strategist'] },
+  { name: 'simple-strategist', displayName: 'Simple LLM Strategist', description: 'A direct strategist', tags: ['strategist'], modelSize: 'default' },
+  { name: 'none-strategist', displayName: 'Vox Populi AI', description: 'The Civ V AI', tags: ['strategist'], modelSize: 'default' },
 ];
 
 const globalLlms: VoxAgentsConfig['llms'] = {
@@ -106,6 +106,7 @@ describe('SessionConfigList', () => {
     expect(wrapper.text()).toContain('Seat');
     expect(wrapper.text()).toContain('1-2');
     expect(wrapper.text()).toContain('Updated');
+    expect(wrapper.get('[role="table"][aria-label="Seats in standard-game"]')).toBeTruthy();
 
     await wrapper.get('button[data-icon="pi pi-ellipsis-v"]').trigger('click');
     await wrapper.get('.action-menu button').trigger('click');

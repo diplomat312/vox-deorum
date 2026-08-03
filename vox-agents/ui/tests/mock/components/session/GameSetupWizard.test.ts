@@ -6,11 +6,13 @@ import type { LLMConfig } from '@/utils/types';
 import type { SetupAgent } from '@/utils/session-summary';
 import { ButtonStub, InputNumberStub, InputTextStub } from '../../../helpers/stubs.js';
 
-const { api } = vi.hoisted(() => ({
+const { api, confirm } = vi.hoisted(() => ({
   api: { getPacingInterruptions: vi.fn(), getConfigModels: vi.fn(), saveSessionConfig: vi.fn() },
+  confirm: { require: vi.fn() },
 }));
 
 vi.mock('@/api/client', async importOriginal => ({ ...(await importOriginal<typeof import('@/api/client')>()), api }));
+vi.mock('primevue/useconfirm', () => ({ useConfirm: () => confirm }));
 
 const DialogStub = defineComponent({ props: ['visible'], emits: ['update:visible'], template: '<div><slot name="header" /><slot /><slot name="footer" /></div>' });
 const SelectStub = defineComponent({
@@ -23,9 +25,9 @@ const SliderStub = defineComponent({
 });
 
 const agents: SetupAgent[] = [
-  { name: 'simple-strategist', displayName: 'Simple LLM Strategist', description: '', tags: ['strategist'], offeredInSetup: true },
-  { name: 'hidden-strategist', displayName: 'Hidden', description: '', tags: ['strategist'], offeredInSetup: false },
-  { name: 'simple-strategist-staffed', displayName: 'Staffed LLM Strategist', description: '', tags: ['strategist'], offeredInSetup: true },
+  { name: 'simple-strategist', displayName: 'Simple LLM Strategist', description: '', tags: ['strategist'], modelSize: 'default', offeredInSetup: true },
+  { name: 'hidden-strategist', displayName: 'Hidden', description: '', tags: ['strategist'], modelSize: 'default', offeredInSetup: false },
+  { name: 'simple-strategist-staffed', displayName: 'Staffed LLM Strategist', description: '', tags: ['strategist'], modelSize: 'small', offeredInSetup: true },
 ];
 
 /** Mounts the visible setup wizard with shared test stubs. */
@@ -37,6 +39,7 @@ function mountWizard() {
       agentsLoading: false,
       agentsError: null,
       globalLlms: {} as Record<string, LLMConfig | string>,
+      existingConfigNames: [],
     },
     global: { stubs: { Dialog: DialogStub, Button: ButtonStub, InputNumber: InputNumberStub, InputText: InputTextStub, Select: SelectStub, Slider: SliderStub } },
   });
@@ -124,6 +127,7 @@ describe('GameSetupWizard', () => {
         agentsLoading: false,
         agentsError: 'The agent catalogue is unavailable.',
         globalLlms: {} as Record<string, LLMConfig | string>,
+        existingConfigNames: [],
       },
       global: { stubs: { Dialog: DialogStub, Button: ButtonStub, InputNumber: InputNumberStub, InputText: InputTextStub, Select: SelectStub, Slider: SliderStub } },
     });
@@ -151,7 +155,7 @@ describe('GameSetupWizard', () => {
     expect(civs.attributes('max')).toBe('12');
     expect(civs.attributes('step')).toBe('2');
     await civs.setValue('8');
-    await wrapper.find('#wizard-agentic').setValue('8');
+    await wrapper.find('#wizard-agentic').setValue('7');
     await click(wrapper, 'Next');
     await flushPromises();
     await click(wrapper, 'Next');
@@ -205,6 +209,7 @@ describe('GameSetupWizard', () => {
     expect(wrapper.text()).toContain('You');
     expect(wrapper.text()).toContain('Agentic AI');
     expect(wrapper.text()).toContain('Vox Populi AI');
+    expect(wrapper.get('[role="table"][aria-label="Game seats"]')).toBeTruthy();
 
     await click(wrapper, 'Next');
     await flushPromises();
@@ -226,5 +231,47 @@ describe('GameSetupWizard', () => {
     await flushPromises();
 
     expect(wrapper.emitted('saved')?.[0]?.[0]).toMatchObject({ name: 'my_first_game' });
+  });
+
+  it('requires confirmation before replacing an existing configuration', async () => {
+    const wrapper = mount(GameSetupWizard, {
+      props: {
+        visible: true,
+        agents,
+        agentsLoading: false,
+        agentsError: null,
+        globalLlms: {} as Record<string, LLMConfig | string>,
+        existingConfigNames: ['MY-FIRST-GAME'],
+      },
+      global: { stubs: { Dialog: DialogStub, Button: ButtonStub, InputNumber: InputNumberStub, InputText: InputTextStub, Select: SelectStub, Slider: SliderStub } },
+    });
+    await click(wrapper, 'Next');
+    await click(wrapper, 'Next');
+    await flushPromises();
+    await click(wrapper, 'Next');
+    await click(wrapper, 'Save only');
+
+    expect(api.saveSessionConfig).not.toHaveBeenCalled();
+    expect(confirm.require).toHaveBeenCalledWith(expect.objectContaining({
+      header: 'Replace Configuration',
+      acceptLabel: 'Replace',
+    }));
+
+    const confirmation = confirm.require.mock.calls[0]?.[0];
+    confirmation.accept();
+    await flushPromises();
+    expect(api.saveSessionConfig).toHaveBeenCalledOnce();
+  });
+
+  it('blocks a fractional count before it can preview or save a different configuration', async () => {
+    const wrapper = mountWizard();
+    await click(wrapper, 'Next');
+    await wrapper.find('#wizard-agentic').setValue('2.5');
+
+    expect(wrapper.text()).toContain('Agentic AI must be a whole number');
+    expect(wrapper.findAll('.p-btn').find(button => button.text() === 'Next')?.attributes('disabled')).toBeDefined();
+    await click(wrapper, 'Next');
+    expect(wrapper.text()).toContain('Who is in the game?');
+    expect(api.saveSessionConfig).not.toHaveBeenCalled();
   });
 });

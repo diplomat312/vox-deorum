@@ -25,7 +25,7 @@ function coveredSeats(config: StrategistSessionConfig, role: WizardRole): number
 }
 
 const agents: SetupAgent[] = [
-  { name: 'simple-strategist', displayName: 'Simple LLM Strategist', description: '', tags: ['strategist'], offeredInSetup: true },
+  { name: 'simple-strategist', displayName: 'Simple LLM Strategist', description: '', tags: ['strategist'], modelSize: 'default', offeredInSetup: true },
   { name: 'simple-strategist-staffed', displayName: 'Staffed LLM Strategist', description: '', tags: ['strategist'], offeredInSetup: true, modelSize: 'small' },
 ];
 
@@ -35,7 +35,8 @@ describe('buildSeats', () => {
     ['watch', 2], ['watch', 4], ['watch', 6], ['watch', 8], ['watch', 10], ['watch', 12],
     ['direct', 2], ['direct', 4], ['direct', 6], ['direct', 8], ['direct', 10], ['direct', 12],
   ] as const)('creates complete summaries for %s with %i civilizations', (role, civCount) => {
-    const llmPlayers = buildSeats(answers({ role, civCount, agenticCount: civCount }));
+    const agenticCount = role === 'watch' ? civCount : civCount - 1;
+    const llmPlayers = buildSeats(answers({ role, civCount, agenticCount }));
     const config: StrategistSessionConfig = {
       name: `${role}-${civCount}`, type: 'strategist', autoPlay: role !== 'play', llmPlayers,
     };
@@ -50,6 +51,12 @@ describe('buildSeats', () => {
 
   it('rejects odd civilization counts rather than silently rounding them', () => {
     expect(() => buildSeats(answers({ civCount: 7 }))).toThrow('even number');
+  });
+
+  it('rejects fractional or out-of-range agentic counts and pacing intervals', () => {
+    expect(() => buildSeats(answers({ agenticCount: 2.5 }))).toThrow('whole number');
+    expect(() => buildSeats(answers({ role: 'direct', agenticCount: 8 }))).toThrow('whole number');
+    expect(() => buildSeats(answers({ pacing: { everyTurns: 2.5, interruption: 'none' } }))).toThrow('positive whole number');
   });
 
   it('leaves the selected model only on agentic seats', () => {

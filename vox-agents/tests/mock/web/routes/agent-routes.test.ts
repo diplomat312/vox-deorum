@@ -224,6 +224,7 @@ describe('agent routes', () => {
           description: 'makes strategic decisions',
           tags: ['strategist'],
           offeredInSetup: true,
+          modelSize: 'small',
         },
       ] as never);
 
@@ -233,6 +234,7 @@ describe('agent routes', () => {
       expect(res.body.agents[0]).toMatchObject({
         displayName: 'Simple LLM Strategist',
         offeredInSetup: true,
+        modelSize: 'small',
       });
     });
 

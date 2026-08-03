@@ -9,7 +9,9 @@ import InputText from 'primevue/inputtext';
 import ProgressSpinner from 'primevue/progressspinner';
 import Select from 'primevue/select';
 import Slider from 'primevue/slider';
+import { useConfirm } from 'primevue/useconfirm';
 import { api } from '@/api/client';
+import SeatSummaryTable from './SeatSummaryTable.vue';
 import type { LLMConfig, StrategistSessionConfig } from '@/utils/types';
 import { buildSeats, describeConfig, type SetupAgent, type WizardAnswers, type WizardRole } from '@/utils/session-summary';
 
@@ -20,6 +22,7 @@ interface Props {
   agentsLoading: boolean;
   agentsError: string | null;
   globalLlms: Record<string, LLMConfig | string>;
+  existingConfigNames: readonly string[];
 }
 
 /** Events emitted after saving or closing the wizard. */
@@ -32,6 +35,7 @@ interface Emits {
 
 const props = defineProps<Props>();
 const emit = defineEmits<Emits>();
+const confirm = useConfirm();
 
 const step = ref(1);
 const role = ref<WizardRole>('play');
@@ -61,6 +65,17 @@ const offeredStrategists = computed(() => props.agents.filter(agent => agent.off
 
 /** Reports whether either remote choice source is currently loading. */
 const loadingChoices = computed(() => loadingPacing.value || loadingModels.value);
+
+/** Reports invalid numeric choices before previewing or saving a configuration. */
+const numericValidationError = computed(() => {
+  if (!Number.isInteger(agenticCount.value) || agenticCount.value < 1 || agenticCount.value > maxAgenticCount.value) {
+    return `Agentic AI must be a whole number from 1 through ${maxAgenticCount.value}.`;
+  }
+  if (!Number.isInteger(everyTurns.value) || everyTurns.value < 1) {
+    return 'Decision pacing must be a positive whole number of turns.';
+  }
+  return '';
+});
 
 const roleOptions: Array<{ value: WizardRole; label: string; description: string; badge?: string }> = [
   { value: 'play', label: 'Play the game yourself', description: 'You take one civilization. Agentic AI runs the rivals.', badge: 'Recommended' },
@@ -139,7 +154,7 @@ function generatedConfig(): StrategistSessionConfig {
 }
 
 /** Shows the shared pure summary of the config about to be saved. */
-const summary = computed(() => describeConfig(generatedConfig(), props.agents, props.globalLlms));
+const summary = computed(() => numericValidationError.value ? null : describeConfig(generatedConfig(), props.agents, props.globalLlms));
 
 /** Renders the exact generated configuration only when the player asks to inspect it. */
 const generatedConfigJson = computed(() => JSON.stringify(generatedConfig(), null, 2));
@@ -162,6 +177,18 @@ function reset(): void {
 /** Converts the server's safe filename back to the config name used by the session list. */
 function configNameFromFilename(filename: string): string {
   return filename.endsWith('.json') ? filename.slice(0, -'.json'.length) : filename;
+}
+
+/** Mirrors the save route's filename normalization for replacement detection. */
+function configFilenameFromName(configName: string): string {
+  const sanitizedName = configName.replace(/[/\\:*?"<>|]/g, '_');
+  return sanitizedName.endsWith('.json') ? sanitizedName : `${sanitizedName}.json`;
+}
+
+/** Reports whether the normalized save name would replace an existing Windows filename. */
+function configNameExists(savedName: string): boolean {
+  const normalizedName = savedName.toLocaleLowerCase();
+  return props.existingConfigNames.some(existingName => existingName.toLocaleLowerCase() === normalizedName);
 }
 
 /** Loads pacing choices independently so a model-catalogue failure cannot discard them. */
@@ -210,6 +237,10 @@ async function loadMindChoices(): Promise<void> {
 
 /** Moves to a wizard step, loading remote choices only when they become relevant. */
 async function goTo(nextStep: number): Promise<void> {
+  if (nextStep > step.value && numericValidationError.value) {
+    saveError.value = numericValidationError.value;
+    return;
+  }
   step.value = nextStep;
   if (nextStep === 3) await loadMindChoices();
 }
@@ -219,12 +250,10 @@ function close(): void {
   if (!saving.value) emit('update:visible', false);
 }
 
-/** Persists the generated config, then tells the host whether to open launch mode selection. */
-async function save(play: boolean): Promise<void> {
-  if (!name.value.trim()) return;
+/** Persists one already-validated configuration, then tells the host whether to open launch mode selection. */
+async function persist(config: StrategistSessionConfig, play: boolean): Promise<void> {
   saving.value = true;
   saveError.value = '';
-  const config = generatedConfig();
   try {
     const result = await api.saveSessionConfig(config.name, config);
     config.name = configNameFromFilename(result.filename);
@@ -235,6 +264,29 @@ async function save(play: boolean): Promise<void> {
   } finally {
     saving.value = false;
   }
+}
+
+/** Confirms a replacement before writing a configuration with an existing name. */
+function save(play: boolean): void {
+  if (!name.value.trim()) return;
+  if (numericValidationError.value) {
+    saveError.value = numericValidationError.value;
+    return;
+  }
+  const config = generatedConfig();
+  const savedName = configNameFromFilename(configFilenameFromName(config.name));
+  if (configNameExists(savedName)) {
+    confirm.require({
+      message: `A configuration named "${savedName}" already exists. Replace it?`,
+      header: 'Replace Configuration',
+      icon: 'pi pi-exclamation-triangle',
+      acceptLabel: 'Replace',
+      acceptClass: 'p-button-danger',
+      accept: () => { void persist(config, play); },
+    });
+    return;
+  }
+  void persist(config, play);
 }
 
 watch(() => props.visible, visible => {
@@ -275,17 +327,13 @@ watch(offeredStrategists, options => {
     </section>
 
     <section v-else-if="step === 2" class="setup-wizard-step">
-      <div class="setup-wizard-heading"><h2>Who is in the game?</h2><p>{{ civCount }} civilizations on a {{ summary.mapSize }} map.</p></div>
+      <div class="setup-wizard-heading"><h2>Who is in the game?</h2><p>{{ civCount }} civilizations on a {{ summary?.mapSize ?? 'selected' }} map.</p></div>
       <div class="setup-wizard-field"><label for="wizard-civs">Civilizations in the game: {{ civCount }}</label><Slider id="wizard-civs" v-model="civCount" :min="2" :max="12" :step="2" /></div>
-      <div class="setup-wizard-field"><label for="wizard-agentic">How many are agentic AI?</label><InputNumber id="wizard-agentic" v-model="agenticCount" :min="1" :max="maxAgenticCount" /></div>
-      <div class="setup-wizard-summary">
+      <div class="setup-wizard-field"><label for="wizard-agentic">How many are agentic AI?</label><InputNumber id="wizard-agentic" v-model="agenticCount" :min="1" :max="maxAgenticCount" :min-fraction-digits="0" :max-fraction-digits="0" /></div>
+      <p v-if="numericValidationError" class="setup-wizard-error">{{ numericValidationError }}</p>
+      <div v-if="summary" class="setup-wizard-summary">
         <p>{{ summary.sentence }}</p>
-        <div class="table-seat-summary-scroll">
-          <div class="table-seat-summary" role="table" aria-label="Game seats">
-            <div class="table-seat-summary-header" role="row"><span role="columnheader">Seat</span><span role="columnheader">Plays as</span><span role="columnheader">Style</span><span role="columnheader">Thinks with</span></div>
-            <div v-for="seatRow in summary.seatRows" :key="seatRow.seats" class="table-seat-summary-row" role="row"><span role="cell">{{ seatRow.seats }}</span><span role="cell">{{ seatRow.role }}</span><span role="cell">{{ seatRow.style }}</span><span role="cell">{{ seatRow.model }}</span></div>
-          </div>
-        </div>
+        <SeatSummaryTable :seat-rows="summary.seatRows" ariaLabel="Game seats" />
       </div>
     </section>
 
@@ -310,10 +358,11 @@ watch(offeredStrategists, options => {
       <template v-else>
         <div class="setup-wizard-field"><label for="wizard-style">Style</label><Select id="wizard-style" v-model="strategist" :options="strategistOptions" option-label="label" option-value="value" /></div>
         <p v-if="selectedStrategist" class="text-muted text-small">{{ selectedStrategist.description }}</p>
-        <div class="setup-wizard-field"><label for="wizard-pace">Re-think every turns</label><InputNumber id="wizard-pace" v-model="everyTurns" :min="1" /></div>
+        <div class="setup-wizard-field"><label for="wizard-pace">Re-think every turns</label><InputNumber id="wizard-pace" v-model="everyTurns" :min="1" :min-fraction-digits="0" :max-fraction-digits="0" /></div>
         <div class="setup-wizard-field"><label for="wizard-interruption">React to</label><Select id="wizard-interruption" v-model="interruption" :options="interruptions" option-label="label" option-value="value" /></div>
         <div class="setup-wizard-field"><label for="wizard-model">Model</label><Select id="wizard-model" v-model="modelId" :options="modelOptions" option-group-label="label" option-group-children="items" option-label="label" option-value="value" /></div>
-        <div class="setup-wizard-summary"><p>{{ agenticCount }} agentic AI civilizations deciding every {{ everyTurns }} turns is roughly {{ decisionEstimate }} decisions across a full game, plus conversation replies.</p></div>
+        <div v-if="summary" class="setup-wizard-summary"><p>{{ agenticCount }} agentic AI civilizations deciding every {{ everyTurns }} turns is roughly {{ decisionEstimate }} decisions across a full game, plus conversation replies.</p></div>
+        <p v-if="numericValidationError" class="setup-wizard-error">{{ numericValidationError }}</p>
         <ProgressSpinner v-if="loadingChoices" class="setup-wizard-spinner" />
         <div v-if="pacingError" class="setup-wizard-error-panel" role="status">
           <strong>Pacing choices could not be loaded.</strong>
@@ -332,14 +381,9 @@ watch(offeredStrategists, options => {
       <div class="setup-wizard-heading"><h2>Confirm your game</h2></div>
       <div class="setup-wizard-field"><label for="wizard-name">Name</label><InputText id="wizard-name" v-model="name" /></div>
       <div class="setup-wizard-field"><label for="wizard-description">Description</label><InputText id="wizard-description" v-model="description" /></div>
-      <div class="setup-wizard-summary">
+      <div v-if="summary" class="setup-wizard-summary">
         <p>{{ summary.sentence }}</p><p>{{ summary.styleLabel }}. {{ summary.paceTooltip }}.</p>
-        <div class="table-seat-summary-scroll">
-          <div class="table-seat-summary" role="table" aria-label="Game seats">
-            <div class="table-seat-summary-header" role="row"><span role="columnheader">Seat</span><span role="columnheader">Plays as</span><span role="columnheader">Style</span><span role="columnheader">Thinks with</span></div>
-            <div v-for="seatRow in summary.seatRows" :key="seatRow.seats" class="table-seat-summary-row" role="row"><span role="cell">{{ seatRow.seats }}</span><span role="cell">{{ seatRow.role }}</span><span role="cell">{{ seatRow.style }}</span><span role="cell">{{ seatRow.model }}</span></div>
-          </div>
-        </div>
+        <SeatSummaryTable :seat-rows="summary.seatRows" ariaLabel="Game seats" />
         <details class="table-config-file"><summary>View file</summary><pre>{{ generatedConfigJson }}</pre></details>
       </div>
       <p v-if="saveError" class="setup-wizard-error">{{ saveError }}</p>
@@ -350,9 +394,9 @@ watch(offeredStrategists, options => {
         <Button label="Cancel" severity="secondary" :disabled="saving" @click="close" />
         <div class="setup-wizard-footer-next">
           <Button v-if="step > 1" label="Back" severity="secondary" :disabled="saving" @click="goTo(step - 1)" />
-          <Button v-if="step < 4" label="Next" :disabled="step === 3 && !strategist" @click="goTo(step + 1)" />
-          <Button v-else label="Save only" severity="secondary" :disabled="saving || !name.trim()" @click="save(false)" />
-          <Button v-if="step === 4" label="Save & Play" :loading="saving" :disabled="!name.trim()" @click="save(true)" />
+          <Button v-if="step < 4" label="Next" :disabled="!!numericValidationError || (step === 3 && !strategist)" @click="goTo(step + 1)" />
+          <Button v-else label="Save only" severity="secondary" :disabled="saving || !name.trim() || !!numericValidationError" @click="save(false)" />
+          <Button v-if="step === 4" label="Save & Play" :loading="saving" :disabled="!name.trim() || !!numericValidationError" @click="save(true)" />
         </div>
       </div>
     </template>

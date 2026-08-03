@@ -22,6 +22,9 @@ import { getStrategicPlayersReport } from "../../utils/prompts/report-filters.js
  * @class
  */
 export class SimpleStrategistStaffed extends SimpleStrategistBase {
+  /** The combined or specialized briefers selected from the event window. */
+  public override modelDependencies = ["simple-briefer", "specialized-briefer"];
+
   /**
    * The name identifier for this agent
    */

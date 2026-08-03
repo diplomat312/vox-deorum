@@ -27,6 +27,12 @@ import { terminalActionTools, type DealRowRenderer } from "../../utils/diplomacy
  * @class
  */
 export class Diplomat extends LiveEnvoy {
+  /** The analyst runs after diplomatic reports are submitted. */
+  public override modelDependencies = ["specialized-briefer", "diplomatic-analyst"];
+
+  /** Deal handoffs resolve the negotiator configured for the voiced seat. */
+  public override usesSeatNegotiator = true;
+
   /**
    * The name identifier for this agent
    */

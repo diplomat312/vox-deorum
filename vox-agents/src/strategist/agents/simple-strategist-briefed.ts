@@ -21,6 +21,9 @@ import { getStrategicPlayersReport } from "../../utils/prompts/report-filters.js
  * @class
  */
 export class SimpleStrategistBriefed extends SimpleStrategistBase {
+  /** The combined briefing generated before each decision. */
+  public override modelDependencies = ["simple-briefer"];
+
   /**
    * The name identifier for this agent
    */

@@ -44,6 +44,9 @@ export interface LiveEnvoyContext {
  * @class
  */
 export abstract class LiveEnvoy extends Envoy<StrategistParameters> {
+  /** The on-demand briefing agent used by the shared get-briefing tool. */
+  public override modelDependencies = ["specialized-briefer"];
+
   /**
    * Force a tool call every step so "speak" is an explicit action (the send-message tool), not raw
    * free text. Honored on the deployed model; vox-context neutralizes it to "auto" on Anthropic,

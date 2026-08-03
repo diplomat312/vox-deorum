@@ -392,6 +392,7 @@ onUnmounted(() => {
       :agents-loading="loadingAgents"
       :agents-error="agentCatalogueWarning"
       :global-llms="globalLlms"
+      :existing-config-names="configs.map(config => config.name)"
       @saved="handleWizardSaved"
       @retry-agents="loadAgents"
       @advanced="openAdvancedFromGameSetup"

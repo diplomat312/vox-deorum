@@ -15,7 +15,7 @@ import { voxCivilization } from "../infra/vox-civilization.js";
 import { setTimeout } from 'node:timers/promises';
 import { VoxSession } from "../infra/vox-session.js";
 import { sessionRegistry } from "../infra/session-registry.js";
-import { StrategistSessionConfig, isVisualMode, isObsMode, isHumanControl } from "../types/config.js";
+import { StrategistSessionConfig, type PlayerConfig, isVisualMode, isObsMode, isHumanControl } from "../types/config.js";
 import { obsManager } from "../infra/obs-manager.js";
 import { ProductionController } from "../infra/production-controller.js";
 import { config } from "../utils/config.js";
@@ -25,6 +25,7 @@ import type { ObservedSeating, SeatingClaim } from "../utils/game/seating/types.
 import { getMetadata, setMetadata } from "../utils/game/metadata.js";
 import { agentRegistry } from '../infra/agent-registry.js';
 import { ensureModelsResolved, selectModelReference } from '../utils/models/resolution.js';
+import { DEFAULT_NEGOTIATOR } from '../envoy/agents/resolve-negotiator.js';
 import {
   autoPlayTurnLimit,
   buildNonFreshTransitionLua,
@@ -117,11 +118,9 @@ export class StrategistSession extends VoxSession<StrategistSessionConfig> {
       this.onStateChange('starting');
       sessionRegistry.register(this);
 
-      // Verify the same model reference each strategist will resolve at runtime before launching Civ V.
+      // Verify every model reference reachable through each configured seat before launching Civ V.
       for (const playerConfig of Object.values(this.config.llmPlayers)) {
-        const strategist = agentRegistry.get(playerConfig.strategist);
-        const reference = selectModelReference(playerConfig.strategist, strategist?.modelSize, playerConfig.llms);
-        await ensureModelsResolved([reference], playerConfig.llms);
+        await ensureModelsResolved(this.modelReferencesForPlayer(playerConfig), playerConfig.llms);
       }
 
       const luaScript = this.config.gameMode === 'start' ? 'StartGame.lua' :
@@ -657,6 +656,34 @@ ${overrideLine}Game.SetAIAutoPlay(${autoPlayTurnLimit}, -1);`
       this.ingameBridge.resetEventDedup();
     }
     await this.recoverGame();
+  }
+
+  /**
+   * Resolve the model references for the configured seat agents and their declared child agents.
+   * Arbitrary override-map entries are deliberately excluded because they cannot run in this session.
+   */
+  private modelReferencesForPlayer(playerConfig: PlayerConfig): string[] {
+    const agentNames = new Set<string>();
+    /** Add one agent and recursively include its fixed model dependencies. */
+    const visit = (name: string): void => {
+      if (agentNames.has(name)) return;
+      agentNames.add(name);
+      const agent = agentRegistry.get(name);
+      for (const dependency of agent?.modelDependencies ?? []) visit(dependency);
+    };
+
+    visit(playerConfig.strategist);
+    const diplomatName = playerConfig.diplomat ?? "diplomat";
+    visit(diplomatName);
+    if (agentRegistry.get(diplomatName)?.usesSeatNegotiator) {
+      const configuredNegotiator = playerConfig.negotiator;
+      visit(configuredNegotiator && agentRegistry.has(configuredNegotiator) ? configuredNegotiator : DEFAULT_NEGOTIATOR);
+    }
+
+    return [...new Set([...agentNames].map((name) => {
+      const agent = agentRegistry.get(name);
+      return selectModelReference(name, agent?.modelSize, playerConfig.llms);
+    }))];
   }
 
   /**

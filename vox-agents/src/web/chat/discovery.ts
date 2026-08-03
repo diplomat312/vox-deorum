@@ -42,6 +42,7 @@ export function createAgentDiscoveryRoutes(): Router {
           displayName: agent.displayName,
           description: agent.description,
           tags: agent.tags || [],
+          modelSize: agent.modelSize,
           diplomacyOnly: agent.diplomacyOnly,
           offeredInSetup: agent.offeredInSetup,
         }));

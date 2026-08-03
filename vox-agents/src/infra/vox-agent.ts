@@ -207,6 +207,18 @@ export abstract class VoxAgent<TParameters extends AgentParameters, TInput = unk
   public modelSize: ModelSize = 'default';
 
   /**
+   * Registered child agents this agent can invoke with the same context model overrides.
+   * Session startup resolves this fixed dependency graph before Civilization V launches.
+   */
+  public modelDependencies: readonly string[] = [];
+
+  /**
+   * Whether this agent delegates deal decisions to the seat's configured negotiator.
+   * Session startup resolves that per-seat target when this is enabled.
+   */
+  public usesSeatNegotiator = false;
+
+  /**
    * Gets the language model to use for this agent execution.
    * Can return undefined to use the default model from VoxContext.
    *

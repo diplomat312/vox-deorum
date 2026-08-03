@@ -49,7 +49,7 @@ const SessionConfigListStub = defineComponent({
 
 const GameSetupWizardStub = defineComponent({
   name: 'GameSetupWizard',
-  props: ['visible', 'agents', 'agentsLoading', 'agentsError', 'globalLlms'],
+  props: ['visible', 'agents', 'agentsLoading', 'agentsError', 'globalLlms', 'existingConfigNames'],
   emits: ['update:visible', 'saved', 'retryAgents', 'advanced'],
   template: '<div class="game-wizard-stub" />',
 });
@@ -81,6 +81,7 @@ const agents: AgentInfo[] = [{
   displayName: 'Simple LLM Strategist',
   description: 'A direct strategist',
   tags: ['strategist'],
+  modelSize: 'default',
   offeredInSetup: true,
 }];
 
@@ -115,6 +116,7 @@ describe('SessionView', () => {
     await flushPromises();
 
     expect(wrapper.findComponent(GameSetupWizardStub).props('visible')).toBe(true);
+    expect(wrapper.findComponent(GameSetupWizardStub).props('existingConfigNames')).toEqual(['starter']);
     expect(routerReplace).toHaveBeenCalledWith({ query: {} });
     expect(api.getAgents).toHaveBeenCalledTimes(1);
     expect(wrapper.findComponent(SessionConfigListStub).props('globalLlms')).toEqual({ default: 'openai/gpt-5-mini' });

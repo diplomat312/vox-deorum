@@ -6,11 +6,7 @@ import type { AgentInfo, LLMConfig, StrategistSessionConfig } from '@/utils/type
 export type WizardRole = 'play' | 'watch' | 'direct';
 
 /** An agent shape with the setup metadata supplied by the agent catalogue. */
-export interface SetupAgent extends AgentInfo {
-  displayName?: string;
-  offeredInSetup?: boolean;
-  modelSize?: 'default' | 'small';
-}
+export type SetupAgent = AgentInfo;
 
 /** Values collected by the game setup wizard before a config is saved. */
 export interface WizardAnswers {
@@ -49,6 +45,21 @@ export interface ConfigSummary {
 function assertSupportedCivCount(civCount: number): void {
   if (!Number.isInteger(civCount) || civCount < 2 || civCount > 12 || civCount % 2 !== 0) {
     throw new Error('Civilization count must be an even number from 2 through 12.');
+  }
+}
+
+/** Rejects agentic counts that the launcher cannot represent exactly. */
+function assertSupportedAgenticCount(agenticCount: number, role: WizardRole, civCount: number): void {
+  const limit = agenticLimit(role, civCount);
+  if (!Number.isInteger(agenticCount) || agenticCount < 1 || agenticCount > limit) {
+    throw new Error(`Agentic AI count must be a whole number from 1 through ${limit}.`);
+  }
+}
+
+/** Rejects pacing intervals that would otherwise be normalized by the game runtime. */
+function assertSupportedPacing(everyTurns: number): void {
+  if (!Number.isInteger(everyTurns) || everyTurns < 1) {
+    throw new Error('Decision pacing must be a positive whole number of turns.');
   }
 }
 
@@ -119,7 +130,9 @@ function paceDescription(pacing: { everyTurns?: number; interruption?: string })
 export function buildSeats(answers: WizardAnswers): StrategistSessionConfig['llmPlayers'] {
   assertSupportedCivCount(answers.civCount);
   const civCount = answers.civCount;
-  const count = Math.min(Math.max(0, Math.trunc(answers.agenticCount)), agenticLimit(answers.role, civCount));
+  assertSupportedAgenticCount(answers.agenticCount, answers.role, civCount);
+  assertSupportedPacing(answers.pacing.everyTurns);
+  const count = answers.agenticCount;
   const firstAgenticSeat = answers.role === 'play' ? 1 : 0;
   const lastAgenticSeat = firstAgenticSeat + count - 1;
   const players: StrategistSessionConfig['llmPlayers'] = {};

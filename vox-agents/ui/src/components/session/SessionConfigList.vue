@@ -9,6 +9,7 @@ import Select from 'primevue/select';
 import Tag from 'primevue/tag';
 import Toolbar from 'primevue/toolbar';
 import type { MenuItem } from 'primevue/menuitem';
+import SeatSummaryTable from './SeatSummaryTable.vue';
 import type { AgentInfo, SessionConfigEntry, StrategistSessionConfig, VoxAgentsConfig } from '@/utils/types';
 import { describeConfig, type WizardRole } from '@/utils/session-summary';
 
@@ -292,16 +293,7 @@ onUnmounted(() => {
             <div v-if="expandedConfigNames.has(config.name)" :id="detailsId(config)" class="table-expander-row" role="row">
               <div class="table-expander-content" role="cell" aria-colspan="8">
                 <p>{{ config.description || summary.sentence }}</p>
-                <div class="table-seat-summary-scroll">
-                  <div class="table-seat-summary" role="table" :aria-label="`Seats in ${config.name}`">
-                    <div class="table-seat-summary-header" role="row">
-                      <span role="columnheader">Seat</span><span role="columnheader">Plays as</span><span role="columnheader">Style</span><span role="columnheader">Thinks with</span>
-                    </div>
-                    <div v-for="seatRow in summary.seatRows" :key="seatRow.seats" class="table-seat-summary-row" role="row">
-                      <span role="cell">{{ seatRow.seats }}</span><span role="cell">{{ seatRow.role }}</span><span role="cell">{{ seatRow.style }}</span><span role="cell">{{ seatRow.model }}</span>
-                    </div>
-                  </div>
-                </div>
+                <SeatSummaryTable :seat-rows="summary.seatRows" :ariaLabel="`Seats in ${config.name}`" />
                 <p class="text-small text-muted">{{ [...configFlags(config), updatedLabel(config.updatedAt)].join(' · ') }}</p>
                 <details v-if="visibleFileConfigName === config.name" class="table-config-file" open>
                   <summary>Configuration file</summary>

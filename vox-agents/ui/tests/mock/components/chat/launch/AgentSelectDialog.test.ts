@@ -250,7 +250,7 @@ describe('AgentSelectDialog', () => {
 
   it('clears a failed chat launch when retrying with cached agents', async () => {
     vi.mocked(api.getAgents).mockResolvedValue({
-      agents: [{ name: 'telepathist', description: 'database analyst', tags: ['telepathist'] }],
+      agents: [{ name: 'telepathist', description: 'database analyst', tags: ['telepathist'], modelSize: 'default' }],
     })
     vi.mocked(api.createAgentChat)
       .mockRejectedValueOnce(new Error('Chat creation failed'))

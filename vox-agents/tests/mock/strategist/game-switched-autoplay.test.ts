@@ -11,7 +11,7 @@
  * mocked and timers are made instant.
  */
 
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { afterEach, describe, it, expect, beforeEach, vi } from 'vitest';
 import { installMockMcpClient, textResult, structuredResult } from '../../helpers/mock-mcp-client.js';
 
 const modelMocks = vi.hoisted(() => ({
@@ -59,6 +59,10 @@ beforeEach(() => {
   mcp.respondWith('set-metadata', textResult(true));
   mcp.respondWith('pause-game', textResult(true));
   mcp.respondWith('lua-executor', structuredResult({ Success: true }));
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
 });
 
 /**
@@ -141,10 +145,27 @@ describe('handleGameSwitched autoplay reconciliation', () => {
 });
 
 describe('model preflight', () => {
-  it('uses strategist metadata to preflight the selected reference, not every seat override', async () => {
-    const overrides = { default: 'openai/selected', 'unused-agent': 'openai/unused' };
-    modelMocks.selectModelReference.mockReturnValue('openai/selected');
-    vi.spyOn(agentRegistry, 'get').mockReturnValue({ modelSize: 'small' } as never);
+  it('preflights reachable support and diplomacy agents without resolving unused seat overrides', async () => {
+    const overrides = {
+      'selected-strategist': 'openai/strategist',
+      'simple-briefer': 'openai/simple-briefer',
+      diplomat: 'openai/diplomat',
+      'specialized-briefer': 'openai/specialized-briefer',
+      'diplomatic-analyst': 'openai/diplomatic-analyst',
+      negotiator: 'openai/negotiator',
+      'unused-agent': 'openai/unused',
+    };
+    const agents = {
+      'selected-strategist': { modelSize: 'small', modelDependencies: ['simple-briefer'] },
+      'simple-briefer': { modelSize: 'small' },
+      diplomat: { modelSize: 'default', modelDependencies: ['specialized-briefer', 'diplomatic-analyst'], usesSeatNegotiator: true },
+      'specialized-briefer': { modelSize: 'small' },
+      'diplomatic-analyst': { modelSize: 'small' },
+      negotiator: { modelSize: 'default' },
+    };
+    modelMocks.selectModelReference.mockImplementation((name) => overrides[name as keyof typeof overrides]);
+    vi.spyOn(agentRegistry, 'get').mockImplementation((name) => agents[name as keyof typeof agents] as never);
+    vi.spyOn(agentRegistry, 'has').mockImplementation((name) => name in agents);
     vi.mocked(voxCivilization.startGame).mockResolvedValue(false);
 
     const s = new StrategistSession({
@@ -158,7 +179,16 @@ describe('model preflight', () => {
     await expect(s.start()).rejects.toThrow('Failed to start Civilization V');
 
     expect(modelMocks.selectModelReference).toHaveBeenCalledWith('selected-strategist', 'small', overrides);
-    expect(modelMocks.ensureModelsResolved).toHaveBeenCalledWith(['openai/selected'], overrides);
+    expect(modelMocks.selectModelReference).toHaveBeenCalledWith('specialized-briefer', 'small', overrides);
+    expect(modelMocks.selectModelReference).not.toHaveBeenCalledWith('unused-agent', expect.anything(), overrides);
+    expect(modelMocks.ensureModelsResolved).toHaveBeenCalledWith([
+      'openai/strategist',
+      'openai/simple-briefer',
+      'openai/diplomat',
+      'openai/specialized-briefer',
+      'openai/diplomatic-analyst',
+      'openai/negotiator',
+    ], overrides);
   });
 });
 

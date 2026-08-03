@@ -7,6 +7,7 @@
 
 import type { Span, TelemetryMetadata, TelemetrySession } from './telemetry.js';
 import type { EnvoyThread, ParticipantIdentity } from './chat.js';
+import type { ModelSize } from './config.js';
 import type { PlayersReport } from '../../../mcp-server/dist/tools/knowledge/get-players.js';
 // Pinned deal contract shared across interactive-diplomacy stages 4–6.
 import type { DealPayload, DealTranscriptMessage } from '../../../mcp-server/dist/utils/deal-schema.js';
@@ -234,6 +235,8 @@ export interface AgentInfo {
   description: string;
   /** Tags for categorizing/filtering agents */
   tags: string[];
+  /** Size alias this agent uses when it has no explicit model assignment. */
+  modelSize: ModelSize;
   /** When true, this agent only operates in diplomacy mode (no ordinary observer/telepathist chat). */
   diplomacyOnly?: boolean;
   /** When true, the game setup wizard offers this agent as a strategist style. */
