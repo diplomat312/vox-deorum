@@ -35,9 +35,15 @@ export function getExecutionTimeout(modelConfig: Model | undefined): number {
     return getCodexExecutionTimeout();
   }
 
-  return process.env.USE_FLEX === 'true' && modelConfig?.provider === 'google'
-    ? 900_000
-    : executionTimeoutDefault;
+  if (modelConfig?.provider === 'openai-compatible') {
+    return 900_000
+  }
+
+  if (process.env.USE_FLEX === 'true' && modelConfig?.provider === 'google') {
+    return 900_000
+  }
+
+  return executionTimeoutDefault;
 }
 
 /**
