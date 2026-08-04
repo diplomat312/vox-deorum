@@ -1844,16 +1844,16 @@
           "type": "string",
           "minLength": 1,
           "maxLength": 200,
-          "description": "Short notification headline (shown in the notification panel)"
+          "description": "Short notification headline (highlighted in the notification panel)"
         },
         "Message": {
           "type": "string",
           "minLength": 1,
           "maxLength": 2000,
-          "description": "Full notification body (shown as tooltip, and in the dialog for counterpart-less notifications)"
+          "description": "Notification body (shown as a tooltip and in the dialog for counterpart-less notifications; truncated to 400 characters)"
         }
       },
-      "required": [
+      "required": [ 
         "PlayerID",
         "Summary",
         "Message"
