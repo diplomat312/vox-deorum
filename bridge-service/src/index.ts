@@ -196,10 +196,11 @@ app.use((error: Error, _req: Request, res: Response, _next: NextFunction) => {
  * @description
  * Initializes and starts the HTTP server with graceful shutdown handlers.
  * This function:
- * 1. Starts the Bridge Service (DLL connection, event pipe)
- * 2. Creates HTTP server with keep-alive timeout
- * 3. Sets up graceful shutdown on SIGTERM, SIGINT, and SIGBREAK
- * 4. Handles uncaught exceptions and unhandled promise rejections
+ * 1. Creates the HTTP server with keep-alive timeout
+ * 2. Publishes the shutdown URL once HTTP is listening
+ * 3. Starts the Bridge Service (DLL connection, event pipe)
+ * 4. Sets up graceful shutdown on SIGTERM, SIGINT, and SIGBREAK
+ * 5. Handles uncaught exceptions and unhandled promise rejections
  *
  * @returns Promise that resolves when the server is successfully started
  * @throws Error if the server fails to start
@@ -212,11 +213,6 @@ app.use((error: Error, _req: Request, res: Response, _next: NextFunction) => {
  */
 async function startServer(): Promise<void> {
   try {
-    // Start the bridge service first
-    logger.info('Starting Bridge Service...');
-    await bridgeService.start();
-    
-    // Start HTTP server
     const server = createServer(app);
     let shuttingDown = false;
 
@@ -255,28 +251,42 @@ async function startServer(): Promise<void> {
     };
 
     server.keepAliveTimeout = 3600000; // 3600 seconds keep-alive timeout
-    server.listen(config.rest.port, config.rest.host, () => {
-      const address = server.address();
-      const actualHost = typeof address === 'object' && address ? address.address : config.rest.host;
-      const actualPort = typeof address === 'object' && address ? address.port : config.rest.port;
-
-      logger.info(`Bridge Service HTTP server listening on http://${actualHost}:${actualPort}`);
-      logger.info('Service endpoints:');
-      logger.info(`  Health: GET http://${actualHost}:${actualPort}/health`);
-      logger.info(`  Shutdown: POST http://${actualHost}:${actualPort}/shutdown`);
-      logger.info(`  Lua API: http://${actualHost}:${actualPort}/lua/*`);
-      logger.info(`  External API: http://${actualHost}:${actualPort}/external/*`);
-      logger.info(`  Events Stream: GET http://${actualHost}:${actualPort}/events`);
-      logger.info('Bridge Service is ready to accept connections');
-
-      void writeShutdownUrlFile(actualHost, actualPort).catch((error) => {
-        logger.warn(`Failed to write shutdown URL file: ${String(error)}`);
-      });
-    });
-
     process.on('SIGTERM', shutdown);
     process.on('SIGBREAK', shutdown);
     process.on('SIGINT', shutdown);
+
+    await new Promise<void>((resolve, reject) => {
+      // Reject startup if the HTTP listener cannot bind.
+      const handleListenError = (error: Error) => {
+        reject(error);
+      };
+
+      server.once('error', handleListenError);
+      server.listen(config.rest.port, config.rest.host, () => {
+        server.off('error', handleListenError);
+        const address = server.address();
+        const actualHost = typeof address === 'object' && address ? address.address : config.rest.host;
+        const actualPort = typeof address === 'object' && address ? address.port : config.rest.port;
+
+        logger.info(`Bridge Service HTTP server listening on http://${actualHost}:${actualPort}`);
+        logger.info('Service endpoints:');
+        logger.info(`  Health: GET http://${actualHost}:${actualPort}/health`);
+        logger.info(`  Shutdown: POST http://${actualHost}:${actualPort}/shutdown`);
+        logger.info(`  Lua API: http://${actualHost}:${actualPort}/lua/*`);
+        logger.info(`  External API: http://${actualHost}:${actualPort}/external/*`);
+        logger.info(`  Events Stream: GET http://${actualHost}:${actualPort}/events`);
+        logger.info('Bridge Service HTTP server is ready to accept connections');
+
+        void writeShutdownUrlFile(actualHost, actualPort)
+          .catch((error) => {
+            logger.warn(`Failed to write shutdown URL file: ${String(error)}`);
+          })
+          .finally(resolve);
+      });
+    });
+
+    logger.info('Starting Bridge Service IPC connections...');
+    await bridgeService.start();
 
     // Handle uncaught exceptions
     process.on('uncaughtException', (error) => {

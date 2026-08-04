@@ -44,7 +44,7 @@ export class EventPipe {
       return;
     }
 
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
       ipc.serve(() => {
         logger.info(`Event pipe server listening on: ${config.eventpipe.name}`);
         this.isServing = true;
@@ -70,12 +70,12 @@ export class EventPipe {
           logger.info(`Event pipe client disconnected (remaining: ${this.connectedClientsCount})`);
         });
 
-        // Handle errors
-        ipc.server.on('error', (error: Error) => {
-          logger.error('Event pipe server error:', error);
-        });
-
         resolve();
+      });
+
+      ipc.server.on('error', (error: Error) => {
+        logger.error('Event pipe server error:', error);
+        reject(error);
       });
 
       ipc.server.start();

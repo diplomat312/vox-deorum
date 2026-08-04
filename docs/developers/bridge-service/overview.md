@@ -47,7 +47,7 @@ Because only manual pause lives in the bridge, only it survives a lost DLL conne
 
 A single orchestrator, `BridgeService` in `bridge-service/src/service.ts`, owns the component lifecycle.
 
-On **startup** it connects the DLL connector to the game pipe and starts the event pipe (if enabled). The HTTP server in `index.ts` then begins listening.
+On **startup** the HTTP server in `index.ts` begins listening and publishes its shutdown URL first. `BridgeService` then connects the DLL connector to the game pipe and starts the event pipe (if enabled).
 
 On **shutdown** it runs in reverse: the HTTP server stops accepting connections, the DLL connection is torn down, the event pipe is stopped, and the pause manager releases anything it was holding. Shutdown can be triggered by a signal (`SIGINT`, `SIGTERM`, or `SIGBREAK`), by an uncaught error, or by an HTTP `POST /shutdown`.
 
@@ -61,7 +61,7 @@ The components are singletons, each in `bridge-service/src/services/`, wired tog
 
 ### Discovering the running port
 
-When the port is chosen dynamically, a launcher needs a way to find it without scraping logs. Set the environment variable `BRIDGE_SHUTDOWN_URL_FILE` and the service writes a one-line file with its real shutdown URL (`http://127.0.0.1:<actual-port>/shutdown`) once it is listening. Local launchers such as `scripts/vox-deorum.cmd` read that file.
+When the port is chosen dynamically, a launcher needs a way to find it without scraping logs. Set the environment variable `BRIDGE_SHUTDOWN_URL_FILE` and the service writes a one-line file with its real shutdown URL (`http://127.0.0.1:<actual-port>/shutdown`) once it is listening. This happens before the service starts its DLL and event-pipe connections, so the launcher can always request shutdown during IPC initialization. Local launchers such as `scripts/vox-deorum.cmd` read that file.
 
 ## Running without the game
 

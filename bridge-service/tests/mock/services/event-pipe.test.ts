@@ -285,6 +285,17 @@ describe('EventPipe.start', () => {
     expect(mocks.serve).toHaveBeenCalledTimes(1);
     expect(loggerMock.warn).toHaveBeenCalledWith('Event pipe server already running');
   });
+
+  it('rejects and logs an error when the server fails before listening', async () => {
+    const error = new Error('pipe bind failed');
+    mocks.serve.mockImplementation(() => undefined);
+    mocks.serverStart.mockImplementation(() => mocks.handlers['error']?.(error));
+    const pipe = new EventPipe();
+
+    await expect(pipe.start()).rejects.toBe(error);
+
+    expect(loggerMock.error).toHaveBeenCalledWith('Event pipe server error:', error);
+  });
 });
 
 describe('EventPipe.stop', () => {
