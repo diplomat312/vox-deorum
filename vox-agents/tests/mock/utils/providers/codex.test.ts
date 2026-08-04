@@ -927,7 +927,7 @@ describe('Codex built-in activity normalization', () => {
     },
   );
 
-  it('supports interleaved activity and rejects orphan, duplicate, and all post-activity disconnects', async () => {
+  it('supports interleaved activity and rejects orphan, duplicate, and ambiguous post-activity disconnects', async () => {
     const model = buildCodexModel({ provider: 'codex', name: 'gpt-5.4-mini' });
     const params = {
       prompt: [{ role: 'user', content: [{ type: 'text', text: 'Inspect Rome.' }] }], providerOptions: buildCodexProviderOptions({ provider: 'codex', name: 'gpt-5.4-mini' }), tools: [foundCityTool()], toolChoice: { type: 'auto' },
@@ -961,6 +961,34 @@ describe('Codex built-in activity normalization', () => {
     await expect(streamParts(model, params)).rejects.toMatchObject({ name: 'CodexProviderProtocolError', isRetryable: false });
     await expect(streamParts(model, params)).rejects.toMatchObject({ name: 'CodexProviderProtocolError', isRetryable: false });
     await expect(streamParts(model, params)).rejects.toMatchObject({ name: 'CodexProviderProtocolError', isRetryable: false });
+  });
+
+  it('marks an app-server transport channel closure as retryable after built-in activity', async () => {
+    const frame = (delta: Record<string, unknown>) => ({
+      id: 'chatcmpl-test', object: 'chat.completion.chunk', created: 1, model: 'gpt-5.4-mini',
+      choices: [{ index: 0, delta, finish_reason: null }],
+    });
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(streamingCompletion(
+      frame({
+        tool_calls: [{
+          index: 0, id: 'search-disconnect', type: 'function',
+          function: { name: 'web_search', arguments: '{"query":"Rome"}' },
+        }],
+      }),
+      {
+        error: {
+          message: 'Transport channel closed, when Client(HttpRequest("http/request failed"))',
+          type: 'server_error',
+          code: 'app_server_error',
+          param: null,
+        },
+      },
+    )));
+
+    await expect(streamParts(buildCodexModel({ provider: 'codex', name: 'gpt-5.4-mini' }), {
+      prompt: [{ role: 'user', content: [{ type: 'text', text: 'Inspect Rome.' }] }],
+      providerOptions: buildCodexProviderOptions({ provider: 'codex', name: 'gpt-5.4-mini' }),
+    })).rejects.toMatchObject({ name: 'CodexProviderTransportError', isRetryable: true });
   });
 
   it('forwards caller-requested raw chunks before their normalized activity', async () => {

@@ -30,6 +30,18 @@ export class CodexProviderProtocolError extends Error {
   }
 }
 
+/** A transient app-server transport failure that the outer model loop may retry. */
+export class CodexProviderTransportError extends Error {
+  /** Allow the shared retry layer to start a fresh Codex attempt. */
+  readonly isRetryable = true;
+
+  /** Preserve the adapter error while exposing a stable retry classification. */
+  constructor(cause: unknown) {
+    super('Codex app-server transport channel closed.', { cause });
+    this.name = 'CodexProviderTransportError';
+  }
+}
+
 /** One parsed built-in activity call tracked across raw response chunks. */
 type ActivityCall = {
   id: string;
@@ -97,6 +109,16 @@ function logMissingReasoningTokenStatistics(usage: LanguageModelV3Usage): void {
 /** Return a non-retryable error with a consistent proxy-protocol prefix. */
 function protocolError(reason: string): CodexProviderProtocolError {
   return new CodexProviderProtocolError(`Codex proxy activity protocol error: ${reason}.`);
+}
+
+/** Find the app-server's transient channel-closure signature through adapter error wrappers. */
+function isTransportChannelClosed(error: unknown, seen = new Set<object>()): boolean {
+  if (typeof error === 'string') return /transport channel closed/i.test(error);
+  if (error === null || typeof error !== 'object' || seen.has(error)) return false;
+  seen.add(error);
+  const record = error as Record<string, unknown>;
+  return ['message', 'responseBody', 'data', 'error', 'cause']
+    .some((key) => isTransportChannelClosed(record[key], seen));
 }
 
 /** Extract the proxy's stable error code from an AI SDK API-call failure. */
@@ -419,8 +441,9 @@ class ActivityNormalizer {
     return parts;
   }
 
-  /** Reject a disconnected stream after activity has started, since replay would be ambiguous. */
-  failOnDisconnect(): void {
+  /** Classify a stream failure, rejecting ambiguous disconnects after activity has started. */
+  failOnDisconnect(error?: unknown): void {
+    if (isTransportChannelClosed(error)) throw new CodexProviderTransportError(error);
     if (this.pendingCandidates.size > 0 || this.calls.size > 0) {
       throw protocolError('stream disconnected during built-in activity');
     }
@@ -475,7 +498,7 @@ export function codexActivityMiddleware(): LanguageModelV3Middleware {
               for (const clientPart of normalizer.finishRaw(finishReason)) controller.enqueue(clientPart);
               return;
             }
-            if (part.type === 'error') normalizer.failOnDisconnect();
+            if (part.type === 'error') normalizer.failOnDisconnect(part.error);
             if (part.type === 'finish') {
               if (!sawRawFinish) normalizer.failOnDisconnect();
               if (!inspectedUsage) {

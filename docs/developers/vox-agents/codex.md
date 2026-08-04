@@ -52,3 +52,5 @@ npm run type-check --workspace=vox-agents
 ```
 
 For a contract-changing release, add focused fixtures for every changed request or response shape. Then start the exact package in the foreground with the command from the player troubleshooting guide. Confirm readiness, authentication, a normal Codex response, provider-executed tool activity, cancellation, and clean shutdown before merging.
+
+Keep response failure classification narrow. App-server `Transport channel closed` failures are transient and retryable. Malformed activity and unclassified disconnects after built-in activity remain terminal because their effects cannot be replayed safely.

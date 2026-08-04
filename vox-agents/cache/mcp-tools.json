@@ -1853,7 +1853,7 @@
           "description": "Notification body (shown as a tooltip and in the dialog for counterpart-less notifications; truncated to 400 characters)"
         }
       },
-      "required": [ 
+      "required": [
         "PlayerID",
         "Summary",
         "Message"
