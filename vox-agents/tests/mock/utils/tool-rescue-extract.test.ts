@@ -261,6 +261,20 @@ describe('rescueToolCallsFromText', () => {
       expect(JSON.parse(result.toolCalls[0].input)).toEqual({ x: 1 });
     });
 
+    it('unwraps an action wrapper string encoded inside a lone arguments field', () => {
+      const strategyTools = new Set(['set-flavors', 'set-research', 'set-persona']);
+      const inner = JSON.stringify({ actions: [
+        { action: 'set-flavors', arguments: { GrandStrategy: 'Spaceship', Flavors: { Science: 100 } } },
+        { action: 'set-research', arguments: { Technology: 'Computers' } },
+        { action: 'set-persona', arguments: { VictoryCompetitiveness: 9 } },
+      ] });
+      const text = JSON.stringify({ arguments: inner });
+      const result = rescueToolCallsFromText(text, strategyTools);
+      expect(result.toolCalls.map((call) => call.toolName)).toEqual(['set-flavors', 'set-research', 'set-persona']);
+      expect(JSON.parse(result.toolCalls[0].input)).toEqual({ GrandStrategy: 'Spaceship', Flavors: { Science: 100 } });
+      expect(result.remainingText).toBeUndefined();
+    });
+
     it('still parses a bare single tool-call object (no wrapper) unchanged', () => {
       const text = '{"action": "get-data", "arguments": {"x": 2}}';
       const result = rescueToolCallsFromText(text, tools);
@@ -486,6 +500,13 @@ describe('rescueToolCallsFromText', () => {
 
     it('should reject JSON without a recognized field pattern', () => {
       const text = '{"foo": "bar", "baz": 42}';
+      const result = rescueToolCallsFromText(text, tools);
+      expect(result.toolCalls).toEqual([]);
+      expect(result.remainingText).toBe(text);
+    });
+
+    it('preserves a lone arguments field containing string-encoded non-call JSON', () => {
+      const text = JSON.stringify({ arguments: JSON.stringify({ note: 'not a tool call' }) });
       const result = rescueToolCallsFromText(text, tools);
       expect(result.toolCalls).toEqual([]);
       expect(result.remainingText).toBe(text);

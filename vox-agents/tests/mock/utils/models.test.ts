@@ -405,6 +405,15 @@ describe('claude-code provider', () => {
         { type: 'function', name: 'send-message', description: 'Send a message', inputSchema: { type: 'object', properties: {}, additionalProperties: false } },
       ];
       const wrapper = JSON.stringify({ actions: [{ action: 'send-message', arguments: { message: 'hi' } }] });
+      const strategyTools = ['set-flavors', 'set-research', 'set-persona'].map((name) => ({
+        type: 'function', name, description: name, inputSchema: { type: 'object', properties: {} },
+      }));
+      const strategyWrapper = JSON.stringify({ actions: [
+        { action: 'set-flavors', arguments: { GrandStrategy: 'Spaceship', Flavors: { Science: 100 } } },
+        { action: 'set-research', arguments: { Technology: 'Computers' } },
+        { action: 'set-persona', arguments: { VictoryCompetitiveness: 9 } },
+      ] });
+      const stringEncodedStrategyCarrier = JSON.stringify({ arguments: strategyWrapper });
 
       // Build params the way production does: transformParams stashes originalTools (clearing
       // params.tools), sets the structuredToolCallsActive marker, and installs our responseFormat;
@@ -470,6 +479,23 @@ describe('claude-code provider', () => {
         const toolCalls = result.content.filter((c: any) => c.type === 'tool-call');
         expect(toolCalls).toHaveLength(1);
         expect(toolCalls[0].toolName).toBe('send-message');
+        expect(result.finishReason.unified).toBe('tool-calls');
+      });
+
+      it('wrapGenerate rescues a string-encoded action wrapper from the carrier arguments field', async () => {
+        const mw = toolRescueMiddleware({ prompt: true, framing: 'action', structuredToolCalls: true });
+        const doGenerate = async () => ({
+          content: [
+            { type: 'tool-call', toolCallId: 'so1', toolName: 'claude-code-tool.StructuredOutput', input: stringEncodedStrategyCarrier },
+            { type: 'text', text: stringEncodedStrategyCarrier },
+          ],
+          finishReason: { unified: 'stop', raw: 'stop' },
+        });
+        const result: any = await (mw.wrapGenerate as any)({ doGenerate, params: await transformed(mw, strategyTools) });
+        const toolCalls = result.content.filter((c: any) => c.type === 'tool-call');
+        expect(toolCalls.map((call: any) => call.toolName)).toEqual(['set-flavors', 'set-research', 'set-persona']);
+        expect(JSON.parse(toolCalls[0].input)).toEqual({ GrandStrategy: 'Spaceship', Flavors: { Science: 100 } });
+        expect(result.content.some((content: any) => content.type === 'text')).toBe(false);
         expect(result.finishReason.unified).toBe('tool-calls');
       });
 
@@ -597,6 +623,30 @@ describe('claude-code provider', () => {
         expect(out.some((c: any) => /structuredoutput/i.test(c.toolName ?? ''))).toBe(false);
         // The truncated husk (`{"actions":}`) is consumed, never leaked downstream as free text.
         expect(out.some((c: any) => c.type === 'text-delta' && String(c.delta).includes('actions'))).toBe(false);
+      });
+
+      it('wrapStream rescues a string-encoded action wrapper from the carrier arguments field', async () => {
+        const mw = toolRescueMiddleware({ prompt: true, framing: 'action', structuredToolCalls: true });
+        const chunks = [
+          { type: 'stream-start', warnings: [] },
+          { type: 'tool-input-start', id: 'so1', toolName: 'claude-code-tool.StructuredOutput' },
+          { type: 'text-start', id: 't1' },
+          { type: 'text-delta', id: 't1', delta: stringEncodedStrategyCarrier },
+          { type: 'text-end', id: 't1' },
+          { type: 'tool-input-delta', id: 'so1', delta: stringEncodedStrategyCarrier },
+          { type: 'tool-input-end', id: 'so1' },
+          { type: 'tool-call', toolCallId: 'so1', toolName: 'claude-code-tool.StructuredOutput', input: stringEncodedStrategyCarrier },
+          { type: 'finish', finishReason: { unified: 'stop', raw: 'stop' }, usage: { inputTokens: 1, outputTokens: 1 } },
+        ];
+        const doStream = async () => ({ stream: streamFrom(chunks) });
+        const { stream }: any = await (mw.wrapStream as any)({ doStream, params: await transformed(mw, strategyTools) });
+        const out = await drain(stream);
+        const toolCalls = out.filter((c: any) => c.type === 'tool-call');
+        expect(toolCalls.map((call: any) => call.toolName)).toEqual(['set-flavors', 'set-research', 'set-persona']);
+        expect(JSON.parse(toolCalls[2].input)).toEqual({ VictoryCompetitiveness: 9 });
+        expect(out.some((chunk: any) =>
+          chunk.type === 'text-delta' && String(chunk.delta).includes('"arguments"'))).toBe(false);
+        expect(out.find((c: any) => c.type === 'finish').finishReason.unified).toBe('tool-calls');
       });
 
       it('wrapGenerate strips the wrapper husk text while keeping the carrier-rescued call', async () => {

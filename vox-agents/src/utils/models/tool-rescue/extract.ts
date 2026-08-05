@@ -37,6 +37,39 @@ const FIELD_PATTERNS = [
 // Recognized parameter-field keys, for stripping nullish husks in the flattened fallback.
 const PARAMETER_FIELDS = new Set<string>(FIELD_PATTERNS.map(p => p.parametersField));
 
+/**
+ * Unwraps the extra function-arguments envelope some providers put around a structured tool
+ * payload. Only a lone `arguments` string whose decoded value already has a recognized wrapper or
+ * tool-call contour is accepted, so arbitrary string-encoded JSON remains ordinary text.
+ */
+function unwrapStringEncodedToolPayload(value: unknown, useJaison: boolean): unknown {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return value;
+  const entries = Object.entries(value as Record<string, unknown>);
+  if (entries.length !== 1 || entries[0][0] !== 'arguments' || typeof entries[0][1] !== 'string') {
+    return value;
+  }
+
+  let nested: unknown;
+  try {
+    nested = useJaison ? jaison(entries[0][1]) : JSON.parse(entries[0][1]);
+  } catch {
+    return value;
+  }
+
+  if (Array.isArray(nested)) {
+    const hasOnlyToolCallContours = nested.length > 0 && nested.every((item) =>
+      item && typeof item === 'object' && !Array.isArray(item)
+      && FIELD_PATTERNS.some(pattern => typeof item[pattern.nameField] === 'string'));
+    return hasOnlyToolCallContours ? nested : value;
+  }
+  if (!nested || typeof nested !== 'object') return value;
+  const nestedObject = nested as Record<string, unknown>;
+  const hasWrapper = Object.entries(nestedObject)
+    .some(([key, wrapped]) => WRAPPER_KEYS.has(key) && Array.isArray(wrapped));
+  const isDirectCall = FIELD_PATTERNS.some(pattern => typeof nestedObject[pattern.nameField] === 'string');
+  return hasWrapper || isDirectCall ? nested : value;
+}
+
 // Simple ID generator
 function generateId(): string {
   return `call_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
@@ -447,6 +480,10 @@ export function rescueToolCallsFromText(
     // Not valid JSON, return as text
     return { toolCalls: [], remainingText: text };
   }
+
+  // StructuredOutput can serialize its generated object inside a lone `arguments` string. Decode
+  // that extra layer only when the inner value already looks like a supported tool-call payload.
+  parsed = unwrapStringEncodedToolPayload(parsed, useJaison);
 
   // A constrained-decoding provider returns the tool-call array wrapped in an object,
   // because its responseFormat root must be an object (see buildToolCallArraySchema). If the
