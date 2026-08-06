@@ -197,6 +197,8 @@ export async function streamTextWithConcurrency<T extends Parameters<typeof stre
         }
       };
       modifiedParams.providerOptions = modifiedParams.providerOptions ?? {};
+      // Drop any error a timed-out earlier attempt preserved onto the shared options late
+      takePreservedModelError(modifiedParams);
 
       // Consume the raw stream
       const result = streamText(modifiedParams);

@@ -17,6 +17,14 @@ const loggerMocks = vi.hoisted(() => ({
   warn: vi.fn(),
 }));
 
+const retryTimerMocks = vi.hoisted(() => ({
+  setTimeout: vi.fn(),
+}));
+
+vi.mock('node:timers/promises', () => ({
+  setTimeout: retryTimerMocks.setTimeout,
+}));
+
 vi.mock('../../../../src/utils/models/providers/codex-proxy.js', async () => {
   const { tmpdir } = await import('node:os');
   const { join } = await import('node:path');
@@ -43,6 +51,7 @@ vi.mock('../../../../src/utils/logger.js', () => ({
 import { buildCodexModel, buildCodexProviderOptions } from '../../../../src/utils/models/providers/codex.js';
 import { codexActivityMiddleware } from '../../../../src/utils/models/providers/codex-response.js';
 import { requiredToolChoiceInstruction } from '../../../../src/utils/models/providers/required-tool-choice.js';
+import { streamTextWithConcurrency, withModelConfig } from '../../../../src/utils/models/concurrency.js';
 
 const testProxyRoot = path.join(os.tmpdir(), 'vox-codex-provider-test');
 
@@ -74,6 +83,27 @@ function proxyErrorResponse(code: string, status = 409): Response {
       code,
     },
   }), { status, headers: { 'content-type': 'application/json' } });
+}
+
+/** Creates a proxy quota response with optional reset metadata. */
+function quotaErrorResponse(
+  code: string,
+  options: { resetAt?: unknown; retryAfter?: string } = {},
+): Response {
+  const error: Record<string, unknown> = {
+    message: `Proxy rejected the request with ${code}.`,
+    type: 'rate_limit_error',
+    param: null,
+    code,
+  };
+  if (options.resetAt !== undefined) error.x_codex = { reset_at: options.resetAt };
+  return new Response(JSON.stringify({ error }), {
+    status: 429,
+    headers: {
+      'content-type': 'application/json',
+      ...(options.retryAfter === undefined ? {} : { 'retry-after': options.retryAfter }),
+    },
+  });
 }
 
 /** Collects all parts from a V3 stream for assertions. */
@@ -109,6 +139,7 @@ beforeEach(() => {
   proxyMocks.getActiveCodexProxyPort.mockReset().mockReturnValue(8787);
   proxyMocks.invalidateConnection.mockReset();
   loggerMocks.warn.mockReset();
+  retryTimerMocks.setTimeout.mockReset().mockResolvedValue(undefined);
 });
 
 afterEach(() => {
@@ -500,6 +531,109 @@ describe('Codex compatible adapter requests', () => {
       providerOptions: buildCodexProviderOptions({ provider: 'codex', name: 'gpt-5.4-mini' }),
     })).rejects.toMatchObject({ isRetryable: false });
   });
+
+  it('uses the proxy reset before Retry-After for a usage limit', async () => {
+    const now = Date.UTC(2026, 7, 6, 12, 0, 0);
+    const nowSpy = vi.spyOn(Date, 'now').mockReturnValue(now);
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(quotaErrorResponse('usage_limit_exceeded', {
+      resetAt: now / 1000 + 90,
+      retryAfter: '30',
+    })));
+
+    await expect(buildCodexModel({ provider: 'codex', name: 'gpt-5.4-mini' }).doGenerate({
+      prompt: [{ role: 'user', content: [{ type: 'text', text: 'Hello.' }] }],
+      providerOptions: buildCodexProviderOptions({ provider: 'codex', name: 'gpt-5.4-mini' }),
+    })).rejects.toMatchObject({
+      name: 'CodexUsageLimitError',
+      isRetryable: true,
+      retryAt: now + 105_000,
+    });
+    nowSpy.mockRestore();
+  });
+
+  it('uses decimal Retry-After when a usage limit has no reset extension', async () => {
+    const now = Date.UTC(2026, 7, 6, 12, 0, 0);
+    const nowSpy = vi.spyOn(Date, 'now').mockReturnValue(now);
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(quotaErrorResponse('usage_limit_exceeded', {
+      retryAfter: '30.5',
+    })));
+
+    await expect(buildCodexModel({ provider: 'codex', name: 'gpt-5.4-mini' }).doGenerate({
+      prompt: [{ role: 'user', content: [{ type: 'text', text: 'Hello.' }] }],
+      providerOptions: buildCodexProviderOptions({ provider: 'codex', name: 'gpt-5.4-mini' }),
+    })).rejects.toMatchObject({ retryAt: now + 45_500 });
+    nowSpy.mockRestore();
+  });
+
+  it.each([
+    ['stale', 1],
+    ['malformed', 'tomorrow'],
+    ['over-eight-day', Date.UTC(2026, 7, 15, 12, 0, 0) / 1000],
+  ])('uses Retry-After when the proxy reset is %s', async (_label, resetAt) => {
+    const now = Date.UTC(2026, 7, 6, 12, 0, 0);
+    const nowSpy = vi.spyOn(Date, 'now').mockReturnValue(now);
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(quotaErrorResponse('usage_limit_exceeded', {
+      resetAt,
+      retryAfter: '30.5',
+    })));
+
+    await expect(buildCodexModel({ provider: 'codex', name: 'gpt-5.4-mini' }).doGenerate({
+      prompt: [{ role: 'user', content: [{ type: 'text', text: 'Hello.' }] }],
+      providerOptions: buildCodexProviderOptions({ provider: 'codex', name: 'gpt-5.4-mini' }),
+    })).rejects.toMatchObject({ retryAt: now + 45_500 });
+    nowSpy.mockRestore();
+  });
+
+  it('does not classify usage_limit_exceeded without an HTTP 429 response', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(proxyErrorResponse('usage_limit_exceeded', 500)));
+
+    await expect(buildCodexModel({ provider: 'codex', name: 'gpt-5.4-mini' }).doGenerate({
+      prompt: [{ role: 'user', content: [{ type: 'text', text: 'Hello.' }] }],
+      providerOptions: buildCodexProviderOptions({ provider: 'codex', name: 'gpt-5.4-mini' }),
+    })).rejects.not.toMatchObject({ name: 'CodexUsageLimitError' });
+  });
+
+  it.each([
+    ['missing reset', {}],
+    ['stale reset', { resetAt: 1 }],
+    ['malformed reset', { resetAt: 'tomorrow' }],
+    ['over-eight-day reset', { resetAt: Date.UTC(2026, 7, 15, 12, 0, 0) / 1000 }],
+    ['malformed Retry-After', { retryAfter: 'tomorrow' }],
+  ])('falls back after a %s usage-limit reset', async (_label, options) => {
+    const now = Date.UTC(2026, 7, 6, 12, 0, 0);
+    const nowSpy = vi.spyOn(Date, 'now').mockReturnValue(now);
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(quotaErrorResponse('usage_limit_exceeded', options)));
+
+    await expect(buildCodexModel({ provider: 'codex', name: 'gpt-5.4-mini' }).doGenerate({
+      prompt: [{ role: 'user', content: [{ type: 'text', text: 'Hello.' }] }],
+      providerOptions: buildCodexProviderOptions({ provider: 'codex', name: 'gpt-5.4-mini' }),
+    })).rejects.toMatchObject({ retryAt: now + 5 * 60_000 });
+    nowSpy.mockRestore();
+  });
+
+  it.each(['insufficient_credits', 'workspace_usage_limit_exceeded'])(
+    'marks the terminal HTTP 429 quota error %s as non-retryable',
+    async (code) => {
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue(quotaErrorResponse(code)));
+
+      await expect(buildCodexModel({ provider: 'codex', name: 'gpt-5.4-mini' }).doGenerate({
+        prompt: [{ role: 'user', content: [{ type: 'text', text: 'Hello.' }] }],
+        providerOptions: buildCodexProviderOptions({ provider: 'codex', name: 'gpt-5.4-mini' }),
+      })).rejects.toMatchObject({ isRetryable: false });
+    },
+  );
+
+  it.each(['insufficient_credits', 'workspace_usage_limit_exceeded'])(
+    'marks the stable terminal quota error %s as non-retryable outside HTTP 429',
+    async (code) => {
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue(proxyErrorResponse(code)));
+
+      await expect(buildCodexModel({ provider: 'codex', name: 'gpt-5.4-mini' }).doGenerate({
+        prompt: [{ role: 'user', content: [{ type: 'text', text: 'Hello.' }] }],
+        providerOptions: buildCodexProviderOptions({ provider: 'codex', name: 'gpt-5.4-mini' }),
+      })).rejects.toMatchObject({ isRetryable: false });
+    },
+  );
 });
 
 describe('Codex reasoning token diagnostics', () => {
@@ -991,6 +1125,156 @@ describe('Codex built-in activity normalization', () => {
     })).rejects.toMatchObject({ name: 'CodexProviderTransportError', isRetryable: true });
   });
 
+  it.each(['before', 'after'])('preserves a raw usage-limit SSE envelope %s activity', async (position) => {
+    const now = Date.UTC(2026, 7, 6, 12, 0, 0);
+    const nowSpy = vi.spyOn(Date, 'now').mockReturnValue(now);
+    const activity = {
+      id: 'search-limit', object: 'chat.completion.chunk', created: 1, model: 'gpt-5.4-mini',
+      choices: [{ index: 0, delta: { tool_calls: [{
+        index: 0, id: 'search-limit', type: 'function',
+        function: { name: 'web_search', arguments: '{"query":"Rome"}' },
+      }] }, finish_reason: null }],
+    };
+    const limit = {
+      error: {
+        message: 'ChatGPT usage limit reached.', type: 'rate_limit_error', code: 'usage_limit_exceeded',
+        x_codex: { reset_at: now / 1000 + 60 },
+      },
+    };
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(streamingCompletion(
+      ...(position === 'before' ? [limit, activity] : [activity, limit]),
+    )));
+    const providerOptions = buildCodexProviderOptions({ provider: 'codex', name: 'gpt-5.4-mini' });
+    const response = await buildCodexModel({ provider: 'codex', name: 'gpt-5.4-mini' }).doStream({
+      prompt: [{ role: 'user', content: [{ type: 'text', text: 'Inspect Rome.' }] }],
+      providerOptions,
+      includeRawChunks: true,
+    });
+
+    const parts: any[] = [];
+    await expect((async () => {
+      for await (const part of response.stream) parts.push(part);
+    })()).rejects.toMatchObject({
+      name: 'CodexUsageLimitError',
+      isRetryable: true,
+      retryAt: now + 75_000,
+    });
+    expect(parts.some((part) => part.type === 'tool-call')).toBe(position === 'after');
+    expect(parts).toContainEqual(expect.objectContaining({ type: 'raw', rawValue: limit }));
+    expect(providerOptions).toMatchObject({
+      error: { name: 'CodexUsageLimitError', retryAt: now + 75_000 },
+    });
+    nowSpy.mockRestore();
+  });
+
+  it.each([
+    ['insufficient_credits', 'Codex credits are exhausted.'],
+    ['workspace_usage_limit_exceeded', undefined],
+  ])('marks a raw %s SSE envelope as a terminal quota failure', async (code, message) => {
+    const limit = {
+      error: {
+        ...(message === undefined ? {} : { message }),
+        type: 'rate_limit_error',
+        code,
+      },
+    };
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(streamingCompletion(limit)));
+    const response = await buildCodexModel({ provider: 'codex', name: 'gpt-5.4-mini' }).doStream({
+      prompt: [{ role: 'user', content: [{ type: 'text', text: 'Inspect Rome.' }] }],
+      providerOptions: buildCodexProviderOptions({ provider: 'codex', name: 'gpt-5.4-mini' }),
+    });
+
+    const parts: any[] = [];
+    await expect((async () => {
+      for await (const part of response.stream) parts.push(part);
+    })()).rejects.toMatchObject({
+      isRetryable: false,
+      message: message ?? `Codex proxy rejected the request with ${code}.`,
+      cause: limit,
+    });
+  });
+
+  it('preserves a raw usage-limit SSE error through streamText', async () => {
+    const now = Date.UTC(2026, 7, 6, 12, 0, 0);
+    const nowSpy = vi.spyOn(Date, 'now').mockReturnValue(now);
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(streamingCompletion({
+      error: {
+        message: 'ChatGPT usage limit reached.', type: 'rate_limit_error', code: 'usage_limit_exceeded',
+        x_codex: { reset_at: now / 1000 + 60 },
+      },
+    })));
+    const providerOptions = buildCodexProviderOptions({ provider: 'codex', name: 'gpt-5.4-mini' });
+    const result = streamText({
+      model: buildCodexModel({ provider: 'codex', name: 'gpt-5.4-mini' }),
+      prompt: 'Inspect Rome.',
+      providerOptions,
+    });
+
+    const parts: any[] = [];
+    await expect((async () => {
+      for await (const part of result.fullStream) parts.push(part);
+    })()).rejects.toMatchObject({
+      name: 'CodexUsageLimitError',
+      retryAt: now + 75_000,
+    });
+
+    expect(parts).toEqual([{ type: 'start' }]);
+    expect(providerOptions).toMatchObject({
+      error: { name: 'CodexUsageLimitError', retryAt: now + 75_000 },
+    });
+    nowSpy.mockRestore();
+  });
+
+  it('waits through the shared retry path and replays the complete Codex attempt', async () => {
+    const now = Date.UTC(2026, 7, 6, 12, 0, 0);
+    const nowSpy = vi.spyOn(Date, 'now').mockReturnValue(now);
+    const randomSpy = vi.spyOn(Math, 'random').mockReturnValue(0);
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(streamingCompletion({
+        error: {
+          message: 'ChatGPT usage limit reached.', type: 'rate_limit_error', code: 'usage_limit_exceeded',
+          x_codex: { reset_at: now / 1000 + 60 },
+        },
+      }))
+      .mockResolvedValueOnce(streamingCompletion(
+        {
+          id: 'chatcmpl-retry', object: 'chat.completion.chunk', created: 1, model: 'gpt-5.4-mini',
+          choices: [{ index: 0, delta: { role: 'assistant', content: 'Rome is ready.' }, finish_reason: null }],
+        },
+        {
+          id: 'chatcmpl-retry', object: 'chat.completion.chunk', created: 1, model: 'gpt-5.4-mini',
+          choices: [{ index: 0, delta: {}, finish_reason: 'stop' }],
+          usage: { prompt_tokens: 1, completion_tokens: 3, total_tokens: 4 },
+        },
+      ));
+    vi.stubGlobal('fetch', fetchMock);
+    const config = { provider: 'codex', name: 'gpt-5.4-mini', options: { concurrencyLimit: 1 } } as any;
+    const abortController = new AbortController();
+    const providerOptions = buildCodexProviderOptions(config);
+    const params = withModelConfig({
+      model: buildCodexModel(config),
+      prompt: 'Inspect Rome.',
+      providerOptions,
+      abortSignal: abortController.signal,
+    }, config);
+    const context = { timeoutRefresh: () => {}, logger: { warn: vi.fn() } } as any;
+
+    const result = await streamTextWithConcurrency(params, context);
+
+    expect(result.steps).toHaveLength(1);
+    expect(result.steps[0]).toMatchObject({ text: 'Rome is ready.' });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(capturedBodies(fetchMock)[0]).toEqual(capturedBodies(fetchMock)[1]);
+    expect(retryTimerMocks.setTimeout).toHaveBeenCalledWith(
+      75_000,
+      undefined,
+      { signal: abortController.signal },
+    );
+    expect(providerOptions).not.toHaveProperty('error');
+    randomSpy.mockRestore();
+    nowSpy.mockRestore();
+  });
+
   it('forwards caller-requested raw chunks before their normalized activity', async () => {
     const fetchMock = vi.fn().mockResolvedValue(streamingCompletion(
       {
@@ -1018,6 +1302,77 @@ describe('Codex built-in activity normalization', () => {
     const activityCall = parts.findIndex((part) => part.type === 'tool-call' && part.toolCallId === 'search-raw');
     expect(firstRaw).toBeGreaterThanOrEqual(0);
     expect(firstRaw).toBeLessThan(activityCall);
+  });
+
+  it('keeps a raw quota error ahead of trailing activity and adapter finish handling', async () => {
+    const now = Date.UTC(2026, 7, 6, 12, 0, 0);
+    const nowSpy = vi.spyOn(Date, 'now').mockReturnValue(now);
+    const beforeLimit = {
+      choices: [{
+        delta: { tool_calls: [{
+          index: 0, id: 'before-limit', type: 'function',
+          function: { name: 'web_search', arguments: '{"query":"Rome"}' },
+        }] },
+        finish_reason: null,
+      }],
+    };
+    const limit = {
+      error: {
+        message: 'ChatGPT usage limit reached.', type: 'rate_limit_error', code: 'usage_limit_exceeded',
+        x_codex: { reset_at: now / 1000 + 60 },
+      },
+    };
+    const afterLimit = {
+      choices: [{
+        delta: { tool_calls: [{
+          index: 1, id: 'after-limit', type: 'function',
+          function: { name: 'computer_use', arguments: '{}' },
+        }] },
+        finish_reason: null,
+      }],
+    };
+    const middleware = codexActivityMiddleware();
+    const transformed = await middleware.transformParams!({
+      type: 'stream',
+      params: {
+        prompt: [{ role: 'user', content: [{ type: 'text', text: 'Inspect Rome.' }] }],
+        providerOptions: {},
+        includeRawChunks: true,
+      } as any,
+      model: {} as any,
+    });
+    const wrapped = await middleware.wrapStream!({
+      doGenerate: async () => { throw new Error('not used'); },
+      doStream: async () => ({
+        stream: new ReadableStream({
+          start(controller) {
+            controller.enqueue({ type: 'raw', rawValue: beforeLimit });
+            controller.enqueue({ type: 'raw', rawValue: limit });
+            controller.enqueue({ type: 'raw', rawValue: afterLimit });
+            controller.enqueue({
+              type: 'finish',
+              finishReason: { unified: 'stop', raw: 'stop' },
+              usage: { inputTokens: { total: 1 }, outputTokens: { total: 1 } },
+            });
+            controller.close();
+          },
+        }),
+      } as any),
+      params: transformed,
+      model: {} as any,
+    });
+    const parts: any[] = [];
+
+    await expect((async () => {
+      for await (const part of wrapped.stream) parts.push(part);
+    })()).rejects.toMatchObject({ name: 'CodexUsageLimitError', retryAt: now + 75_000 });
+
+    expect(parts.filter((part) => part.type === 'raw')).toHaveLength(3);
+    expect(parts).toContainEqual(expect.objectContaining({
+      type: 'tool-call', toolCallId: 'before-limit', providerExecuted: true,
+    }));
+    expect(parts.some((part) => part.type === 'tool-call' && part.toolCallId === 'after-limit')).toBe(false);
+    nowSpy.mockRestore();
   });
 
   it('suppresses internally enabled raw chunks when transformed parameters are cloned', async () => {

@@ -2,7 +2,7 @@
 
 This guide is for developers updating the managed `codex-openai-proxy` release used by vox-agents. Vox Deorum launches an exact version through `npx` on the first Codex request. The proxy is not a workspace dependency.
 
-The current pin is `codex-openai-proxy@0.1.0-rc.18`, which bundles `@openai/codex@0.146.0`.
+The current pin is `codex-openai-proxy@0.1.0-rc.19`, which bundles `@openai/codex@0.146.0`.
 
 ## Check the release
 
@@ -21,6 +21,8 @@ Review the candidate's release notes and command help for changes to:
 - the `/health` and `/ready` responses;
 - request policy fields such as sandbox, web search, and tool choice;
 - streamed `tool_calls`, `tool_results`, errors, and diagnostic records.
+
+The proxy reports temporary ChatGPT quota exhaustion as HTTP 429 with the stable `usage_limit_exceeded` error code. It may include `error.x_codex.reset_at` as Unix seconds, or a decimal `Retry-After` header when that field is unavailable. The same error envelope can appear in an SSE stream before the compatible adapter reduces it to a message. `insufficient_credits` and `workspace_usage_limit_exceeded` are terminal quota states, not retry signals.
 
 These are integration contracts. A compatible dependency update needs only the version edits below. A contract change also needs adapter code and captured response fixtures updated in the same change.
 

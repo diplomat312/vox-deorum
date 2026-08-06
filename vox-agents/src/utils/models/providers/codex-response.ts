@@ -12,6 +12,7 @@ import type {
   LanguageModelV3Usage,
 } from '@ai-sdk/provider';
 import { createLogger } from '../../logger.js';
+import { preserveModelError } from '../preserved-model-error.js';
 import { classifyProviderActivityStatus } from './activity-status.js';
 import { clientFunctionToolNames } from './required-tool-choice.js';
 
@@ -39,6 +40,22 @@ export class CodexProviderTransportError extends Error {
   constructor(cause: unknown) {
     super('Codex app-server transport channel closed.', { cause });
     this.name = 'CodexProviderTransportError';
+  }
+}
+
+/** A retryable ChatGPT usage limit reported by the managed Codex proxy. */
+export class CodexUsageLimitError extends Error {
+  /** Allow the shared retry layer to wait until the proxy-provided reset time. */
+  readonly isRetryable = true;
+
+  /** Absolute epoch timestamp at which a fresh Codex attempt may start. */
+  readonly retryAt: number;
+
+  /** Create a quota error targeting the provided absolute retry timestamp. */
+  constructor(retryAt: number, cause?: unknown) {
+    super('Codex ChatGPT usage limit reached.', cause === undefined ? undefined : { cause });
+    this.name = 'CodexUsageLimitError';
+    this.retryAt = retryAt;
   }
 }
 
@@ -88,6 +105,16 @@ const terminalContinuationCodes = new Set([
   'unknown_tool_call_id',
 ]);
 
+/** Quota states that cannot become available through waiting and retrying. */
+const terminalQuotaCodes = new Set([
+  'insufficient_credits',
+  'workspace_usage_limit_exceeded',
+]);
+
+const quotaRetryFallbackMs = 5 * 60 * 1000;
+const quotaRetryGraceMs = 15 * 1000;
+const maximumQuotaRetryDelayMs = 8 * 24 * 60 * 60 * 1000;
+
 /** Return a record only for object values that can safely be inspected. */
 function asRecord(value: unknown): Record<string, unknown> | undefined {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
@@ -121,23 +148,88 @@ function isTransportChannelClosed(error: unknown, seen = new Set<object>()): boo
     .some((key) => isTransportChannelClosed(record[key], seen));
 }
 
-/** Extract the proxy's stable error code from an AI SDK API-call failure. */
-function proxyErrorCode(error: unknown): string | undefined {
+/** Parsed stable proxy error fields shared by HTTP failures and raw SSE envelopes. */
+type ProxyErrorDetails = {
+  code?: string;
+  resetAtSeconds?: number;
+};
+
+/** Return the proxy response body, retaining extensions that the adapter's data omits. */
+function proxyResponseBody(error: unknown): Record<string, unknown> | undefined {
   const record = asRecord(error);
-  const dataError = asRecord(asRecord(record?.data)?.error);
-  if (typeof dataError?.code === 'string') return dataError.code;
   if (typeof record?.responseBody !== 'string') return undefined;
   try {
-    const bodyError = asRecord(asRecord(JSON.parse(record.responseBody) as unknown)?.error);
-    return typeof bodyError?.code === 'string' ? bodyError.code : undefined;
+    return asRecord(asRecord(JSON.parse(record.responseBody) as unknown)?.error);
   } catch {
     return undefined;
   }
 }
 
+/** Extract the proxy's stable error fields from an AI SDK failure or raw envelope. */
+function proxyErrorDetails(error: unknown): ProxyErrorDetails {
+  const record = asRecord(error);
+  // A raw SSE envelope carries only a top-level error, while an adapter HTTP failure
+  // carries the same body twice: parsed data whose schema drops extensions such as
+  // x_codex, and the original response text. Extensions must prefer the reparsed body.
+  const adapterError = asRecord(record?.error) ?? asRecord(asRecord(record?.data)?.error);
+  const bodyError = proxyResponseBody(error);
+  const code = (adapterError ?? bodyError)?.code;
+  const resetAt = asRecord((bodyError ?? adapterError)?.x_codex)?.reset_at;
+  return {
+    ...(typeof code === 'string' ? { code } : {}),
+    ...(typeof resetAt === 'number' && Number.isFinite(resetAt) ? { resetAtSeconds: resetAt } : {}),
+  };
+}
+
+/** Return the HTTP status preserved by an AI SDK API-call error. */
+function proxyStatusCode(error: unknown): number | undefined {
+  const statusCode = asRecord(error)?.statusCode;
+  return typeof statusCode === 'number' ? statusCode : undefined;
+}
+
+/** Return one response header value without relying on the adapter's header representation. */
+function proxyResponseHeader(error: unknown, name: string): string | undefined {
+  const headers = asRecord(asRecord(error)?.responseHeaders);
+  if (headers === undefined) return undefined;
+  const expected = name.toLowerCase();
+  for (const [key, value] of Object.entries(headers)) {
+    if (key.toLowerCase() === expected && typeof value === 'string') return value;
+  }
+  return undefined;
+}
+
+/** Resolve a valid future proxy quota reset, retaining a short post-reset grace period. */
+function validQuotaRetryAt(resetAtMs: number | undefined, now: number): number | undefined {
+  if (resetAtMs === undefined || resetAtMs <= now || resetAtMs > now + maximumQuotaRetryDelayMs) {
+    return undefined;
+  }
+  return resetAtMs + quotaRetryGraceMs;
+}
+
+/** Parse the proxy's decimal Retry-After fallback into an absolute timestamp. */
+function retryAfterAt(error: unknown, now: number): number | undefined {
+  const retryAfter = proxyResponseHeader(error, 'retry-after');
+  if (retryAfter === undefined || !/^\d+(?:\.\d+)?$/.test(retryAfter.trim())) return undefined;
+  const seconds = Number(retryAfter);
+  return Number.isFinite(seconds) ? now + seconds * 1000 : undefined;
+}
+
+/** Build a typed retryable error for a proxy usage-limit response. */
+function usageLimitError(error: unknown, details: ProxyErrorDetails): CodexUsageLimitError {
+  const now = Date.now();
+  const retryAt = validQuotaRetryAt(details.resetAtSeconds === undefined ? undefined : details.resetAtSeconds * 1000, now)
+    ?? validQuotaRetryAt(retryAfterAt(error, now), now)
+    ?? now + quotaRetryFallbackMs;
+  return new CodexUsageLimitError(retryAt, error);
+}
+
+/** Mark known terminal proxy quota states so broad provider retry handling cannot replay them. */
+function markTerminalQuotaError(error: unknown): void {
+  if (asRecord(error) !== undefined) (error as { isRetryable?: boolean }).isRetryable = false;
+}
+
 /** Mark deterministic proxy continuation failures as terminal for Vox Deorum's retry layer. */
-function classifyContinuationFailure(error: unknown): never {
-  const code = proxyErrorCode(error);
+function classifyContinuationFailure(error: unknown, code: string | undefined): never {
   if (
     code !== undefined
     && (terminalContinuationCodes.has(code) || /^continuation_.+_mismatch$/.test(code))
@@ -148,12 +240,39 @@ function classifyContinuationFailure(error: unknown): never {
   throw error;
 }
 
+/** Classify quota and continuation failures thrown before any response chunk is available. */
+function classifyProviderFailure(error: unknown): never {
+  const details = proxyErrorDetails(error);
+  if (proxyStatusCode(error) === 429 && details.code === 'usage_limit_exceeded') {
+    throw usageLimitError(error, details);
+  }
+  if (details.code !== undefined && terminalQuotaCodes.has(details.code)) {
+    markTerminalQuotaError(error);
+  }
+  return classifyContinuationFailure(error, details.code);
+}
+
+/** Classify a raw proxy SSE error before the compatible adapter discards extensions. */
+function classifyRawProxyFailure(raw: unknown): Error | undefined {
+  const details = proxyErrorDetails(raw);
+  if (details.code === 'usage_limit_exceeded') return usageLimitError(raw, details);
+  if (details.code !== undefined && terminalQuotaCodes.has(details.code)) {
+    const message = asRecord(asRecord(raw)?.error)?.message;
+    const error = new Error(typeof message === 'string'
+      ? message
+      : `Codex proxy rejected the request with ${details.code}.`, { cause: raw });
+    markTerminalQuotaError(error);
+    return error;
+  }
+  return undefined;
+}
+
 /** Execute one adapter operation while preserving and refining its retry classification. */
-async function withContinuationClassification<T>(operation: () => PromiseLike<T>): Promise<T> {
+async function withProviderFailureClassification<T>(operation: () => PromiseLike<T>): Promise<T> {
   try {
     return await operation();
   } catch (error) {
-    return classifyContinuationFailure(error);
+    return classifyProviderFailure(error);
   }
 }
 
@@ -464,7 +583,7 @@ export function codexActivityMiddleware(): LanguageModelV3Middleware {
       return transformed;
     },
     wrapGenerate: async ({ doGenerate, params }) => {
-      const response = await withContinuationClassification(doGenerate);
+      const response = await withProviderFailureClassification(doGenerate);
       logMissingReasoningTokenStatistics(response.usage);
       const normalizer = new ActivityNormalizer(params);
       const payload = rawChoicePayload(response.response?.body);
@@ -478,24 +597,35 @@ export function codexActivityMiddleware(): LanguageModelV3Middleware {
       return { ...response, content: [...content, ...activity as LanguageModelV3Content[]] };
     },
     wrapStream: async ({ doStream, params }) => {
-      const response = await withContinuationClassification(doStream);
+      const response = await withProviderFailureClassification(doStream);
       const normalizer = new ActivityNormalizer(params);
       const requestedRawChunks = rawChunkPreferences.get(params) ?? false;
       let sawFinish = false;
       let sawRawFinish = false;
       let inspectedUsage = false;
+      let rawProxyFailure: Error | undefined;
       return {
         ...response,
         stream: response.stream.pipeThrough(new TransformStream<LanguageModelV3StreamPart, LanguageModelV3StreamPart>({
           transform(part, controller) {
             if (part.type === 'raw') {
               if (requestedRawChunks) controller.enqueue(part);
+              if (rawProxyFailure !== undefined) return;
+              rawProxyFailure = classifyRawProxyFailure(part.rawValue);
+              if (rawProxyFailure !== undefined) return;
               const payload = rawChoicePayload(part.rawValue);
               const finishReason = rawFinishReason(part.rawValue);
               if (finishReason !== undefined) sawRawFinish = true;
               for (const activity of normalizer.ingestCalls(payload?.tool_calls)) controller.enqueue(activity);
               for (const activity of normalizer.ingestResults(payload?.tool_results)) controller.enqueue(activity);
               for (const clientPart of normalizer.finishRaw(finishReason)) controller.enqueue(clientPart);
+              return;
+            }
+            if (rawProxyFailure !== undefined) {
+              if (part.type === 'error') {
+                preserveModelError(params, rawProxyFailure);
+                controller.error(rawProxyFailure);
+              }
               return;
             }
             if (part.type === 'error') normalizer.failOnDisconnect(part.error);
@@ -510,7 +640,12 @@ export function codexActivityMiddleware(): LanguageModelV3Middleware {
             }
             for (const normalizedPart of normalizer.handleAdapterPart(part)) controller.enqueue(normalizedPart);
           },
-          flush() {
+          flush(controller) {
+            if (rawProxyFailure !== undefined) {
+              preserveModelError(params, rawProxyFailure);
+              controller.error(rawProxyFailure);
+              return;
+            }
             if (!sawFinish) normalizer.failOnDisconnect();
           },
         })),

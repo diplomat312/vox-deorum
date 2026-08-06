@@ -74,6 +74,8 @@ Common Codex models are already listed on the Settings page, and you can also se
 
 Vox Deorum reuses an existing ChatGPT login when it can. Otherwise the Setup wizard opens or links the device-login page, displays the verification URL and user code in the dashboard, and waits for authentication before validating the account through the proxy. The verification URL can also appear in the logs, but the one-time user code is never written there. If the browser doesn't open, use the link shown in the wizard; restarting Vox Deorum tries the login again.
 
+If ChatGPT reports a temporary Codex usage limit during play, Vox Deorum waits until the reported reset time and retries the interrupted attempt automatically. Canceling the active run also cancels that wait.
+
 Codex's own web, file, and command activity shows up in the dashboard as progress, but it's not a move in the game.
 
 Advanced setups can let a CLI-backed model read or write files or reach the web during its turn, controlled by the `hostTools` option on a model's configuration entry; the full policy is in the [developer overview](../developers/vox-agents/overview.md#models-and-configuration).
