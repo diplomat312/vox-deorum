@@ -11,6 +11,7 @@ import { mkdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { existsSync } from 'node:fs';
 import { dirname, isAbsolute, join } from 'node:path';
+import { stripVTControlCharacters } from 'node:util';
 import type { SpawnOptions } from 'node:child_process';
 import { createLogger } from '../../logger.js';
 import { executionTimeoutDefault } from '../../retry.js';
@@ -439,7 +440,8 @@ export class CodexProxyManager {
     let record: unknown;
     try { record = JSON.parse(line); }
     catch {
-      this.dependencies.logger.info('Codex proxy:', redactProxyText(line));
+      const text = redactProxyText(stripVTControlCharacters(line)).trim();
+      if (text) this.dependencies.logger.info(`Codex proxy: ${text}`);
       return;
     }
     if (isRecord(record) && Object.keys(record).length === 0) return;
