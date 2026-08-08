@@ -442,6 +442,25 @@ describe('CodexProxyManager startup', () => {
     expect(output).not.toContain('secret-value');
   });
 
+  it('should not forward empty structured proxy records', async () => {
+    const child = createChild();
+    const logger = { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() };
+    const manager = createManager(
+      vi.fn()
+        .mockRejectedValueOnce(new TypeError('connection refused'))
+        .mockResolvedValue(response(200, { status: 'ready' })),
+      vi.fn(() => child),
+      { logger },
+    );
+
+    await manager.ensureCodexProxy();
+    child.stderr.emit('data', '{}\n');
+    child.stderr.emit('data', `${JSON.stringify({ event: 'server_listening' })}\n`);
+
+    const forwarded = logger.info.mock.calls.filter((call) => call[0] === 'Codex proxy:');
+    expect(forwarded).toEqual([['Codex proxy:', { event: 'server_listening' }]]);
+  });
+
   it('should demote readiness and health request records to debug regardless of their own level', async () => {
     const child = createChild();
     const logger = { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() };

@@ -442,6 +442,7 @@ export class CodexProxyManager {
       this.dependencies.logger.info('Codex proxy:', redactProxyText(line));
       return;
     }
+    if (isRecord(record) && Object.keys(record).length === 0) return;
     this.openDeviceLogin(child, record);
     logProxyRecord(this.dependencies.logger, record);
   }
