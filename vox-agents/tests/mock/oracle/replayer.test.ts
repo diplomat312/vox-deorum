@@ -50,6 +50,8 @@ const mocks = vi.hoisted(() => {
     registerTools: vi.fn(),
     replaceToolsWithSchemaOnly: vi.fn(),
     shutdown: vi.fn(),
+    shutdownBatchManager: vi.fn(),
+    startBatchManager: vi.fn(),
   };
 });
 
@@ -94,6 +96,11 @@ vi.mock('../../../src/instrumentation.js', () => ({
   spanProcessor: {
     forceFlush: mocks.forceFlush,
   },
+}));
+
+vi.mock('../../../src/oracle/batch/batch-manager.js', () => ({
+  shutdownBatchManager: mocks.shutdownBatchManager,
+  startBatchManager: mocks.startBatchManager,
 }));
 
 import { runReplay } from '../../../src/oracle/replayer.js';
@@ -589,11 +596,50 @@ describe('oracle replayer (non-cache paths)', () => {
       expect(mocks.connect).not.toHaveBeenCalled();
       expect(mocks.disconnect).not.toHaveBeenCalled();
     });
+
+    it('flushes telemetry before teardown when replay setup throws', async () => {
+      const outputDir = makeTempDir();
+      mocks.createContext.mockRejectedValueOnce(new Error('telemetry context failed'));
+
+      await expect(runReplay(baseConfig(outputDir, 'lifecycle-error', () => ({})), [retrieved()]))
+        .rejects.toThrow('telemetry context failed');
+
+      expect(mocks.forceFlush).toHaveBeenCalledTimes(1);
+      expect(mocks.shutdown).toHaveBeenCalledTimes(1);
+    });
   });
 
-  describe('shutdown (Ctrl+C)', () => {
+  describe('retrieved input validation', () => {
+    it('throws when replay input is absent instead of terminating the process', async () => {
+      const outputDir = makeTempDir();
+
+      await expect(runReplay(baseConfig(outputDir, 'missing-retrieved', () => ({}))))
+        .rejects.toThrow('No retrieved rows found');
+    });
+  });
+
+  describe('shutdown (Ctrl+C) and graceful stop (Ctrl+A)', () => {
     /** Four distinct models expand one source row into four tasks, run one at a time. */
     const FOUR_MODELS = ['oracle-test/m-a@low', 'oracle-test/m-b@low', 'oracle-test/m-c@low', 'oracle-test/m-d@low'];
+
+    /** Execute mock whose single task stays pending until the returned resolver is called. */
+    function mockPendingFirstTask(): Promise<(result?: any) => void> {
+      return new Promise<(result?: any) => void>(exposeResolver => {
+        mocks.execute.mockImplementationOnce(async (_agentName, input, _callback, tokenOutput) => {
+          tokenOutput.inputTokens = 10;
+          return new Promise(settle => {
+            exposeResolver((result = {}) => settle({
+              row: input.row,
+              model: 'oracle-test/m-a',
+              decisions: [],
+              tokens: { inputTokens: 0, reasoningTokens: 0, outputTokens: 0 },
+              messages: [],
+              ...result,
+            }));
+          });
+        });
+      });
+    }
 
     /** Execute mock that raises the shutdown flag while the first task is running. */
     function mockShutdownDuringFirstTask(): void {
@@ -644,6 +690,77 @@ describe('oracle replayer (non-cache paths)', () => {
       // The completed task's trail still landed, so the next run can reuse it as cache.
       const trails = fs.readdirSync(path.join(outputDir, 'interrupt-csv')).filter(f => f.endsWith('.json'));
       expect(trails).toEqual(['game-1-p2-t3-m-a.json']);
+      expect(mocks.forceFlush).toHaveBeenCalledTimes(1);
+    });
+
+    it('drains active work without publishing a CSV after a graceful stop', async () => {
+      const outputDir = makeTempDir();
+      const csvPath = path.join(outputDir, 'graceful-csv-results.csv');
+      fs.writeFileSync(csvPath, 'PREVIOUS_COMPLETE_RUN', 'utf-8');
+      const execution = mockPendingFirstTask();
+      const stop = { value: false };
+      const results = runReplay(
+        baseConfig(outputDir, 'graceful-csv', () => ({}), { modelOverride: () => FOUR_MODELS }),
+        [retrieved()],
+        () => stop.value
+      );
+
+      await vi.waitFor(() => expect(mocks.execute).toHaveBeenCalledTimes(1));
+      stop.value = true;
+      (await execution)();
+
+      await expect(results).resolves.toHaveLength(1);
+      expect(mocks.execute).toHaveBeenCalledTimes(1);
+      expect(fs.readFileSync(csvPath, 'utf-8')).toBe('PREVIOUS_COMPLETE_RUN');
+      expect(fs.readdirSync(path.join(outputDir, 'graceful-csv')).filter(f => f.endsWith('.json')))
+        .toEqual(['game-1-p2-t3-m-a.json']);
+      expect(mocks.forceFlush).toHaveBeenCalledTimes(1);
+    });
+
+    it('publishes the CSV when a graceful stop arrives after every task was admitted', async () => {
+      const outputDir = makeTempDir();
+      const execution = mockPendingFirstTask();
+      const stop = { value: false };
+      // One row, one model: the single task is admitted before the stop, so nothing is withheld
+      // and the run is complete despite the pending stop.
+      const results = runReplay(
+        baseConfig(outputDir, 'graceful-complete', () => ({})),
+        [retrieved()],
+        () => stop.value
+      );
+
+      await vi.waitFor(() => expect(mocks.execute).toHaveBeenCalledTimes(1));
+      stop.value = true;
+      (await execution)();
+
+      await expect(results).resolves.toHaveLength(1);
+      expect(readCsvRows(outputDir, 'graceful-complete')).toHaveLength(1);
+    });
+
+    it('finishes admitted batch work and still shuts the batch manager down after a graceful stop', async () => {
+      const outputDir = makeTempDir();
+      const execution = mockPendingFirstTask();
+      const stop = { value: false };
+
+      const results = runReplay(
+        baseConfig(outputDir, 'batch-stop', () => ({}), { batch: true, modelOverride: () => FOUR_MODELS }),
+        [retrieved()],
+        () => stop.value
+      );
+
+      await vi.waitFor(() => expect(mocks.execute).toHaveBeenCalledTimes(1));
+      stop.value = true;
+      expect(mocks.shutdownBatchManager).not.toHaveBeenCalled();
+      (await execution)();
+
+      // The admitted task keeps running past the stop and lands its trail; only the queued
+      // tasks are withheld, and the batch manager is torn down exactly once afterwards.
+      await expect(results).resolves.toHaveLength(1);
+      expect(mocks.execute).toHaveBeenCalledTimes(1);
+      expect(fs.readdirSync(path.join(outputDir, 'batch-stop')).filter(f => f.endsWith('.json')))
+        .toEqual(['game-1-p2-t3-m-a.json']);
+      expect(mocks.startBatchManager).toHaveBeenCalledTimes(1);
+      expect(mocks.shutdownBatchManager).toHaveBeenCalledTimes(1);
     });
   });
 

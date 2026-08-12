@@ -141,7 +141,7 @@ async function anthropicModels(key: string): Promise<string[]> {
   const names: string[] = [];
   let afterId: string | undefined;
 
-  do {
+  for (;;) {
     const url = afterId === undefined
       ? 'https://api.anthropic.com/v1/models'
       : `https://api.anthropic.com/v1/models?after_id=${encodeURIComponent(afterId)}`;
@@ -153,7 +153,7 @@ async function anthropicModels(key: string): Promise<string[]> {
     }
     seenCursors.add(page.lastId);
     afterId = page.lastId;
-  } while (true);
+  }
 }
 
 /** Discovers model records for one supported provider without caching results. */

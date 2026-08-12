@@ -56,6 +56,8 @@ Outputs default under `temp/oracle/`: the per-experiment results CSV next to a d
 
 CLI flags override the output and telemetry directories and the target agent. Bare experiment filenames resolve to `experiments/`.
 
-Ctrl+C stops dispatching new replays and leaves the results CSV untouched, so an interrupted run cannot overwrite a complete one. The trails already written are kept and reused as cache on the next run. Press Ctrl+C again to force-quit.
+Ctrl+A is a reversible graceful-stop toggle, the same key the strategist console uses. The first press stops admitting queued work, lets admitted work finish (including requests already accepted by the batch manager), and skips any later phase. Press Ctrl+A again before that work drains to continue normally. A graceful stop keeps successful retrieved JSON artifacts and replay trails; it leaves the results CSV untouched whenever it withheld queued tasks, and publishes normally when the stop arrived after every task had already started. Replay trails are reused as cache by the next replay, while retrieved JSON artifacts are retained for inspection rather than used as a retrieval cache. Oracle shuts down through its process manager once the run ends, whether it stopped early or finished.
+
+Ctrl+C is distinct and irreversible: it shuts down the process using the existing interrupted-task behavior. Press Ctrl+C again to force-quit. The trails already written are kept and reused as cache on the next run.
 
 The Oracle reads the same telemetry the [telepathist](telepathist.md) reads. One explains what happened; the other explores what could have happened instead.

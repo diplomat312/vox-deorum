@@ -2,64 +2,54 @@
  * @module oracle/console
  *
  * CLI entry point for Oracle experiments.
- * Dynamically imports user experiment scripts and runs them through the two-phase pipeline.
- *
- * Usage:
- *   npm run oracle -- -c nuke-real-world.js              # retrieve + replay (default)
- *   npm run oracle -- -c nuke-real-world.js --retrieve   # retrieve only (no LLM)
- *   npm run oracle -- -c nuke-real-world.js --replay     # replay only (load saved JSONs)
- *   npm run oracle -- -c nuke-real-world.js --forceReplay # ignore cached replay trails
- *   npm run oracle -- -c nuke-real-world.js -o temp/oracle-v2 -t telemetry/custom
+ * Dynamically imports user experiment scripts, runs them through the retrieve/replay
+ * pipeline, and handles graceful stop (Ctrl+A) and immediate shutdown (Ctrl+C).
  */
 
 import path from 'node:path';
+import * as readline from 'node:readline';
+import { setTimeout } from 'node:timers/promises';
 import { parseArgs } from 'node:util';
 import { pathToFileURL } from 'node:url';
-import { setTimeout } from 'node:timers/promises';
-import { createLogger } from '../utils/logger.js';
-import { runRetrieve } from './retriever.js';
-import { runReplay } from './replayer.js';
-import type { OracleConfig } from './types.js';
-import { startWebServer } from '../web/server.js';
 import { sqliteExporter } from '../instrumentation.js';
 import { processManager } from '../infra/process-manager.js';
+import { createLogger } from '../utils/logger.js';
+import { startWebServer } from '../web/server.js';
+import { runReplay } from './replayer.js';
+import { runRetrieve } from './retriever.js';
+import type { OracleConfig, RetrievedRow } from './types.js';
 
 const logger = createLogger('OracleCLI');
 
-processManager.register('telemetry', async () => {
-  await sqliteExporter.forceFlush();
-  await setTimeout(1000);
-});
-
 const { values } = parseArgs({
   options: {
-    config:       { type: 'string',  short: 'c' },
-    outputDir:    { type: 'string',  short: 'o' },
-    telemetryDir: { type: 'string',  short: 't' },
-    targetAgent:    { type: 'string' },
-    agentType:      { type: 'string' },
-    retrievalName:  { type: 'string' },
-    retrieve:       { type: 'boolean' },
-    replay:         { type: 'boolean' },
-    forceReplay:    { type: 'boolean' },
-    batch:          { type: 'boolean' },
+    config: { type: 'string', short: 'c' },
+    outputDir: { type: 'string', short: 'o' },
+    telemetryDir: { type: 'string', short: 't' },
+    targetAgent: { type: 'string' },
+    agentType: { type: 'string' },
+    retrievalName: { type: 'string' },
+    retrieve: { type: 'boolean' },
+    replay: { type: 'boolean' },
+    forceReplay: { type: 'boolean' },
+    batch: { type: 'boolean' },
   },
   strict: false,
   allowPositionals: false,
 });
 
-/**
- * Resolves an experiment script path.
- * - Absolute path -> use directly
- * - Path with directory separator -> resolve from cwd
- * - Bare filename -> resolve from experiments/ directory
- */
+let rl: readline.Interface | null = null;
+
+let shuttingdownAfter = false;
+
+/** Resolves an experiment script path from the CLI's flexible config argument. */
 function resolveExperimentPath(input: string): string {
   if (path.isAbsolute(input)) return input;
   if (input.includes('/') || input.includes('\\')) return path.resolve(process.cwd(), input);
   return path.resolve(process.cwd(), 'experiments', input);
 }
 
+/** Prints Oracle CLI usage through the application logger. */
 function printUsage(): void {
   logger.info([
     'Usage: npm run oracle -- -c <experiment-script> [options]',
@@ -87,90 +77,121 @@ function printUsage(): void {
     '  npm run oracle -- -c nuke-real-world.js --replay',
     '  npm run oracle -- -c nuke-real-world.js -o temp/oracle-v2 -t telemetry/custom',
     '',
+    'Press Ctrl+A to stop once admitted work drains, or press it again to cancel that stop.',
     'See docs/oracle.md for full documentation.',
   ].join('\n'));
 }
 
-async function main() {
-  if (!values.config) {
+/** Loads and combines the experiment script with supported CLI overrides. */
+async function loadOracleConfig(): Promise<OracleConfig> {
+  if (typeof values.config !== 'string' || !values.config) {
     printUsage();
-    process.exit(1);
+    throw new Error('An Oracle experiment script is required.');
   }
 
-  const scriptPath = resolveExperimentPath(values.config as string);
+  const scriptPath = resolveExperimentPath(values.config);
   logger.info(`Loading experiment: ${scriptPath}`);
+  const scriptUrl = pathToFileURL(scriptPath).href;
+  const module = await import(scriptUrl);
+  const experimentConfig: OracleConfig = module.default;
 
-  try {
-    const scriptUrl = pathToFileURL(scriptPath).href;
-    const module = await import(scriptUrl);
-    const experimentConfig: OracleConfig = module.default;
+  if (!experimentConfig || !experimentConfig.csvPath || !experimentConfig.experimentName || !experimentConfig.modifyPrompt) {
+    throw new Error('Experiment script must export a default OracleConfig with csvPath, experimentName, and modifyPrompt.');
+  }
 
-    if (!experimentConfig || !experimentConfig.csvPath || !experimentConfig.experimentName || !experimentConfig.modifyPrompt) {
-      logger.error('Experiment script must export a default OracleConfig with csvPath, experimentName, and modifyPrompt.');
-      process.exit(1);
+  const cliOverrides = Object.fromEntries(
+    (['outputDir', 'telemetryDir', 'targetAgent', 'agentType', 'retrievalName'] as const)
+      .filter(key => values[key] !== undefined)
+      .map(key => [key, values[key]]),
+  ) as Partial<OracleConfig>;
+
+  return {
+    ...experimentConfig,
+    ...cliOverrides,
+    ...(values.forceReplay === true ? { readCache: false } : {}),
+    ...(values.batch === true ? { batch: true } : {}),
+  };
+}
+
+// Register shutdown hooks with processManager
+processManager.register('terminal', async () => {
+  if (process.stdin.isTTY && process.stdin.setRawMode) {
+    process.stdin.setRawMode(false);
+  }
+  if (rl) rl.close();
+});
+processManager.register('telemetry', async () => {
+  await sqliteExporter.forceFlush();
+  await setTimeout(1000);
+});
+
+// Web UI
+await startWebServer();
+
+// Setup readline interface for keyboard input
+rl = readline.createInterface({
+  input: process.stdin,
+  output: process.stdout,
+  terminal: true
+});
+
+// Enable raw mode to capture Ctrl key combinations
+if (process.stdin.isTTY) {
+  process.stdin.setRawMode(true);
+}
+
+// Listen for keypress events
+process.stdin.on('data', (key) => {
+  // Ctrl+A is ASCII code 1 - stop admitting new work once the current work drains
+  if (key[0] === 1) {
+    if (!shuttingdownAfter) {
+      shuttingdownAfter = true;
+      logger.info('Ctrl+A pressed: Will stop after current work completes');
+    } else {
+      shuttingdownAfter = false;
+      logger.info('Ctrl+A pressed again: Cancelled shutdown after current work');
     }
+  }
+  // Ctrl+C is ASCII code 3 - immediate shutdown via processManager
+  else if (key[0] === 3) {
+    processManager.shutdown('SIGINT');
+  }
+});
 
-    // Merge CLI overrides into experiment config
-    const cliOverrides = Object.fromEntries(
-      (['outputDir', 'telemetryDir', 'targetAgent', 'agentType', 'retrievalName'] as const)
-        .filter(k => values[k] !== undefined)
-        .map(k => [k, values[k]])
-    ) as Partial<OracleConfig>;
-
-    const config: OracleConfig = {
-      ...experimentConfig,
-      ...cliOverrides,
-      ...(values.forceReplay === true ? { readCache: false } : {}),
-      ...(values.batch === true ? { batch: true } : {}),
-    };
-
-    const retrieveOnly = values.retrieve === true && values.replay !== true;
-    const replayOnly   = values.replay === true   && values.retrieve !== true;
-
-    await startWebServer();
+/**
+ * Main entry point.
+ * Runs the selected Oracle phases, then shuts down through processManager.
+ * Each phase reports its own counts and artifact paths, so this only reports the verdict.
+ */
+async function main() {
+  try {
+    const config = await loadOracleConfig();
     logger.info(`Starting experiment: ${config.experimentName}`);
 
-    const retrieveBaseName = config.retrievalName ?? config.experimentName;
+    const retrieveOnly = values.retrieve === true && values.replay !== true;
+    const replayOnly = values.replay === true && values.retrieve !== true;
+    const shouldStop = () => shuttingdownAfter;
 
-    if (retrieveOnly) {
-      const rows = await runRetrieve(config, true);
-      const errors = rows.filter(r => r.error).length;
-      logger.info([
-        `Experiment "${config.experimentName}" retrieve complete:`,
-        `  ${rows.length - errors} rows retrieved`,
-        `  ${errors} errors`,
-        `  Retrieved JSONs: temp/oracle/${retrieveBaseName}/retrieved/`,
-      ].join('\n'));
-    } else if (replayOnly) {
-      const results = await runReplay(config);
-      const errors = results.filter(r => r.error).length;
-      logger.info([
-        `Experiment "${config.experimentName}" replay complete:`,
-        `  ${results.length - errors} successful replays`,
-        `  ${errors} errors`,
-        `  Results: temp/oracle/${config.experimentName}-results.csv`,
-        `  Trails: temp/oracle/${config.experimentName}/`,
-        `  Telemetry: telemetry/oracle/${config.experimentName}.db`,
-      ].join('\n'));
-    } else {
-      // Both: retrieve (saving to disk), then replay with in-memory rows
-      const rows = await runRetrieve(config, true);
-      const results = await runReplay(config, rows);
-      const errors = results.filter(r => r.error).length;
-      logger.info([
-        `Experiment "${config.experimentName}" complete:`,
-        `  ${results.length - errors} successful replays`,
-        `  ${errors} errors`,
-        `  Retrieved JSONs: temp/oracle/${retrieveBaseName}/retrieved/`,
-        `  Results: temp/oracle/${config.experimentName}-results.csv`,
-        `  Trails: temp/oracle/${config.experimentName}/`,
-        `  Telemetry: telemetry/oracle/${config.experimentName}.db`,
-      ].join('\n'));
+    let rows: RetrievedRow[] | undefined;
+    if (!replayOnly) {
+      rows = await runRetrieve(config, true, shouldStop);
     }
+
+    // A stop requested during retrieve skips replay rather than replaying a partial row set.
+    if (!retrieveOnly && !shuttingdownAfter) {
+      await runReplay(config, rows, shouldStop);
+    }
+
+    logger.info(shuttingdownAfter
+      ? `Experiment "${config.experimentName}" stopped after Ctrl+A.`
+      : `Experiment "${config.experimentName}" complete.`);
   } catch (error) {
     logger.error('Experiment failed:', error);
     process.exit(1);
+  } finally {
+    await processManager.shutdown('main-complete');
   }
 }
 
+// Run the main function
 main();

@@ -8,7 +8,6 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import pLimit from 'p-limit';
 import { VoxContext } from '../infra/vox-context.js';
 import { agentRegistry } from '../infra/agent-registry.js';
 import { processManager } from '../infra/process-manager.js';
@@ -17,8 +16,10 @@ import type { ExecuteTokenOutput } from '../infra/vox-run.js';
 import { VoxSpanExporter } from '../utils/telemetry/vox-exporter.js';
 import { mcpClient } from '../utils/models/mcp-client.js';
 import { spanProcessor } from '../instrumentation.js';
+import { config as appConfig } from '../utils/config.js';
 import { createLogger } from '../utils/logger.js';
 import { resolveModel } from './utils/model-resolver.js';
+import { runOracleTasks } from './run-control.js';
 import { loadToolSchemaCache, replaceToolsWithSchemaOnly } from './utils/schema-tools.js';
 import { getTrailBase, getTrailPaths, readReplayCache, resolvePath, writeCsv, writeTrail } from './utils/output.js';
 import { startBatchManager, shutdownBatchManager } from './batch/batch-manager.js';
@@ -43,9 +44,14 @@ const INTERRUPTED_ERROR = 'Interrupted by shutdown';
  *
  * @param config - Experiment configuration
  * @param rows - Optional pre-loaded RetrievedRows; if absent, loads from {experimentDir}/retrieved/*.json
- * @returns Array of ReplayResult (one per source row per model)
+ * @param shouldStop - Optional predicate that stops admitting queued tasks
+ * @returns Compact, source-ordered array of settled ReplayResults
  */
-export async function runReplay(config: OracleConfig, rows?: RetrievedRow[]): Promise<ReplayResult[]> {
+export async function runReplay(
+  config: OracleConfig,
+  rows?: RetrievedRow[],
+  shouldStop?: () => boolean
+): Promise<ReplayResult[]> {
   const outputDir = resolvePath(config.outputDir || '../temp/oracle');
   const experimentDir = path.join(outputDir, config.experimentName);
   const retrieveBaseName = config.retrievalName ?? config.experimentName;
@@ -54,13 +60,11 @@ export async function runReplay(config: OracleConfig, rows?: RetrievedRow[]): Pr
   // Load retrieved rows from disk if not provided
   if (!rows) {
     if (!fs.existsSync(retrieveDir)) {
-      logger.error(`No retrieved rows found at ${retrieveDir}. Run --retrieve first.`);
-      process.exit(1);
+      throw new Error(`No retrieved rows found at ${retrieveDir}. Run --retrieve first.`);
     }
     const files = fs.readdirSync(retrieveDir).filter(f => f.endsWith('.json'));
     if (files.length === 0) {
-      logger.error(`No retrieved rows found at ${retrieveDir}. Run --retrieve first.`);
-      process.exit(1);
+      throw new Error(`No retrieved rows found at ${retrieveDir}. Run --retrieve first.`);
     }
     rows = files.map(f => JSON.parse(fs.readFileSync(path.join(retrieveDir, f), 'utf-8')) as RetrievedRow);
     logger.info(`Loaded ${rows.length} retrieved rows from ${retrieveDir}`);
@@ -151,7 +155,7 @@ export async function runReplay(config: OracleConfig, rows?: RetrievedRow[]): Pr
     await VoxSpanExporter.getInstance().createContext(config.experimentName, 'oracle');
 
     // Start batch manager if batch mode is enabled.
-    // The batch manager is transparent infrastructure — streamTextWithConcurrency
+    // The batch manager is transparent infrastructure. streamTextWithConcurrency
     // checks for it and routes requests automatically.
     if (config.batch) {
       const batchOpts = typeof config.batch === 'object' ? config.batch : {};
@@ -163,11 +167,9 @@ export async function runReplay(config: OracleConfig, rows?: RetrievedRow[]): Pr
       logger.info('Batch mode enabled');
     }
 
-    const limit = pLimit(config.concurrency ?? 5);
-
-    const results = await Promise.all(
+    const { results, stopped } = await runOracleTasks(
       tasks.map(({ retrieved, resolvedModel, suffix, repetition }, i) =>
-        limit(async (): Promise<ReplayResult> => {
+        async (): Promise<ReplayResult> => {
           const failed = (error: string): ReplayResult => ({
             row: retrieved.row,
             model: `${resolvedModel.provider}/${resolvedModel.name}`,
@@ -193,39 +195,62 @@ export async function runReplay(config: OracleConfig, rows?: RetrievedRow[]): Pr
             logger.error(`Error replaying task ${i + 1}: ${errorMsg}`);
             return failed(errorMsg);
           }
-        })
-      )
+        }
+      ),
+      config.concurrency ?? 5,
+      shouldStop
     );
+
+    // Tasks Ctrl+C dropped carry the interrupted marker rather than a real failure, and a
+    // graceful stop leaves its withheld tasks out of the results entirely.
+    const interrupted = results.filter(r => r.error === INTERRUPTED_ERROR).length;
+    const errors = results.filter(r => r.error && r.error !== INTERRUPTED_ERROR).length;
+    const succeeded = results.length - errors - interrupted;
 
     // An interrupted run must not publish its results: each trail is written as its task
     // completes, so completed work survives on disk and is reused as cache next time, but
     // overwriting a full results CSV with a mostly-interrupted one would lose real data.
-    if (processManager.isShuttingDown) {
-      logger.warn(`Replay interrupted; ${config.experimentName}-results.csv left untouched. Completed trails are kept and reused as cache.`);
+    // A graceful stop that still admitted every task is a complete run and publishes normally.
+    if (processManager.isShuttingDown || stopped) {
+      logger.warn([
+        `Replay stopped: ${succeeded} succeeded, ${errors} failed, ${interrupted + tasks.length - results.length} never ran`,
+        `  ${config.experimentName}-results.csv left untouched; completed trails are kept and reused as cache`,
+        `  Trails: ${experimentDir}`,
+      ].join('\n'));
       return results;
     }
 
     // Write output CSV
     const outputCsvPath = path.join(outputDir, `${config.experimentName}-results.csv`);
     writeCsv(outputCsvPath, results);
-    logger.info(`Results written to: ${outputCsvPath}`);
 
-    // Flush telemetry
-    await spanProcessor.forceFlush();
-    logger.info(`Telemetry flushed to: ${resolvePath(`telemetry/oracle/${config.experimentName}.db`)}`);
-
-    const errors = results.filter(r => r.error).length;
-    logger.info(`Replay complete: ${results.length - errors} succeeded, ${errors} failed`);
+    logger.info([
+      `Replay complete: ${succeeded} succeeded, ${errors} failed`,
+      `  Results: ${outputCsvPath}`,
+      `  Trails: ${experimentDir}`,
+    ].join('\n'));
 
     return results;
   } finally {
-    // Shut down batch manager first — flushes remaining requests and waits for polls
-    if (config.batch) {
-      await shutdownBatchManager();
-    }
-    await voxContext.shutdown();
-    if (connectedToMcp) {
-      await mcpClient.disconnect();
+    // Flush replay spans before tearing down the context, including interrupted and failed runs.
+    // A flush failure must not replace the error that actually ended the run.
+    try {
+      await spanProcessor.forceFlush();
+      // The oracle span DB lives under the exporter's telemetry root (see instrumentation.ts),
+      // which is the app-level directory; OracleConfig.telemetryDir is the retrieve phase's input.
+      const telemetryRoot = appConfig.telemetryDir || 'telemetry';
+      logger.info(`Telemetry flushed to: ${resolvePath(path.join(telemetryRoot, 'oracle', `${config.experimentName}.db`))}`);
+    } catch (flushError) {
+      logger.error('Failed to flush replay telemetry:', flushError);
+    } finally {
+      // Shut down batch manager first. It flushes remaining requests and waits for polls.
+      if (config.batch) {
+        await shutdownBatchManager();
+      }
+      await voxContext.shutdown();
+      if (connectedToMcp) {
+        await mcpClient.disconnect();
+      }
     }
   }
 }

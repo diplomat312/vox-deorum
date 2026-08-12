@@ -345,5 +345,36 @@ describe('oracle runRetrieve', () => {
       expect(fs.existsSync(path.join(dir, 'shared', 'retrieved', 'g1-p1-t30.json'))).toBe(true);
       expect(fs.existsSync(path.join(dir, 'exp', 'retrieved', 'g1-p1-t30.json'))).toBe(false);
     });
+
+    it('drains active retrievals, returns their compact results, and saves only their successful JSONs after a graceful stop', async () => {
+      const dir = makeTempDir();
+      const csv = writeCsvFile(
+        dir,
+        `${CSV_HEADER}\ng1,1,30,Test,\ng2,2,40,Test,\ng3,3,50,Test,`
+      );
+      let resolveFirst!: (value: ReturnType<typeof extracted>) => void;
+      const delayedPrompt = new Promise<ReturnType<typeof extracted>>(resolve => {
+        resolveFirst = resolve;
+      });
+      mocks.discoverDbPath.mockReturnValue('/fake/db.db');
+      mocks.openReadonlyDb.mockReturnValue(makeFakeDb());
+      mocks.extractPrompt.mockImplementationOnce(() => delayedPrompt).mockResolvedValue(extracted());
+      const stop = { value: false };
+      const results = runRetrieve(
+        baseConfig(csv, dir, { concurrency: 1 }),
+        true,
+        () => stop.value
+      );
+
+      await vi.waitFor(() => expect(mocks.extractPrompt).toHaveBeenCalledTimes(1));
+      stop.value = true;
+      resolveFirst(extracted());
+
+      await expect(results).resolves.toHaveLength(1);
+      expect(mocks.extractPrompt).toHaveBeenCalledTimes(1);
+      expect(fs.existsSync(path.join(dir, 'exp', 'retrieved', 'g1-p1-t30.json'))).toBe(true);
+      expect(fs.existsSync(path.join(dir, 'exp', 'retrieved', 'g2-p2-t40.json'))).toBe(false);
+      expect(fs.existsSync(path.join(dir, 'exp', 'retrieved', 'g3-p3-t50.json'))).toBe(false);
+    });
   });
 });

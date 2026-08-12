@@ -74,7 +74,7 @@ function resolveAlias(name: string, overrides?: Record<string, Model | string>):
   const visited = new Set<string>();
   const path: string[] = [];
   let current = name;
-  while (true) {
+  for (;;) {
     if (visited.has(current)) {
       path.push(current);
       throw new Error(`Cannot resolve model alias '${name}': alias cycle detected (${path.join(' -> ')}).`);

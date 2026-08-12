@@ -2,16 +2,16 @@
  * @module oracle/retriever
  *
  * Retrieve phase: extracts raw prompt data from telemetry databases for each CSV row.
- * No LLM calls, no prompt modifications — pure telemetry extraction.
+ * No LLM calls or prompt modifications: pure telemetry extraction.
  * The saved JSON files are experiment-agnostic and can be replayed with any config.
  */
 
 import fs from 'node:fs';
 import path from 'node:path';
-import pLimit from 'p-limit';
 import Papa from 'papaparse';
 import { createLogger } from '../utils/logger.js';
 import { discoverDbPath, openReadonlyDb } from './utils/db-resolver.js';
+import { runOracleTasks } from './run-control.js';
 import { extractPrompt, findTurnByRationale } from './utils/prompt-extractor.js';
 import { resolvePath } from './utils/output.js';
 import type { OracleConfig, OracleRow, RetrievedRow } from './types.js';
@@ -23,9 +23,14 @@ const logger = createLogger('OracleRetriever');
  *
  * @param config - Experiment configuration (uses csvPath, telemetryDir, outputDir, targetAgent, agentType, concurrency)
  * @param save - If true, write each RetrievedRow to {experimentDir}/retrieved/{gameId}-p{playerId}-t{turn}.json
- * @returns Array of RetrievedRow (raw telemetry data, one per CSV row)
+ * @param shouldStop - Optional predicate that stops admitting queued rows
+ * @returns Compact, source-ordered array of settled RetrievedRows
  */
-export async function runRetrieve(config: OracleConfig, save = false): Promise<RetrievedRow[]> {
+export async function runRetrieve(
+  config: OracleConfig,
+  save = false,
+  shouldStop?: () => boolean
+): Promise<RetrievedRow[]> {
   const outputDir = resolvePath(config.outputDir || '../temp/oracle');
   const telemetryDir = resolvePath(config.telemetryDir || 'telemetry');
   const csvPath = resolvePath(config.csvPath);
@@ -56,12 +61,10 @@ export async function runRetrieve(config: OracleConfig, save = false): Promise<R
     logger.info(`Filtered to ${rows.length} of ${before} rows`);
   }
 
-  // Process rows in parallel
-  const limit = pLimit(config.concurrency ?? 5);
-
-  const results = await Promise.all(
+  // Process rows in parallel while retaining graceful-stop admission boundaries.
+  const { results, stopped } = await runOracleTasks(
     rows.map((row, i) =>
-      limit(async (): Promise<RetrievedRow> => {
+      async (): Promise<RetrievedRow> => {
         logger.info(`Retrieving row ${i + 1}/${rows.length}: game=${row.game_id}, player=${row.player_id}, turn=${row.turn}`);
         const retrieved = await retrieveRow(row, config, telemetryDir);
 
@@ -69,7 +72,7 @@ export async function runRetrieve(config: OracleConfig, save = false): Promise<R
           logger.error(`Row ${i + 1} failed: ${retrieved.error}`);
         } else if (save) {
           // Normalize the turn the same way getTrailBase does (parseInt), so a padded
-          // CSV turn like "030" writes t30.json instead of t030.json — otherwise replay,
+          // CSV turn like "030" writes t30.json instead of t030.json. Otherwise replay,
           // which looks up via getTrailBase, would miss the retrieved file.
           const trailBase = `${row.game_id}-p${row.player_id}-t${parseInt(row.turn, 10)}`;
           fs.writeFileSync(
@@ -79,12 +82,19 @@ export async function runRetrieve(config: OracleConfig, save = false): Promise<R
         }
 
         return retrieved;
-      })
-    )
+      }
+    ),
+    config.concurrency ?? 5,
+    shouldStop
   );
 
   const errors = results.filter(r => r.error).length;
-  logger.info(`Retrieve complete: ${results.length - errors} succeeded, ${errors} failed`);
+  logger.info([
+    stopped
+      ? `Retrieve stopped: ${results.length - errors} succeeded, ${errors} failed, ${rows.length - results.length} never ran`
+      : `Retrieve complete: ${results.length - errors} succeeded, ${errors} failed`,
+    ...(save ? [`  Retrieved JSONs: ${retrieveDir}`] : []),
+  ].join('\n'));
 
   return results;
 }
