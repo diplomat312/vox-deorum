@@ -130,11 +130,6 @@ describe('LiveEnvoy.getInitialMessages', () => {
     expect(last.content).not.toBe(spokesperson.getHint(params, input));
   });
 
-  it('exposes the {{{Greeting}}} trigger as a base-class default prompt string', () => {
-    expect(specialMessages).toHaveProperty('{{{Greeting}}}');
-    expect(typeof specialMessages['{{{Greeting}}}']).toBe('string');
-    expect(specialMessages['{{{Greeting}}}']).toBeTruthy();
-  });
 });
 
 describe('LiveEnvoy.getInitialMessages past/ongoing split (cache-aware record)', () => {

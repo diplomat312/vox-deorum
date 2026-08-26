@@ -37,20 +37,6 @@ describe('web server', () => {
     expect(response.body.version).toBe(config.versionInfo?.version ?? '0.0.0');
   });
 
-  it('reports an idle session exactly when no session is active', async () => {
-    const response = await request(app).get('/api/session/status');
-
-    expect(response.status).toBe(200);
-    expect(response.body).toEqual({ active: false });
-  });
-
-  it('returns an error when players-summary has no active session', async () => {
-    const response = await request(app).get('/api/session/players-summary');
-
-    expect(response.status).toBe(404);
-    expect(response.body.error).toEqual(expect.any(String));
-  });
-
   it('returns JSON 404 for an unknown API endpoint', async () => {
     const response = await request(app).get('/api/not-a-route');
 

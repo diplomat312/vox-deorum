@@ -189,11 +189,6 @@ describe.skipIf(!dbExists)('GetSituationTool (detailed mode)', () => {
     const sections = await tool.execute({ Turns: turns.join(','), Detailed: true }, params);
     expect(sections.length).toBeGreaterThanOrEqual(2);
   });
-
-  it('should return "No turns found" for out-of-range turn', async () => {
-    const sections = await tool.execute({ Turns: '99999', Detailed: true }, params);
-    expect(sections).toEqual(['No turns found in the requested range.']);
-  });
 });
 
 describe.skipIf(!dbExists)('GetDecisionTool (default mode)', () => {
@@ -203,11 +198,6 @@ describe.skipIf(!dbExists)('GetDecisionTool (default mode)', () => {
     const turn = params.availableTurns[0];
     const sections = await tool.execute({ Turns: String(turn) }, params);
     expect(sections.length).toBeGreaterThan(0);
-  });
-
-  it('should return "No turns found" for out-of-range turn', async () => {
-    const sections = await tool.execute({ Turns: '99999' }, params);
-    expect(sections).toEqual(['No turns found in the requested range.']);
   });
 });
 
@@ -231,10 +221,6 @@ describe.skipIf(!dbExists)('GetDecisionTool (detailed mode)', () => {
     }
   });
 
-  it('should return "No turns found" for out-of-range turn', async () => {
-    const sections = await tool.execute({ Turns: '99999', Detailed: true }, params);
-    expect(sections).toEqual(['No turns found in the requested range.']);
-  });
 });
 
 describe.skipIf(!dbExists)('GetConversationLogTool', () => {

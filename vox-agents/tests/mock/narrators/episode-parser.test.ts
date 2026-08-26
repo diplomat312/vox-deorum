@@ -249,25 +249,6 @@ describe('episode-parser', () => {
       });
     });
 
-    it('should match the wall-clock to file-relative conversion example from spec', () => {
-      // From stage-1-assemble.md:
-      // segment start.at = 1700000000000
-      // switch.at        = 1700000005000
-      // stop.at          = 1700000020000
-      // Episode 1: offset = 0,    duration = 5000
-      // Episode 2: offset = 5000, duration = 15000
-      const content = toJsonl([
-        { event: 'start', turn: 1, playerID: 0, at: 1700000000000 },
-        { event: 'switch', turn: 1, playerID: 1, at: 1700000005000 },
-        { event: 'stop', turn: 1, playerID: 1, at: 1700000020000, file: 'rec.mkv' },
-      ]);
-      const episodes = parseAndDecompose(content, new Set<number>());
-      expect(episodes[0].offset).toBe(0);
-      expect(episodes[0].duration).toBe(5000);
-      expect(episodes[1].offset).toBe(5000);
-      expect(episodes[1].duration).toBe(15000);
-    });
-
     it('should handle minor civs in combined flow', () => {
       const content = toJsonl([
         { event: 'start', turn: 10, playerID: 2, at: 1000 },

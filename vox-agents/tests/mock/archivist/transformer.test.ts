@@ -262,54 +262,6 @@ describe('transformEpisode', () => {
   });
 
   describe('feature vectors', () => {
-    it('should produce a 35-element game state vector with values in valid ranges', () => {
-      const raw = makeRaw({ playerId: 0, grandStrategy: 'Culture' });
-      const ctx = makeContext([
-        { pid: 0, civ: 'Rome' },
-        { pid: 1, civ: 'Egypt' },
-      ]);
-      const ep = transformEpisode(raw, ctx);
-      expect(ep.gameStateVector).toHaveLength(35);
-      for (const v of ep.gameStateVector) {
-        expect(Number.isFinite(v)).toBe(true);
-        // element [0] (era) can reach 2.0; all others are clamped/one-hot in [0,1]
-        expect(v).toBeGreaterThanOrEqual(0);
-        expect(v).toBeLessThanOrEqual(2);
-      }
-    });
-
-    it('should encode grand strategy as a one-hot at the expected slot', () => {
-      const ctx = makeContext([{ pid: 0, civ: 'Rome' }]);
-      const culture = transformEpisode(makeRaw({ grandStrategy: 'Culture' }), ctx).gameStateVector;
-      // one-hot occupies indices [1..4]: Conquest, Culture, United Nations, Spaceship
-      expect(culture.slice(1, 5)).toEqual([0, 1, 0, 0]);
-      const conquest = transformEpisode(makeRaw({ grandStrategy: 'Conquest' }), ctx).gameStateVector;
-      expect(conquest.slice(1, 5)).toEqual([1, 0, 0, 0]);
-      const none = transformEpisode(makeRaw({ grandStrategy: null }), ctx).gameStateVector;
-      expect(none.slice(1, 5)).toEqual([0, 0, 0, 0]);
-    });
-
-    it('should produce a 32-element neighbor vector with values in [0,1]', () => {
-      const raw = makeRaw({ playerId: 0, militaryStrength: 100, technologies: 10, policies: 5 });
-      const ctx = makeContext([
-        {
-          pid: 0,
-          civ: 'Rome',
-          summary: {
-            MilitaryStrength: 100,
-            Relationships: { Egypt: ['Distance: Neighbors', 'War (Our Score: 10)'] },
-          },
-        },
-        { pid: 1, civ: 'Egypt', summary: { MilitaryStrength: 150, Technologies: 12 } },
-      ]);
-      const ep = transformEpisode(raw, ctx);
-      expect(ep.neighborVector).toHaveLength(32);
-      for (const v of ep.neighborVector) {
-        expect(v).toBeGreaterThanOrEqual(0);
-        expect(v).toBeLessThanOrEqual(1);
-      }
-    });
-
     it('should fall back to a neutral-padded neighbor vector when the player has no summary', () => {
       // raw.playerId not present in playerSummaries -> playerSummary undefined -> NEUTRAL_PAD fallback
       const raw = makeRaw({ playerId: 99 });

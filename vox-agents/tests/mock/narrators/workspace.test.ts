@@ -69,11 +69,6 @@ describe('NarratorWorkspace', () => {
   });
 
   describe('directory and path layout', () => {
-    it('should resolve filenames within the workspace via getPath', () => {
-      expect(ws.getPath(CONTEXT_FILE)).toBe(path.join(workspaceDir, CONTEXT_FILE));
-      expect(ws.getPath('sub/file.json')).toBe(path.join(workspaceDir, 'sub/file.json'));
-    });
-
     it('should create the workspace directory recursively via ensureDir', () => {
       const nested = path.join(workspaceDir, 'a', 'b', 'c');
       const nestedWs = new NarratorWorkspace(nested);

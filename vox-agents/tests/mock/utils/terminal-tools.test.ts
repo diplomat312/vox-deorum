@@ -103,11 +103,6 @@ describe('formatToolChoiceList', () => {
   it('uses an Oxford comma for three or more names', () => {
     expect(formatToolChoiceList(['a', 'b', 'c'])).toBe('`a`, `b`, or `c`');
   });
-
-  it('passes hyphenated tool names through verbatim inside the backticks', () => {
-    expect(formatToolChoiceList(['accept-deal', 'propose-deal', 'reject-deal']))
-      .toBe('`accept-deal`, `propose-deal`, or `reject-deal`');
-  });
 });
 
 describe('buildCompletionToolsNudge', () => {

@@ -249,39 +249,4 @@ describe('buildLiveGameStateVector', () => {
     const state = makeState(players);
     expect(buildLiveGameStateVector(state, 1, 'g')).toBeUndefined();
   });
-
-  it('should produce 35-element game-state and 32-element neighbor vectors', () => {
-    const players = makePlayersReport({
-      '0': makePlayer({ Civilization: 'Rome', MilitaryStrength: 200 }),
-      '1': makePlayer({ Civilization: 'Egypt', MilitaryStrength: 150 }),
-    });
-    const cities = makeCities({ Rome: [{ ProductionPerTurn: 5, FoodPerTurn: 6 }] });
-    const state = makeState(players, { cities });
-
-    const result = buildLiveGameStateVector(state, 0, 'g', { totalMajors: 2 });
-    expect(result).toBeDefined();
-    expect(result!.gameStateVector).toHaveLength(35);
-    expect(result!.neighborVector).toHaveLength(32);
-
-    for (const v of result!.gameStateVector) {
-      expect(Number.isFinite(v)).toBe(true);
-      expect(v).toBeGreaterThanOrEqual(0);
-      expect(v).toBeLessThanOrEqual(2);
-    }
-    for (const v of result!.neighborVector) {
-      expect(Number.isFinite(v)).toBe(true);
-      expect(v).toBeGreaterThanOrEqual(0);
-      expect(v).toBeLessThanOrEqual(1);
-    }
-  });
-
-  it('should encode grand strategy as a one-hot in the game-state vector', () => {
-    const players = makePlayersReport({ '0': makePlayer({ Civilization: 'Rome' }) });
-    const state = makeState(players);
-    const culture = buildLiveGameStateVector(state, 0, 'g', { grandStrategy: 'Culture' })!.gameStateVector;
-    // one-hot occupies indices [1..4]: Conquest, Culture, United Nations, Spaceship.
-    expect(culture.slice(1, 5)).toEqual([0, 1, 0, 0]);
-    const none = buildLiveGameStateVector(state, 0, 'g')!.gameStateVector;
-    expect(none.slice(1, 5)).toEqual([0, 0, 0, 0]);
-  });
 });

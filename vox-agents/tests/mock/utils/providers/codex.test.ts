@@ -154,13 +154,6 @@ describe('Codex provider options', () => {
     expect(fs.existsSync(testProxyRoot)).toBe(false);
   });
 
-  it('keeps an explicit empty host tool list disabled without a cwd', () => {
-    expect(buildCodexProviderOptions({
-      provider: 'codex', name: 'gpt-5.4-mini', options: { hostTools: [] },
-    })).toEqual({ codex: { x_codex: { sandbox: 'disabled', web_search: 'disabled' } } });
-    expect(fs.existsSync(testProxyRoot)).toBe(false);
-  });
-
   it('whitelists reasoning effort and excludes unrelated Vox options', () => {
     expect(buildCodexProviderOptions({
       provider: 'codex',

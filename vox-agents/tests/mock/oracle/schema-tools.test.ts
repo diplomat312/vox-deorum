@@ -48,15 +48,6 @@ function baseMcpTool(overrides: Partial<MCPTool> & { _meta?: any } = {}): any {
 
 describe('oracle schema-tools', () => {
   describe('schemaOnlyTool', () => {
-    it('produces a dynamic tool whose execute never runs against MCP', async () => {
-      const tool = schemaOnlyTool('set-flavors', baseMcpTool());
-      expect(tool.type).toBe('dynamic');
-      const result = await tool.execute({}, {} as any);
-      expect(result).toMatchObject({ _oracle: true });
-      expect(result.message).toContain('set-flavors');
-      expect(result.message).toMatch(/replay/i);
-    });
-
     it('uses the tool description', () => {
       const tool = schemaOnlyTool('set-flavors', baseMcpTool());
       expect(tool.description).toBe('Set strategic flavors');

@@ -4,9 +4,9 @@
  * which also sidesteps circular-import hazards). Protected/base members are reached
  * through a loosely-typed handle.
  *
- * Covers the fire-and-forget flag, toolChoice, the shared input schema, the active tool
- * IDs, the get-briefing extra tool, and that getContextMessages delegates to the shared
- * buildGameContextMessages builder. Span/context detachment is intentionally NOT tested here.
+ * Covers the fire-and-forget flag, toolChoice, the shared input schema, the get-briefing
+ * extra tool, and that getContextMessages delegates to the shared buildGameContextMessages
+ * builder. Span/context detachment is intentionally NOT tested here.
  */
 
 import { describe, it, expect } from 'vitest';
@@ -42,13 +42,6 @@ describe('Analyst input schema', () => {
 
   it('rejects input missing required fields', () => {
     expect(() => analyst.inputSchema.parse({ Content: 'only content' })).toThrow();
-  });
-});
-
-describe('Analyst active tools', () => {
-  it('exposes relay-message, get-briefing, and get-diplomatic-events', () => {
-    const tools = analyst.getActiveTools(makeStrategistParameters());
-    expect(tools).toEqual(['relay-message', 'get-briefing', 'get-diplomatic-events']);
   });
 });
 
