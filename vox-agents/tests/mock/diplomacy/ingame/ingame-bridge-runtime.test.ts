@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => ({
   loggerError: vi.fn(),
   notify: vi.fn(),
   openChat: vi.fn(),
+  readActive: vi.fn(),
   readPage: vi.fn(),
   reject: vi.fn(),
   runChatTurn: vi.fn(),
@@ -40,11 +41,13 @@ vi.mock("../../../../src/utils/diplomacy/deal/deal-actions.js", () => ({
   rejectDealAction: mocks.reject,
   NotDiplomacyThreadError: class NotDiplomacyThreadError extends Error {},
 }));
-// The bridge only reads these modules for their error vocabulary; the real ones pull the whole
-// transcript I/O layer in behind them, which this transport suite deliberately replaces.
+// The bridge only reads this module for its error vocabulary and the open-offer read backing a
+// blind panel propose; the real one pulls the whole transcript I/O layer in behind it, which this
+// transport suite deliberately replaces.
 vi.mock("../../../../src/utils/diplomacy/deal/deal.js", () => ({
   IllegalDealError: class IllegalDealError extends Error {},
   ProposalConflictError: class ProposalConflictError extends Error {},
+  readActiveProposal: mocks.readActive,
 }));
 vi.mock("../../../../src/utils/diplomacy/turn/chat-turn-commit.js", () => ({
   isThreadBusy: () => false,
@@ -503,6 +506,7 @@ describe("IngameBridge deal actions", () => {
     mocks.readPage.mockResolvedValue({ messages: [], hasMore: false });
     mocks.openChat.mockResolvedValue({ id: "dipl:game-a:1:3", player1ID: 1, player2ID: 3 });
     mocks.notify.mockResolvedValue(true);
+    mocks.readActive.mockResolvedValue({ active: null, status: "none", proposals: [] });
     mocks.runChatTurn.mockImplementation(async (_body: unknown, sink: ChatStreamSink) => {
       sink.connected({ sessionId: "s", rows: [dealRow(80, "deal-proposal")] });
       sink.done({ sessionId: "s", messageCount: 2, deals: [], rows: [row(81, "Interesting.")] });
@@ -510,7 +514,7 @@ describe("IngameBridge deal actions", () => {
     });
   });
 
-  it("routes a propose action through the shared chat turn without an expected proposal", async () => {
+  it("routes a propose action with nothing open through the shared chat turn without an expected proposal", async () => {
     const bridge = bridgeFor();
 
     bridge.handleNotification(dealEvent(20, { Action: "propose", Deal: { version: 1, items: [] } }));
@@ -520,6 +524,29 @@ describe("IngameBridge deal actions", () => {
       kind: "deal",
       chatId: "dipl:game-a:1:3",
       deal: { version: 1, items: [] },
+    });
+  });
+
+  it("coerces a propose into a counter when an offer is already open", async () => {
+    const bridge = bridgeFor();
+    // The panel's Propose is pressed blind (it never carries the offer the player saw), so the
+    // bridge derives the open offer — the player's own included — and submits against it, letting
+    // classifyDealSubmission archive the deal as a counter instead of 409ing.
+    mocks.readActive.mockResolvedValue({
+      active: { ID: 7, SpeakerID: 3 },
+      status: "open",
+      proposals: [],
+    });
+
+    bridge.handleNotification(dealEvent(22, { Action: "propose", Deal: { version: 1, items: [] } }));
+
+    await vi.waitFor(() => expect(mocks.runChatTurn).toHaveBeenCalledOnce());
+    expect(mocks.readActive).toHaveBeenCalledWith(1, 3);
+    expect(mocks.runChatTurn.mock.calls[0][0]).toEqual({
+      kind: "deal",
+      chatId: "dipl:game-a:1:3",
+      deal: { version: 1, items: [] },
+      expectedProposalID: 7,
     });
   });
 

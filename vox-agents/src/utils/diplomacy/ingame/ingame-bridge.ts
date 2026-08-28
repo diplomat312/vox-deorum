@@ -42,7 +42,7 @@ import {
   NotDiplomacyThreadError,
   rejectDealAction,
 } from "../deal/deal-actions.js";
-import { IllegalDealError, ProposalConflictError } from "../deal/deal.js";
+import { IllegalDealError, ProposalConflictError, readActiveProposal } from "../deal/deal.js";
 import {
   ConversationClosedThisTurnError,
   LiveTurnUnavailableError,
@@ -870,17 +870,26 @@ export class IngameBridge {
    * streaming path. Accept and reject are direct transactional actions with no model run, so they
    * return their durable rows immediately. Retract has no wire form: the driver sends it as `reject`,
    * and the backend already permits an author to reject their own offer.
+   *
+   * The panel's Propose is pressed blind — unlike the Web editor it never carries the ID of the offer
+   * the player saw. So the open offer is derived here instead of rejecting: proposing while an offer
+   * is on the table (either side's, the player's own included) submits a counter superseding it,
+   * which is `classifyDealSubmission`'s own rule. The classifier still re-checks under the turn lock,
+   * so an offer that changes identity between this read and the commit 409s as before.
    */
   private async runDealAction(event: DiplomacyEvent, caller: ResolvedCaller, guard: TransportGeneration): Promise<void> {
     const thread = await this.awaitCurrent(guard, caller, () => this.openPair(event, caller));
     if (thread === staleTransport) return;
     try {
       if (event.Action === "propose" || event.Action === "counter") {
+        const expectedProposalID = event.Action === "counter"
+          ? event.ProposalMessageID
+          : await this.openProposalID(thread);
         await this.runTurn(event, caller, guard, {
           kind: "deal",
           chatId: thread.id,
           deal: event.Deal,
-          ...(event.Action === "counter" ? { expectedProposalID: event.ProposalMessageID } : {}),
+          ...(expectedProposalID !== undefined ? { expectedProposalID } : {}),
         });
         return;
       }
@@ -905,6 +914,12 @@ export class IngameBridge {
       if (detail === undefined) throw error;
       await this.enqueueStatus(event.PlayerID, event.CounterpartID, detail, guard);
     }
+  }
+
+  /** The ID of the pair's currently open offer (either side's), or undefined when none is open. */
+  private async openProposalID(thread: EnvoyThread): Promise<number | undefined> {
+    const reduction = await readActiveProposal(thread.player1ID, thread.player2ID);
+    return reduction.status === "open" ? reduction.active?.ID : undefined;
   }
 
   /**
