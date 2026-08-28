@@ -49,7 +49,7 @@ After connecting, the Setup wizard lists models. API-backed providers and local 
 | Smaller / faster models | Cheaper, quicker | Lower quality of play |
 | Local models | Free to run, private | Limited by your own hardware |
 
-When you save, the wizard silently applies the recommended settings Vox Deorum knows for that model. The full built-in model list remains available in Settings, which also lets you assign different models to different jobs. Per-civilization models are possible too, say a strong model for the main opponents and something cheap for the minor ones, but those mean editing the game configuration file by hand; see the [developer overview](../developers/vox-agents/overview.md#models-and-configuration) if you want to go that deep.
+When you save, the wizard silently applies the recommended settings Vox Deorum knows for that model. The full built-in model list remains available in Settings, which also lets you assign different models to different jobs. In a model assignment, **More** opens discovery. Additions remain unsaved until you choose **Save All**. Use the Setup wizard before signing in to a new Codex account. Per-civilization models are possible too, say a strong model for the main opponents and something cheap for the minor ones, but those mean editing the game configuration file by hand; see the [developer overview](../developers/vox-agents/overview.md#models-and-configuration) if you want to go that deep.
 
 A mid-tier model from your chosen provider is a sensible starting point. Move up or down once you've seen how it plays.
 

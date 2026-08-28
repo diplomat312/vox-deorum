@@ -6,7 +6,7 @@ The Replayer is built for [Community Patch and Vox Populi](https://github.com/Lo
 
 To watch a replay:
 
-1. Open the Replayer at <https://civitas-john.github.io/vox-deorum-replay/>.
+1. Open the Replayer at <https://vox-deorum.github.io/vox-deorum-replay/>.
 2. [Find your replay file](#finding-your-replay-files).
 3. [Load it](#loading-a-game).
 4. [Play it back](#watching-a-game).

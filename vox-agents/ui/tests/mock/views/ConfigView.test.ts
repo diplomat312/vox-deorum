@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { flushPromises, mount } from '@vue/test-utils';
 import ConfigView from '@/views/ConfigView.vue';
 import AgentModelMappings from '@/components/config/AgentModelMappings.vue';
+import ModelDiscoveryDialog from '@/components/config/ModelDiscoveryDialog.vue';
 import ModelDefinitions from '@/components/config/ModelDefinitions.vue';
 import SetupWizard from '@/components/config/SetupWizard.vue';
 import { api } from '@/api/client';
@@ -151,6 +152,101 @@ describe('ConfigView model deletion', () => {
       label: 'openai/new-embedder',
       value: 'openai/new-embedder',
     });
+  });
+
+  it('should open discovery for a mapping, add its model locally, and save it only on Save All', async () => {
+    const wrapper = mount(ConfigView, { shallow: true });
+    await flushPromises();
+    const discovered = {
+      id: 'openrouter/discovered-chat',
+      provider: 'openrouter',
+      name: 'discovered-chat',
+      recommendedOptions: { reasoningEffort: 'high' }
+    };
+
+    wrapper.findComponent(AgentModelMappings).vm.$emit('update:mappings', [
+      { agent: 'default', model: 'old-model' }
+    ] satisfies AgentMapping[]);
+    wrapper.findComponent(AgentModelMappings).vm.$emit('discover-model', 0);
+    await wrapper.vm.$nextTick();
+    expect(wrapper.findComponent(ModelDiscoveryDialog).props('visible')).toBe(true);
+
+    wrapper.findComponent(ModelDiscoveryDialog).vm.$emit('select', discovered);
+    await wrapper.vm.$nextTick();
+    expect(wrapper.findComponent(ModelDefinitions).props('models')).toEqual([{
+      id: 'openrouter/discovered-chat',
+      provider: 'openrouter',
+      name: 'discovered-chat',
+      options: { reasoningEffort: 'high' }
+    }]);
+    expect(wrapper.findComponent(AgentModelMappings).props('mappings')).toEqual([
+      { agent: 'default', model: 'openrouter/discovered-chat' }
+    ]);
+    expect(api.updateCurrentConfig).not.toHaveBeenCalled();
+
+    const saveButton = wrapper.findAll('button-stub')
+      .find(button => button.attributes('label') === 'Save All');
+    await saveButton?.trigger('click');
+    await flushPromises();
+    expect(api.updateCurrentConfig).toHaveBeenCalledWith(expect.objectContaining({
+      config: expect.objectContaining({
+        llms: expect.objectContaining({
+          default: 'openrouter/discovered-chat',
+          'openrouter/discovered-chat': expect.objectContaining({
+            provider: 'openrouter',
+            name: 'discovered-chat',
+            options: { reasoningEffort: 'high' }
+          })
+        })
+      })
+    }));
+  });
+
+  it('should retain an existing definition when discovery returns the same model id', async () => {
+    const wrapper = mount(ConfigView, { shallow: true });
+    await flushPromises();
+    const existing: LLMConfig = {
+      id: 'openrouter/existing',
+      provider: 'openrouter',
+      name: 'curated-name',
+      options: { reasoningEffort: 'low' }
+    };
+    wrapper.findComponent(ModelDefinitions).vm.$emit('update:models', [existing]);
+    wrapper.findComponent(AgentModelMappings).vm.$emit('update:mappings', [
+      { agent: 'default', model: 'old-model' }
+    ] satisfies AgentMapping[]);
+    wrapper.findComponent(AgentModelMappings).vm.$emit('discover-model', 0);
+    await wrapper.vm.$nextTick();
+    wrapper.findComponent(ModelDiscoveryDialog).vm.$emit('select', {
+      id: 'openrouter/existing',
+      provider: 'openrouter',
+      name: 'replacement-name',
+      recommendedOptions: { reasoningEffort: 'high' }
+    });
+    await wrapper.vm.$nextTick();
+
+    expect(wrapper.findComponent(ModelDefinitions).props('models')).toEqual([existing]);
+    expect(wrapper.findComponent(AgentModelMappings).props('mappings')).toEqual([
+      { agent: 'default', model: 'openrouter/existing' }
+    ]);
+  });
+
+  it('should assign a discovered model to the embedder target', async () => {
+    const wrapper = mount(ConfigView, { shallow: true });
+    await flushPromises();
+    wrapper.findComponent(AgentModelMappings).vm.$emit('discover-embedder');
+    await wrapper.vm.$nextTick();
+    expect(wrapper.findComponent(ModelDiscoveryDialog).props('visible')).toBe(true);
+
+    wrapper.findComponent(ModelDiscoveryDialog).vm.$emit('select', {
+      id: 'openai/discovered-embedder',
+      provider: 'openai',
+      name: 'discovered-embedder',
+      recommendedOptions: { embeddingSize: 1536 }
+    });
+    await wrapper.vm.$nextTick();
+
+    expect(wrapper.findComponent(AgentModelMappings).props('embedderModel')).toBe('openai/discovered-embedder');
   });
 
   it('removes only the selected duplicate model row', async () => {

@@ -87,17 +87,17 @@ const menuItems = [
       {
         label: 'Documentation',
         icon: 'pi pi-question-circle',
-        command: () => window.open('https://github.com/CIVITAS-John/vox-deorum/blob/main/README.md', '_blank')
+        command: () => window.open('https://github.com/vox-deorum/vox-deorum/blob/main/README.md', '_blank')
       },
       {
         label: 'Report Issues',
         icon: 'pi pi-exclamation-triangle',
-        command: () => window.open('https://github.com/CIVITAS-John/vox-deorum/issues', '_blank')
+        command: () => window.open('https://github.com/vox-deorum/vox-deorum/issues', '_blank')
       },
       {
         label: 'Replay Viewer',
         icon: 'pi pi-video',
-        command: () => window.open('https://civitas-john.github.io/vox-deorum-replay', '_blank')
+        command: () => window.open('https://vox-deorum.github.io/vox-deorum-replay/', '_blank')
       }
     ]
   }

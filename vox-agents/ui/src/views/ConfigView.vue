@@ -6,10 +6,11 @@ import Message from 'primevue/message';
 import ProgressSpinner from 'primevue/progressspinner';
 import { useConfirm } from 'primevue/useconfirm';
 import { api } from '../api/client';
-import type { AgentMapping, LLMConfig, VoxAgentsConfig, AgentInfo } from '../utils/types';
+import type { AgentMapping, LLMConfig, VoxAgentsConfig, AgentInfo, DiscoveredModel } from '../utils/types';
 import { apiKeyFields } from '../utils/types';
 import AgentModelMappings from '../components/config/AgentModelMappings.vue';
 import ApiKeysSection from '../components/config/ApiKeysSection.vue';
+import ModelDiscoveryDialog from '../components/config/ModelDiscoveryDialog.vue';
 import ModelDefinitions from '../components/config/ModelDefinitions.vue';
 import PathSettingsSection from '../components/config/PathSettingsSection.vue';
 import ModelOptionsDialog from '../components/config/ModelOptionsDialog.vue';
@@ -45,6 +46,8 @@ const confirm = useConfirm();
 // Model options dialog state
 const modelOptionsVisible = ref(false);
 const editingModel = ref<LLMConfig | null>(null);
+const modelDiscoveryVisible = ref(false);
+const discoveryTarget = ref<{ kind: 'mapping'; index: number } | { kind: 'embedder' } | null>(null);
 
 /** Rebuild the editable LLM form state from one complete LLM configuration. */
 function rehydrateLlmForm(llms: VoxAgentsConfig['llms']): void {
@@ -216,6 +219,34 @@ function applyModelOptions(options: LLMConfig['options']): void {
   editingModel.value = updated;
 }
 
+/** Open model discovery for the mapping or embedder that requested a new model. */
+function openModelDiscovery(target: { kind: 'mapping'; index: number } | { kind: 'embedder' }): void {
+  discoveryTarget.value = target;
+  modelDiscoveryVisible.value = true;
+}
+
+/** Add a discovered definition when needed, then assign it to the requesting control. */
+function applyDiscoveredModel(model: DiscoveredModel): void {
+  if (!modelDefinitions.value.some(definition => definition.id === model.id)) {
+    modelDefinitions.value = [...modelDefinitions.value, {
+      id: model.id,
+      provider: model.provider,
+      name: model.name,
+      options: { ...(model.recommendedOptions ?? {}) }
+    }];
+  }
+
+  const target = discoveryTarget.value;
+  if (target?.kind === 'mapping') {
+    agentMappings.value = agentMappings.value.map((mapping, index) =>
+      index === target.index ? { ...mapping, model: model.id } : mapping
+    );
+  } else if (target?.kind === 'embedder') {
+    embedderModel.value = model.id;
+  }
+  discoveryTarget.value = null;
+}
+
 // Save configuration (API keys and config)
 async function saveConfig() {
   saving.value = true;
@@ -326,6 +357,8 @@ function updateWizardConfig(updatedConfig: VoxAgentsConfig): void {
       :agentTypes="agentTypes"
       :availableModels="availableModels"
       :embeddingModels="embeddingModels"
+      @discover-model="openModelDiscovery({ kind: 'mapping', index: $event })"
+      @discover-embedder="openModelDiscovery({ kind: 'embedder' })"
     />
 
     <ModelDefinitions
@@ -338,6 +371,13 @@ function updateWizardConfig(updatedConfig: VoxAgentsConfig): void {
       v-model:visible="modelOptionsVisible"
       :model="editingModel"
       @apply="applyModelOptions"
+    />
+
+    <ModelDiscoveryDialog
+      v-model:visible="modelDiscoveryVisible"
+      :apiKeys="apiKeys"
+      @select="applyDiscoveredModel"
+      @update:apiKeys="apiKeys = $event"
     />
 
     <SetupWizard

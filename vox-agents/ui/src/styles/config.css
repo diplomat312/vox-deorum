@@ -142,6 +142,10 @@
   max-height: calc(100vh - 2rem);
 }
 
+.model-discovery-dialog {
+  width: min(40rem, calc(100vw - 2rem));
+}
+
 .setup-wizard-dialog .p-dialog-header {
   padding-right: 0;
   padding-bottom: 0;

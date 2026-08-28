@@ -6,9 +6,10 @@ import Dialog from 'primevue/dialog';
 import InputText from 'primevue/inputtext';
 import Password from 'primevue/password';
 import ProgressSpinner from 'primevue/progressspinner';
-import { api, ModelDiscoveryError, type ModelDiscoveryErrorKind } from '@/api/client';
+import { api } from '@/api/client';
+import ModelPickerList from '@/components/config/ModelPickerList.vue';
+import { useModelDiscovery } from '@/composables/useModelDiscovery';
 import type { DiscoveredModel, LLMConfig, VoxAgentsConfig } from '@/utils/types';
-import { apiKeyFields, llmProviders, providerCredentials } from '@/utils/types';
 
 type SetupStep = 'path' | 'credentials' | 'models' | 'confirm';
 type SetupDoor = 'subscription' | 'api' | 'local';
@@ -28,18 +29,28 @@ interface Emits {
 const props = defineProps<Props>();
 const emit = defineEmits<Emits>();
 const router = useRouter();
+const {
+  selectedProvider,
+  enteredCredentials,
+  discoveredModels,
+  selectedModelId,
+  discoveryPending,
+  discoveryErrorKind,
+  selectedProviderLabel,
+  credentialFields,
+  selectedModel,
+  recommendedSmallModel,
+  discoveryStatusCopy,
+  updateCredential,
+  clearDiscoveryError,
+  nonEmptySelectedCredentials,
+  discover,
+  reset,
+  invalidate
+} = useModelDiscovery({ isActive: () => props.visible });
 
 const currentStep = ref<SetupStep>('path');
 const selectedDoor = ref<SetupDoor | null>(null);
-const selectedProvider = ref('');
-const enteredCredentials = ref<Record<string, string>>({});
-const discoveredModels = ref<DiscoveredModel[]>([]);
-const recommendedTiers = ref<{ default?: string; small?: string }>({});
-const selectedModelId = ref('');
-const modelFilter = ref('');
-const discoveryPending = ref(false);
-const discoveryErrorKind = ref<ModelDiscoveryErrorKind | null>(null);
-const discoveryError = ref('');
 const saving = ref(false);
 const saveError = ref('');
 const codexState = ref<'stopped' | 'starting' | 'ready'>('stopped');
@@ -77,10 +88,6 @@ const dialogVisible = computed({
   set: value => emit('update:visible', value)
 });
 
-const selectedProviderLabel = computed(() =>
-  llmProviders.find(provider => provider.value === selectedProvider.value)?.label ?? selectedProvider.value
-);
-
 const credentialsHeading = computed(() => {
   if (selectedProvider.value === 'codex') return 'Sign in with ChatGPT';
   if (selectedProvider.value === 'claude-code') return 'Use Claude Code';
@@ -93,72 +100,14 @@ const visibleServiceOptions = computed(() => {
   return serviceOptions[selectedDoor.value];
 });
 
-const credentialKeys = computed(() => {
-  const metadata = providerCredentials[selectedProvider.value];
-  return [...(metadata?.required ?? []), ...(metadata?.optional ?? [])];
-});
-
-const credentialFields = computed(() =>
-  credentialKeys.value
-    .map(key => apiKeyFields.find(field => field.key === key))
-    .filter((field): field is (typeof apiKeyFields)[number] => field !== undefined)
-);
-
 const canContinueFromPath = computed(() => selectedDoor.value !== null && selectedProvider.value.length > 0);
-
-const filteredModels = computed(() => {
-  const query = modelFilter.value.trim().toLowerCase();
-  if (!query) return discoveredModels.value;
-  return discoveredModels.value.filter(model =>
-    model.id.toLowerCase().includes(query) || model.name.toLowerCase().includes(query)
-  );
-});
-
-const selectedModel = computed(() =>
-  discoveredModels.value.find(model => model.id === selectedModelId.value) ?? null
-);
-
-const recommendedSmallModel = computed(() => {
-  const id = recommendedTiers.value.small;
-  return id ? discoveredModels.value.find(model => model.id === id) ?? null : null;
-});
-
-const discoveryStatusCopy = computed(() => {
-  const provider = selectedProviderLabel.value || 'This service';
-  switch (discoveryErrorKind.value) {
-    case 'auth':
-      return `${provider} did not accept those details. Check them and try again.`;
-    case 'network':
-      return selectedProvider.value === 'openai-compatible'
-        ? 'No AI server was found on this PC. Start Ollama or LM Studio, then try again.'
-        : `We could not reach ${provider}. Check your connection and try again.`;
-    case 'missing-credential':
-      return selectedProvider.value === 'openai-compatible'
-        ? 'No AI server was found on this PC. Check the address and start Ollama or LM Studio first.'
-        : `Add the requested ${provider} details, then try again.`;
-    case 'unsupported':
-      return `${provider} cannot list models here yet. Go back and choose another service.`;
-    case 'provider':
-      return `${provider} could not list models right now. Nothing was saved, so it is safe to try again.`;
-    default:
-      return discoveryError.value;
-  }
-});
 
 /** Reset the wizard to a clean first step while preserving configuration passed by the host. */
 function resetWizard(): void {
   invalidatePendingWork();
+  reset({ ...props.apiKeys });
   currentStep.value = 'path';
   selectedDoor.value = null;
-  selectedProvider.value = '';
-  enteredCredentials.value = { ...props.apiKeys };
-  discoveredModels.value = [];
-  recommendedTiers.value = {};
-  selectedModelId.value = '';
-  modelFilter.value = '';
-  discoveryPending.value = false;
-  discoveryErrorKind.value = null;
-  discoveryError.value = '';
   saving.value = false;
   saveError.value = '';
   resetCodexState();
@@ -169,12 +118,6 @@ function selectDoor(door: SetupDoor): void {
   selectedDoor.value = door;
   selectedProvider.value = door === 'local' ? 'openai-compatible' : '';
   clearDiscoveryError();
-}
-
-/** Clear discovery feedback before another provider or credential attempt. */
-function clearDiscoveryError(): void {
-  discoveryErrorKind.value = null;
-  discoveryError.value = '';
 }
 
 /** Move from path selection into the matching credential experience. */
@@ -188,41 +131,11 @@ function continueFromPath(): void {
   if (selectedProvider.value === 'codex') void beginCodexLogin();
 }
 
-/** Update one locally owned credential field. */
-function updateCredential(key: string, value: string): void {
-  enteredCredentials.value = { ...enteredCredentials.value, [key]: value };
-  clearDiscoveryError();
-}
-
-/** Build the chosen provider's credential payload without leaking unrelated stored keys. */
-function selectedCredentials(): Record<string, string> {
-  return Object.fromEntries(credentialKeys.value.map(key => [key, enteredCredentials.value[key] ?? '']));
-}
-
-/** Discover and sort the models available through the chosen service. */
+/** Discover models and advance only while this wizard still owns the successful result. */
 async function discoverSelectedModels(): Promise<void> {
-  if (!selectedProvider.value || discoveryPending.value) return;
-  const generation = wizardGeneration;
-  discoveryPending.value = true;
-  clearDiscoveryError();
-  try {
-    const response = await api.discoverModels(selectedProvider.value, selectedCredentials());
-    if (!props.visible || generation !== wizardGeneration) return;
-    discoveredModels.value = [...response.models].sort((left, right) => left.id.localeCompare(right.id));
-    recommendedTiers.value = response.recommendedTiers ?? {};
-    selectedModelId.value = discoveredModels.value.some(model => model.id === recommendedTiers.value.default)
-      ? recommendedTiers.value.default ?? ''
-      : '';
-    modelFilter.value = '';
+  if (await discover()) {
     currentStep.value = 'models';
-    discoveryPending.value = false;
     invalidatePendingWork();
-  } catch (error) {
-    if (!props.visible || generation !== wizardGeneration) return;
-    discoveryError.value = error instanceof Error ? error.message : 'The model list could not be loaded.';
-    discoveryErrorKind.value = error instanceof ModelDiscoveryError ? error.kind : 'provider';
-  } finally {
-    if (generation === wizardGeneration) discoveryPending.value = false;
   }
 }
 
@@ -239,6 +152,7 @@ function resetCodexState(): void {
 /** Stop login polling and invalidate all pending login or discovery callbacks. */
 function invalidatePendingWork(): void {
   wizardGeneration += 1;
+  invalidate();
   if (codexPollTimer) {
     clearInterval(codexPollTimer);
     codexPollTimer = null;
@@ -312,7 +226,6 @@ function goBack(): void {
   if (saving.value) return;
   if (currentStep.value === 'credentials') {
     invalidatePendingWork();
-    discoveryPending.value = false;
     resetCodexState();
     currentStep.value = 'path';
   } else if (currentStep.value === 'models') {
@@ -330,15 +243,6 @@ function continueFromModels(): void {
   if (!selectedModel.value) return;
   saveError.value = '';
   currentStep.value = 'confirm';
-}
-
-/** Return only nonempty fields entered for the selected service. */
-function nonEmptySelectedCredentials(): Record<string, string> {
-  return Object.fromEntries(
-    credentialKeys.value
-      .map(key => [key, enteredCredentials.value[key]?.trim() ?? ''] as const)
-      .filter(([, value]) => value.length > 0)
-  );
 }
 
 /** Build a selected model entry while retaining an explicit configured entry when one exists. */
@@ -588,18 +492,7 @@ onUnmounted(invalidatePendingWork);
         <h3>Setup Step 3 of 4 · Pick the model your AI opponents will use</h3>
         <p>Your account works. Choose the AI Vox Deorum should use by default.</p>
       </div>
-      <div class="setup-wizard-field">
-        <InputText id="setup-model-filter" v-model="modelFilter" placeholder="Search by AI model name" />
-      </div>
-      <div class="setup-wizard-model-list" role="radiogroup" aria-label="Available AIs">
-        <label v-for="model in filteredModels" :key="model.id" class="setup-wizard-model">
-          <input v-model="selectedModelId" type="radio" name="setup-model" :value="model.id" />
-          <span><strong>{{ model.id }}</strong><small>{{ model.name }}</small></span>
-        </label>
-        <div v-if="filteredModels.length === 0" class="setup-wizard-empty" aria-live="polite">
-          {{ modelFilter.trim() ? 'No AIs match that filter.' : 'No AIs were found for this service.' }}
-        </div>
-      </div>
+      <ModelPickerList v-model="selectedModelId" :models="discoveredModels" />
     </section>
 
     <section v-else class="setup-wizard-step">

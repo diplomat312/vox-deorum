@@ -4,7 +4,7 @@ Play Civilization V with AI-enhanced opponents powered by GPT, Claude, and other
 
 **Version 0.12.1 - Beta**
 
-![Replay](https://github.com/CIVITAS-John/vox-deorum-replay/blob/gh-pages/examples/replay-demo.gif)
+![Replay](https://github.com/vox-deorum/vox-deorum-replay/blob/gh-pages/examples/replay-demo.gif)
 
 Vox Deorum gives Civ V's AI civilizations a language model brain. They reason about strategy in natural language, adapt to what you do, and can speak for themselves, so you can chat with any LLM-enhanced player in the game.
 
