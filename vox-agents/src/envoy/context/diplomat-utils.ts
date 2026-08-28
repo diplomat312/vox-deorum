@@ -112,7 +112,7 @@ export function formatDealContext(
     // state the open-deal ask directly instead of leaving the model an if-else.
     blocks.push(
       ownAuthored
-        ? "Your proposal awaits the counterpart's reply. Do not call the negotiator again until they respond."
+        ? "Your proposal awaits the counterpart's reply. Call the negotiator again only if their response makes you want to revise or retract it."
         : "The counterpart's deal is on the table. Hand it to the negotiator by calling `call-negotiator` with a `Briefing` of the conversation so far. The negotiator decides whether to accept, counter, or reject."
     );
   }

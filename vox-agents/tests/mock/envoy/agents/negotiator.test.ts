@@ -190,6 +190,18 @@ describe('accept-deal', () => {
     expect(input.outcome).toBeUndefined();
     expect(mcp.calls('enact-agent-deal')).toHaveLength(0);
   });
+
+  it('refuses to accept the seat own standing offer (store guard)', async () => {
+    setOpenProposal(7, 3); // the negotiator's own seat authored it
+    const input = negotiatorInput({ activeProposal: { messageID: 7, deal: { version: 1, items: [], promises: [] } } });
+    const tools = createNegotiatorTerminalTools(makeContext(input));
+
+    const msg = await run(tools['accept-deal'], { Rationale: 'Seal it.', Message: 'We agree.' });
+
+    expect(msg).toContain('cannot respond to its own proposal');
+    expect(input.outcome).toBeUndefined();
+    expect(mcp.calls('enact-agent-deal')).toHaveLength(0);
+  });
 });
 
 describe('propose-deal', () => {
@@ -375,7 +387,9 @@ describe('propose-deal', () => {
     expect(mcp.calls('append-message')).toHaveLength(1);
   });
 
-  it('does not create an opening proposal while another proposal is open', async () => {
+  it('does not create an opening proposal when a proposal opened under the run (lost race)', async () => {
+    // The run saw no deal on the table (no activeProposal), but a proposal has opened in the store
+    // since — the opening path must refuse rather than silently supersede the unseen offer.
     setOpenProposal();
     const input = negotiatorInput({ intent: 'open trade', upfrontInspection: legalInspection });
     const tools = createNegotiatorTerminalTools(makeContext(input));
@@ -390,6 +404,30 @@ describe('propose-deal', () => {
     expect(msg).toContain('already open');
     expect(input.outcome).toBeUndefined();
     expect(mcp.calls('append-message')).toHaveLength(0);
+  });
+
+  it('revises the seat own standing offer as a deal-counter superseding it', async () => {
+    setOpenProposal(7, 3); // the negotiator's own seat authored the open offer
+    mcp.respondWith('inspect-deal', structuredResult(emptyInspection));
+    mcp.respondWith('append-message', structuredResult({ ID: 15, Turn: 5 }));
+    const input = negotiatorInput({
+      activeProposal: { messageID: 7, deal: { version: 1, items: [], promises: [] } },
+      upfrontInspection: legalInspection,
+    });
+    const tools = createNegotiatorTerminalTools(makeContext(input));
+
+    const msg = await run(tools['propose-deal'], {
+      Rationale: 'Soften the ask.',
+      Message: 'We lower our demand to open borders alone.',
+      Give: [],
+      Receive: ['Open Borders'],
+    });
+
+    const append = mcp.calls('append-message')[0]!.args;
+    expect(append.MessageType).toBe('deal-counter');
+    expect(append.SpeakerID).toBe(3);
+    expect(input.outcome).toMatchObject({ type: 'counter', dealMessageID: 15 });
+    expect(msg).toContain('deal message #15');
   });
 });
 
@@ -426,6 +464,29 @@ describe('reject-deal', () => {
     const msg = await run(tools['reject-deal'], { rationale: 'x' });
     expect(msg).toContain('no deal on the table');
     expect(mcp.calls('append-message')).toHaveLength(0);
+  });
+
+  it('retracts the seat own standing offer through the transactional reject action', async () => {
+    setOpenProposal(7, 3); // the negotiator's own seat authored it — rejecting is a retraction
+    mcp.onTool('reject-agent-deal', (args) => structuredResult({
+      Result: 'rejected',
+      ProposalMessageID: args.ProposalMessageID,
+      AlreadyRejected: false,
+      Row: {
+        ID: 16, Player1ID: 1, Player2ID: 3, Player1Role: 'the leader', Player2Role: 'diplomat',
+        SpeakerID: args.SpeakerID, MessageType: 'deal-reject', Content: args.Content,
+        Payload: { ProposalMessageID: args.ProposalMessageID }, Turn: 5, CreatedAt: 0,
+      },
+    }));
+    const input = negotiatorInput({ activeProposal: { messageID: 7, deal: { version: 1, items: [], promises: [] } } });
+    const tools = createNegotiatorTerminalTools(makeContext(input));
+
+    await run(tools['reject-deal'], { Rationale: 'Terms overtaken by events.', Message: 'We withdraw our offer.' });
+
+    const rejection = mcp.calls('reject-agent-deal')[0]!.args;
+    expect(rejection.ProposalMessageID).toBe(7);
+    expect(rejection.SpeakerID).toBe(3);
+    expect(input.outcome).toMatchObject({ type: 'reject', proposalMessageID: 7, rejectMessageID: 16 });
   });
 });
 
@@ -690,7 +751,7 @@ describe('getInitialMessages task determination', () => {
     expect(text).toContain(`### Promises (example format "${PROMISE_METADATA.MILITARY.label}")`);
   });
 
-  it('does not forward the seat own pending proposal (notes it awaits a reply)', async () => {
+  it('forwards the seat own pending proposal as a standing offer to revise or retract', async () => {
     setOpenProposal(7, 3); // the negotiator's own seat authored it
     mcp.respondWith('inspect-deal', structuredResult(emptyInspection));
     const negotiator = new Negotiator();
@@ -698,8 +759,13 @@ describe('getInitialMessages task determination', () => {
 
     const messages = await negotiator.getInitialMessages(params, input, {} as any);
 
-    expect(input.activeProposal).toBeUndefined();
-    expect(content(messages)).toContain('awaiting the counterpart');
+    expect(input.activeProposal).toMatchObject({ messageID: 7 });
+    const text = content(messages);
+    expect(text).toContain('Your Standing Offer (#7)');
+    expect(text).toContain('revise it with propose-deal');
+    expect(text).toContain('retract it with reject-deal');
+    // Inspection runs against the standing own deal, so the model sees its own offer's terms/values.
+    expect(mcp.calls('inspect-deal')[0]!.args).toHaveProperty('ProposedDeal');
   });
 
   it('injects the fresh diplomacy background when the thread carries civ identities', async () => {

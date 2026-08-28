@@ -171,9 +171,9 @@ You can access additional information by calling the following tools.
   }
 
   /**
-   * Assemble the negotiator's grounding. Determines the task itself from the transcript — a
-   * still-open proposal authored by the COUNTERPART is forwarded for a response; anything else
-   * (none, or our own pending proposal, or a closed one) means we are opening a deal. Then runs
+   * Assemble the negotiator's grounding. Determines the task itself from the transcript — any
+   * still-open proposal is forwarded: the counterpart's to answer, or our own standing offer to
+   * revise or retract; none (or a closed one) means we are opening a deal. Then runs
    * `inspect-deal` upfront (context 2) against the on-the-table deal, or the bare tradable
    * range when proposing. The derived `activeProposal` is stashed on `input` for the terminal
    * tools (which re-validate it against the live transcript before writing).
@@ -187,10 +187,10 @@ You can access additional information by calling the following tools.
     const leader = parameters.metadata?.YouAre?.Leader ?? "your leader";
     const civName = parameters.metadata?.YouAre?.Name ?? "your civilization";
 
-    // (3) what is on the table — reduce the transcript and forward only the counterpart's offer.
+    // (3) what is on the table — reduce the transcript and forward the open offer from either side.
     const reduction = await readActiveProposal(thread.player1ID, thread.player2ID);
-    const ownPending = reduction.status === "open" && reduction.active?.SpeakerID === thread.agent;
-    if (reduction.active && reduction.status === "open" && reduction.active.SpeakerID !== thread.agent) {
+    const selfAuthored = reduction.status === "open" && reduction.active?.SpeakerID === thread.agent;
+    if (reduction.active && reduction.status === "open") {
       const deal = activeProposalDeal(reduction);
       if (deal) input.activeProposal = { messageID: reduction.active.ID, deal };
     }
@@ -219,13 +219,13 @@ You can access additional information by calling the following tools.
     if (input.activeProposal) {
       // The unified ledger folds the on-the-table deal's per-term legality, advisory value, and
       // third-party relationship context directly into the terms: no separate inspection section.
-      sections.push(formatActiveProposalLedger(input.activeProposal, thread, ledgerOptions));
-    } else {
-      if (ownPending) {
+      sections.push(formatActiveProposalLedger(input.activeProposal, thread, { ...ledgerOptions, selfAuthored }));
+      if (selfAuthored) {
         sections.push(
-          `# Note\nYour side's proposal #${reduction.active!.ID} is still awaiting the counterpart's reply — there is nothing new to put on the table until they respond.`
+          `The deal on the table is YOUR OWN proposal #${input.activeProposal.messageID}, awaiting the counterpart's reply. You cannot accept your own offer. Either revise it with propose-deal (your new terms supersede it) or retract it with reject-deal.`
         );
       }
+    } else {
       sections.push(`# Strategic Intent\n${input.intent || "(open a deal at your discretion)"}`);
       sections.push(
         "There is no deal from the counterpart on the table. Construct opening terms with propose-deal using the menu below."

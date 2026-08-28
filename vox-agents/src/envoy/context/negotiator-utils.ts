@@ -67,7 +67,8 @@ function toTermList(value: string | string[]): string[] {
   return typeof value === "string" ? [value] : value;
 }
 
-/** The on-the-table deal from the counterpart being responded to. Absent when proposing outright. */
+/** The still-open deal on the table — the counterpart's offer to answer, or our own standing offer
+ * awaiting their reply (to revise or retract). Absent when proposing outright. */
 export interface ActiveProposalContext {
   /** Append ID of the deal-proposal / deal-counter being relayed. */
   messageID: number;
@@ -103,7 +104,7 @@ export interface NegotiatorInput {
   briefing: string;
   /** Strategic intent for an outright proposal (no on-the-table deal) — no terms. */
   intent?: string;
-  /** The on-the-table deal from the counterpart, when one awaits a response. Derived, not authored. */
+  /** The still-open deal on the table (either side's), when one exists. Derived, not authored. */
   activeProposal?: ActiveProposalContext;
   /**
    * The upfront `inspect-deal` result (tradable range + promise targets) computed in
@@ -116,22 +117,25 @@ export interface NegotiatorInput {
 }
 
 /**
- * Format the on-the-table proposal (context 3) as the shared unified ledger: the counterpart's
- * one-line message, our leader's intention toward them, and every term grouped by direction with the
- * advisory per-item value estimates and third-party relationship context. Always a counterpart-authored
- * deal here (the negotiator only ever responds to the other side's offer), so the message is "theirs".
+ * Format the on-the-table proposal (context 3) as the shared unified ledger: the offer's one-line
+ * message, our leader's intention toward them, and every term grouped by direction with the
+ * advisory per-item value estimates and third-party relationship context. The offer is usually the
+ * counterpart's; `selfAuthored` relabels the heading and message when it is our own standing offer.
  */
 export function formatActiveProposalLedger(
   active: ActiveProposalContext,
   thread: EnvoyThread,
-  options?: DealLedgerOptions
+  options?: DealLedgerOptions & { selfAuthored?: boolean }
 ): string {
-  const messageBlock = active.deal.message ? `## Their Message\n> ${active.deal.message}` : undefined;
+  const { selfAuthored, ...ledgerOptions } = options ?? {};
+  const messageBlock = active.deal.message
+    ? `## ${selfAuthored ? "Your Message" : "Their Message"}\n> ${active.deal.message}`
+    : undefined;
   return formatDealLedger(
     active.deal,
-    `# Deal On The Table (#${active.messageID})`,
+    `# ${selfAuthored ? "Your Standing Offer" : "Deal On The Table"} (#${active.messageID})`,
     ledgerContextFor(thread),
-    { ...options, messageBlock }
+    { ...ledgerOptions, messageBlock }
   );
 }
 
@@ -357,10 +361,13 @@ export function createNegotiatorTerminalTools(context: VoxContext<StrategistPara
         };
         try {
           if (isCounter) {
+            // Countering permits the offer's own author (a revision superseding its standing offer —
+            // the store's rule per classifyDealSubmission), just like rejecting permits a retraction.
             await requireCurrentOpenProposal(
               ni.thread,
               ni.activeProposal!.messageID,
-              ni.thread.agent
+              ni.thread.agent,
+              { allowSelfAuthored: true }
             );
           } else {
             await requireNoOpenProposal(ni.thread);
