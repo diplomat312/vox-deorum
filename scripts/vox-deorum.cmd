@@ -87,6 +87,9 @@ set "VOX_PID_FILE=%TEMP%\vox-deorum-vox-%RUN_ID%.pid"
 set "BRIDGE_URL_FILE=%TEMP%\vox-deorum-bridge-%RUN_ID%.shutdown"
 set "MCP_URL_FILE=%TEMP%\vox-deorum-mcp-%RUN_ID%.shutdown"
 set "VOX_URL_FILE=%TEMP%\vox-deorum-vox-%RUN_ID%.shutdown"
+set "BRIDGE_LOG_FILE=%~dp0..\bridge-service\logs\combined.log"
+set "MCP_LOG_FILE=%~dp0..\mcp-server\logs\combined.log"
+set "VOX_LOG_FILE=%~dp0..\vox-agents\logs\combined.log"
 
 del "%BRIDGE_PID_FILE%" 2>nul
 del "%MCP_PID_FILE%" 2>nul
@@ -124,6 +127,9 @@ set "MCP_SHUTDOWN_URL="
 set "VOX_SHUTDOWN_URL="
 set "KILL_CIV_MODE="
 set "CIV_PID="
+set "FAILED_SERVICE_ID="
+set "FAILED_SERVICE_NAME="
+set "FAILED_SERVICE_LOG="
 
 :: Refuse to start when a prior service is still listening on a required port.
 call :check_port_free 5000 "Bridge Service"
@@ -160,42 +166,32 @@ echo        Started with PID: %VOX_PID%
 echo.
 echo [INFO] Waiting for shutdown URLs...
 
-call :wait_for_url_file "%BRIDGE_URL_FILE%" "Bridge Service" 60 "%BRIDGE_PID%"
+call :wait_for_url_file "%BRIDGE_URL_FILE%" "Bridge Service" 60
+if errorlevel 2 goto :unexpected_exit
 if errorlevel 1 goto :startup_failed
 set /p BRIDGE_SHUTDOWN_URL=<"%BRIDGE_URL_FILE%"
 call :extract_port "%BRIDGE_SHUTDOWN_URL%"
 set "BRIDGE_PORT=!EXTRACTED_PORT!"
 echo        Bridge Service URL: %BRIDGE_SHUTDOWN_URL%
 
-call :wait_for_url_file "%MCP_URL_FILE%" "MCP Server" 60 "%MCP_PID%"
+call :wait_for_url_file "%MCP_URL_FILE%" "MCP Server" 60
+if errorlevel 2 goto :unexpected_exit
 if errorlevel 1 goto :startup_failed
 set /p MCP_SHUTDOWN_URL=<"%MCP_URL_FILE%"
 call :extract_port "%MCP_SHUTDOWN_URL%"
 set "MCP_PORT=!EXTRACTED_PORT!"
 echo        MCP Server URL: %MCP_SHUTDOWN_URL%
 
-call :wait_for_url_file "%VOX_URL_FILE%" "Vox Agents" 90 "%VOX_PID%"
+call :wait_for_url_file "%VOX_URL_FILE%" "Vox Agents" 90
+if errorlevel 2 goto :unexpected_exit
 if errorlevel 1 goto :startup_failed
 set /p VOX_SHUTDOWN_URL=<"%VOX_URL_FILE%"
 call :extract_port "%VOX_SHUTDOWN_URL%"
 set "VOX_PORT=!EXTRACTED_PORT!"
 echo        Shutdown URL: %VOX_SHUTDOWN_URL%
 
-call :is_pid_running "%BRIDGE_PID%"
-if errorlevel 1 (
-    echo [ERROR] Bridge Service ^(PID: %BRIDGE_PID%^) exited before startup completed.
-    goto :startup_failed
-)
-call :is_pid_running "%MCP_PID%"
-if errorlevel 1 (
-    echo [ERROR] MCP Server ^(PID: %MCP_PID%^) exited before startup completed.
-    goto :startup_failed
-)
-call :is_pid_running "%VOX_PID%"
-if errorlevel 1 (
-    echo [ERROR] Vox Agents ^(PID: %VOX_PID%^) exited before startup completed.
-    goto :startup_failed
-)
+call :check_services_running
+if errorlevel 1 goto :unexpected_exit
 
 echo ========================================
 echo All services started successfully!
@@ -209,24 +205,29 @@ echo     %MCP_SHUTDOWN_URL%
 echo   - Vox Agents (Port: %VOX_PORT%, Mode: %VOX_MODE%, PID: %VOX_PID%)
 echo     %VOX_SHUTDOWN_URL%
 echo.
-echo Press ENTER to stop all services.
-echo Type K then press ENTER to stop all services and then kill CivilizationV.exe.
-set /p "STOP_CONFIRM=> "
+echo Press Q to stop all services.
+echo Press K to stop all services, then kill CivilizationV.exe.
 
-if /I "%STOP_CONFIRM%"=="K" (
+:monitor_loop
+choice /c QKT /n /t 1 /d T >nul
+set "CHOICE_RESULT=!errorlevel!"
+call :check_services_running
+if errorlevel 1 goto :unexpected_exit
+if "!CHOICE_RESULT!"=="1" goto :normal_shutdown
+if "!CHOICE_RESULT!"=="2" (
     set "KILL_CIV_MODE=1"
     echo [INFO] Kill-game mode selected. Services will stop first, then CivilizationV.exe will be force-killed if found.
+    goto :normal_shutdown
 )
+if "!CHOICE_RESULT!"=="3" goto :monitor_loop
+echo [ERROR] Could not read launcher input.
+goto :startup_failed
 
+:normal_shutdown
 echo.
 echo [INFO] Shutting down services...
 
-echo [1/3] Stopping Vox Agents (PID: %VOX_PID%)...
-call :stop_service "Vox Agents" "%VOX_PID%" "%VOX_SHUTDOWN_URL%" %GRACEFUL_STOP_TIMEOUT%
-echo [2/3] Stopping MCP Server (PID: %MCP_PID%)...
-call :stop_service "MCP Server" "%MCP_PID%" "%MCP_SHUTDOWN_URL%" %GRACEFUL_STOP_TIMEOUT%
-echo [3/3] Stopping Bridge Service (PID: %BRIDGE_PID%)...
-call :stop_service "Bridge Service" "%BRIDGE_PID%" "%BRIDGE_SHUTDOWN_URL%" %GRACEFUL_STOP_TIMEOUT%
+call :shutdown_services
 
 if defined KILL_CIV_MODE (
     echo.
@@ -254,22 +255,43 @@ echo.
 endlocal
 exit /b 0
 
+:unexpected_exit
+:: Stop the remaining services and show the failed service's recent output.
+echo.
+echo [ERROR] %FAILED_SERVICE_NAME% exited unexpectedly.
+echo [INFO] Shutting down remaining services...
+call :shutdown_services
+call :print_failed_log_tail
+call :cleanup_temp_files
+pause
+endlocal
+exit /b 1
+
+:shutdown_services
+:: Stop every service through its existing graceful shutdown path.
+echo [1/3] Stopping Vox Agents (PID: %VOX_PID%)...
+call :stop_service "Vox Agents" "%VOX_PID%" "%VOX_SHUTDOWN_URL%" %GRACEFUL_STOP_TIMEOUT%
+echo [2/3] Stopping MCP Server (PID: %MCP_PID%)...
+call :stop_service "MCP Server" "%MCP_PID%" "%MCP_SHUTDOWN_URL%" %GRACEFUL_STOP_TIMEOUT%
+echo [3/3] Stopping Bridge Service (PID: %BRIDGE_PID%)...
+call :stop_service "Bridge Service" "%BRIDGE_PID%" "%BRIDGE_SHUTDOWN_URL%" %GRACEFUL_STOP_TIMEOUT%
+exit /b 0
+
 :wait_for_url_file
 set "WAIT_FILE=%~1"
 set "WAIT_NAME=%~2"
 set /a WAIT_LIMIT=%~3
-set "WAIT_PID=%~4"
 set /a WAIT_COUNT=0
 :wait_for_url_file_loop
+call :check_services_running
+if errorlevel 1 (
+    echo [ERROR] %FAILED_SERVICE_NAME% exited before %WAIT_NAME% published its shutdown URL.
+    exit /b 2
+)
 if exist "%WAIT_FILE%" (
     set "WAIT_VALUE="
     set /p WAIT_VALUE=<"%WAIT_FILE%"
     if defined WAIT_VALUE exit /b 0
-)
-call :is_pid_running "%WAIT_PID%"
-if errorlevel 1 (
-    echo [ERROR] %WAIT_NAME% ^(PID: %WAIT_PID%^) exited before publishing its shutdown URL.
-    exit /b 2
 )
 if !WAIT_COUNT! GEQ !WAIT_LIMIT! (
     echo [ERROR] Timed out waiting for %WAIT_NAME% shutdown URL file: %WAIT_FILE%
@@ -278,6 +300,70 @@ if !WAIT_COUNT! GEQ !WAIT_LIMIT! (
 timeout /t 1 /nobreak >nul
 set /a WAIT_COUNT+=1
 goto :wait_for_url_file_loop
+
+:check_services_running
+:: Record the first service wrapper that exits unexpectedly.
+if defined FAILED_SERVICE_ID exit /b 1
+if defined BRIDGE_PID (
+    call :is_pid_running "%BRIDGE_PID%"
+    if errorlevel 1 (
+        set "FAILED_SERVICE_ID=bridge"
+        set "FAILED_SERVICE_NAME=Bridge Service"
+        set "FAILED_SERVICE_LOG=%BRIDGE_LOG_FILE%"
+        exit /b 1
+    )
+)
+if defined MCP_PID (
+    call :is_pid_running "%MCP_PID%"
+    if errorlevel 1 (
+        set "FAILED_SERVICE_ID=mcp"
+        set "FAILED_SERVICE_NAME=MCP Server"
+        set "FAILED_SERVICE_LOG=%MCP_LOG_FILE%"
+        exit /b 1
+    )
+)
+if defined VOX_PID (
+    call :is_pid_running "%VOX_PID%"
+    if errorlevel 1 (
+        set "FAILED_SERVICE_ID=vox"
+        set "FAILED_SERVICE_NAME=Vox Agents"
+        set "FAILED_SERVICE_LOG=%VOX_LOG_FILE%"
+        exit /b 1
+    )
+)
+exit /b 0
+
+:print_failed_log_tail
+:: Print the final 50 lines from the failed service's combined log.
+echo.
+echo ========================================
+echo Final 50 lines from %FAILED_SERVICE_NAME%
+echo ========================================
+if not defined FAILED_SERVICE_LOG (
+    echo [INFO] No log file is configured for this service.
+    exit /b 0
+)
+if not exist "%FAILED_SERVICE_LOG%" (
+    echo [INFO] Combined log not found: %FAILED_SERVICE_LOG%
+    exit /b 0
+)
+for %%A in ("%FAILED_SERVICE_LOG%") do if %%~zA EQU 0 (
+    echo [INFO] Combined log is empty: %FAILED_SERVICE_LOG%
+    exit /b 0
+)
+set "TAIL_LAST_LINE=0"
+for /f "tokens=1 delims=:" %%a in ('findstr /r /n "^.*" ^< "%FAILED_SERVICE_LOG%"') do set "TAIL_LAST_LINE=%%a"
+if !TAIL_LAST_LINE! EQU 0 (
+    echo [INFO] Combined log has no readable lines: %FAILED_SERVICE_LOG%
+    exit /b 0
+)
+set /a TAIL_SKIP_LINES=TAIL_LAST_LINE-50
+if !TAIL_SKIP_LINES! LSS 1 (
+    type "%FAILED_SERVICE_LOG%" | findstr /r "^.*"
+) else (
+    more +!TAIL_SKIP_LINES! < "%FAILED_SERVICE_LOG%" | findstr /r "^.*"
+)
+exit /b 0
 
 :check_port_free
 set "CHECK_PORT=%~1"

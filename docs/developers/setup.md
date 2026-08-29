@@ -65,7 +65,7 @@ The bridge service and MCP server read their own settings from environment and c
 
 For a full session you need the game, with the mod enabled, plus all three services.
 
-The launcher `scripts/vox-deorum.cmd` brings the services up in dependency order (bridge, then MCP server, then vox-agents) and waits for each to publish its port. On exit it shuts them all down gracefully, falling back to a force-kill, and optionally kills CivilizationV.exe too:
+The launcher `scripts/vox-deorum.cmd` brings the services up in dependency order (bridge, then MCP server, then vox-agents) and waits for each to publish its port. Press Q to stop the services, or K to stop them and then kill CivilizationV.exe. If a service exits unexpectedly, the launcher stops the remaining services and shows the final 50 lines of that service's `logs/combined.log`. It shuts services down gracefully, falling back to a force-kill:
 
 ```bat
 scripts\vox-deorum.cmd            REM default: web UI
