@@ -213,14 +213,34 @@ choice /c QKT /n /t 1 /d T >nul
 set "CHOICE_RESULT=!errorlevel!"
 call :check_services_running
 if errorlevel 1 goto :unexpected_exit
-if "!CHOICE_RESULT!"=="1" goto :normal_shutdown
+if "!CHOICE_RESULT!"=="1" (
+    set "PENDING_ACTION=Q"
+    set "CONFIRM_PROMPT=Stop all services? (Y/N)"
+    goto :confirm_shutdown
+)
 if "!CHOICE_RESULT!"=="2" (
-    set "KILL_CIV_MODE=1"
-    echo [INFO] Kill-game mode selected. Services will stop first, then CivilizationV.exe will be force-killed if found.
-    goto :normal_shutdown
+    set "PENDING_ACTION=K"
+    set "CONFIRM_PROMPT=Stop all services and kill CivilizationV.exe? (Y/N)"
+    goto :confirm_shutdown
 )
 if "!CHOICE_RESULT!"=="3" goto :monitor_loop
 echo [ERROR] Could not read launcher input.
+goto :startup_failed
+
+:confirm_shutdown
+choice /c YN /n /m "!CONFIRM_PROMPT!"
+set "CONFIRM_RESULT=!errorlevel!"
+call :check_services_running
+if errorlevel 1 goto :unexpected_exit
+if "!CONFIRM_RESULT!"=="1" (
+    if "!PENDING_ACTION!"=="K" (
+        set "KILL_CIV_MODE=1"
+        echo [INFO] Kill-game mode selected. Services will stop first, then CivilizationV.exe will be force-killed if found.
+    )
+    goto :normal_shutdown
+)
+if "!CONFIRM_RESULT!"=="2" goto :monitor_loop
+echo [ERROR] Could not read launcher confirmation.
 goto :startup_failed
 
 :normal_shutdown
