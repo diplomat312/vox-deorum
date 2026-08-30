@@ -182,7 +182,9 @@ const toggleDrawer = () => {
 <style scoped>
 .app-container {
   height: 100vh;
+  min-width: 0;
   display: flex;
+  overflow: hidden;
 }
 
 .menu-toggle {
@@ -195,11 +197,21 @@ const toggleDrawer = () => {
 .main-content {
   flex: 1;
   height: 100vh;
-  overflow-y: auto;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  box-sizing: border-box;
   transition: margin-left 0.3s;
 }
 
 .main-content.drawer-open {
   margin-left: 16rem;
+}
+
+.main-content > .surface-section {
+  min-height: 0;
+  height: 100%;
+  box-sizing: border-box;
+  overflow: auto;
 }
 </style>

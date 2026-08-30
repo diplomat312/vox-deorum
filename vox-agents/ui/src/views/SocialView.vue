@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import Button from 'primevue/button'
 import Card from 'primevue/card'
 import Checkbox from 'primevue/checkbox'
@@ -28,6 +29,7 @@ const modelOptions = ref<Array<{ label: string; value: string }>>([
   { label: 'Nemotron 3.5 Lightning (free)', value: 'nvidia/nemotron-3.5-lightning:free' },
 ])
 const excludedModelIds = new Set(['liquid/lfm-2.5-2.6b:free'])
+const cleoFallbackModel = 'nvidia/nemotron-3.5-lightning:free'
 const composer = ref('')
 const loading = ref(false)
 const sending = ref(false)
@@ -36,11 +38,42 @@ const sessionActive = ref(false)
 const storedSessions = ref<SocialStoredSession[]>([])
 const messagesPane = ref<HTMLElement | null>(null)
 let stopEvents: (() => void) | undefined
+const router = useRouter()
 
 const selectedChannel = computed(() => channels.value.find((channel) => channel.id === selectedChannelId.value))
 const aiActors = computed(() => actors.value.filter((actor) => actor.control === 'model'))
 const dmChannels = computed(() => channels.value.filter((channel) => channel.kind === 'dm'))
 const groupChannels = computed(() => channels.value.filter((channel) => channel.kind === 'group'))
+
+/** Keep persisted OpenRouter references compatible with the UI model catalog. */
+function normalizeModelRef(modelRef: string | undefined): string {
+  return modelRef?.replace(/^openrouter\//, '') ?? ''
+}
+
+/** Copy resumed actor assignments into the setup controls used by the next session. */
+function syncModelSelections(resumedActors: SocialActor[]): void {
+  for (const [index, actorId] of ['alice', 'bob', 'cleo'].entries()) {
+    const modelRef = resumedActors.find((actor) => actor.id === actorId)?.modelRef
+    if (modelRef && !excludedModelIds.has(normalizeModelRef(modelRef))) modelSelections.value[index] = normalizeModelRef(modelRef)
+  }
+}
+
+/** Replace the removed LFM assignment while keeping a running session alive. */
+async function migrateRemovedCleoModel(currentActors: SocialActor[]): Promise<SocialActor[]> {
+  const cleo = currentActors.find((actor) => actor.id === 'cleo')
+  if (!cleo?.modelRef || !excludedModelIds.has(normalizeModelRef(cleo.modelRef))) return currentActors
+  try {
+    const updatedCleo = await api.updateSocialActorModel(cleo.id, cleoFallbackModel)
+    return currentActors.map((actor): SocialActor => actor.id === updatedCleo.id ? updatedCleo : actor)
+  } catch {
+    return currentActors
+  }
+}
+
+/** Return to the normal Vox Deorum session menu. */
+function goToMainMenu(): void {
+  void router.push('/session')
+}
 
 /** Refresh the session, channel list, and current transcript. */
 async function load(): Promise<void> {
@@ -54,7 +87,8 @@ async function load(): Promise<void> {
     } catch { /* The curated free defaults keep setup usable without discovery credentials. */ }
     const session = await api.getSocialSession()
     sessionActive.value = true
-    actors.value = session.actors
+    actors.value = await migrateRemovedCleoModel(session.actors)
+    syncModelSelections(actors.value)
     await loadChannels()
     connectEvents()
   } catch {
@@ -99,7 +133,26 @@ async function start(): Promise<void> {
 }
 
 /** Resume a persisted social session after a server restart. */
-async function resume(sessionId: string): Promise<void> { loading.value = true; error.value = ''; try { const response = await api.resumeSocialSession(sessionId); actors.value = response.actors; sessionActive.value = true; storedSessions.value = []; selectedChannelId.value = 'world'; await loadChannels(); connectEvents() } catch (caught) { error.value = caught instanceof Error ? caught.message : 'Could not resume social session' } finally { loading.value = false } }
+async function resume(sessionId: string): Promise<void> {
+  loading.value = true
+  error.value = ''
+  try {
+    const response = await api.resumeSocialSession(sessionId)
+    let resumedActors: SocialActor[] = response.actors.map((actor): SocialActor => actor.modelRef ? { ...actor, modelRef: normalizeModelRef(actor.modelRef) } : actor)
+    resumedActors = await migrateRemovedCleoModel(resumedActors)
+    actors.value = resumedActors
+    syncModelSelections(resumedActors)
+    sessionActive.value = true
+    storedSessions.value = []
+    selectedChannelId.value = 'world'
+    await loadChannels()
+    connectEvents()
+  } catch (caught) {
+    error.value = caught instanceof Error ? caught.message : 'Could not resume social session'
+  } finally {
+    loading.value = false
+  }
+}
 
 /** Send the human's message and refresh immediately while model replies arrive over SSE. */
 async function send(): Promise<void> {
@@ -139,7 +192,7 @@ onUnmounted(() => stopEvents?.())
   <div class="social-page">
     <div class="page-header">
       <div><h1>Social Sandbox</h1><p class="text-muted">A persistent multi-agent conversation space for Vox Deorum.</p></div>
-      <div class="flex gap-2 align-items-center"><Tag v-if="sessionActive" severity="success" value="Live" /><Button v-if="sessionActive" label="Stop" icon="pi pi-stop" severity="secondary" @click="api.stopSocialSession().then(load)" /></div>
+      <div class="flex gap-2 align-items-center"><Button label="Main menu" icon="pi pi-home" text severity="secondary" @click="goToMainMenu" /><Tag v-if="sessionActive" severity="success" value="Live" /><Button v-if="sessionActive" label="Stop" icon="pi pi-stop" severity="secondary" @click="api.stopSocialSession().then(load)" /></div>
     </div>
     <div v-if="error" class="social-error">{{ error }}</div>
     <Card v-if="!sessionActive" class="social-start-card">
@@ -147,7 +200,7 @@ onUnmounted(() => stopEvents?.())
       <template #content><p class="text-muted">Chat with three independent model actors without launching Civilization V.</p><div class="model-setup"><label v-for="(model, index) in modelSelections" :key="index">{{ ['Alice', 'Bob', 'Cleo'][index] }}<Dropdown v-model="modelSelections[index]" :options="modelOptions" option-label="label" option-value="value" /></label></div><div class="flex gap-2 mt-3"><InputText v-model="displayName" placeholder="Your display name" /><Button label="Start sandbox" icon="pi pi-play" :loading="loading" @click="start" /></div></template>
     </Card>
     <Card v-if="!sessionActive && storedSessions.length" class="social-start-card stored-card"><template #title>Resume a saved sandbox</template><template #content><div v-for="saved in storedSessions" :key="saved.session.id" class="stored-session"><div><strong>{{ saved.session.id }}</strong><small>{{ saved.actors.length }} actors · {{ saved.actors.filter((actor) => actor.control === 'model').map((actor) => actor.displayName).join(', ') }}</small></div><Button label="Resume" icon="pi pi-history" size="small" :loading="loading" @click="resume(saved.session.id)" /></div></template></Card>
-    <div v-else class="social-shell">
+    <div v-if="sessionActive" class="social-shell">
       <aside class="social-sidebar">
         <Button class="world-button" :class="{ active: selectedChannelId === 'world' }" text @click="selectChannel('world')"><i class="pi pi-globe" /><span>WORLD</span></Button>
         <h3>Direct messages</h3>
