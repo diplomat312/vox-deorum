@@ -17,4 +17,10 @@ describe('normalizeSocialOutput', () => {
   it('should preserve normal social speech', () => {
     expect(normalizeSocialOutput('I would rather play twenty questions.')).toBe('I would rather play twenty questions.');
   });
+
+  it('should suppress no-response and multi-speaker drafts', () => {
+    expect(normalizeSocialOutput('NO_RESPONSE')).toBeUndefined();
+    expect(normalizeSocialOutput('[alice] Hello. [bob] I agree.', ['Alice', 'Bob', 'Cleo'])).toBeUndefined();
+    expect(normalizeSocialOutput('Alice: I will go first.', ['Alice', 'Bob', 'Cleo'])).toBeUndefined();
+  });
 });
