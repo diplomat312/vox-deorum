@@ -20,7 +20,9 @@ describe('normalizeSocialOutput', () => {
 
   it('should suppress no-response and multi-speaker drafts', () => {
     expect(normalizeSocialOutput('NO_RESPONSE')).toBeUndefined();
+    expect(normalizeSocialOutput('NO_RESPONSE</think> I have nothing useful to add.')).toBeUndefined();
     expect(normalizeSocialOutput('[alice] Hello. [bob] I agree.', ['Alice', 'Bob', 'Cleo'])).toBeUndefined();
     expect(normalizeSocialOutput('Alice: I will go first.', ['Alice', 'Bob', 'Cleo'])).toBeUndefined();
+    expect(normalizeSocialOutput('*mulls over the clue* I have an idea.')).toBeUndefined();
   });
 });
