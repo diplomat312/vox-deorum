@@ -9,6 +9,10 @@ dist
 .env
 nul
 
+# Local installed/runtime snapshots kept for comparison, not source control.
+/runtime/
+/implementation/
+
 # Oracle telemetry output (also ignored in vox-agents/.gitignore; covered here
 # in case a run writes it at the repo root)
 /telemetry/

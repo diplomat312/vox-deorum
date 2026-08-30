@@ -1,0 +1,18 @@
+{
+  "name": "observer-8p-7llm",
+  "description": "Eight-player game: seven distinct LLM strategists in seats 0-6 and human player in seat 7.",
+  "type": "strategist",
+  "autoPlay": false,
+  "production": "test",
+  "randomizeSeating": false,
+  "llmPlayers": {
+    "0": { "strategist": "simple-strategist", "llms": { "simple-strategist": "openai-compatible/minimax-m3" }, "pacing": { "everyTurns": 5, "interruption": "importantEvents" } },
+    "1": { "strategist": "simple-strategist", "llms": { "simple-strategist": "openai-compatible/kimi-k3" }, "pacing": { "everyTurns": 5, "interruption": "importantEvents" } },
+    "2": { "strategist": "simple-strategist", "llms": { "simple-strategist": "openai-compatible/glm-5.3" }, "pacing": { "everyTurns": 5, "interruption": "importantEvents" } },
+    "3": { "strategist": "simple-strategist", "llms": { "simple-strategist": "openai-compatible/deepseek-v4-pro" }, "pacing": { "everyTurns": 5, "interruption": "importantEvents" } },
+    "4": { "strategist": "simple-strategist", "llms": { "simple-strategist": "openai-compatible/qwen3.8-max" }, "pacing": { "everyTurns": 5, "interruption": "importantEvents" } },
+    "5": { "strategist": "simple-strategist", "llms": { "simple-strategist": "openai-compatible/grok-4.6" }, "pacing": { "everyTurns": 5, "interruption": "importantEvents" } },
+    "6": { "strategist": "simple-strategist", "llms": { "simple-strategist": "openai-compatible/gpt-5.6-luna" }, "pacing": { "everyTurns": 5, "interruption": "importantEvents" } },
+    "7": { "strategist": "human-strategist" }
+  }
+}
