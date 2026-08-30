@@ -46,7 +46,7 @@ async function load(): Promise<void> {
   try {
     try {
       const discovered = await api.getConfigModels()
-      const freeModels = discovered.models.filter((model) => model.id.endsWith(':free')).map((model) => ({ label: model.name, value: model.id }))
+      const freeModels = discovered.models.filter((model) => model.id.endsWith(':free')).map((model) => ({ label: model.name, value: model.id.replace(/^openrouter\//, '') }))
       if (freeModels.length) modelOptions.value = freeModels
     } catch { /* The curated free defaults keep setup usable without discovery credentials. */ }
     const session = await api.getSocialSession()

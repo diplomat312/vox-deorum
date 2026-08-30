@@ -57,9 +57,10 @@ export class SocialRuntime {
       try {
         const page = await store.readMessages(this.getSessionId(), channelId, actor.id, 40);
         if (!page.messages.some((message) => message.id === triggerMessageId)) return;
-        const modelConfig = actor.modelRef?.includes('/')
-          ? { provider: 'openrouter' as const, name: actor.modelRef }
-          : getModelConfig(actor.modelRef ?? 'default');
+        const modelRef = actor.modelRef?.startsWith('openrouter/') ? actor.modelRef.slice('openrouter/'.length) : actor.modelRef;
+        const modelConfig = modelRef?.includes('/')
+          ? { provider: 'openrouter' as const, name: modelRef }
+          : getModelConfig(modelRef ?? 'default');
         const modelMessages: ModelMessage[] = page.messages.map((message) => ({ role: 'user', content: `[${message.speakerActorId}] ${message.content}` }));
         const result = await generateText({
           model: getModel(modelConfig),
