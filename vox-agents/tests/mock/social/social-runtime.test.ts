@@ -32,6 +32,6 @@ describe('SocialRuntime', () => {
     const dm = await runtime.openHumanDm('alice');
     await runtime.appendHumanMessage(dm.id, 'A private greeting');
     expect((await runtime.listChannels()).map((channel) => channel.id)).toEqual(['world', dm.id]);
-    expect(events).toEqual(['message-added', 'channel-created', 'message-added']);
+    expect(events).toEqual(['message-added', 'intention-created', 'channel-created', 'message-added', 'intention-created']);
   });
 });
