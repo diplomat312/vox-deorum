@@ -14,8 +14,7 @@ import { streamText, TextStreamPart, ToolSet } from 'ai';
 import { executionTimeoutDefault, exponentialRetry } from '../retry.js';
 import { createLogger } from '../logger.js';
 import type { Model } from '../../types/index.js';
-import { VoxContext } from '../../infra/vox-context.js';
-import { AgentParameters } from '../../infra/vox-agent.js';
+import { DEFAULT_VOX_RETRY_POLICY, type ModelCallContext, type ModelRetryPolicy } from './model-call-context.js';
 import { hasBatchManager, getBatchManager } from '../../oracle/batch/batch-manager.js';
 import { convertToStepResult } from '../../oracle/batch/format-converter.js';
 import { takePreservedModelError } from './preserved-model-error.js';
@@ -93,7 +92,8 @@ function getModelLimiter(model: Model): ReturnType<typeof pLimit> {
  */
 export async function streamTextWithConcurrency<T extends Parameters<typeof streamText>[0]>(
   params: T & { model: any }, // model is from getModel() which returns LanguageModel
-  context: VoxContext<AgentParameters>
+  context: ModelCallContext,
+  retryPolicy: Partial<ModelRetryPolicy> = {},
 ) {
   context.timeoutRefresh = () => {};
   // Extract the model config from params
@@ -240,11 +240,11 @@ export async function streamTextWithConcurrency<T extends Parameters<typeof stre
       }
     }, context.logger, {
       source: modelName,
-      maxRetries: 100,
-      initialDelay: 5000,
-      maxDelay: 180000,
-      backoffFactor: 1.2,
-      executionTimeout: getExecutionTimeout(modelConfig),
+      maxRetries: retryPolicy.maxRetries ?? DEFAULT_VOX_RETRY_POLICY.maxRetries,
+      initialDelay: retryPolicy.initialDelayMs ?? DEFAULT_VOX_RETRY_POLICY.initialDelayMs,
+      maxDelay: retryPolicy.maxDelayMs ?? DEFAULT_VOX_RETRY_POLICY.maxDelayMs,
+      backoffFactor: retryPolicy.backoffFactor ?? DEFAULT_VOX_RETRY_POLICY.backoffFactor,
+      executionTimeout: retryPolicy.executionTimeout ?? getExecutionTimeout(modelConfig),
       abortSignal: params.abortSignal,
     })
   });
