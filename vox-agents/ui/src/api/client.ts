@@ -54,7 +54,7 @@ import type {
   InspectDealResponse,
   DealRejectRequest,
   DealAcceptRequest,
-  DealMessagesResponse
+  DealMessagesResponse,
   SocialSessionResponse, SocialChannelsResponse, SocialStartRequest, SocialChannel, SocialMessage, VisibleMessagePage
 } from '../utils/types';
 import type { TextStreamPart, ToolSet } from 'ai';
