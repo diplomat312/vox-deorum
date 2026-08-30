@@ -16,9 +16,9 @@ import type { SocialActor, SocialChannel, SocialMessage, VisibleMessagePage } fr
 export type { SocialActor, SocialChannel, SocialMessage, VisibleMessagePage };
 export interface SocialSessionResponse { sessionId: string; humanActorId: string; actors: SocialActor[]; }
 export interface SocialChannelsResponse { channels: SocialChannel[]; }
-export interface SocialStoredSession { session: { id: string; humanActorId: string; createdAt?: string }; actors: SocialActor[] }
+export interface SocialStoredSession { session: { id: string; humanActorId: string; title?: string; archived?: boolean; createdAt?: string; updatedAt?: string }; actors: SocialActor[] }
 export interface SocialStoredSessionsResponse { sessions: SocialStoredSession[] }
-export interface SocialStartRequest { sessionId?: string; humanActorId?: string; dataDirectory?: string; actors: Array<{ id: string; ordinal: number; control: 'human' | 'model'; displayName: string; modelRef?: string; profile?: string }>; }
+export interface SocialStartRequest { sessionId?: string; humanActorId?: string; title?: string; dataDirectory?: string; actors: Array<{ id: string; ordinal: number; control: 'human' | 'model'; displayName: string; modelRef?: string; profile?: string }>; }
 
 /** UI-specialized reduction for the typed deal transcript. */
 export type DealReduction = DealReductionOf<DealTranscriptMessage>;

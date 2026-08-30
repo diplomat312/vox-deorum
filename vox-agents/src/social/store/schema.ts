@@ -1,6 +1,6 @@
 import type { Generated } from 'kysely';
 
-export interface SocialSessionRow { id: string; humanActorId: string; createdAt: string; }
+export interface SocialSessionRow { id: string; humanActorId: string; title: string; archived: number; createdAt: string; updatedAt: string; }
 export interface SocialActorRow { id: string; sessionId: string; ordinal: number; control: string; displayName: string; modelRef: string | null; profile: string | null; createdAt: string; status: string; }
 export interface SocialChannelRow { id: string; sessionId: string; kind: string; title: string; createdByActorId: string; canonicalKey: string | null; createdAt: string; archived: number; }
 export interface SocialMembershipRow { id: string; channelId: string; actorId: string; status: string; invitedByActorId: string | null; visibleAfterMessageId: number; leftAfterMessageId: number | null; createdAt: string; updatedAt: string; }

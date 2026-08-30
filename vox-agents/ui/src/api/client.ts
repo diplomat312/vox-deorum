@@ -187,6 +187,10 @@ class ApiClient {
   async stopSocialSession(): Promise<void> { await this.fetchJson<{ success: boolean }>(`${this.baseUrl}/api/social/session/stop`, { method: 'POST' }); }
   /** List persisted sessions available to resume. */
   async getStoredSocialSessions(): Promise<SocialStoredSessionsResponse> { return this.fetchJson<SocialStoredSessionsResponse>(`${this.baseUrl}/api/social/sessions`); }
+  /** Update a saved sandbox title or archive state. */
+  async updateStoredSocialSession(sessionId: string, values: { title?: string; archived?: boolean }): Promise<void> { await this.fetchJson(`${this.baseUrl}/api/social/sessions/${encodeURIComponent(sessionId)}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(values) }); }
+  /** Permanently delete a saved sandbox. */
+  async deleteStoredSocialSession(sessionId: string): Promise<void> { await this.fetchJson(`${this.baseUrl}/api/social/sessions/${encodeURIComponent(sessionId)}`, { method: 'DELETE' }); }
   /** Resume a persisted social session. */
   async resumeSocialSession(sessionId: string): Promise<SocialSessionResponse> { return this.fetchJson<SocialSessionResponse>(`${this.baseUrl}/api/social/session/resume`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId }) }); }
   /** List channels visible to the human. */

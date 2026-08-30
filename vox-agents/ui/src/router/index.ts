@@ -65,6 +65,11 @@ const router = createRouter({
       path: '/social',
       name: 'social',
       component: () => import('../views/SocialView.vue')
+    },
+    {
+      path: '/social/chat/:sessionId',
+      name: 'social-chat',
+      component: () => import('../views/SocialView.vue')
     }
   ],
 })

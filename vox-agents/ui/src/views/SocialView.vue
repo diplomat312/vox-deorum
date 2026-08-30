@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import Button from 'primevue/button'
 import Card from 'primevue/card'
 import Checkbox from 'primevue/checkbox'
@@ -9,13 +9,14 @@ import Dropdown from 'primevue/dropdown'
 import Textarea from 'primevue/textarea'
 import Tag from 'primevue/tag'
 import { api } from '../api/client'
-import type { SocialActor, SocialChannel, SocialMessage, SocialStoredSession } from '../utils/types'
+import type { SocialActor, SocialChannel, SocialMessage, SocialSessionResponse, SocialStoredSession } from '../utils/types'
 
 const actors = ref<SocialActor[]>([])
 const channels = ref<SocialChannel[]>([])
 const messages = ref<SocialMessage[]>([])
 const selectedChannelId = ref('world')
 const displayName = ref('Human')
+const sandboxTitle = ref('')
 const groupTitle = ref('')
 const selectedInvitees = ref<string[]>([])
 const modelSelections = ref<string[]>([
@@ -39,11 +40,15 @@ const storedSessions = ref<SocialStoredSession[]>([])
 const messagesPane = ref<HTMLElement | null>(null)
 let stopEvents: (() => void) | undefined
 const router = useRouter()
+const route = useRoute()
 
 const selectedChannel = computed(() => channels.value.find((channel) => channel.id === selectedChannelId.value))
 const aiActors = computed(() => actors.value.filter((actor) => actor.control === 'model'))
 const dmChannels = computed(() => channels.value.filter((channel) => channel.kind === 'dm'))
 const groupChannels = computed(() => channels.value.filter((channel) => channel.kind === 'group'))
+const isHome = computed(() => !route.params.sessionId)
+const activeStoredSessions = computed(() => storedSessions.value.filter((saved) => !saved.session.archived))
+const archivedStoredSessions = computed(() => storedSessions.value.filter((saved) => saved.session.archived))
 
 /** Keep persisted OpenRouter references compatible with the UI model catalog. */
 function normalizeModelRef(modelRef: string | undefined): string {
@@ -75,6 +80,34 @@ function goToSandboxMenu(): void {
   void router.push('/social')
 }
 
+/** Stop the active workspace and return to the persisted sandbox homepage. */
+async function stopAndReturnHome(): Promise<void> {
+  try { await api.stopSocialSession(); sessionActive.value = false; stopEvents?.(); stopEvents = undefined; await router.push('/social'); await load() } catch (caught) { error.value = caught instanceof Error ? caught.message : 'Could not stop sandbox' }
+}
+
+/** Open a saved sandbox in its dedicated workspace route. */
+function openStoredSession(sessionId: string): void {
+  void router.push(`/social/chat/${encodeURIComponent(sessionId)}`)
+}
+
+/** Archive or restore a sandbox from the homepage. */
+async function setArchived(saved: SocialStoredSession, archived: boolean): Promise<void> {
+  try { await api.updateStoredSocialSession(saved.session.id, { archived }); await load() } catch (caught) { error.value = caught instanceof Error ? caught.message : 'Could not update sandbox' }
+}
+
+/** Rename a sandbox from its compact homepage card. */
+async function renameStoredSession(saved: SocialStoredSession): Promise<void> {
+  const title = window.prompt('Sandbox title', saved.session.title ?? 'Untitled sandbox')?.trim()
+  if (!title) return
+  try { await api.updateStoredSocialSession(saved.session.id, { title }); await load() } catch (caught) { error.value = caught instanceof Error ? caught.message : 'Could not rename sandbox' }
+}
+
+/** Permanently remove a stopped sandbox after confirmation. */
+async function deleteStoredSession(saved: SocialStoredSession): Promise<void> {
+  if (!window.confirm(`Delete “${saved.session.title ?? saved.session.id}” permanently?`)) return
+  try { await api.deleteStoredSocialSession(saved.session.id); await load() } catch (caught) { error.value = caught instanceof Error ? caught.message : 'Could not delete sandbox' }
+}
+
 /** Refresh the session, channel list, and current transcript. */
 async function load(): Promise<void> {
   loading.value = true
@@ -85,7 +118,11 @@ async function load(): Promise<void> {
       const freeModels = discovered.models.filter((model) => model.id.endsWith(':free')).map((model) => ({ label: model.name, value: model.id.replace(/^openrouter\//, '') })).filter((model) => !excludedModelIds.has(model.value))
       if (freeModels.length) modelOptions.value = freeModels
     } catch { /* The curated free defaults keep setup usable without discovery credentials. */ }
-    const session = await api.getSocialSession()
+    storedSessions.value = (await api.getStoredSocialSessions()).sessions
+    if (isHome.value) return
+    let session: SocialSessionResponse
+    try { session = await api.getSocialSession() } catch { session = await api.resumeSocialSession(String(route.params.sessionId)) }
+    if (session.sessionId !== String(route.params.sessionId)) throw new Error('The selected sandbox is not the active sandbox')
     sessionActive.value = true
     actors.value = await migrateRemovedCleoModel(session.actors)
     syncModelSelections(actors.value)
@@ -119,7 +156,7 @@ async function start(): Promise<void> {
   loading.value = true
   error.value = ''
   try {
-    const response = await api.startSocialSession({ actors: [
+    const response = await api.startSocialSession({ title: sandboxTitle.value.trim() || 'Untitled sandbox', actors: [
       { id: 'human', ordinal: 0, control: 'human', displayName: displayName.value || 'Human' },
       { id: 'alice', ordinal: 1, control: 'model', displayName: 'Alice', modelRef: modelSelections.value[0], profile: 'Thoughtful, curious, and diplomatic.' },
       { id: 'bob', ordinal: 2, control: 'model', displayName: 'Bob', modelRef: modelSelections.value[1], profile: 'Skeptical, direct, and strategic.' },
@@ -129,6 +166,7 @@ async function start(): Promise<void> {
     sessionActive.value = true
     await loadChannels()
     connectEvents()
+    void router.push(`/social/chat/${encodeURIComponent(response.sessionId)}`)
   } catch (caught) { error.value = caught instanceof Error ? caught.message : 'Could not start social session' } finally { loading.value = false }
 }
 
@@ -143,10 +181,10 @@ async function resume(sessionId: string): Promise<void> {
     actors.value = resumedActors
     syncModelSelections(resumedActors)
     sessionActive.value = true
-    storedSessions.value = []
     selectedChannelId.value = 'world'
     await loadChannels()
     connectEvents()
+    void router.push(`/social/chat/${encodeURIComponent(sessionId)}`)
   } catch (caught) {
     error.value = caught instanceof Error ? caught.message : 'Could not resume social session'
   } finally {
@@ -185,6 +223,7 @@ async function scrollToLatest(): Promise<void> { await nextTick(); if (messagesP
 function connectEvents(): void { stopEvents?.(); stopEvents = api.streamSocialEvents(async () => { await loadChannels() }) }
 
 onMounted(async () => { await load() })
+watch(() => route.params.sessionId, async (sessionId, previousSessionId) => { if (sessionId !== previousSessionId) await load() })
 onUnmounted(() => stopEvents?.())
 </script>
 
@@ -192,15 +231,15 @@ onUnmounted(() => stopEvents?.())
   <div class="social-page">
     <div class="page-header">
       <div><h1>Social Sandbox</h1><p class="text-muted">A persistent multi-agent conversation space for Vox Deorum.</p></div>
-      <div class="flex gap-2 align-items-center"><Button label="Sandbox menu" icon="pi pi-home" text severity="secondary" @click="goToSandboxMenu" /><Tag v-if="sessionActive" severity="success" value="Live" /><Button v-if="sessionActive" label="Stop" icon="pi pi-stop" severity="secondary" @click="api.stopSocialSession().then(load)" /></div>
+      <div class="flex gap-2 align-items-center"><Button v-if="!isHome" label="Sandbox home" icon="pi pi-home" text severity="secondary" @click="goToSandboxMenu" /><Tag v-if="sessionActive && !isHome" severity="success" value="Live" /><Button v-if="sessionActive && !isHome" label="Stop" icon="pi pi-stop" severity="secondary" @click="stopAndReturnHome" /></div>
     </div>
     <div v-if="error" class="social-error">{{ error }}</div>
-    <Card v-if="!sessionActive" class="social-start-card">
-      <template #title>Start a social sandbox</template>
-      <template #content><p class="text-muted">Chat with three independent model actors without launching Civilization V.</p><div class="model-setup"><label v-for="(model, index) in modelSelections" :key="index">{{ ['Alice', 'Bob', 'Cleo'][index] }}<Dropdown v-model="modelSelections[index]" :options="modelOptions" option-label="label" option-value="value" /></label></div><div class="flex gap-2 mt-3"><InputText v-model="displayName" placeholder="Your display name" /><Button label="Start sandbox" icon="pi pi-play" :loading="loading" @click="start" /></div></template>
-    </Card>
-    <Card v-if="!sessionActive && storedSessions.length" class="social-start-card stored-card"><template #title>Resume a saved sandbox</template><template #content><div v-for="saved in storedSessions" :key="saved.session.id" class="stored-session"><div><strong>{{ saved.session.id }}</strong><small>{{ saved.actors.length }} actors · {{ saved.actors.filter((actor) => actor.control === 'model').map((actor) => actor.displayName).join(', ') }}</small></div><Button label="Resume" icon="pi pi-history" size="small" :loading="loading" @click="resume(saved.session.id)" /></div></template></Card>
-    <div v-if="sessionActive" class="social-shell">
+    <div v-if="isHome" class="social-home">
+      <Card class="social-start-card create-card"><template #title>New sandbox</template><template #content><p class="text-muted">Create a compact multi-agent conversation space.</p><div class="flex gap-2"><InputText v-model="sandboxTitle" placeholder="Sandbox title" /><InputText v-model="displayName" placeholder="Your display name" /><Button label="Create sandbox" icon="pi pi-plus" :loading="loading" @click="start" /></div><div class="model-setup"><label v-for="(model, index) in modelSelections" :key="index">{{ ['Alice', 'Bob', 'Cleo'][index] }}<Dropdown v-model="modelSelections[index]" :options="modelOptions" option-label="label" option-value="value" /></label></div></template></Card>
+      <section class="sandbox-list"><div class="list-heading"><h2>Saved chats</h2><span class="text-muted">{{ activeStoredSessions.length }}</span></div><div v-if="!activeStoredSessions.length" class="empty-home">No saved chats yet.</div><article v-for="saved in activeStoredSessions" :key="saved.session.id" class="sandbox-card"><button class="sandbox-open" @click="openStoredSession(saved.session.id)"><strong>{{ saved.session.title || 'Untitled sandbox' }}</strong><small>{{ saved.actors.filter((actor) => actor.control === 'model').map((actor) => `${actor.displayName} · ${actor.modelRef || 'unconfigured'}`).join('  |  ') }}</small><small>{{ saved.session.updatedAt || saved.session.createdAt || 'No timestamp' }}</small></button><div class="sandbox-actions"><Button icon="pi pi-pencil" text rounded aria-label="Rename chat" @click="renameStoredSession(saved)" /><Button icon="pi pi-box" text rounded aria-label="Archive chat" @click="setArchived(saved, true)" /><Button icon="pi pi-trash" text rounded severity="danger" aria-label="Delete chat" @click="deleteStoredSession(saved)" /></div></article></section>
+      <section class="sandbox-list archived-list"><div class="list-heading"><h2>Archived chats</h2><span class="text-muted">{{ archivedStoredSessions.length }}</span></div><article v-for="saved in archivedStoredSessions" :key="saved.session.id" class="sandbox-card"><button class="sandbox-open" @click="openStoredSession(saved.session.id)"><strong>{{ saved.session.title || 'Untitled sandbox' }}</strong><small>{{ saved.actors.filter((actor) => actor.control === 'model').map((actor) => actor.displayName).join('  |  ') }}</small></button><div class="sandbox-actions"><Button icon="pi pi-replay" text rounded aria-label="Restore chat" @click="setArchived(saved, false)" /><Button icon="pi pi-trash" text rounded severity="danger" aria-label="Delete chat" @click="deleteStoredSession(saved)" /></div></article></section>
+    </div>
+    <div v-else-if="sessionActive" class="social-shell">
       <aside class="social-sidebar">
         <Button class="world-button" :class="{ active: selectedChannelId === 'world' }" text @click="selectChannel('world')"><i class="pi pi-globe" /><span>WORLD</span></Button>
         <h3>Direct messages</h3>
@@ -224,6 +263,7 @@ onUnmounted(() => stopEvents?.())
 .social-page { height: 100%; display: flex; flex-direction: column; }
 .social-error { background: var(--p-red-50); color: var(--p-red-700); border: 1px solid var(--p-red-200); border-radius: 6px; padding: .75rem 1rem; margin-bottom: 1rem; }
 .social-start-card { max-width: 680px; margin: 3rem auto; width: 100%; }
+.social-home { width: min(100%, 980px); margin: 0 auto; overflow: auto; }.create-card { max-width: none; margin: 0 0 1.25rem; }.create-card .p-inputtext { min-width: 0; flex: 1; }.sandbox-list { margin-bottom: 1.25rem; }.list-heading { display: flex; align-items: center; gap: .5rem; margin: 1rem 0 .6rem; }.list-heading h2 { margin: 0; font-size: 1rem; }.sandbox-card { display: flex; align-items: center; gap: .75rem; padding: .7rem .85rem; margin-bottom: .45rem; border: 1px solid var(--p-content-border-color); border-radius: 7px; background: var(--p-content-background); }.sandbox-open { min-width: 0; flex: 1; border: 0; background: transparent; color: inherit; text-align: left; cursor: pointer; display: grid; gap: .18rem; }.sandbox-open strong, .sandbox-open small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }.sandbox-open small { color: var(--p-text-muted-color); }.sandbox-actions { display: flex; flex-shrink: 0; }.empty-home { padding: 1rem; color: var(--p-text-muted-color); border: 1px dashed var(--p-content-border-color); border-radius: 7px; }.archived-list { opacity: .86; }
 .stored-card { margin-top: 0; }.stored-session { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: .75rem 0; border-bottom: 1px solid var(--p-content-border-color); }.stored-session:last-child { border-bottom: 0; }.stored-session small { display: block; color: var(--p-text-muted-color); margin-top: .2rem; }
 .model-setup { display: grid; grid-template-columns: repeat(3, 1fr); gap: .75rem; margin-top: 1.25rem; }.model-setup label { display: flex; flex-direction: column; gap: .35rem; font-size: .8rem; font-weight: 700; }.model-setup .p-dropdown { width: 100%; font-weight: 400; }
 .social-shell { flex: 1; min-height: 0; display: grid; grid-template-columns: 230px minmax(0, 1fr) 220px; border: 1px solid var(--p-content-border-color); border-radius: 8px; overflow: hidden; background: var(--p-content-background); }

@@ -1,4 +1,4 @@
-import { mkdir, readdir } from 'node:fs/promises';
+import { mkdir, readdir, unlink } from 'node:fs/promises';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { ActorLane } from './actor-lane.js';
@@ -11,7 +11,7 @@ import { normalizeSocialOutput } from './social-output.js';
 import type { SocialActor, SocialActorDefinition, SocialChannel, SocialIntention, SocialMembership, SocialMessage, SocialSessionDefinition, VisibleMessagePage } from '../types.js';
 
 /** Configuration for one standalone social sandbox. */
-export interface SocialRuntimeConfig { sessionId?: string; humanActorId?: string; actors: SocialActorDefinition[]; dataDirectory: string; }
+export interface SocialRuntimeConfig { sessionId?: string; humanActorId?: string; title?: string; actors: SocialActorDefinition[]; dataDirectory: string; }
 
 /** Lifecycle owner for one durable, game-independent social session. */
 export class SocialRuntime {
@@ -28,7 +28,7 @@ export class SocialRuntime {
     if (!config.actors.some((actor) => actor.id === humanActorId && actor.control === 'human')) throw new Error('The social session requires one human actor');
     if (config.actors.length < 2 || config.actors.length > 8) throw new Error('A social session requires 2 to 8 actors');
     await mkdir(config.dataDirectory, { recursive: true });
-    this.session = { id: config.sessionId ?? randomUUID(), humanActorId };
+    this.session = { id: config.sessionId ?? randomUUID(), humanActorId, title: config.title };
     this.store = new SocialStore(path.join(config.dataDirectory, `${this.session.id}.sqlite`));
     await this.store.createSession(this.session, config.actors);
     for (const actor of config.actors) this.lanes.set(actor.id, new ActorLane());
@@ -36,7 +36,11 @@ export class SocialRuntime {
   /** Reopen a persisted social session without creating duplicate channels or messages. */
   public async resume(sessionId: string, dataDirectory: string): Promise<void> { if (this.store) throw new Error('A social session is already running'); if (!/^[a-zA-Z0-9_-]+$/.test(sessionId)) throw new Error('Invalid social session ID'); const store = new SocialStore(path.join(dataDirectory, `${sessionId}.sqlite`)); const session = await store.getSession(sessionId); if (!session) { await store.close(); throw new Error('Persisted social session was not found'); } this.store = store; this.session = session; for (const actor of await store.listActors(sessionId)) this.lanes.set(actor.id, new ActorLane()); }
   /** List persisted sessions available for resume. */
-  public async listStoredSessions(dataDirectory: string): Promise<Array<{ session: SocialSessionDefinition; actors: SocialActor[] }>> { await mkdir(dataDirectory, { recursive: true }); const files = await readdir(dataDirectory); const sessions: Array<{ session: SocialSessionDefinition; actors: SocialActor[] }> = []; for (const file of files.filter((candidate) => candidate.endsWith('.sqlite'))) { const sessionId = file.slice(0, -'.sqlite'.length); if (!/^[a-zA-Z0-9_-]+$/.test(sessionId)) continue; const store = new SocialStore(path.join(dataDirectory, file)); const session = await store.getSession(sessionId); if (session) sessions.push({ session, actors: await store.listActors(sessionId) }); await store.close(); } return sessions; }
+  public async listStoredSessions(dataDirectory: string): Promise<Array<{ session: SocialSessionDefinition; actors: SocialActor[] }>> { await mkdir(dataDirectory, { recursive: true }); const files = await readdir(dataDirectory); const sessions: Array<{ session: SocialSessionDefinition; actors: SocialActor[] }> = []; for (const file of files.filter((candidate) => candidate.endsWith('.sqlite'))) { const sessionId = file.slice(0, -'.sqlite'.length); if (!/^[a-zA-Z0-9_-]+$/.test(sessionId)) continue; const store = new SocialStore(path.join(dataDirectory, file)); const session = await store.getSession(sessionId); if (session) sessions.push({ session, actors: await store.listActors(sessionId) }); await store.close(); } return sessions.sort((a, b) => (b.session.updatedAt ?? b.session.createdAt ?? '').localeCompare(a.session.updatedAt ?? a.session.createdAt ?? '')); }
+  /** Update durable homepage metadata for a persisted session. */
+  public async updateStoredSession(sessionId: string, dataDirectory: string, values: { title?: string; archived?: boolean }): Promise<SocialSessionDefinition> { if (!/^[a-zA-Z0-9_-]+$/.test(sessionId)) throw new Error('Invalid social session ID'); const store = new SocialStore(path.join(dataDirectory, `${sessionId}.sqlite`)); try { return await store.updateSession(sessionId, values); } finally { await store.close(); } }
+  /** Permanently delete a stopped persisted session. */
+  public async deleteStoredSession(sessionId: string, dataDirectory: string): Promise<void> { if (!/^[a-zA-Z0-9_-]+$/.test(sessionId)) throw new Error('Invalid social session ID'); if (this.session?.id === sessionId) throw new Error('Stop the active social session before deleting it'); await unlink(path.join(dataDirectory, `${sessionId}.sqlite`)); }
 
   /** Stop the session and close the durable store. */
   public async stop(): Promise<void> { if (this.store) await this.store.close(); this.store = undefined; this.session = undefined; this.lanes.clear(); }
