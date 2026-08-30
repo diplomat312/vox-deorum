@@ -68,10 +68,8 @@ export class SocialRuntime {
     const trigger = triggerPage.messages.find((message) => message.id === triggerMessageId);
     if (!trigger || trigger.speakerActorId !== this.getHumanActorId()) return;
     const modelActors = actors.filter((actor) => actor.control === 'model');
-    const mentioned = modelActors.filter((actor) => this.isActorMentioned(trigger.content, actor));
-    const eligibleActors = mentioned.length ? mentioned : this.selectUnaddressedResponders(modelActors, trigger.content, triggerMessageId);
     const actorNames = actors.map((actor) => actor.displayName);
-    await Promise.all(eligibleActors.map((actor) => this.runForActor(actor.id, async () => {
+    await Promise.all(modelActors.map((actor) => this.runForActor(actor.id, async () => {
       try {
         const page = await store.readMessages(this.getSessionId(), channelId, actor.id, 40);
         if (!page.messages.some((message) => message.id === triggerMessageId)) return;
@@ -107,10 +105,6 @@ Identity rules:
     })));
   }
 
-  /** Return true when a human explicitly addresses one actor by ID or display name. */
-  private isActorMentioned(content: string, actor: SocialActor): boolean { const escaped = actor.displayName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); const id = actor.id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); return new RegExp(`(?:^|\\W)(?:@?${escaped}|@?${id})(?:$|\\W)`, 'i').test(content); }
-  /** Limit unaddressed room replies so a single human message does not summon a chorus. */
-  private selectUnaddressedResponders(actors: SocialActor[], content: string, triggerMessageId: number): SocialActor[] { if (!actors.length) return []; if (/\b(?:everyone|everybody|all of you|you all)\b/i.test(content)) return actors.slice(0, 2); return [actors[triggerMessageId % actors.length]]; }
   /** Open a human DM with an actor. */
   public async openHumanDm(actorId: string, title?: string): Promise<SocialChannel> { const channel = await this.requireStore().openDm(this.getSessionId(), this.getHumanActorId(), actorId, title ?? `DM with ${actorId}`); this.events.publish({ type: 'channel-created', channel }); return channel; }
   /** Create a group owned by the human. */
