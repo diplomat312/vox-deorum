@@ -11,6 +11,12 @@ import type {
   DealReduction as DealReductionOf,
   ProposalOutcome as ProposalOutcomeOf,
 } from '@vox/utils/diplomacy/deal/deal-reduce';
+import type { SocialActor, SocialChannel, SocialMessage, VisibleMessagePage } from '../../../src/social/types';
+
+export type { SocialActor, SocialChannel, SocialMessage, VisibleMessagePage };
+export interface SocialSessionResponse { sessionId: string; humanActorId: string; actors: SocialActor[]; }
+export interface SocialChannelsResponse { channels: SocialChannel[]; }
+export interface SocialStartRequest { sessionId?: string; humanActorId?: string; dataDirectory?: string; actors: Array<{ id: string; ordinal: number; control: 'human' | 'model'; displayName: string; modelRef?: string; profile?: string }>; }
 
 /** UI-specialized reduction for the typed deal transcript. */
 export type DealReduction = DealReductionOf<DealTranscriptMessage>;

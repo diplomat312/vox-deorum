@@ -62,6 +62,11 @@ const menuItems = [
         command: () => router.push('/chat')
       },
       {
+        label: 'Social Sandbox',
+        icon: 'pi pi-users',
+        command: () => router.push('/social')
+      },
+      {
         label: 'Telemetry',
         icon: 'pi pi-chart-line',
         command: () => router.push('/telemetry')

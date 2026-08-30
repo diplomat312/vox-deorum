@@ -4,6 +4,9 @@ import { randomUUID } from 'node:crypto';
 import { ActorLane } from './actor-lane.js';
 import { SocialEventHub } from '../events/social-event-hub.js';
 import { SocialStore } from '../store/social-store.js';
+import { generateText, type ModelMessage } from 'ai';
+import { getModel, getModelConfig } from '../../utils/models/models.js';
+import { createLogger } from '../../utils/logger.js';
 import type { SocialActor, SocialActorDefinition, SocialChannel, SocialIntention, SocialMembership, SocialMessage, SocialSessionDefinition, VisibleMessagePage } from '../types.js';
 
 /** Configuration for one standalone social sandbox. */
@@ -11,6 +14,7 @@ export interface SocialRuntimeConfig { sessionId?: string; humanActorId?: string
 
 /** Lifecycle owner for one durable, game-independent social session. */
 export class SocialRuntime {
+  private readonly logger = createLogger('social-runtime');
   public readonly events = new SocialEventHub();
   private readonly lanes = new Map<string, ActorLane>();
   private store: SocialStore | undefined;
@@ -45,6 +49,30 @@ export class SocialRuntime {
   public async readMessages(channelId: string, limit?: number, beforeId?: number, inspect = false): Promise<VisibleMessagePage> { return this.requireStore().readMessages(this.getSessionId(), channelId, this.getHumanActorId(), limit, beforeId, inspect); }
   /** Append a human message and publish the event after commit. */
   public async appendHumanMessage(channelId: string, content: string, replyToMessageId?: number): Promise<SocialMessage> { const message = await this.requireStore().appendMessage({ sessionId: this.getSessionId(), actorId: this.getHumanActorId(), channelId, content, replyToMessageId }); this.events.publish({ type: 'message-added', message }); return message; }
+  /** Ask each eligible model actor to consider the newly committed message. */
+  public async generateAiReplies(channelId: string, triggerMessageId: number): Promise<void> {
+    const store = this.requireStore();
+    const actors = await this.listActors();
+    await Promise.all(actors.filter((actor) => actor.control === 'model').map((actor) => this.runForActor(actor.id, async () => {
+      try {
+        const page = await store.readMessages(this.getSessionId(), channelId, actor.id, 40);
+        if (!page.messages.some((message) => message.id === triggerMessageId)) return;
+        const modelConfig = getModelConfig(actor.modelRef ?? 'default');
+        const modelMessages: ModelMessage[] = page.messages.map((message) => ({ role: 'user', content: `[${message.speakerActorId}] ${message.content}` }));
+        const result = await generateText({
+          model: getModel(modelConfig),
+          system: `You are ${actor.displayName}, an independent participant in a social sandbox. ${actor.profile ?? ''}\nReply naturally and concisely. You may choose not to engage, but if you do, output only the message you want to send.`,
+          messages: modelMessages,
+        });
+        const content = result.text.trim();
+        if (!content) return;
+        const reply = await store.appendMessage({ sessionId: this.getSessionId(), actorId: actor.id, channelId, content, intentionId: `human-trigger:${triggerMessageId}`, idempotencyKey: `social-reply:${triggerMessageId}:${actor.id}` });
+        this.events.publish({ type: 'message-added', message: reply });
+      } catch (error) {
+        this.logger.warn(`Social actor ${actor.id} could not respond: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    })));
+  }
   /** Open a human DM with an actor. */
   public async openHumanDm(actorId: string, title?: string): Promise<SocialChannel> { const channel = await this.requireStore().openDm(this.getSessionId(), this.getHumanActorId(), actorId, title ?? `DM with ${actorId}`); this.events.publish({ type: 'channel-created', channel }); return channel; }
   /** Create a group owned by the human. */

@@ -55,6 +55,7 @@ import type {
   DealRejectRequest,
   DealAcceptRequest,
   DealMessagesResponse
+  ,SocialSessionResponse, SocialChannelsResponse, SocialStartRequest, SocialChannel, SocialMessage, VisibleMessagePage
 } from '../utils/types';
 import type { TextStreamPart, ToolSet } from 'ai';
 
@@ -177,6 +178,25 @@ class ApiClient {
   async getHealth(): Promise<HealthStatus> {
     return this.fetchJson<HealthStatus>(`${this.baseUrl}/api/health`);
   }
+
+  /** Start the standalone social sandbox. */
+  async startSocialSession(request: SocialStartRequest): Promise<SocialSessionResponse> { return this.fetchJson<SocialSessionResponse>(`${this.baseUrl}/api/social/session`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(request) }); }
+  /** Return the current standalone social session. */
+  async getSocialSession(): Promise<SocialSessionResponse> { return this.fetchJson<SocialSessionResponse>(`${this.baseUrl}/api/social/session`); }
+  /** Stop the standalone social sandbox. */
+  async stopSocialSession(): Promise<void> { await this.fetchJson<{ success: boolean }>(`${this.baseUrl}/api/social/session/stop`, { method: 'POST' }); }
+  /** List channels visible to the human. */
+  async getSocialChannels(inspect = false): Promise<SocialChannelsResponse> { return this.fetchJson<SocialChannelsResponse>(`${this.baseUrl}/api/social/channels${inspect ? '?inspect=true' : ''}`); }
+  /** Read one social channel. */
+  async getSocialMessages(channelId: string): Promise<VisibleMessagePage> { return this.fetchJson<VisibleMessagePage>(`${this.baseUrl}/api/social/channels/${encodeURIComponent(channelId)}/messages`); }
+  /** Send a human message to a social channel. */
+  async sendSocialMessage(channelId: string, content: string): Promise<SocialMessage> { return this.fetchJson<SocialMessage>(`${this.baseUrl}/api/social/channels/${encodeURIComponent(channelId)}/messages`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content }) }); }
+  /** Open a private DM with an actor. */
+  async openSocialDm(actorId: string): Promise<SocialChannel> { return this.fetchJson<SocialChannel>(`${this.baseUrl}/api/social/dms/${encodeURIComponent(actorId)}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }); }
+  /** Create a titled group. */
+  async createSocialGroup(title: string, invitedActorIds: string[] = []): Promise<SocialChannel> { return this.fetchJson<SocialChannel>(`${this.baseUrl}/api/social/groups`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title, invitedActorIds }) }); }
+  /** Subscribe to committed social events. */
+  streamSocialEvents(onEvent: () => void): () => void { const source = new EventSource(`${this.baseUrl}/api/social/events/stream`); const handler = () => onEvent(); ['channel-created', 'message-added', 'membership-changed', 'intention-created'].forEach((name) => source.addEventListener(name, handler)); source.onerror = () => undefined; return () => source.close(); }
 
   /**
    * Stream logs via Server-Sent Events
