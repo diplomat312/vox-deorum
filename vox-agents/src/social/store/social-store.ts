@@ -1,9 +1,8 @@
-import Database from 'better-sqlite3';
 import { Kysely, sql, type Transaction } from 'kysely';
 import { randomUUID } from 'node:crypto';
 import { openSqliteKysely, type OpenedSqlite } from '../../utils/telemetry/sqlite-helpers.js';
 import type { SocialActor, SocialActorDefinition, SocialChannel, SocialChannelKind, SocialIntention, SocialMembership, SocialMessage, SocialMemory, SocialSessionDefinition, VisibleMessagePage } from '../types.js';
-import type { SocialDatabase, SocialActorRow, SocialChannelRow, SocialIntentionRow, SocialMembershipRow, SocialMessageRow } from './schema.js';
+import type { SocialDatabase, SocialChannelRow, SocialIntentionRow, SocialMembershipRow, SocialMessageRow } from './schema.js';
 import { migrateSocialSchema } from './migrations.js';
 
 type SocialDb = Kysely<SocialDatabase> | Transaction<SocialDatabase>;
@@ -17,6 +16,8 @@ export class SocialStore {
   public async close(): Promise<void> { await this.opened.db.destroy(); }
   /** Create a session, its actors, WORLD, and WORLD memberships atomically. */
   public async createSession(session: SocialSessionDefinition, actors: SocialActorDefinition[]): Promise<void> {
+    if (actors.filter((actor) => actor.control === 'human').length !== 1 || !actors.some((actor) => actor.id === session.humanActorId && actor.control === 'human')) throw new Error('A social session requires exactly one configured human actor');
+    if (new Set(actors.map((actor) => actor.id)).size !== actors.length) throw new Error('Actor IDs must be unique');
     const now = session.createdAt ?? new Date().toISOString();
     await this.opened.db.transaction().execute(async (trx) => {
       await trx.insertInto('socialSessions').values({ id: session.id, humanActorId: session.humanActorId, title: session.title ?? 'Untitled sandbox', archived: session.archived ? 1 : 0, createdAt: now, updatedAt: session.updatedAt ?? now }).execute();
@@ -32,7 +33,7 @@ export class SocialStore {
   /** Update durable homepage metadata for a session. */
   public async updateSession(sessionId: string, values: { title?: string; archived?: boolean }): Promise<SocialSessionDefinition> { const row = await this.opened.db.updateTable('socialSessions').set({ ...(values.title !== undefined ? { title: values.title } : {}), ...(values.archived !== undefined ? { archived: values.archived ? 1 : 0 } : {}), updatedAt: new Date().toISOString() }).where('id', '=', sessionId).returningAll().executeTakeFirstOrThrow(); return { id: row.id, humanActorId: row.humanActorId, title: row.title, archived: row.archived === 1, createdAt: row.createdAt, updatedAt: row.updatedAt }; }
   /** Change a model actor's model for future runs without interrupting the session. */
-  public async updateActorModel(sessionId: string, actorId: string, modelRef: string): Promise<SocialActor> { const row = await this.opened.db.updateTable('socialActors').set({ modelRef }).where('sessionId', '=', sessionId).where('id', '=', actorId).where('control', '=', 'model').returningAll().executeTakeFirstOrThrow(); return { ...row, control: row.control as SocialActor['control'], status: row.status as SocialActor['status'], modelRef: row.modelRef ?? undefined, profile: row.profile ?? undefined }; }
+  public async updateActorModel(sessionId: string, actorId: string, modelRef: string): Promise<SocialActor> { if (!modelRef.includes('/')) throw new Error('modelRef must be provider/model'); const row = await this.opened.db.updateTable('socialActors').set({ modelRef }).where('sessionId', '=', sessionId).where('id', '=', actorId).where('control', '=', 'model').returningAll().executeTakeFirstOrThrow(); return { ...row, control: row.control as SocialActor['control'], status: row.status as SocialActor['status'], modelRef: row.modelRef ?? undefined, profile: row.profile ?? undefined }; }
   /** Return channels visible to an actor, or all channels for explicit developer inspection. */
   public async listChannels(sessionId: string, actorId: string, inspect = false): Promise<SocialChannel[]> {
     const rows = inspect ? await this.opened.db.selectFrom('socialChannels').selectAll().where('sessionId', '=', sessionId).where('archived', '=', 0).orderBy('createdAt', 'asc').execute() : await this.opened.db.selectFrom('socialChannels as c').innerJoin('socialMemberships as m', 'm.channelId', 'c.id').selectAll('c').where('c.sessionId', '=', sessionId).where('c.archived', '=', 0).where('m.actorId', '=', actorId).where('m.status', '=', 'active').orderBy('c.createdAt', 'asc').execute();
@@ -40,6 +41,8 @@ export class SocialStore {
   }
   /** Open the canonical DM for a pair, creating it only once. */
   public async openDm(sessionId: string, actorAId: string, actorBId: string, title: string): Promise<SocialChannel> {
+    if (actorAId === actorBId) throw new Error('A DM requires two different actors');
+    await this.assertActorsInSession(this.opened.db, sessionId, [actorAId, actorBId]);
     const canonicalKey = `dm:${[actorAId, actorBId].sort().join(':')}`;
     const existing = await this.opened.db.selectFrom('socialChannels').selectAll().where('sessionId', '=', sessionId).where('canonicalKey', '=', canonicalKey).executeTakeFirst();
     if (existing) return this.toChannel(existing);
@@ -49,14 +52,16 @@ export class SocialStore {
   }
   /** Create a private group with the creator active and optional invitees pending. */
   public async createGroup(sessionId: string, creatorActorId: string, title: string, invitedActorIds: string[] = []): Promise<SocialChannel> {
+    const uniqueInvitees = [...new Set(invitedActorIds)].filter((actorId) => actorId !== creatorActorId);
+    await this.assertActorsInSession(this.opened.db, sessionId, [creatorActorId, ...uniqueInvitees]);
     const channelId = randomUUID(); const now = new Date().toISOString();
-    await this.opened.db.transaction().execute(async (trx) => { await trx.insertInto('socialChannels').values({ id: channelId, sessionId, kind: 'group', title, createdByActorId: creatorActorId, canonicalKey: null, createdAt: now, archived: 0 }).execute(); await this.insertMembership(trx, channelId, creatorActorId, 'active', null, 0, now); for (const actorId of invitedActorIds) await this.insertMembership(trx, channelId, actorId, 'invited', creatorActorId, await this.latestMessageId(trx, channelId), now); });
+    await this.opened.db.transaction().execute(async (trx) => { await trx.insertInto('socialChannels').values({ id: channelId, sessionId, kind: 'group', title, createdByActorId: creatorActorId, canonicalKey: null, createdAt: now, archived: 0 }).execute(); await this.insertMembership(trx, channelId, creatorActorId, 'active', null, 0, now); for (const actorId of uniqueInvitees) await this.insertMembership(trx, channelId, actorId, 'invited', creatorActorId, await this.latestMessageId(trx, channelId), now); });
     return this.toChannel(await this.opened.db.selectFrom('socialChannels').selectAll().where('id', '=', channelId).executeTakeFirstOrThrow());
   }
   /** Invite an actor at a precise history boundary. */
   public async invite(channelId: string, actorId: string, invitedByActorId: string): Promise<SocialMembership> {
     const now = new Date().toISOString();
-    await this.opened.db.transaction().execute(async (trx) => { await trx.selectFrom('socialChannels').select('id').where('id', '=', channelId).executeTakeFirstOrThrow(); await this.assertActiveMember(trx, channelId, invitedByActorId); await trx.insertInto('socialMemberships').values({ id: randomUUID(), channelId, actorId, status: 'invited', invitedByActorId, visibleAfterMessageId: await this.latestMessageId(trx, channelId), leftAfterMessageId: null, createdAt: now, updatedAt: now }).execute(); });
+    await this.opened.db.transaction().execute(async (trx) => { const channel = await trx.selectFrom('socialChannels').selectAll().where('id', '=', channelId).executeTakeFirstOrThrow(); await this.assertActiveMember(trx, channelId, invitedByActorId); await this.assertActorsInSession(trx, channel.sessionId, [actorId]); const existing = await trx.selectFrom('socialMemberships').select('id').where('channelId', '=', channelId).where('actorId', '=', actorId).where('status', 'in', ['active', 'invited']).executeTakeFirst(); if (existing) throw new Error(`Actor ${actorId} is already a member or invitee`); await trx.insertInto('socialMemberships').values({ id: randomUUID(), channelId, actorId, status: 'invited', invitedByActorId, visibleAfterMessageId: await this.latestMessageId(trx, channelId), leftAfterMessageId: null, createdAt: now, updatedAt: now }).execute(); });
     return this.toMembership(await this.opened.db.selectFrom('socialMemberships').selectAll().where('channelId', '=', channelId).where('actorId', '=', actorId).orderBy('createdAt', 'desc').executeTakeFirstOrThrow());
   }
   /** Accept or decline the current invitation. */
@@ -71,13 +76,14 @@ export class SocialStore {
   }
   /** Read only messages visible during the actor's active membership periods. */
   public async readMessages(sessionId: string, channelId: string, actorId: string, limit = 100, beforeId?: number, inspect = false): Promise<VisibleMessagePage> {
+    limit = Math.max(1, Math.min(200, Math.floor(limit)));
     let query = this.opened.db.selectFrom('socialMessages as msg').innerJoin('socialChannels as channel', 'channel.id', 'msg.channelId').selectAll('msg').where('channel.sessionId', '=', sessionId).where('msg.channelId', '=', channelId);
     if (!inspect) query = query.where((eb) => eb.exists(eb.selectFrom('socialMemberships as member').select('member.id').whereRef('member.channelId', '=', 'msg.channelId').where('member.actorId', '=', actorId).where('member.status', 'in', ['active', 'left']).whereRef('member.visibleAfterMessageId', '<', 'msg.id').where((inner) => inner.or([inner('member.leftAfterMessageId', 'is', null), inner('member.leftAfterMessageId', '>=', eb.ref('msg.id'))]))));
     if (beforeId !== undefined) query = query.where('msg.id', '<', beforeId);
     const rows = await query.orderBy('msg.id', 'desc').limit(limit + 1).execute(); return { messages: rows.slice(0, limit).reverse().map((row) => this.toMessage(row)), hasMore: rows.length > limit };
   }
   /** Replace an actor's private memory with a new revision. */
-  public async updateMemory(actorId: string, content: string, sourceRunId?: string): Promise<SocialMemory> { const current = await this.opened.db.selectFrom('socialMemories').selectAll().where('actorId', '=', actorId).executeTakeFirst(); const row = await this.opened.db.insertInto('socialMemories').values({ actorId, revision: (current?.revision ?? 0) + 1, content, updatedAt: new Date().toISOString(), sourceRunId: sourceRunId ?? null }).onConflict((oc) => oc.column('actorId').doUpdateSet({ revision: (current?.revision ?? 0) + 1, content, updatedAt: new Date().toISOString(), sourceRunId: sourceRunId ?? null })).returningAll().executeTakeFirstOrThrow(); return row; }
+  public async updateMemory(actorId: string, content: string, sourceRunId?: string, expectedRevision?: number): Promise<SocialMemory> { const now = new Date().toISOString(); const row = await this.opened.db.transaction().execute(async (trx) => { const current = await trx.selectFrom('socialMemories').selectAll().where('actorId', '=', actorId).executeTakeFirst(); const revision = current?.revision ?? 0; if (expectedRevision !== undefined && expectedRevision !== revision) throw new Error(`Memory revision conflict for ${actorId}: expected ${expectedRevision}, current ${revision}`); if (!current) return trx.insertInto('socialMemories').values({ actorId, revision: 1, content, updatedAt: now, sourceRunId: sourceRunId ?? null }).returningAll().executeTakeFirstOrThrow(); return trx.updateTable('socialMemories').set({ revision: revision + 1, content, updatedAt: now, sourceRunId: sourceRunId ?? null }).where('actorId', '=', actorId).where('revision', '=', revision).returningAll().executeTakeFirstOrThrow(); }); return row; }
   /** Read one actor's private memory. */
   public async getMemory(actorId: string): Promise<SocialMemory | undefined> { const row = await this.opened.db.selectFrom('socialMemories').selectAll().where('actorId', '=', actorId).executeTakeFirst(); return row ? { ...row } : undefined; }
   /** Enqueue a durable intention with an optional deduplication key. */
@@ -104,6 +110,8 @@ export class SocialStore {
   private async latestMessageId(db: SocialDb, channelId: string): Promise<number> { const row = await db.selectFrom('socialMessages').select(sql<number>`COALESCE(MAX(id), 0)`.as('latest')).where('channelId', '=', channelId).executeTakeFirstOrThrow(); return Number(row.latest); }
   /** Require active membership before a write. */
   private async assertActiveMember(db: SocialDb, channelId: string, actorId: string): Promise<void> { const member = await db.selectFrom('socialMemberships').select('id').where('channelId', '=', channelId).where('actorId', '=', actorId).where('status', '=', 'active').executeTakeFirst(); if (!member) throw new Error(`Actor ${actorId} is not an active member of channel ${channelId}`); }
+  /** Require every participant in a channel operation to belong to the same session. */
+  private async assertActorsInSession(db: SocialDb, sessionId: string, actorIds: string[]): Promise<void> { const uniqueIds = [...new Set(actorIds)]; const rows = await db.selectFrom('socialActors').select('id').where('sessionId', '=', sessionId).where('id', 'in', uniqueIds).execute(); if (rows.length !== uniqueIds.length) throw new Error('All social actors must belong to the current session'); }
   /** Require that a reply target was visible to the speaker. */
   private async assertMessageVisible(db: SocialDb, actorId: string, message: SocialMessageRowLike): Promise<void> { const visible = await db.selectFrom('socialMemberships').select('id').where('channelId', '=', message.channelId).where('actorId', '=', actorId).where('status', 'in', ['active', 'left']).where('visibleAfterMessageId', '<', Number(message.id)).where((eb) => eb.or([eb('leftAfterMessageId', 'is', null), eb('leftAfterMessageId', '>=', Number(message.id))])).executeTakeFirst(); if (!visible) throw new Error(`Message ${message.id} is not visible to actor ${actorId}`); }
   /** Convert a channel row to a domain object. */

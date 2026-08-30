@@ -2,6 +2,7 @@ import { Router, type Request, type Response } from 'express';
 import path from 'node:path';
 import { SocialRuntime, type SocialRuntimeConfig } from '../../social/runtime/social-runtime.js';
 import type { SocialActorDefinition } from '../../social/types.js';
+import { SocialEventProjector } from '../../social/events/social-event-projector.js';
 
 const router = Router();
 export const socialRuntime = new SocialRuntime();
@@ -50,6 +51,6 @@ router.post('/groups/:channelId/invitation', async (req: Request<{ channelId: st
 router.post('/groups/:channelId/leave', async (req: Request<{ channelId: string }>, res: Response) => { try { res.json(await socialRuntime.leave(req.params.channelId)); } catch (error) { res.status(400).json({ error: errorMessage(error) }); } });
 
 /** Stream committed social events as an SSE connection. */
-router.get('/events/stream', async (req: Request, res: Response) => { if (!socialRuntime.isRunning()) { res.status(404).json({ error: 'No social session is active' }); return; } const inspect = queryFlag(req.query.inspect) && socialRuntime.inspectionAvailable(); res.setHeader('Content-Type', 'text/event-stream'); res.setHeader('Cache-Control', 'no-cache'); res.setHeader('Connection', 'keep-alive'); res.flushHeaders(); const unsubscribe = socialRuntime.events.subscribe((event) => { void (async () => { if (event.type === 'intention-created') return; if ((event.type === 'channel-created' || event.type === 'message-added') && !inspect && !(await socialRuntime.canHumanSeeChannel(event.type === 'channel-created' ? event.channel.id : event.message.channelId))) return; const safeEvent = event.type === 'message-added' ? { type: event.type, message: { id: event.message.id, channelId: event.message.channelId } } : event.type === 'membership-changed' ? { type: event.type, membership: { id: event.membership.id, channelId: event.membership.channelId, actorId: event.membership.actorId, status: event.membership.status } } : event; res.write(`event: ${event.type}\ndata: ${JSON.stringify(safeEvent)}\n\n`); })(); }); req.on('close', unsubscribe); });
+router.get('/events/stream', async (req: Request, res: Response) => { if (!socialRuntime.isRunning()) { res.status(404).json({ error: 'No social session is active' }); return; } const projector = new SocialEventProjector((channelId) => socialRuntime.canHumanSeeChannel(channelId), queryFlag(req.query.inspect) && socialRuntime.inspectionAvailable()); res.setHeader('Content-Type', 'text/event-stream'); res.setHeader('Cache-Control', 'no-cache'); res.setHeader('Connection', 'keep-alive'); res.flushHeaders(); const unsubscribe = socialRuntime.events.subscribe((event) => { void (async () => { const projected = await projector.project(event); if (!projected) return; res.write(`event: ${projected.type}\ndata: ${JSON.stringify(projected)}\n\n`); })(); }); req.on('close', unsubscribe); });
 
 export default router;

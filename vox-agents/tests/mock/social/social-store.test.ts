@@ -82,4 +82,14 @@ describe('SocialStore', () => {
     expect((await reopened.enqueueIntention({ id: 'intention-2', actorId: 'human', kind: 'idle', channelId: null, sourceMessageId: null, priority: 1, state: 'queued', notBefore: new Date().toISOString(), payload: null, dedupeKey: 'idle:human' })).id).toBe('intention-1');
     await reopened.close();
   });
+
+  it('should reject stale private-memory revisions', async () => {
+    const store = createStore();
+    await store.createSession({ id: 'session-5', humanActorId: 'human' }, [{ id: 'human', ordinal: 0, control: 'human', displayName: 'Human' }, { id: 'alice', ordinal: 1, control: 'model', displayName: 'Alice' }]);
+    const first = await store.updateMemory('alice', 'first', 'run-1', 0);
+    expect(first.revision).toBe(1);
+    await expect(store.updateMemory('alice', 'stale', 'run-2', 0)).rejects.toThrow(/revision conflict/);
+    expect((await store.getMemory('alice'))?.content).toBe('first');
+    await store.close();
+  });
 });
