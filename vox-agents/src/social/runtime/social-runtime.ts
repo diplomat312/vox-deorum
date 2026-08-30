@@ -5,10 +5,11 @@ import { ActorLane } from './actor-lane.js';
 import { SocialEventHub } from '../events/social-event-hub.js';
 import { SocialStore } from '../store/social-store.js';
 import { SocialScheduler } from './social-scheduler.js';
+import type { SocialDecisionExecutor } from './social-model-executor.js';
 import type { SocialActor, SocialActorDefinition, SocialChannel, SocialIntention, SocialMembership, SocialMessage, SocialSessionDefinition, VisibleMessagePage } from '../types.js';
 
 /** Configuration for one standalone social sandbox. */
-export interface SocialRuntimeConfig { sessionId?: string; humanActorId?: string; title?: string; actors: SocialActorDefinition[]; dataDirectory: string; }
+export interface SocialRuntimeConfig { sessionId?: string; humanActorId?: string; title?: string; actors: SocialActorDefinition[]; dataDirectory: string; modelExecutor?: SocialDecisionExecutor; }
 
 /** Lifecycle owner for one durable, game-independent social session. */
 export class SocialRuntime {
@@ -17,6 +18,7 @@ export class SocialRuntime {
   private store: SocialStore | undefined;
   private session: SocialSessionDefinition | undefined;
   private scheduler: SocialScheduler | undefined;
+  private modelExecutor: SocialDecisionExecutor | undefined;
 
   /** Create and persist a new social session. */
   public async start(config: SocialRuntimeConfig): Promise<void> {
@@ -29,6 +31,7 @@ export class SocialRuntime {
     this.store = new SocialStore(path.join(config.dataDirectory, `${this.session.id}.sqlite`));
     await this.store.createSession(this.session, config.actors);
     for (const actor of config.actors) this.lanes.set(actor.id, new ActorLane());
+    this.modelExecutor = config.modelExecutor;
     this.scheduler = this.createScheduler();
   }
   /** Reopen a persisted social session without creating duplicate channels or messages. */
@@ -56,10 +59,14 @@ export class SocialRuntime {
   public async listChannels(inspect = false): Promise<SocialChannel[]> { return this.requireStore().listChannels(this.getSessionId(), this.getHumanActorId(), inspect); }
   /** Read a channel using the human actor's authorization boundary. */
   public async readMessages(channelId: string, limit?: number, beforeId?: number, inspect = false): Promise<VisibleMessagePage> { return this.requireStore().readMessages(this.getSessionId(), channelId, this.getHumanActorId(), limit, beforeId, inspect); }
+  /** Report whether development inspection is explicitly enabled for this process. */
+  public inspectionAvailable(): boolean { return process.env.SOCIAL_DEV_INSPECT === 'true'; }
+  /** Check human visibility for viewer-aware event projection. */
+  public async canHumanSeeChannel(channelId: string): Promise<boolean> { return this.requireStore().isActiveMember(channelId, this.getHumanActorId()); }
   /** Append a human message and publish the event after commit. */
   public async appendHumanMessage(channelId: string, content: string, replyToMessageId?: number): Promise<SocialMessage> { const message = await this.requireStore().appendMessage({ sessionId: this.getSessionId(), actorId: this.getHumanActorId(), channelId, content, replyToMessageId }); this.events.publish({ type: 'message-added', message }); await this.enqueueListeners(message); return message; }
   /** Create the durable scheduler for the current session. */
-  private createScheduler(): SocialScheduler { return new SocialScheduler(this.requireStore(), () => this.listActors(), this.lanes, this.events, undefined, undefined, async (message, payload) => this.enqueueListeners(message, payload)); }
+  private createScheduler(): SocialScheduler { return new SocialScheduler(this.requireStore(), () => this.listActors(), this.lanes, this.events, this.modelExecutor, undefined, async (message, payload) => this.enqueueListeners(message, payload)); }
   /** Enqueue listener intentions after each committed visible message. */
   private async enqueueListeners(message: SocialMessage, payload: { rootMessageId: number; depth: number; count: number } = { rootMessageId: message.id, depth: 0, count: 0 }): Promise<void> { const store = this.requireStore(); const actors = await store.listActiveModelActors(this.getSessionId(), message.channelId); for (const actor of actors.filter((candidate) => candidate.id !== message.speakerActorId)) { const intention = await store.enqueueIntention({ id: randomUUID(), actorId: actor.id, kind: 'consider-reply', channelId: message.channelId, sourceMessageId: message.id, priority: 0, state: 'queued', notBefore: new Date().toISOString(), payload: JSON.stringify(payload), dedupeKey: `social-message:${message.id}:${actor.id}` }); this.events.publish({ type: 'intention-created', intention }); } this.scheduler?.kick(); }
 

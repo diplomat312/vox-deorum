@@ -13,7 +13,7 @@ export function migrateSocialSchema(sqlite: InstanceType<typeof Database>): void
     addColumn('socialIntentions', 'result', 'TEXT');
     sqlite.exec("UPDATE socialSessions SET updatedAt = createdAt WHERE updatedAt = ''");
     sqlite.exec('CREATE INDEX IF NOT EXISTS socialIntentionsClaimIndex ON socialIntentions(state, notBefore, priority, createdAt);');
-    sqlite.exec("UPDATE socialActors SET modelRef = 'openrouter/' || modelRef WHERE modelRef IS NOT NULL AND instr(modelRef, '/') > 0 AND modelRef NOT LIKE 'openrouter/%' AND modelRef NOT LIKE 'openai/%' AND modelRef NOT LIKE 'anthropic/%' AND modelRef NOT LIKE 'google/%' AND modelRef NOT LIKE 'codex/%' AND modelRef NOT LIKE 'chutes/%' AND modelRef NOT LIKE 'synthetic/%' AND modelRef NOT LIKE 'openai-compatible/%'");
+    sqlite.exec("UPDATE socialActors SET modelRef = 'openrouter/' || modelRef WHERE modelRef IS NOT NULL AND modelRef NOT LIKE 'openrouter/%' AND (modelRef LIKE 'inclusionai/%' OR modelRef LIKE 'dots-studio/%' OR modelRef LIKE 'nvidia/%' OR modelRef LIKE 'liquid/%' OR modelRef LIKE 'poolside/%' OR modelRef LIKE 'thinkingmachines/%' OR modelRef LIKE 'z-ai/%' OR modelRef LIKE 'minimax/%')");
     sqlite.pragma('user_version = 3');
   });
   migrate();

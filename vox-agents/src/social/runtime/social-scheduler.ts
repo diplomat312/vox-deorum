@@ -1,7 +1,7 @@
 import { ActorLane } from './actor-lane.js';
 import { ChannelLane } from './channel-lane.js';
 import { SocialContextBuilder } from '../context/social-context-builder.js';
-import { SocialModelExecutor } from './social-model-executor.js';
+import { SocialModelExecutor, type SocialDecisionExecutor } from './social-model-executor.js';
 import type { SocialActor, SocialIntention, SocialMessage } from '../types.js';
 import { SocialStore } from '../store/social-store.js';
 import { SocialEventHub } from '../events/social-event-hub.js';
@@ -15,7 +15,7 @@ export class SocialScheduler {
   private stopped = false;
   private drainPromise: Promise<void> | undefined;
 
-  public constructor(private readonly store: SocialStore, private readonly actors: () => Promise<SocialActor[]>, private readonly lanes: Map<string, ActorLane>, private readonly events: SocialEventHub, private readonly executor = new SocialModelExecutor(), private readonly contextBuilder = new SocialContextBuilder(), private readonly onMessageCommitted: (message: SocialMessage, payload: CascadePayload) => Promise<void> = async () => {}, private readonly maxCascadeMessages = 12) {}
+  public constructor(private readonly store: SocialStore, private readonly actors: () => Promise<SocialActor[]>, private readonly lanes: Map<string, ActorLane>, private readonly events: SocialEventHub, private readonly executor: SocialDecisionExecutor = new SocialModelExecutor(), private readonly contextBuilder = new SocialContextBuilder(), private readonly onMessageCommitted: (message: SocialMessage, payload: CascadePayload) => Promise<void> = async () => {}, private readonly maxCascadeMessages = 12) {}
 
   /** Stop future claims and let the current bounded work finish. */
   public stop(): void { this.stopped = true; }
@@ -53,11 +53,15 @@ export class SocialScheduler {
 
   /** Build fresh authorized context, commit speech, and propagate its listeners. */
   private async decide(intention: SocialIntention): Promise<void> {
-    const actors = await this.actors();
+    const allActors = await this.actors();
+    const actorSeed = allActors.find((candidate) => candidate.id === intention.actorId);
+    if (!actorSeed) { await this.store.completeIntention(intention.id, 'pass'); return; }
+    if (!intention.channelId) { await this.store.completeIntention(intention.id, 'pass'); return; }
+    const actors = await this.store.listActiveActors(actorSeed.sessionId, intention.channelId);
     const actor = actors.find((candidate) => candidate.id === intention.actorId);
-    if (!actor || !intention.channelId) { await this.store.completeIntention(intention.id, 'pass'); return; }
+    if (!actor) { await this.store.completeIntention(intention.id, 'pass'); return; }
     const payload = this.readPayload(intention.payload);
-    const messages = (await this.store.readMessages(intention.payload ? actor.sessionId : actor.sessionId, intention.channelId, actor.id, 80)).messages;
+    const messages = (await this.store.readMessages(actor.sessionId, intention.channelId, actor.id, 80)).messages;
     const memory = await this.store.getMemory(actor.id);
     const context = this.contextBuilder.build(actor, actors, messages, intention, memory?.content);
     const decision = await this.executor.decide(actor, context, actors.map((candidate) => candidate.displayName));

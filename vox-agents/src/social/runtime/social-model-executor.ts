@@ -7,9 +7,10 @@ import type { SocialActor } from '../types.js';
 import type { SocialContextBundle } from '../context/social-context-builder.js';
 
 export type SocialDecision = { outcome: 'speak'; content: string } | { outcome: 'pass' };
+export interface SocialDecisionExecutor { decide(actor: SocialActor, context: SocialContextBundle, actorNames: string[], abortSignal?: AbortSignal): Promise<SocialDecision>; }
 
 /** Provider-neutral social model execution through the shared Vox concurrency/retry layer. */
-export class SocialModelExecutor {
+export class SocialModelExecutor implements SocialDecisionExecutor {
   private readonly logger = createLogger('social-model-executor');
 
   /** Execute one actor decision with a bounded social retry policy. */

@@ -9,7 +9,7 @@ import Dropdown from 'primevue/dropdown'
 import Textarea from 'primevue/textarea'
 import Tag from 'primevue/tag'
 import { api } from '../api/client'
-import type { SocialActor, SocialChannel, SocialMessage, SocialSessionResponse, SocialStoredSession } from '../utils/types'
+import type { SocialActor, SocialChannel, SocialMessage, SocialSessionResponse, SocialStartRequest, SocialStoredSession } from '../utils/types'
 
 const actors = ref<SocialActor[]>([])
 const channels = ref<SocialChannel[]>([])
@@ -17,20 +17,21 @@ const messages = ref<SocialMessage[]>([])
 const selectedChannelId = ref('world')
 const displayName = ref('Human')
 const sandboxTitle = ref('')
+const draftActors = ref<SocialStartRequest['actors']>([
+  { id: 'human', ordinal: 0, control: 'human', displayName: 'Human' },
+  { id: 'alice', ordinal: 1, control: 'model', displayName: 'Alice', modelRef: 'openrouter/inclusionai/ling-3.0-flash-fin:free', profile: 'Thoughtful, curious, and diplomatic.' },
+  { id: 'bob', ordinal: 2, control: 'model', displayName: 'Bob', modelRef: 'openrouter/dots-studio/dots-3-note-preview:free', profile: 'Skeptical, direct, and strategic.' },
+  { id: 'cleo', ordinal: 3, control: 'model', displayName: 'Cleo', modelRef: 'openrouter/nvidia/nemotron-3.5-lightning:free', profile: 'Warm, observant, and mischievous.' },
+])
 const groupTitle = ref('')
 const selectedInvitees = ref<string[]>([])
-const modelSelections = ref<string[]>([
-  'inclusionai/ling-3.0-flash-fin:free',
-  'dots-studio/dots-3-note-preview:free',
-  'nvidia/nemotron-3.5-lightning:free',
-])
 const modelOptions = ref<Array<{ label: string; value: string }>>([
-  { label: 'Ling 3.0 Flash Fin (free)', value: 'inclusionai/ling-3.0-flash-fin:free' },
-  { label: 'Dots 3 Note Preview (free)', value: 'dots-studio/dots-3-note-preview:free' },
-  { label: 'Nemotron 3.5 Lightning (free)', value: 'nvidia/nemotron-3.5-lightning:free' },
+  { label: 'Ling 3.0 Flash Fin (free)', value: 'openrouter/inclusionai/ling-3.0-flash-fin:free' },
+  { label: 'Dots 3 Note Preview (free)', value: 'openrouter/dots-studio/dots-3-note-preview:free' },
+  { label: 'Nemotron 3.5 Lightning (free)', value: 'openrouter/nvidia/nemotron-3.5-lightning:free' },
 ])
-const excludedModelIds = new Set(['liquid/lfm-2.5-2.6b:free'])
-const cleoFallbackModel = 'nvidia/nemotron-3.5-lightning:free'
+const excludedModelIds = new Set(['openrouter/liquid/lfm-2.5-2.6b:free'])
+const cleoFallbackModel = 'openrouter/nvidia/nemotron-3.5-lightning:free'
 const composer = ref('')
 const loading = ref(false)
 const sending = ref(false)
@@ -52,15 +53,12 @@ const archivedStoredSessions = computed(() => storedSessions.value.filter((saved
 
 /** Keep persisted OpenRouter references compatible with the UI model catalog. */
 function normalizeModelRef(modelRef: string | undefined): string {
-  return modelRef?.replace(/^openrouter\//, '') ?? ''
+  return modelRef ?? ''
 }
 
 /** Copy resumed actor assignments into the setup controls used by the next session. */
 function syncModelSelections(resumedActors: SocialActor[]): void {
-  for (const [index, actorId] of ['alice', 'bob', 'cleo'].entries()) {
-    const modelRef = resumedActors.find((actor) => actor.id === actorId)?.modelRef
-    if (modelRef && !excludedModelIds.has(normalizeModelRef(modelRef))) modelSelections.value[index] = normalizeModelRef(modelRef)
-  }
+  draftActors.value = resumedActors.map((actor) => ({ id: actor.id, ordinal: actor.ordinal, control: actor.control, displayName: actor.displayName, ...(actor.modelRef ? { modelRef: normalizeModelRef(actor.modelRef) } : {}), ...(actor.profile ? { profile: actor.profile } : {}) }))
 }
 
 /** Replace the removed LFM assignment while keeping a running session alive. */
@@ -115,7 +113,7 @@ async function load(): Promise<void> {
   try {
     try {
       const discovered = await api.getConfigModels()
-      const freeModels = discovered.models.filter((model) => model.id.endsWith(':free')).map((model) => ({ label: model.name, value: model.id.replace(/^openrouter\//, '') })).filter((model) => !excludedModelIds.has(model.value))
+      const freeModels = discovered.models.filter((model) => model.id.endsWith(':free')).map((model) => ({ label: model.name, value: model.id })).filter((model) => !excludedModelIds.has(model.value))
       if (freeModels.length) modelOptions.value = freeModels
     } catch { /* The curated free defaults keep setup usable without discovery credentials. */ }
     storedSessions.value = (await api.getStoredSocialSessions()).sessions
@@ -156,12 +154,7 @@ async function start(): Promise<void> {
   loading.value = true
   error.value = ''
   try {
-    const response = await api.startSocialSession({ title: sandboxTitle.value.trim() || 'Untitled sandbox', actors: [
-      { id: 'human', ordinal: 0, control: 'human', displayName: displayName.value || 'Human' },
-      { id: 'alice', ordinal: 1, control: 'model', displayName: 'Alice', modelRef: modelSelections.value[0], profile: 'Thoughtful, curious, and diplomatic.' },
-      { id: 'bob', ordinal: 2, control: 'model', displayName: 'Bob', modelRef: modelSelections.value[1], profile: 'Skeptical, direct, and strategic.' },
-      { id: 'cleo', ordinal: 3, control: 'model', displayName: 'Cleo', modelRef: modelSelections.value[2], profile: 'Warm, observant, and mischievous.' },
-    ] })
+    const response = await api.startSocialSession({ title: sandboxTitle.value.trim() || 'Untitled sandbox', actors: draftActors.value.map((actor, ordinal) => ({ ...actor, ordinal, ...(actor.id === 'human' ? { displayName: displayName.value || actor.displayName || 'Human' } : {}) })) })
     actors.value = response.actors
     sessionActive.value = true
     await loadChannels()
@@ -169,6 +162,12 @@ async function start(): Promise<void> {
     void router.push(`/social/chat/${encodeURIComponent(response.sessionId)}`)
   } catch (caught) { error.value = caught instanceof Error ? caught.message : 'Could not start social session' } finally { loading.value = false }
 }
+
+/** Add a model actor to the new-sandbox roster. */
+function addDraftActor(): void { const ordinal = draftActors.value.length; draftActors.value.push({ id: `actor-${ordinal + 1}`, ordinal, control: 'model', displayName: `Actor ${ordinal}`, modelRef: modelOptions.value[ordinal % modelOptions.value.length]?.value ?? 'openrouter/nvidia/nemotron-3.5-lightning:free', profile: '' }) }
+
+/** Remove a model actor from the new-sandbox roster while retaining the human seat. */
+function removeDraftActor(actorId: string): void { if (draftActors.value.length <= 2 || actorId === 'human') return; draftActors.value = draftActors.value.filter((actor) => actor.id !== actorId).map((actor, ordinal) => ({ ...actor, ordinal })) }
 
 /** Resume a persisted social session after a server restart. */
 async function resume(sessionId: string): Promise<void> {
@@ -235,7 +234,7 @@ onUnmounted(() => stopEvents?.())
     </div>
     <div v-if="error" class="social-error">{{ error }}</div>
     <div v-if="isHome" class="social-home">
-      <Card class="social-start-card create-card"><template #title>New sandbox</template><template #content><p class="text-muted">Create a compact multi-agent conversation space.</p><div class="flex gap-2"><InputText v-model="sandboxTitle" placeholder="Sandbox title" /><InputText v-model="displayName" placeholder="Your display name" /><Button label="Create sandbox" icon="pi pi-plus" :loading="loading" @click="start" /></div><div class="model-setup"><label v-for="(model, index) in modelSelections" :key="index">{{ ['Alice', 'Bob', 'Cleo'][index] }}<Dropdown v-model="modelSelections[index]" :options="modelOptions" option-label="label" option-value="value" /></label></div></template></Card>
+      <Card class="social-start-card create-card"><template #title>New sandbox</template><template #content><p class="text-muted">Create a 2–8 participant conversation space.</p><div class="flex gap-2"><InputText v-model="sandboxTitle" placeholder="Sandbox title" /><InputText v-model="displayName" placeholder="Your display name" /><Button label="Create sandbox" icon="pi pi-plus" :loading="loading" @click="start" /></div><div class="draft-roster"><div v-for="actor in draftActors" :key="actor.id" class="draft-actor"><InputText v-model="actor.displayName" :disabled="actor.control === 'human'" placeholder="Actor name" /><Dropdown v-if="actor.control === 'model'" v-model="actor.modelRef" :options="modelOptions" option-label="label" option-value="value" /><Button v-if="actor.control === 'model'" icon="pi pi-trash" text rounded severity="danger" aria-label="Remove actor" @click="removeDraftActor(actor.id)" /></div><Button label="Add model" icon="pi pi-user-plus" text size="small" :disabled="draftActors.length >= 8" @click="addDraftActor" /></div></template></Card>
       <section class="sandbox-list"><div class="list-heading"><h2>Saved chats</h2><span class="text-muted">{{ activeStoredSessions.length }}</span></div><div v-if="!activeStoredSessions.length" class="empty-home">No saved chats yet.</div><article v-for="saved in activeStoredSessions" :key="saved.session.id" class="sandbox-card"><button class="sandbox-open" @click="openStoredSession(saved.session.id)"><strong>{{ saved.session.title || 'Untitled sandbox' }}</strong><small>{{ saved.actors.filter((actor) => actor.control === 'model').map((actor) => `${actor.displayName} · ${actor.modelRef || 'unconfigured'}`).join('  |  ') }}</small><small>{{ saved.session.updatedAt || saved.session.createdAt || 'No timestamp' }}</small></button><div class="sandbox-actions"><Button icon="pi pi-pencil" text rounded aria-label="Rename chat" @click="renameStoredSession(saved)" /><Button icon="pi pi-box" text rounded aria-label="Archive chat" @click="setArchived(saved, true)" /><Button icon="pi pi-trash" text rounded severity="danger" aria-label="Delete chat" @click="deleteStoredSession(saved)" /></div></article></section>
       <section class="sandbox-list archived-list"><div class="list-heading"><h2>Archived chats</h2><span class="text-muted">{{ archivedStoredSessions.length }}</span></div><article v-for="saved in archivedStoredSessions" :key="saved.session.id" class="sandbox-card"><button class="sandbox-open" @click="openStoredSession(saved.session.id)"><strong>{{ saved.session.title || 'Untitled sandbox' }}</strong><small>{{ saved.actors.filter((actor) => actor.control === 'model').map((actor) => actor.displayName).join('  |  ') }}</small></button><div class="sandbox-actions"><Button icon="pi pi-replay" text rounded aria-label="Restore chat" @click="setArchived(saved, false)" /><Button icon="pi pi-trash" text rounded severity="danger" aria-label="Delete chat" @click="deleteStoredSession(saved)" /></div></article></section>
     </div>
@@ -263,7 +262,7 @@ onUnmounted(() => stopEvents?.())
 .social-page { height: 100%; display: flex; flex-direction: column; }
 .social-error { background: var(--p-red-50); color: var(--p-red-700); border: 1px solid var(--p-red-200); border-radius: 6px; padding: .75rem 1rem; margin-bottom: 1rem; }
 .social-start-card { max-width: 680px; margin: 3rem auto; width: 100%; }
-.social-home { width: min(100%, 980px); margin: 0 auto; overflow: auto; }.create-card { max-width: none; margin: 0 0 1.25rem; }.create-card .p-inputtext { min-width: 0; flex: 1; }.sandbox-list { margin-bottom: 1.25rem; }.list-heading { display: flex; align-items: center; gap: .5rem; margin: 1rem 0 .6rem; }.list-heading h2 { margin: 0; font-size: 1rem; }.sandbox-card { display: flex; align-items: center; gap: .75rem; padding: .7rem .85rem; margin-bottom: .45rem; border: 1px solid var(--p-content-border-color); border-radius: 7px; background: var(--p-content-background); }.sandbox-open { min-width: 0; flex: 1; border: 0; background: transparent; color: inherit; text-align: left; cursor: pointer; display: grid; gap: .18rem; }.sandbox-open strong, .sandbox-open small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }.sandbox-open small { color: var(--p-text-muted-color); }.sandbox-actions { display: flex; flex-shrink: 0; }.empty-home { padding: 1rem; color: var(--p-text-muted-color); border: 1px dashed var(--p-content-border-color); border-radius: 7px; }.archived-list { opacity: .86; }
+.social-home { width: min(100%, 980px); margin: 0 auto; overflow: auto; }.create-card { max-width: none; margin: 0 0 1.25rem; }.create-card .p-inputtext { min-width: 0; flex: 1; }.draft-roster { display: grid; gap: .5rem; margin-top: 1rem; }.draft-actor { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr) auto; gap: .5rem; }.sandbox-list { margin-bottom: 1.25rem; }.list-heading { display: flex; align-items: center; gap: .5rem; margin: 1rem 0 .6rem; }.list-heading h2 { margin: 0; font-size: 1rem; }.sandbox-card { display: flex; align-items: center; gap: .75rem; padding: .7rem .85rem; margin-bottom: .45rem; border: 1px solid var(--p-content-border-color); border-radius: 7px; background: var(--p-content-background); }.sandbox-open { min-width: 0; flex: 1; border: 0; background: transparent; color: inherit; text-align: left; cursor: pointer; display: grid; gap: .18rem; }.sandbox-open strong, .sandbox-open small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }.sandbox-open small { color: var(--p-text-muted-color); }.sandbox-actions { display: flex; flex-shrink: 0; }.empty-home { padding: 1rem; color: var(--p-text-muted-color); border: 1px dashed var(--p-content-border-color); border-radius: 7px; }.archived-list { opacity: .86; }
 .stored-card { margin-top: 0; }.stored-session { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: .75rem 0; border-bottom: 1px solid var(--p-content-border-color); }.stored-session:last-child { border-bottom: 0; }.stored-session small { display: block; color: var(--p-text-muted-color); margin-top: .2rem; }
 .model-setup { display: grid; grid-template-columns: repeat(3, 1fr); gap: .75rem; margin-top: 1.25rem; }.model-setup label { display: flex; flex-direction: column; gap: .35rem; font-size: .8rem; font-weight: 700; }.model-setup .p-dropdown { width: 100%; font-weight: 400; }
 .social-shell { flex: 1; min-height: 0; display: grid; grid-template-columns: 230px minmax(0, 1fr) 220px; border: 1px solid var(--p-content-border-color); border-radius: 8px; overflow: hidden; background: var(--p-content-background); }
