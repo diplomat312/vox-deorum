@@ -1,0 +1,66 @@
+import { mkdir } from 'node:fs/promises';
+import path from 'node:path';
+import { randomUUID } from 'node:crypto';
+import { ActorLane } from './actor-lane.js';
+import { SocialEventHub } from '../events/social-event-hub.js';
+import { SocialStore } from '../store/social-store.js';
+import type { SocialActor, SocialActorDefinition, SocialChannel, SocialIntention, SocialMembership, SocialMessage, SocialSessionDefinition, VisibleMessagePage } from '../types.js';
+
+/** Configuration for one standalone social sandbox. */
+export interface SocialRuntimeConfig { sessionId?: string; humanActorId?: string; actors: SocialActorDefinition[]; dataDirectory: string; }
+
+/** Lifecycle owner for one durable, game-independent social session. */
+export class SocialRuntime {
+  public readonly events = new SocialEventHub();
+  private readonly lanes = new Map<string, ActorLane>();
+  private store: SocialStore | undefined;
+  private session: SocialSessionDefinition | undefined;
+
+  /** Create and persist a new social session. */
+  public async start(config: SocialRuntimeConfig): Promise<void> {
+    if (this.store) throw new Error('A social session is already running');
+    const humanActorId = config.humanActorId ?? 'human';
+    if (!config.actors.some((actor) => actor.id === humanActorId && actor.control === 'human')) throw new Error('The social session requires one human actor');
+    if (config.actors.length < 2 || config.actors.length > 8) throw new Error('A social session requires 2 to 8 actors');
+    await mkdir(config.dataDirectory, { recursive: true });
+    this.session = { id: config.sessionId ?? randomUUID(), humanActorId };
+    this.store = new SocialStore(path.join(config.dataDirectory, `${this.session.id}.sqlite`));
+    await this.store.createSession(this.session, config.actors);
+    for (const actor of config.actors) this.lanes.set(actor.id, new ActorLane());
+  }
+
+  /** Stop the session and close the durable store. */
+  public async stop(): Promise<void> { if (this.store) await this.store.close(); this.store = undefined; this.session = undefined; this.lanes.clear(); }
+  /** Return whether a session is active. */
+  public isRunning(): boolean { return this.store !== undefined && this.session !== undefined; }
+  /** Return the active session identifier. */
+  public getSessionId(): string { return this.requireSession().id; }
+  /** Return the human actor identifier. */
+  public getHumanActorId(): string { return this.requireSession().humanActorId; }
+  /** Return all session actors. */
+  public async listActors(): Promise<SocialActor[]> { return this.requireStore().listActors(this.getSessionId()); }
+  /** Return channels visible to the human, with explicit developer inspection support. */
+  public async listChannels(inspect = false): Promise<SocialChannel[]> { return this.requireStore().listChannels(this.getSessionId(), this.getHumanActorId(), inspect); }
+  /** Read a channel using the human actor's authorization boundary. */
+  public async readMessages(channelId: string, limit?: number, beforeId?: number, inspect = false): Promise<VisibleMessagePage> { return this.requireStore().readMessages(this.getSessionId(), channelId, this.getHumanActorId(), limit, beforeId, inspect); }
+  /** Append a human message and publish the event after commit. */
+  public async appendHumanMessage(channelId: string, content: string, replyToMessageId?: number): Promise<SocialMessage> { const message = await this.requireStore().appendMessage({ sessionId: this.getSessionId(), actorId: this.getHumanActorId(), channelId, content, replyToMessageId }); this.events.publish({ type: 'message-added', message }); return message; }
+  /** Open a human DM with an actor. */
+  public async openHumanDm(actorId: string, title?: string): Promise<SocialChannel> { const channel = await this.requireStore().openDm(this.getSessionId(), this.getHumanActorId(), actorId, title ?? `DM with ${actorId}`); this.events.publish({ type: 'channel-created', channel }); return channel; }
+  /** Create a group owned by the human. */
+  public async createHumanGroup(title: string, invitedActorIds?: string[]): Promise<SocialChannel> { const channel = await this.requireStore().createGroup(this.getSessionId(), this.getHumanActorId(), title, invitedActorIds); this.events.publish({ type: 'channel-created', channel }); return channel; }
+  /** Invite an actor to a human-owned group. */
+  public async invite(channelId: string, actorId: string): Promise<SocialMembership> { const membership = await this.requireStore().invite(channelId, actorId, this.getHumanActorId()); this.events.publish({ type: 'membership-changed', membership }); return membership; }
+  /** Resolve the human's own pending invitation. */
+  public async resolveHumanInvitation(channelId: string, accepted: boolean): Promise<SocialMembership> { const membership = await this.requireStore().resolveInvitation(channelId, this.getHumanActorId(), accepted); this.events.publish({ type: 'membership-changed', membership }); return membership; }
+  /** Leave a human group. */
+  public async leave(channelId: string): Promise<SocialMembership> { const membership = await this.requireStore().leaveGroup(channelId, this.getHumanActorId()); this.events.publish({ type: 'membership-changed', membership }); return membership; }
+  /** Enqueue a durable development intention for the human actor. */
+  public async enqueueIntention(input: Omit<SocialIntention, 'createdAt' | 'updatedAt' | 'attemptCount' | 'lastError'>): Promise<SocialIntention> { const intention = await this.requireStore().enqueueIntention(input); this.events.publish({ type: 'intention-created', intention }); return intention; }
+  /** Run one actor-owned operation through its serial lane. */
+  public runForActor<T>(actorId: string, work: () => Promise<T>): Promise<T> { const lane = this.lanes.get(actorId); if (!lane) throw new Error(`Unknown social actor ${actorId}`); return lane.run(work); }
+  /** Return the active session or throw a clear lifecycle error. */
+  private requireSession(): SocialSessionDefinition { if (!this.session) throw new Error('No social session is active'); return this.session; }
+  /** Return the active store or throw a clear lifecycle error. */
+  private requireStore(): SocialStore { if (!this.store) throw new Error('No social session is active'); return this.store; }
+}

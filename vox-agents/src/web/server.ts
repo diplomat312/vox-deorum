@@ -19,6 +19,7 @@ import sessionRoutes from './routes/session.js';
 import { processManager } from '../infra/process-manager.js';
 import type { HealthStatus, ErrorResponse } from '../types/index.js';
 import { isAllowedDashboardRequest, isAllowedLoopbackOrigin } from './origin.js';
+import socialRoutes from './routes/social.js';
 
 // Get __dirname in ESM
 const __filename = fileURLToPath(import.meta.url);
@@ -142,6 +143,9 @@ app.use('/api', createAgentRoutes());
 
 // Mount session routes
 app.use('/api/session', sessionRoutes);
+
+// Mount the standalone game-independent social sandbox.
+app.use('/api/social', socialRoutes);
 
 // Health check endpoint - minimal API foundation
 app.get('/api/health', (_req: Request, res: Response<HealthStatus>) => {
