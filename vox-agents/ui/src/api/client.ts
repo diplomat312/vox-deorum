@@ -55,7 +55,7 @@ import type {
   DealRejectRequest,
   DealAcceptRequest,
   DealMessagesResponse
-  ,SocialSessionResponse, SocialChannelsResponse, SocialStartRequest, SocialChannel, SocialMessage, VisibleMessagePage
+  SocialSessionResponse, SocialChannelsResponse, SocialStartRequest, SocialChannel, SocialMessage, VisibleMessagePage
 } from '../utils/types';
 import type { TextStreamPart, ToolSet } from 'ai';
 

@@ -4,6 +4,7 @@ import Button from 'primevue/button'
 import Card from 'primevue/card'
 import Checkbox from 'primevue/checkbox'
 import InputText from 'primevue/inputtext'
+import Dropdown from 'primevue/dropdown'
 import Textarea from 'primevue/textarea'
 import Tag from 'primevue/tag'
 import { api } from '../api/client'
@@ -16,6 +17,16 @@ const selectedChannelId = ref('world')
 const displayName = ref('Human')
 const groupTitle = ref('')
 const selectedInvitees = ref<string[]>([])
+const modelSelections = ref<string[]>([
+  'inclusionai/ling-3.0-flash-fin:free',
+  'dots-studio/dots-3-note-preview:free',
+  'nvidia/nemotron-3.5-lightning:free',
+])
+const modelOptions = ref<Array<{ label: string; value: string }>>([
+  { label: 'Ling 3.0 Flash Fin (free)', value: 'inclusionai/ling-3.0-flash-fin:free' },
+  { label: 'Dots 3 Note Preview (free)', value: 'dots-studio/dots-3-note-preview:free' },
+  { label: 'Nemotron 3.5 Lightning (free)', value: 'nvidia/nemotron-3.5-lightning:free' },
+])
 const composer = ref('')
 const loading = ref(false)
 const sending = ref(false)
@@ -33,6 +44,11 @@ async function load(): Promise<void> {
   loading.value = true
   error.value = ''
   try {
+    try {
+      const discovered = await api.getConfigModels()
+      const freeModels = discovered.models.filter((model) => model.id.endsWith(':free')).map((model) => ({ label: model.name, value: model.id }))
+      if (freeModels.length) modelOptions.value = freeModels
+    } catch { /* The curated free defaults keep setup usable without discovery credentials. */ }
     const session = await api.getSocialSession()
     sessionActive.value = true
     actors.value = session.actors
@@ -65,9 +81,9 @@ async function start(): Promise<void> {
   try {
     const response = await api.startSocialSession({ actors: [
       { id: 'human', ordinal: 0, control: 'human', displayName: displayName.value || 'Human' },
-      { id: 'alice', ordinal: 1, control: 'model', displayName: 'Alice', modelRef: 'default', profile: 'Thoughtful, curious, and diplomatic.' },
-      { id: 'bob', ordinal: 2, control: 'model', displayName: 'Bob', modelRef: 'default', profile: 'Skeptical, direct, and strategic.' },
-      { id: 'cleo', ordinal: 3, control: 'model', displayName: 'Cleo', modelRef: 'default', profile: 'Warm, observant, and mischievous.' },
+      { id: 'alice', ordinal: 1, control: 'model', displayName: 'Alice', modelRef: modelSelections.value[0], profile: 'Thoughtful, curious, and diplomatic.' },
+      { id: 'bob', ordinal: 2, control: 'model', displayName: 'Bob', modelRef: modelSelections.value[1], profile: 'Skeptical, direct, and strategic.' },
+      { id: 'cleo', ordinal: 3, control: 'model', displayName: 'Cleo', modelRef: modelSelections.value[2], profile: 'Warm, observant, and mischievous.' },
     ] })
     actors.value = response.actors
     sessionActive.value = true
@@ -109,7 +125,7 @@ onUnmounted(() => stopEvents?.())
     <div v-if="error" class="social-error">{{ error }}</div>
     <Card v-if="!sessionActive" class="social-start-card">
       <template #title>Start a social sandbox</template>
-      <template #content><p class="text-muted">Chat with three independent model actors without launching Civilization V.</p><div class="flex gap-2 mt-3"><InputText v-model="displayName" placeholder="Your display name" /><Button label="Start sandbox" icon="pi pi-play" :loading="loading" @click="start" /></div></template>
+      <template #content><p class="text-muted">Chat with three independent model actors without launching Civilization V.</p><div class="model-setup"><label v-for="(model, index) in modelSelections" :key="index">{{ ['Alice', 'Bob', 'Cleo'][index] }}<Dropdown v-model="modelSelections[index]" :options="modelOptions" option-label="label" option-value="value" /></label></div><div class="flex gap-2 mt-3"><InputText v-model="displayName" placeholder="Your display name" /><Button label="Start sandbox" icon="pi pi-play" :loading="loading" @click="start" /></div></template>
     </Card>
     <div v-else class="social-shell">
       <aside class="social-sidebar">
@@ -135,6 +151,7 @@ onUnmounted(() => stopEvents?.())
 .social-page { height: 100%; display: flex; flex-direction: column; }
 .social-error { background: var(--p-red-50); color: var(--p-red-700); border: 1px solid var(--p-red-200); border-radius: 6px; padding: .75rem 1rem; margin-bottom: 1rem; }
 .social-start-card { max-width: 680px; margin: 3rem auto; width: 100%; }
+.model-setup { display: grid; grid-template-columns: repeat(3, 1fr); gap: .75rem; margin-top: 1.25rem; }.model-setup label { display: flex; flex-direction: column; gap: .35rem; font-size: .8rem; font-weight: 700; }.model-setup .p-dropdown { width: 100%; font-weight: 400; }
 .social-shell { flex: 1; min-height: 0; display: grid; grid-template-columns: 230px minmax(0, 1fr) 220px; border: 1px solid var(--p-content-border-color); border-radius: 8px; overflow: hidden; background: var(--p-content-background); }
 .social-sidebar, .social-details { padding: 1rem; overflow-y: auto; background: var(--p-content-hover-background); }
 .social-sidebar h3, .social-details h3 { font-size: .8rem; text-transform: uppercase; letter-spacing: .06em; color: var(--p-text-muted-color); margin: 1rem 0 .5rem; }
