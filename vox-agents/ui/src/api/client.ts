@@ -196,7 +196,7 @@ class ApiClient {
   /** Create a titled group. */
   async createSocialGroup(title: string, invitedActorIds: string[] = []): Promise<SocialChannel> { return this.fetchJson<SocialChannel>(`${this.baseUrl}/api/social/groups`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title, invitedActorIds }) }); }
   /** Subscribe to committed social events. */
-  streamSocialEvents(onEvent: () => void): () => void { const source = new EventSource(`${this.baseUrl}/api/social/events/stream`); const handler = () => onEvent(); ['channel-created', 'message-added', 'membership-changed', 'intention-created'].forEach((name) => source.addEventListener(name, handler)); source.onerror = () => undefined; return () => source.close(); }
+  streamSocialEvents(onEvent: () => void): () => void { let source: EventSource | undefined; let retryTimer: number | undefined; let closed = false; const handler = () => onEvent(); const connect = (): void => { if (closed) return; source = new EventSource(`${this.baseUrl}/api/social/events/stream`); ['channel-created', 'message-added', 'membership-changed', 'intention-created'].forEach((name) => source?.addEventListener(name, handler)); source.onerror = () => { source?.close(); if (!closed) retryTimer = window.setTimeout(connect, 2000); }; }; connect(); return () => { closed = true; if (retryTimer !== undefined) window.clearTimeout(retryTimer); source?.close(); }; }
 
   /**
    * Stream logs via Server-Sent Events
