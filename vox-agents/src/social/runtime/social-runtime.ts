@@ -1,4 +1,4 @@
-import { mkdir } from 'node:fs/promises';
+import { mkdir, readdir } from 'node:fs/promises';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { ActorLane } from './actor-lane.js';
@@ -33,6 +33,10 @@ export class SocialRuntime {
     await this.store.createSession(this.session, config.actors);
     for (const actor of config.actors) this.lanes.set(actor.id, new ActorLane());
   }
+  /** Reopen a persisted social session without creating duplicate channels or messages. */
+  public async resume(sessionId: string, dataDirectory: string): Promise<void> { if (this.store) throw new Error('A social session is already running'); if (!/^[a-zA-Z0-9_-]+$/.test(sessionId)) throw new Error('Invalid social session ID'); const store = new SocialStore(path.join(dataDirectory, `${sessionId}.sqlite`)); const session = await store.getSession(sessionId); if (!session) { await store.close(); throw new Error('Persisted social session was not found'); } this.store = store; this.session = session; for (const actor of await store.listActors(sessionId)) this.lanes.set(actor.id, new ActorLane()); }
+  /** List persisted sessions available for resume. */
+  public async listStoredSessions(dataDirectory: string): Promise<Array<{ session: SocialSessionDefinition; actors: SocialActor[] }>> { await mkdir(dataDirectory, { recursive: true }); const files = await readdir(dataDirectory); const sessions: Array<{ session: SocialSessionDefinition; actors: SocialActor[] }> = []; for (const file of files.filter((candidate) => candidate.endsWith('.sqlite'))) { const sessionId = file.slice(0, -'.sqlite'.length); if (!/^[a-zA-Z0-9_-]+$/.test(sessionId)) continue; const store = new SocialStore(path.join(dataDirectory, file)); const session = await store.getSession(sessionId); if (session) sessions.push({ session, actors: await store.listActors(sessionId) }); await store.close(); } return sessions; }
 
   /** Stop the session and close the durable store. */
   public async stop(): Promise<void> { if (this.store) await this.store.close(); this.store = undefined; this.session = undefined; this.lanes.clear(); }
@@ -44,6 +48,8 @@ export class SocialRuntime {
   public getHumanActorId(): string { return this.requireSession().humanActorId; }
   /** Return all session actors. */
   public async listActors(): Promise<SocialActor[]> { return this.requireStore().listActors(this.getSessionId()); }
+  /** Change one model actor's future model without stopping or resetting the session. */
+  public async updateActorModel(actorId: string, modelRef: string): Promise<SocialActor> { return this.requireStore().updateActorModel(this.getSessionId(), actorId, modelRef); }
   /** Return channels visible to the human, with explicit developer inspection support. */
   public async listChannels(inspect = false): Promise<SocialChannel[]> { return this.requireStore().listChannels(this.getSessionId(), this.getHumanActorId(), inspect); }
   /** Read a channel using the human actor's authorization boundary. */

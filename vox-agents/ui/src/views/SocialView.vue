@@ -8,7 +8,7 @@ import Dropdown from 'primevue/dropdown'
 import Textarea from 'primevue/textarea'
 import Tag from 'primevue/tag'
 import { api } from '../api/client'
-import type { SocialActor, SocialChannel, SocialMessage } from '../utils/types'
+import type { SocialActor, SocialChannel, SocialMessage, SocialStoredSession } from '../utils/types'
 
 const actors = ref<SocialActor[]>([])
 const channels = ref<SocialChannel[]>([])
@@ -27,11 +27,13 @@ const modelOptions = ref<Array<{ label: string; value: string }>>([
   { label: 'Dots 3 Note Preview (free)', value: 'dots-studio/dots-3-note-preview:free' },
   { label: 'Nemotron 3.5 Lightning (free)', value: 'nvidia/nemotron-3.5-lightning:free' },
 ])
+const excludedModelIds = new Set(['liquid/lfm-2.5-2.6b:free'])
 const composer = ref('')
 const loading = ref(false)
 const sending = ref(false)
 const error = ref('')
 const sessionActive = ref(false)
+const storedSessions = ref<SocialStoredSession[]>([])
 const messagesPane = ref<HTMLElement | null>(null)
 let stopEvents: (() => void) | undefined
 
@@ -47,7 +49,7 @@ async function load(): Promise<void> {
   try {
     try {
       const discovered = await api.getConfigModels()
-      const freeModels = discovered.models.filter((model) => model.id.endsWith(':free')).map((model) => ({ label: model.name, value: model.id.replace(/^openrouter\//, '') }))
+      const freeModels = discovered.models.filter((model) => model.id.endsWith(':free')).map((model) => ({ label: model.name, value: model.id.replace(/^openrouter\//, '') })).filter((model) => !excludedModelIds.has(model.value))
       if (freeModels.length) modelOptions.value = freeModels
     } catch { /* The curated free defaults keep setup usable without discovery credentials. */ }
     const session = await api.getSocialSession()
@@ -57,6 +59,7 @@ async function load(): Promise<void> {
     connectEvents()
   } catch {
     sessionActive.value = false
+    try { storedSessions.value = (await api.getStoredSocialSessions()).sessions } catch { storedSessions.value = [] }
   } finally {
     loading.value = false
   }
@@ -95,6 +98,9 @@ async function start(): Promise<void> {
   } catch (caught) { error.value = caught instanceof Error ? caught.message : 'Could not start social session' } finally { loading.value = false }
 }
 
+/** Resume a persisted social session after a server restart. */
+async function resume(sessionId: string): Promise<void> { loading.value = true; error.value = ''; try { const response = await api.resumeSocialSession(sessionId); actors.value = response.actors; sessionActive.value = true; storedSessions.value = []; selectedChannelId.value = 'world'; await loadChannels(); connectEvents() } catch (caught) { error.value = caught instanceof Error ? caught.message : 'Could not resume social session' } finally { loading.value = false } }
+
 /** Send the human's message and refresh immediately while model replies arrive over SSE. */
 async function send(): Promise<void> {
   const content = composer.value.trim()
@@ -109,6 +115,9 @@ async function openDm(actorId: string): Promise<void> { try { const channel = aw
 
 /** Create a titled private group. */
 async function createGroup(): Promise<void> { const title = groupTitle.value.trim(); if (!title) return; try { const channel = await api.createSocialGroup(title, selectedInvitees.value); groupTitle.value = ''; selectedInvitees.value = []; await loadChannels(); selectedChannelId.value = channel.id; await loadMessages() } catch (caught) { error.value = caught instanceof Error ? caught.message : 'Could not create group' } }
+
+/** Change an actor's model for future replies without interrupting the session. */
+async function changeActorModel(actor: SocialActor, modelRef: string): Promise<void> { try { const updated = await api.updateSocialActorModel(actor.id, modelRef); actors.value = actors.value.map((candidate) => candidate.id === updated.id ? updated : candidate) } catch (caught) { error.value = caught instanceof Error ? caught.message : 'Could not update model' } }
 
 /** Return a display name for a speaker ID. */
 function actorName(actorId: string): string { return actors.value.find((actor) => actor.id === actorId)?.displayName ?? actorId }
@@ -137,6 +146,7 @@ onUnmounted(() => stopEvents?.())
       <template #title>Start a social sandbox</template>
       <template #content><p class="text-muted">Chat with three independent model actors without launching Civilization V.</p><div class="model-setup"><label v-for="(model, index) in modelSelections" :key="index">{{ ['Alice', 'Bob', 'Cleo'][index] }}<Dropdown v-model="modelSelections[index]" :options="modelOptions" option-label="label" option-value="value" /></label></div><div class="flex gap-2 mt-3"><InputText v-model="displayName" placeholder="Your display name" /><Button label="Start sandbox" icon="pi pi-play" :loading="loading" @click="start" /></div></template>
     </Card>
+    <Card v-if="!sessionActive && storedSessions.length" class="social-start-card stored-card"><template #title>Resume a saved sandbox</template><template #content><div v-for="saved in storedSessions" :key="saved.session.id" class="stored-session"><div><strong>{{ saved.session.id }}</strong><small>{{ saved.actors.length }} actors · {{ saved.actors.filter((actor) => actor.control === 'model').map((actor) => actor.displayName).join(', ') }}</small></div><Button label="Resume" icon="pi pi-history" size="small" :loading="loading" @click="resume(saved.session.id)" /></div></template></Card>
     <div v-else class="social-shell">
       <aside class="social-sidebar">
         <Button class="world-button" :class="{ active: selectedChannelId === 'world' }" text @click="selectChannel('world')"><i class="pi pi-globe" /><span>WORLD</span></Button>
@@ -152,7 +162,7 @@ onUnmounted(() => stopEvents?.())
         <div ref="messagesPane" class="social-messages"><div v-if="!messages.length" class="empty-state"><i class="pi pi-inbox" /><p>No messages yet. Start the conversation.</p></div><article v-for="message in messages" :key="message.id" class="social-message" :class="{ human: message.speakerActorId === 'human' }"><div class="message-author">{{ actorName(message.speakerActorId) }}<span>{{ new Date(message.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }}</span></div><div>{{ message.content }}</div></article></div>
         <div class="social-composer"><Textarea v-model="composer" auto-resize rows="2" placeholder="Say something to the group..." @keydown.enter.exact.prevent="send" /><Button icon="pi pi-send" aria-label="Send" :loading="sending" :disabled="!composer.trim()" @click="send" /></div>
       </main>
-      <aside class="social-details"><h3>Actors</h3><div v-for="actor in actors" :key="actor.id" class="actor-row"><span class="actor-dot" :class="actor.control" /> <span>{{ actor.displayName }}</span><small>{{ actor.control === 'model' ? actor.modelRef : 'You' }}</small></div><p class="text-muted text-small mt-4">Model replies are generated independently and appear here live.</p></aside>
+      <aside class="social-details"><h3>Actors</h3><div v-for="actor in actors" :key="actor.id" class="actor-row"><span class="actor-dot" :class="actor.control" /> <span>{{ actor.displayName }}</span><small v-if="actor.control === 'human'">You</small><Dropdown v-else v-model="actor.modelRef" :options="modelOptions" option-label="label" option-value="value" class="actor-model" @update:model-value="changeActorModel(actor, $event)" /></div><p class="text-muted text-small mt-4">Model changes apply to future replies and do not interrupt the current session.</p></aside>
     </div>
   </div>
 </template>
@@ -161,6 +171,7 @@ onUnmounted(() => stopEvents?.())
 .social-page { height: 100%; display: flex; flex-direction: column; }
 .social-error { background: var(--p-red-50); color: var(--p-red-700); border: 1px solid var(--p-red-200); border-radius: 6px; padding: .75rem 1rem; margin-bottom: 1rem; }
 .social-start-card { max-width: 680px; margin: 3rem auto; width: 100%; }
+.stored-card { margin-top: 0; }.stored-session { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: .75rem 0; border-bottom: 1px solid var(--p-content-border-color); }.stored-session:last-child { border-bottom: 0; }.stored-session small { display: block; color: var(--p-text-muted-color); margin-top: .2rem; }
 .model-setup { display: grid; grid-template-columns: repeat(3, 1fr); gap: .75rem; margin-top: 1.25rem; }.model-setup label { display: flex; flex-direction: column; gap: .35rem; font-size: .8rem; font-weight: 700; }.model-setup .p-dropdown { width: 100%; font-weight: 400; }
 .social-shell { flex: 1; min-height: 0; display: grid; grid-template-columns: 230px minmax(0, 1fr) 220px; border: 1px solid var(--p-content-border-color); border-radius: 8px; overflow: hidden; background: var(--p-content-background); }
 .social-sidebar, .social-details { padding: 1rem; overflow-y: auto; background: var(--p-content-hover-background); }
@@ -177,6 +188,6 @@ onUnmounted(() => stopEvents?.())
 .social-message.human { margin-left: auto; background: var(--p-primary-50); border-right: 3px solid var(--p-primary-500); }
 .message-author { font-weight: 700; margin-bottom: .25rem; color: var(--p-primary-700); }.message-author span { font-weight: 400; color: var(--p-text-muted-color); font-size: .72rem; margin-left: .5rem; }
 .social-composer { display: flex; gap: .75rem; padding: 1rem; border-top: 1px solid var(--p-content-border-color); }.social-composer .p-textarea { flex: 1; }
-.actor-row { display: grid; grid-template-columns: 10px 1fr; gap: .5rem; align-items: center; margin-bottom: .7rem; }.actor-row small { grid-column: 2; color: var(--p-text-muted-color); font-size: .7rem; }.actor-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--p-green-500); }.actor-dot.human { background: var(--p-primary-500); }
+.actor-row { display: grid; grid-template-columns: 10px 1fr; gap: .5rem; align-items: center; margin-bottom: .7rem; }.actor-row small { grid-column: 2; color: var(--p-text-muted-color); font-size: .7rem; }.actor-model { grid-column: 2; width: 100%; font-size: .72rem; }.actor-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--p-green-500); }.actor-dot.human { background: var(--p-primary-500); }
 @media (max-width: 900px) { .social-shell { grid-template-columns: 180px minmax(0, 1fr); }.social-details { display: none; } }
 </style>

@@ -5,6 +5,7 @@ import type { SocialActorDefinition } from '../../social/types.js';
 
 const router = Router();
 export const socialRuntime = new SocialRuntime();
+const socialDataDirectory = path.join(process.cwd(), 'social-data');
 
 /** Return a request body as a record when it is a JSON object. */
 function bodyRecord(body: unknown): Record<string, unknown> | undefined { return body !== null && typeof body === 'object' && !Array.isArray(body) ? body as Record<string, unknown> : undefined; }
@@ -19,8 +20,14 @@ function actorDefinitions(value: unknown): SocialActorDefinition[] | undefined {
 router.post('/session', async (req: Request, res: Response) => { try { const body = bodyRecord(req.body); const actors = actorDefinitions(body?.actors); if (!actors) { res.status(400).json({ error: 'actors must contain 2 to 8 valid actor definitions' }); return; } const runtimeConfig: SocialRuntimeConfig = { actors, dataDirectory: typeof body?.dataDirectory === 'string' ? body.dataDirectory : path.join(process.cwd(), 'social-data'), ...(typeof body?.sessionId === 'string' ? { sessionId: body.sessionId } : {}), ...(typeof body?.humanActorId === 'string' ? { humanActorId: body.humanActorId } : {}) }; await socialRuntime.start(runtimeConfig); res.status(201).json({ sessionId: socialRuntime.getSessionId(), humanActorId: socialRuntime.getHumanActorId(), actors: await socialRuntime.listActors() }); } catch (error) { res.status(400).json({ error: errorMessage(error) }); } });
 /** Stop the standalone social session. */
 router.post('/session/stop', async (_req: Request, res: Response) => { try { await socialRuntime.stop(); res.json({ success: true }); } catch (error) { res.status(400).json({ error: errorMessage(error) }); } });
+/** List persisted social sessions available after a server restart. */
+router.get('/sessions', async (_req: Request, res: Response) => { try { res.json({ sessions: await socialRuntime.listStoredSessions(socialDataDirectory) }); } catch (error) { res.status(500).json({ error: errorMessage(error) }); } });
+/** Resume one persisted social session without changing its durable state. */
+router.post('/session/resume', async (req: Request, res: Response) => { const body = bodyRecord(req.body); if (typeof body?.sessionId !== 'string') { res.status(400).json({ error: 'sessionId is required' }); return; } try { await socialRuntime.resume(body.sessionId, socialDataDirectory); res.json({ sessionId: socialRuntime.getSessionId(), humanActorId: socialRuntime.getHumanActorId(), actors: await socialRuntime.listActors() }); } catch (error) { res.status(400).json({ error: errorMessage(error) }); } });
 /** Return social session status and actor definitions. */
 router.get('/session', async (_req: Request, res: Response) => { if (!socialRuntime.isRunning()) { res.status(404).json({ error: 'No social session is active' }); return; } res.json({ sessionId: socialRuntime.getSessionId(), humanActorId: socialRuntime.getHumanActorId(), actors: await socialRuntime.listActors() }); });
+/** Change one model actor's model for future replies without interrupting the session. */
+router.patch('/actors/:actorId', async (req: Request<{ actorId: string }>, res: Response) => { const body = bodyRecord(req.body); if (typeof body?.modelRef !== 'string' || !body.modelRef.includes('/')) { res.status(400).json({ error: 'modelRef must be a provider/model identifier' }); return; } try { res.json(await socialRuntime.updateActorModel(req.params.actorId, body.modelRef)); } catch (error) { res.status(400).json({ error: errorMessage(error) }); } });
 /** List channels visible to the human, optionally using read-only developer inspection. */
 router.get('/channels', async (req: Request, res: Response) => { try { res.json({ channels: await socialRuntime.listChannels(queryFlag(req.query.inspect)) }); } catch (error) { res.status(404).json({ error: errorMessage(error) }); } });
 /** Read a channel with paging and authorization. */

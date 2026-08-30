@@ -26,6 +26,10 @@ export class SocialStore {
   }
   /** Return all actors in a session. */
   public async listActors(sessionId: string): Promise<SocialActor[]> { const rows = await this.opened.db.selectFrom('socialActors').selectAll().where('sessionId', '=', sessionId).orderBy('ordinal', 'asc').execute(); return rows.map((row) => ({ ...row, control: row.control as SocialActor['control'], status: row.status as SocialActor['status'], modelRef: row.modelRef ?? undefined, profile: row.profile ?? undefined })); }
+  /** Return the persisted session definition. */
+  public async getSession(sessionId: string): Promise<SocialSessionDefinition | undefined> { const row = await this.opened.db.selectFrom('socialSessions').selectAll().where('id', '=', sessionId).executeTakeFirst(); return row ? { id: row.id, humanActorId: row.humanActorId, createdAt: row.createdAt } : undefined; }
+  /** Change a model actor's model for future runs without interrupting the session. */
+  public async updateActorModel(sessionId: string, actorId: string, modelRef: string): Promise<SocialActor> { const row = await this.opened.db.updateTable('socialActors').set({ modelRef }).where('sessionId', '=', sessionId).where('id', '=', actorId).where('control', '=', 'model').returningAll().executeTakeFirstOrThrow(); return { ...row, control: row.control as SocialActor['control'], status: row.status as SocialActor['status'], modelRef: row.modelRef ?? undefined, profile: row.profile ?? undefined }; }
   /** Return channels visible to an actor, or all channels for explicit developer inspection. */
   public async listChannels(sessionId: string, actorId: string, inspect = false): Promise<SocialChannel[]> {
     const rows = inspect ? await this.opened.db.selectFrom('socialChannels').selectAll().where('sessionId', '=', sessionId).where('archived', '=', 0).orderBy('createdAt', 'asc').execute() : await this.opened.db.selectFrom('socialChannels as c').innerJoin('socialMemberships as m', 'm.channelId', 'c.id').selectAll('c').where('c.sessionId', '=', sessionId).where('c.archived', '=', 0).where('m.actorId', '=', actorId).where('m.status', '=', 'active').orderBy('c.createdAt', 'asc').execute();

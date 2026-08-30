@@ -55,7 +55,7 @@ import type {
   DealRejectRequest,
   DealAcceptRequest,
   DealMessagesResponse,
-  SocialSessionResponse, SocialChannelsResponse, SocialStartRequest, SocialChannel, SocialMessage, VisibleMessagePage
+  SocialSessionResponse, SocialChannelsResponse, SocialStartRequest, SocialActor, SocialChannel, SocialMessage, VisibleMessagePage, SocialStoredSessionsResponse
 } from '../utils/types';
 import type { TextStreamPart, ToolSet } from 'ai';
 
@@ -185,12 +185,18 @@ class ApiClient {
   async getSocialSession(): Promise<SocialSessionResponse> { return this.fetchJson<SocialSessionResponse>(`${this.baseUrl}/api/social/session`); }
   /** Stop the standalone social sandbox. */
   async stopSocialSession(): Promise<void> { await this.fetchJson<{ success: boolean }>(`${this.baseUrl}/api/social/session/stop`, { method: 'POST' }); }
+  /** List persisted sessions available to resume. */
+  async getStoredSocialSessions(): Promise<SocialStoredSessionsResponse> { return this.fetchJson<SocialStoredSessionsResponse>(`${this.baseUrl}/api/social/sessions`); }
+  /** Resume a persisted social session. */
+  async resumeSocialSession(sessionId: string): Promise<SocialSessionResponse> { return this.fetchJson<SocialSessionResponse>(`${this.baseUrl}/api/social/session/resume`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId }) }); }
   /** List channels visible to the human. */
   async getSocialChannels(inspect = false): Promise<SocialChannelsResponse> { return this.fetchJson<SocialChannelsResponse>(`${this.baseUrl}/api/social/channels${inspect ? '?inspect=true' : ''}`); }
   /** Read one social channel. */
   async getSocialMessages(channelId: string): Promise<VisibleMessagePage> { return this.fetchJson<VisibleMessagePage>(`${this.baseUrl}/api/social/channels/${encodeURIComponent(channelId)}/messages`); }
   /** Send a human message to a social channel. */
   async sendSocialMessage(channelId: string, content: string): Promise<SocialMessage> { return this.fetchJson<SocialMessage>(`${this.baseUrl}/api/social/channels/${encodeURIComponent(channelId)}/messages`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content }) }); }
+  /** Change one model actor's model without interrupting the active social session. */
+  async updateSocialActorModel(actorId: string, modelRef: string): Promise<SocialActor> { return this.fetchJson<SocialActor>(`${this.baseUrl}/api/social/actors/${encodeURIComponent(actorId)}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ modelRef }) }); }
   /** Open a private DM with an actor. */
   async openSocialDm(actorId: string): Promise<SocialChannel> { return this.fetchJson<SocialChannel>(`${this.baseUrl}/api/social/dms/${encodeURIComponent(actorId)}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }); }
   /** Create a titled group. */
