@@ -7,6 +7,7 @@ import { SocialStore } from '../store/social-store.js';
 import { generateText, type ModelMessage } from 'ai';
 import { getModel, getModelConfig } from '../../utils/models/models.js';
 import { createLogger } from '../../utils/logger.js';
+import { normalizeSocialOutput } from './social-output.js';
 import type { SocialActor, SocialActorDefinition, SocialChannel, SocialIntention, SocialMembership, SocialMessage, SocialSessionDefinition, VisibleMessagePage } from '../types.js';
 
 /** Configuration for one standalone social sandbox. */
@@ -67,7 +68,7 @@ export class SocialRuntime {
           system: `You are ${actor.displayName}, an independent participant in a social sandbox. ${actor.profile ?? ''}\nReply naturally and concisely. You may choose not to engage, but if you do, output only the message you want to send.`,
           messages: modelMessages,
         });
-        const content = result.text.trim();
+        const content = normalizeSocialOutput(result.text);
         if (!content) return;
         const reply = await store.appendMessage({ sessionId: this.getSessionId(), actorId: actor.id, channelId, content, intentionId: `human-trigger:${triggerMessageId}`, idempotencyKey: `social-reply:${triggerMessageId}:${actor.id}` });
         this.events.publish({ type: 'message-added', message: reply });
