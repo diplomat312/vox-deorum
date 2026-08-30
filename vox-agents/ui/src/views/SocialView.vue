@@ -70,9 +70,9 @@ async function migrateRemovedCleoModel(currentActors: SocialActor[]): Promise<So
   }
 }
 
-/** Return to the normal Vox Deorum session menu. */
-function goToMainMenu(): void {
-  void router.push('/session')
+/** Return to the Social Sandbox landing menu. */
+function goToSandboxMenu(): void {
+  void router.push('/social')
 }
 
 /** Refresh the session, channel list, and current transcript. */
@@ -192,7 +192,7 @@ onUnmounted(() => stopEvents?.())
   <div class="social-page">
     <div class="page-header">
       <div><h1>Social Sandbox</h1><p class="text-muted">A persistent multi-agent conversation space for Vox Deorum.</p></div>
-      <div class="flex gap-2 align-items-center"><Button label="Main menu" icon="pi pi-home" text severity="secondary" @click="goToMainMenu" /><Tag v-if="sessionActive" severity="success" value="Live" /><Button v-if="sessionActive" label="Stop" icon="pi pi-stop" severity="secondary" @click="api.stopSocialSession().then(load)" /></div>
+      <div class="flex gap-2 align-items-center"><Button label="Sandbox menu" icon="pi pi-home" text severity="secondary" @click="goToSandboxMenu" /><Tag v-if="sessionActive" severity="success" value="Live" /><Button v-if="sessionActive" label="Stop" icon="pi pi-stop" severity="secondary" @click="api.stopSocialSession().then(load)" /></div>
     </div>
     <div v-if="error" class="social-error">{{ error }}</div>
     <Card v-if="!sessionActive" class="social-start-card">
