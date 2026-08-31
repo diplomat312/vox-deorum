@@ -1,8 +1,9 @@
 import { ActorLane } from './actor-lane.js';
 import { ChannelLane } from './channel-lane.js';
-import { SocialContextBuilder } from '../context/social-context-builder.js';
-import { defaultSocialModelExecutor, type SocialModelExecutor } from './social-model-executor.js';
-import { SocialDecisionExecutor } from './social-decision-executor.js';
+import { createSocialReferenceSet, SocialContextBuilder } from '../context/social-context-builder.js';
+import { defaultSocialModelExecutor, type InstrumentedSocialModelExecutor, type SocialModelExecutor } from './social-model-executor.js';
+import { decisionRoutingSummary, SocialDecisionExecutor } from './social-decision-executor.js';
+import { createSocialDecisionTools, type SocialDecisionToolScope } from './social-decision-tools.js';
 import type { SocialActor, SocialExecutionScope, SocialIntention, SocialMessage } from '../types.js';
 import { SocialStore } from '../store/social-store.js';
 import { SocialEventHub } from '../events/social-event-hub.js';
@@ -56,10 +57,22 @@ export class SocialScheduler {
   private async decide(intention: SocialIntention, scope: SocialExecutionScope, abortSignal: AbortSignal): Promise<void> {
     const allActors = await this.actors(); const actor = allActors.find((candidate) => candidate.id === intention.actorId); if (!actor || actor.control !== 'model' || actor.status !== 'active') { await this.store.cancelIntention(intention.id, 'actor is not an active model SocialActor'); return; }
     const memory = await this.store.getMemory(actor.id); const environment = await this.environmentForActor(actor); const definitions = await this.decisionDefinitionsForActor(actor, intention); let context;
-    if (scope === 'channel-reaction') { const channelId = intention.channelId!; const visibleActors = await this.store.listActiveActors(actor.sessionId, channelId); if (!visibleActors.some((candidate) => candidate.id === actor.id)) { await this.store.completeIntention(intention.id, 'pass:not-visible'); return; } const messages = (await this.store.readMessages(actor.sessionId, channelId, actor.id, 80)).messages; context = this.contextBuilder.build(actor, visibleActors, messages, intention, memory?.content, { environment, mode: intention.kind }); }
-    else { const activity = await this.store.listVisibleActivity(actor.sessionId, actor.id, 20); context = this.contextBuilder.buildPlayerMind(actor, allActors, activity, intention, memory?.content, { environment, mode: intention.kind }); }
-    context.decisionToolDefinitions = definitions; const decision = await this.modelExecutor.decide(actor, context, allActors.map((candidate) => candidate.displayName), abortSignal); await this.decisionExecutor.apply(actor, intention, decision);
+    if (scope === 'channel-reaction') { const channelId = intention.channelId!; const visibleActors = await this.store.listActiveActors(actor.sessionId, channelId); if (!visibleActors.some((candidate) => candidate.id === actor.id)) { await this.store.completeIntention(intention.id, 'pass:not-visible'); return; } const channel = await this.store.getChannel(actor.sessionId, channelId); const messages = (await this.store.readMessages(actor.sessionId, channelId, actor.id, 80)).messages; context = this.contextBuilder.build(actor, visibleActors, messages, intention, memory?.content, { environment, mode: intention.kind, currentChannel: channel ?? undefined, references: createSocialReferenceSet(visibleActors, channel ? [channel] : []) }); }
+    else { const activity = await this.store.listVisibleActivity(actor.sessionId, actor.id, 20); context = this.contextBuilder.buildPlayerMind(actor, allActors, activity, intention, memory?.content, { environment, mode: intention.kind, references: createSocialReferenceSet(allActors, activity.map(({ channel }) => channel)) }); }
+    context.decisionToolDefinitions = definitions; context.decisionTools = createSocialDecisionTools(this.toolScope(scope, intention), context.references, definitions); const startedAt = Date.now(); let diagnosticId: string | undefined;
+    try {
+      const run = await this.runModel(actor, context, allActors.map((candidate) => candidate.displayName), abortSignal, startedAt);
+      const diagnostic = await this.store.insertDecisionDiagnostic({ intentionId: intention.id, actorId: actor.id, actorDisplayName: actor.displayName, modelRef: actor.modelRef ?? null, executionScope: scope, selectedKind: run.decision.kind, routingRefsJson: JSON.stringify(decisionRoutingSummary(run.decision)), validationOutcome: 'validated', applicationOutcome: null, error: null, latencyMs: run.latencyMs, retryCount: run.retryCount }); diagnosticId = diagnostic.id;
+      const applied = await this.decisionExecutor.apply(actor, intention, run.decision, context.references); await this.store.updateDecisionDiagnostic(diagnostic.id, { applicationOutcome: applied.result });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error); if (diagnosticId) await this.store.updateDecisionDiagnostic(diagnosticId, { applicationOutcome: 'error', error: message.slice(0, 500) }); else await this.store.insertDecisionDiagnostic({ intentionId: intention.id, actorId: actor.id, actorDisplayName: actor.displayName, modelRef: actor.modelRef ?? null, executionScope: scope, selectedKind: null, routingRefsJson: null, validationOutcome: 'failed', applicationOutcome: null, error: message.slice(0, 500), latencyMs: Date.now() - startedAt, retryCount: 0 }); throw error;
+    }
   }
+
+  /** Use instrumentation when the built-in executor supports it, while preserving test executors. */
+  private async runModel(actor: SocialActor, context: import('../context/social-context-builder.js').SocialContextBundle, actorNames: string[], abortSignal: AbortSignal, startedAt: number): Promise<import('./social-model-executor.js').SocialDecisionRun> { const instrumented = this.modelExecutor as SocialModelExecutor & Partial<InstrumentedSocialModelExecutor>; if (typeof instrumented.decideWithTelemetry === 'function') return instrumented.decideWithTelemetry(actor, context, actorNames, abortSignal); return { decision: await this.modelExecutor.decide(actor, context, actorNames, abortSignal), retryCount: 0, latencyMs: Date.now() - startedAt }; }
+  /** Map runtime execution to the intentionally small model-facing tool scopes. */
+  private toolScope(scope: SocialExecutionScope, intention: SocialIntention): SocialDecisionToolScope { return intention.kind === 'invitation-decision' ? 'invitation-decision' : scope; }
   /** Read legacy/null payloads safely while retaining a bounded cascade contract. */
   private readPayload(payload: string | null): CascadePayload { if (!payload) return { rootMessageId: 0, depth: 0, count: 0 }; try { const value = JSON.parse(payload) as Partial<CascadePayload>; return { rootMessageId: typeof value.rootMessageId === 'number' ? value.rootMessageId : 0, depth: typeof value.depth === 'number' ? value.depth : 0, count: typeof value.count === 'number' ? value.count : 0 }; } catch { return { rootMessageId: 0, depth: 0, count: 0 }; } }
   /** Retain one timer for the nearest deferred intention. */

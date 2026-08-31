@@ -6,6 +6,9 @@ import { SocialStore } from '../../../src/social/store/social-store.js';
 import { SocialEventHub } from '../../../src/social/events/social-event-hub.js';
 import { SocialDecisionExecutor } from '../../../src/social/runtime/social-decision-executor.js';
 import { decodeSocialDecision } from '../../../src/social/runtime/social-decision-tools.js';
+import { createSocialReferenceSet } from '../../../src/social/context/social-context-builder.js';
+import { SocialContextBuilder } from '../../../src/social/context/social-context-builder.js';
+import { createSocialDecisionTools } from '../../../src/social/runtime/social-decision-tools.js';
 import type { SocialActor, SocialIntention } from '../../../src/social/types.js';
 
 const cleanups: Array<() => Promise<void>> = [];
@@ -27,17 +30,34 @@ async function running(store: SocialStore, id: string, actorId: string, kind = '
 
 describe('structured social decisions', () => {
   it('should decode one tool call and reject zero or multiple calls', () => {
-    expect(decodeSocialDecision([{ toolName: 'social_pass', input: { reasonCode: 'quiet' } }])).toEqual({ kind: 'pass', reasonCode: 'quiet' });
+    expect(decodeSocialDecision([{ toolName: 'social_pass', input: { reason: 'quiet' } }])).toEqual({ kind: 'pass', reasonCode: 'quiet' });
     expect(() => decodeSocialDecision([])).toThrow(/exactly one/); expect(() => decodeSocialDecision([{ toolName: 'social_pass', input: {} }, { toolName: 'social_pass', input: {} }])).toThrow(/exactly one/);
-    expect(() => decodeSocialDecision([{ toolName: 'social_send_message', input: { content: '' } }])).toThrow(/invalid-output/);
+    expect(() => decodeSocialDecision([{ toolName: 'social_reply', input: { text: '' } }])).toThrow(/invalid-output/);
   });
 
   it('should apply DM, group, invitation, leave, and memory decisions through durable store paths', async () => {
-    const { store, actors } = await createFixture(); const events = new SocialEventHub(); const applied = new SocialDecisionExecutor(store, events);
-    const dmIntention = await running(store, 'dm-1', 'alice'); await applied.apply(actors[1], dmIntention, { kind: 'send_dm', targetActorId: 'bob', content: 'Private plan' }); const dm = (await store.listChannels('decisions', 'alice')).find((channel) => channel.kind === 'dm'); expect(dm).toBeDefined(); expect((await store.readMessages('decisions', dm!.id, 'bob')).messages.map((message) => message.content)).toEqual(['Private plan']);
-    const groupIntention = await running(store, 'group-1', 'alice'); const groupMutation = await applied.apply(actors[1], groupIntention, { kind: 'create_group', title: 'Secret council', invitedActorIds: ['bob'], initialMessage: 'Before you join' }); expect(groupMutation.result).toBe('create_group'); const invitation = (await store.listPendingInvitations('decisions', 'bob'))[0]; expect(invitation.channelTitle).toBe('Secret council');
-    const acceptIntention = await running(store, 'accept-1', 'bob', 'invitation-decision', invitation.channelId); await applied.apply(actors[2], acceptIntention, { kind: 'resolve_invitation', channelId: invitation.channelId, accepted: true }); await store.appendMessage({ sessionId: 'decisions', actorId: 'alice', channelId: invitation.channelId, content: 'After you joined' }); expect((await store.readMessages('decisions', invitation.channelId, 'bob')).messages.map((message) => message.content)).toEqual(['After you joined']);
-    const memoryIntention = await running(store, 'memory-1', 'alice'); await applied.apply(actors[1], memoryIntention, { kind: 'update_memory', expectedRevision: 0, content: 'Remember the council' }); expect((await store.getMemory('alice'))?.content).toBe('Remember the council');
-    const leaveIntention = await running(store, 'leave-1', 'bob', 'autonomous-social', invitation.channelId); await applied.apply(actors[2], leaveIntention, { kind: 'leave_group', channelId: invitation.channelId }); await expect(store.readMessages('decisions', dm!.id, 'bob')).resolves.toBeDefined();
+    const { store, actors } = await createFixture(); const events = new SocialEventHub(); const applied = new SocialDecisionExecutor(store, events); const actorRefs = createSocialReferenceSet(actors);
+    const dmIntention = await running(store, 'dm-1', 'alice'); await applied.apply(actors[1], dmIntention, { kind: 'send_dm', participantRef: 'bob', content: 'Private plan' }, actorRefs); const dm = (await store.listChannels('decisions', 'alice')).find((channel) => channel.kind === 'dm'); expect(dm).toBeDefined(); expect((await store.readMessages('decisions', dm!.id, 'bob')).messages.map((message) => message.content)).toEqual(['Private plan']);
+    const groupIntention = await running(store, 'group-1', 'alice'); const groupApplied = await applied.apply(actors[1], groupIntention, { kind: 'start_group', title: 'Secret council', participantRefs: ['bob'], initialMessage: 'Before you join' }, actorRefs); expect(groupApplied.result).toBe('start_group'); const invitation = (await store.listPendingInvitations('decisions', 'bob'))[0]; expect(invitation.channelTitle).toBe('Secret council');
+    const acceptIntention = await running(store, 'accept-1', 'bob', 'invitation-decision', invitation.channelId); await applied.apply(actors[2], acceptIntention, { kind: 'respond_invitation', accepted: true }, actorRefs); await store.appendMessage({ sessionId: 'decisions', actorId: 'alice', channelId: invitation.channelId, content: 'After you joined' }); expect((await store.readMessages('decisions', invitation.channelId, 'bob')).messages.map((message) => message.content)).toEqual(['After you joined']);
+    const group = (await store.listChannels('decisions', 'bob')).find((channel) => channel.title === 'Secret council'); const roomRefs = createSocialReferenceSet(actors, group ? [group] : []);
+    const leaveIntention = await running(store, 'leave-1', 'bob', 'autonomous-social', invitation.channelId); await applied.apply(actors[2], leaveIntention, { kind: 'leave_group', roomRef: 'secret-council' }, roomRefs); await expect(store.readMessages('decisions', dm!.id, 'bob')).resolves.toBeDefined();
+    const hidden = await store.createGroup('decisions', 'human', 'Hidden room', []); const unauthorizedIntention = await running(store, 'unauthorized-1', 'alice'); const hiddenRefs = createSocialReferenceSet(actors, [hidden]); expect((await applied.apply(actors[1], unauthorizedIntention, { kind: 'send_message', roomRef: 'hidden-room', content: 'This must be refused' }, hiddenRefs)).result).toBe('refused');
+  });
+
+  it('should expose semantic references and omit runtime-owned routing and memory fields', () => {
+    const duplicateActors = [
+      { ...({ id: 'first-id', ordinal: 1, control: 'model' as const, displayName: 'Alice', sessionId: 'decisions', createdAt: '', status: 'active' as const }) },
+      { ...({ id: 'second-id', ordinal: 2, control: 'model' as const, displayName: 'Alice', sessionId: 'decisions', createdAt: '', status: 'active' as const }) },
+    ];
+    const refs = createSocialReferenceSet(duplicateActors);
+    expect(refs.actors.map((reference) => reference.ref)).toEqual(['alice', 'alice-2']);
+    const tools = createSocialDecisionTools('channel-reaction', refs);
+    expect(Object.keys(tools)).toEqual(['social_pass', 'social_reply', 'social_send_dm', 'social_start_group']);
+    expect(Object.keys(createSocialDecisionTools('player-mind', refs))).not.toContain('social_update_memory');
+    const context = new SocialContextBuilder().build(duplicateActors[0], duplicateActors, [], { id: 'i', actorId: 'first-id', kind: 'consider-reply', channelId: 'world', sourceMessageId: null, priority: 1, state: 'queued', notBefore: '', payload: null, dedupeKey: 'i', attemptCount: 0, lastError: null, createdAt: '', updatedAt: '' });
+    expect(context.messages[0].content).toContain('[alice] Alice');
+    expect(context.messages[0].content).toContain('[alice-2] Alice');
+    expect((decodeSocialDecision([{ toolName: 'social_reply', input: { text: 'hello', channelId: 'other-room' } }]) as { kind: string }).kind).toBe('reply');
   });
 });

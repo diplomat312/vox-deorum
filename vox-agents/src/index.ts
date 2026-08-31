@@ -27,8 +27,9 @@ async function main() {
     // Start the web server — returns the actual port, or null if both ports were occupied
     const actualPort = await startWebServer();
 
-    if (actualPort !== null) {
-      // Open browser after successful startup
+    if (actualPort !== null && process.env.VOX_OPEN_BROWSER === 'true') {
+      // Open browser only when explicitly requested. Development watch restarts
+      // on source edits, so automatic opening makes every edit disruptive.
       const url = `http://localhost:${actualPort}`;
       voxLogger.info(`Opening GUI at ${url}...`);
 

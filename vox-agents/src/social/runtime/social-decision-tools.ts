@@ -1,72 +1,74 @@
 import { tool, type Tool, type ToolSet } from 'ai';
 import { z } from 'zod';
 import type { SocialDecision } from '../types.js';
+import type { SocialReferenceSet } from '../context/social-context-builder.js';
 
-/** A model-facing environment action definition with no execution callback. */
 export interface DecisionToolDefinition { name: string; actionName: string; description: string; inputSchema: z.ZodType; }
+export type SocialDecisionToolScope = 'channel-reaction' | 'player-mind' | 'invitation-decision';
 
-const decisionSchemas = {
-  social_pass: z.object({ reasonCode: z.string().max(200).optional() }),
-  social_send_message: z.object({ channelId: z.string().min(1).optional(), content: z.string().min(1).max(12000), replyToMessageId: z.number().int().positive().optional() }),
-  social_send_dm: z.object({ targetActorId: z.string().min(1), content: z.string().min(1).max(12000) }),
-  social_create_group: z.object({ title: z.string().min(1).max(200), invitedActorIds: z.array(z.string().min(1)).max(8), initialMessage: z.string().min(1).max(12000).optional() }),
-  social_invite_actor: z.object({ channelId: z.string().min(1), actorId: z.string().min(1) }),
-  social_resolve_invitation: z.object({ channelId: z.string().min(1), accepted: z.boolean() }),
-  social_leave_group: z.object({ channelId: z.string().min(1) }),
-  social_update_memory: z.object({ expectedRevision: z.number().int().nonnegative(), content: z.string().max(12000) }),
-} as const;
-
-/** Build side-effect-free tools that let a model propose exactly one runtime action. */
-export function createSocialDecisionTools(extra: DecisionToolDefinition[] = []): ToolSet {
-  const tools: Record<string, Tool> = {};
-  for (const [name, inputSchema] of Object.entries(decisionSchemas)) {
-    tools[name] = tool({ description: decisionDescription(name), inputSchema: inputSchema as any, strict: true });
+/** Build only the semantic actions legal for the current intention. */
+export function createSocialDecisionTools(scope: SocialDecisionToolScope, references: SocialReferenceSet, extra: DecisionToolDefinition[] = []): ToolSet {
+  const tools: Record<string, Tool> = { social_pass: tool({ description: 'Pass without taking a social action.', inputSchema: z.object({ reason: z.string().max(200).optional() }), strict: true }) };
+  if (scope === 'channel-reaction') {
+    tools.social_reply = tool({ description: 'Reply in the current room.', inputSchema: z.object({ text: z.string().min(1).max(12000), replyToMessageId: z.number().int().positive().optional() }), strict: true });
   }
+  if (scope === 'channel-reaction' || scope === 'player-mind') {
+    tools.social_send_dm = tool({ description: 'Send a private message to one listed participant.', inputSchema: z.object({ participantRef: referenceSchema(references.actors), text: z.string().min(1).max(12000) }), strict: true });
+    tools.social_start_group = tool({ description: 'Start a private titled group with listed participants.', inputSchema: z.object({ title: z.string().min(1).max(200), participantRefs: z.array(referenceSchema(references.actors)).max(8), text: z.string().min(1).max(12000).optional() }), strict: true });
+  }
+  if (scope === 'player-mind') {
+    tools.social_send_room_message = tool({ description: 'Send a message to one listed visible room.', inputSchema: z.object({ roomRef: referenceSchema(references.channels), text: z.string().min(1).max(12000) }), strict: true });
+    tools.social_invite = tool({ description: 'Invite one listed participant to one listed group room.', inputSchema: z.object({ roomRef: referenceSchema(references.channels), participantRef: referenceSchema(references.actors) }), strict: true });
+    tools.social_leave_group = tool({ description: 'Leave one listed group room.', inputSchema: z.object({ roomRef: referenceSchema(references.channels) }), strict: true });
+  }
+  if (scope === 'invitation-decision') tools.social_respond_invitation = tool({ description: 'Accept or decline the invitation described in the situation.', inputSchema: z.object({ accept: z.boolean() }), strict: true });
   for (const definition of extra) {
     if (!definition.name.startsWith('environment_')) throw new Error(`Environment decision tool must be namespaced: ${definition.name}`);
-    if (tools[definition.name]) throw new Error(`Duplicate decision tool: ${definition.name}`);
     tools[definition.name] = tool({ description: definition.description, inputSchema: definition.inputSchema as any, strict: true });
   }
   return tools;
 }
 
-/** Decode and validate one provider tool call into a generic SocialDecision. */
+/** Decode exactly one semantic tool call into a side-effect-free decision. */
 export function decodeSocialDecision(calls: readonly unknown[], extra: DecisionToolDefinition[] = []): SocialDecision {
   if (calls.length !== 1) throw new Error(`invalid-output: expected exactly one decision tool call, received ${calls.length}`);
   const call = calls[0] as { toolName?: unknown; input?: unknown };
   if (typeof call.toolName !== 'string') throw new Error('invalid-output: decision tool name is missing');
-  const input = call.input;
-  const parsed = parseDecisionCall(call.toolName, input, extra);
-  if (!parsed) throw new Error(`invalid-output: unknown decision tool ${call.toolName}`);
-  return parsed;
-}
-
-/** Return a short description that reinforces one-call, proposal-only semantics. */
-function decisionDescription(name: string): string {
-  return `${name.replace(/^social_/, '').replaceAll('_', ' ')}. This only proposes one action; the runtime applies it after validation.`;
-}
-
-/** Parse one known decision tool without executing any side effect. */
-function parseDecisionCall(name: string, input: unknown, extra: DecisionToolDefinition[]): SocialDecision | undefined {
-  const schema = decisionSchemas[name as keyof typeof decisionSchemas];
-  if (schema) {
-    const parsed = schema.safeParse(input);
-    if (!parsed.success) throw new Error(`invalid-output: ${name} arguments failed validation`);
-    const value = parsed.data as Record<string, unknown>;
-    switch (name) {
-      case 'social_pass': return { kind: 'pass', reasonCode: value.reasonCode as string | undefined };
-      case 'social_send_message': return { kind: 'send_message', channelId: value.channelId as string | undefined, content: value.content as string, replyToMessageId: value.replyToMessageId as number | undefined };
-      case 'social_send_dm': return { kind: 'send_dm', targetActorId: value.targetActorId as string, content: value.content as string };
-      case 'social_create_group': return { kind: 'create_group', title: value.title as string, invitedActorIds: value.invitedActorIds as string[], initialMessage: value.initialMessage as string | undefined };
-      case 'social_invite_actor': return { kind: 'invite_actor', channelId: value.channelId as string, actorId: value.actorId as string };
-      case 'social_resolve_invitation': return { kind: 'resolve_invitation', channelId: value.channelId as string, accepted: value.accepted as boolean };
-      case 'social_leave_group': return { kind: 'leave_group', channelId: value.channelId as string };
-      case 'social_update_memory': return { kind: 'update_memory', expectedRevision: value.expectedRevision as number, content: value.content as string };
+  const input = call.input as Record<string, unknown>;
+  if (!input || typeof input !== 'object') throw new Error('invalid-output: decision arguments are missing');
+  switch (call.toolName) {
+    case 'social_pass': return { kind: 'pass', reasonCode: typeof input.reason === 'string' ? input.reason : undefined };
+    case 'social_reply': return { kind: 'reply', content: requiredText(input.text, 'text'), replyToMessageId: positiveNumber(input.replyToMessageId) };
+    case 'social_send_dm': return { kind: 'send_dm', participantRef: requiredRef(input.participantRef, 'participantRef'), content: requiredText(input.text, 'text') };
+    case 'social_start_group': return { kind: 'start_group', title: boundedText(input.title, 'title', 200), participantRefs: requiredRefs(input.participantRefs), initialMessage: input.text === undefined ? undefined : requiredText(input.text, 'text') };
+    case 'social_send_room_message': return { kind: 'send_message', roomRef: requiredRef(input.roomRef, 'roomRef'), content: requiredText(input.text, 'text') };
+    case 'social_invite': return { kind: 'invite_actor', roomRef: requiredRef(input.roomRef, 'roomRef'), participantRef: requiredRef(input.participantRef, 'participantRef') };
+    case 'social_respond_invitation': if (typeof input.accept !== 'boolean') throw new Error('invalid-output: accept must be boolean'); return { kind: 'respond_invitation', accepted: input.accept };
+    case 'social_leave_group': return { kind: 'leave_group', roomRef: requiredRef(input.roomRef, 'roomRef') };
+    default: {
+      const environment = extra.find((definition) => definition.name === call.toolName);
+      if (!environment) throw new Error(`invalid-output: unknown decision tool ${call.toolName}`);
+      const parsed = environment.inputSchema.safeParse(input);
+      if (!parsed.success) throw new Error(`invalid-output: ${call.toolName} arguments failed validation`);
+      return { kind: 'environment_action', actionName: environment.actionName, arguments: parsed.data as Record<string, unknown> };
     }
   }
-  const environment = extra.find((definition) => definition.name === name);
-  if (!environment) return undefined;
-  const parsed = environment.inputSchema.safeParse(input);
-  if (!parsed.success) throw new Error(`invalid-output: ${name} arguments failed validation`);
-  return { kind: 'environment_action', actionName: environment.actionName, arguments: parsed.data as Record<string, unknown> };
 }
+
+/** Build a schema that only accepts the references authorized for this run. */
+function referenceSchema(references: Array<{ ref: string }>): z.ZodType<string> {
+  if (references.length === 0) return z.never();
+  if (references.length === 1) return z.literal(references[0].ref);
+  return z.enum(references.map((reference) => reference.ref) as [string, ...string[]]);
+}
+
+/** Validate a bounded model text field before converting it to a runtime decision. */
+function requiredText(value: unknown, field: string): string { return boundedText(value, field, 12000); }
+/** Validate a short model reference without accepting an omitted value. */
+function requiredRef(value: unknown, field: string): string { if (typeof value !== 'string' || value.trim() === '') throw new Error(`invalid-output: ${field} is required`); return value; }
+/** Validate a bounded text field. */
+function boundedText(value: unknown, field: string, maximum: number): string { if (typeof value !== 'string' || value.trim() === '' || value.length > maximum) throw new Error(`invalid-output: ${field} is invalid`); return value; }
+/** Validate an optional positive message ID. */
+function positiveNumber(value: unknown): number | undefined { if (value === undefined) return undefined; if (typeof value !== 'number' || !Number.isInteger(value) || value <= 0) throw new Error('invalid-output: replyToMessageId is invalid'); return value; }
+/** Validate a nonempty list of model references. */
+function requiredRefs(value: unknown): string[] { if (!Array.isArray(value) || value.some((item) => typeof item !== 'string' || item.trim() === '') || value.length > 8) throw new Error('invalid-output: participantRefs is invalid'); return value as string[]; }

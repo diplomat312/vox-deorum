@@ -1,6 +1,6 @@
 import Database from 'better-sqlite3';
 
-export const currentSocialSchemaVersion = 9;
+export const currentSocialSchemaVersion = 10;
 type Sqlite = InstanceType<typeof Database>;
 
 /** Apply ordered social schema migrations without rewriting current databases. */
@@ -21,6 +21,7 @@ function applyMigration(sqlite: Sqlite, version: number): void {
   if (version === 7) sqlite.exec(`CREATE TABLE IF NOT EXISTS socialEnvironmentBindings (sessionId TEXT NOT NULL, environmentType TEXT NOT NULL, gameId TEXT NOT NULL, actorId TEXT NOT NULL, playerId INTEGER NOT NULL, controlMode TEXT NOT NULL, civilizationType TEXT, leaderType TEXT, active INTEGER NOT NULL DEFAULT 1, createdAt TEXT NOT NULL, updatedAt TEXT NOT NULL, PRIMARY KEY(sessionId, actorId), UNIQUE(sessionId, environmentType, gameId, playerId)); CREATE INDEX IF NOT EXISTS socialEnvironmentBindingsGameIndex ON socialEnvironmentBindings(sessionId, environmentType, gameId); CREATE TABLE IF NOT EXISTS socialEnvironmentEvents (id INTEGER PRIMARY KEY AUTOINCREMENT, sessionId TEXT NOT NULL, environmentType TEXT NOT NULL, gameId TEXT NOT NULL, sourceKey TEXT NOT NULL UNIQUE, turn INTEGER, eventType TEXT NOT NULL, sourcePlayerId INTEGER, targetPlayerId INTEGER, normalizedPayloadJson TEXT NOT NULL, occurredAt TEXT, createdAt TEXT NOT NULL); CREATE INDEX IF NOT EXISTS socialEnvironmentEventsSessionIndex ON socialEnvironmentEvents(sessionId, environmentType, gameId, id);`);
   if (version === 8) sqlite.exec(`CREATE TABLE IF NOT EXISTS socialCivActionAttempts (operationId TEXT PRIMARY KEY, sessionId TEXT NOT NULL, actorId TEXT NOT NULL, gameId TEXT NOT NULL, playerId INTEGER NOT NULL, sourceTurn INTEGER NOT NULL, actionType TEXT NOT NULL, category TEXT NOT NULL, normalizedArgumentsJson TEXT NOT NULL, state TEXT NOT NULL, requestedAt TEXT NOT NULL, executingAt TEXT, completedAt TEXT, resultSummary TEXT, failureClass TEXT, readbackSummary TEXT); CREATE INDEX IF NOT EXISTS socialCivActionAttemptsActorIndex ON socialCivActionAttempts(sessionId, actorId, requestedAt);`);
   if (version === 9) sqlite.exec('CREATE INDEX IF NOT EXISTS socialEnvironmentEventsSourceIndex ON socialEnvironmentEvents(sessionId, sourceKey);');
+  if (version === 10) sqlite.exec('CREATE TABLE IF NOT EXISTS socialDecisionDiagnostics (id TEXT PRIMARY KEY, intentionId TEXT NOT NULL, actorId TEXT NOT NULL, actorDisplayName TEXT NOT NULL, modelRef TEXT, executionScope TEXT NOT NULL, selectedKind TEXT, routingRefsJson TEXT, validationOutcome TEXT NOT NULL, applicationOutcome TEXT, error TEXT, latencyMs INTEGER, retryCount INTEGER NOT NULL DEFAULT 0, createdAt TEXT NOT NULL); CREATE INDEX IF NOT EXISTS socialDecisionDiagnosticsIntentionIndex ON socialDecisionDiagnostics(intentionId, createdAt); CREATE INDEX IF NOT EXISTS socialDecisionDiagnosticsActorIndex ON socialDecisionDiagnostics(actorId, createdAt);');
 }
 
 /** Add a column only when upgrading a legacy table that lacks it. */

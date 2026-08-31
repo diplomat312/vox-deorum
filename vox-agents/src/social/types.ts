@@ -9,13 +9,13 @@ export type SocialExecutionScope = 'channel-reaction' | 'player-mind';
 /** One validated side-effect proposal returned by an authoritative model run. */
 export type SocialDecision =
   | { kind: 'pass'; reasonCode?: string }
-  | { kind: 'send_message'; channelId?: string; content: string; replyToMessageId?: number }
-  | { kind: 'send_dm'; targetActorId: string; content: string }
-  | { kind: 'create_group'; title: string; invitedActorIds: string[]; initialMessage?: string }
-  | { kind: 'invite_actor'; channelId: string; actorId: string }
-  | { kind: 'resolve_invitation'; channelId: string; accepted: boolean }
-  | { kind: 'leave_group'; channelId: string }
-  | { kind: 'update_memory'; expectedRevision: number; content: string }
+  | { kind: 'reply'; content: string; replyToMessageId?: number }
+  | { kind: 'send_message'; roomRef: string; content: string; replyToMessageId?: number }
+  | { kind: 'send_dm'; participantRef: string; content: string }
+  | { kind: 'start_group'; title: string; participantRefs: string[]; initialMessage?: string }
+  | { kind: 'invite_actor'; roomRef: string; participantRef: string }
+  | { kind: 'respond_invitation'; accepted: boolean }
+  | { kind: 'leave_group'; roomRef: string }
   | { kind: 'environment_action'; actionName: string; arguments: Record<string, unknown>; rationale?: string };
 
 export interface SocialActorDefinition { id: string; ordinal: number; control: SocialActorControl; displayName: string; modelRef?: string; profile?: string; }
@@ -30,3 +30,4 @@ export interface SocialCascade { id: string; sessionId: string; rootKind: 'messa
 export interface SocialCascadeBudget { maxModelRuns: number; maxCommittedModelMessages: number; maxRepliesPerActor: number; maxWallClockMs: number; }
 export interface SocialInvitation { membershipId: string; channelId: string; channelTitle: string; invitedByActorId: string; invitedByDisplayName: string; createdAt: string; }
 export interface VisibleMessagePage { messages: SocialMessage[]; hasMore: boolean; }
+export interface SocialDecisionDiagnostic { id: string; intentionId: string; actorId: string; actorDisplayName: string; modelRef: string | null; executionScope: SocialExecutionScope; selectedKind: string | null; routingRefsJson: string | null; validationOutcome: string; applicationOutcome: string | null; error: string | null; latencyMs: number | null; retryCount: number; createdAt: string; }

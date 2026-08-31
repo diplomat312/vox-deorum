@@ -25,3 +25,7 @@ scripts/.dll-cache
 # Source of truth is .agents/skills/; this link is machine-local (recreate with
 # `mklink /J .claude\skills .agents\skills`).
 .claude/skills/
+
+# Local agent handoffs and standalone social sandbox databases.
+.codex-handoff/
+/vox-agents/social-data/

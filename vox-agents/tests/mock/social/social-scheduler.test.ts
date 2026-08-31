@@ -15,11 +15,11 @@ afterEach(async () => { for (const cleanup of cleanups.splice(0)) await cleanup(
 
 class ScriptedExecutor implements SocialDecisionExecutor {
   public readonly contexts = new Map<string, string[]>();
-  public async decide(actor: SocialActorType, context: SocialContextBundle): Promise<{ kind: 'send_message'; content: string } | { kind: 'pass' }> {
+  public async decide(actor: SocialActorType, context: SocialContextBundle): Promise<{ kind: 'reply'; content: string } | { kind: 'pass' }> {
     const serialized = context.messages.map((message) => typeof message.content === 'string' ? message.content : JSON.stringify(message.content));
     this.contexts.set(actor.id, [...(this.contexts.get(actor.id) ?? []), ...serialized]);
-    if (actor.id === 'alice') return { kind: 'send_message', content: 'Alice proposes a plan.' };
-    if (actor.id === 'bob' && serialized.some((value) => value.includes('Alice proposes a plan.'))) return { kind: 'send_message', content: 'Bob responds to Alice.' };
+    if (actor.id === 'alice') return { kind: 'reply', content: 'Alice proposes a plan.' };
+    if (actor.id === 'bob' && serialized.some((value) => value.includes('Alice proposes a plan.'))) return { kind: 'reply', content: 'Bob responds to Alice.' };
     return { kind: 'pass' };
   }
 }
@@ -48,6 +48,8 @@ describe('SocialScheduler', () => {
     expect(messages.map((message) => message.content)).toContain('Alice proposes a plan.');
     expect(messages.map((message) => message.content)).toContain('Bob responds to Alice.');
     expect(executor.contexts.get('bob')?.some((value) => value.includes('Alice proposes a plan.'))).toBe(true);
+    const diagnostics = await store.listDecisionDiagnostics('scheduler');
+    expect(diagnostics.some((diagnostic) => diagnostic.actorId === 'alice' && diagnostic.selectedKind === 'reply' && diagnostic.applicationOutcome === 'send_message')).toBe(true);
   });
 
   it('should execute channel-less player-mind intentions under only the actor lane', async () => {

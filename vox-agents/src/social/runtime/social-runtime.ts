@@ -7,7 +7,7 @@ import { SocialStore } from '../store/social-store.js';
 import { SocialScheduler } from './social-scheduler.js';
 import type { SocialDecisionExecutor } from './social-model-executor.js';
 import { SocialDecisionExecutor as SocialDecisionApplier } from './social-decision-executor.js';
-import type { SocialActor, SocialActorDefinition, SocialChannel, SocialIntention, SocialInvitation, SocialMembership, SocialMessage, SocialSessionDefinition, VisibleMessagePage } from '../types.js';
+import type { SocialActor, SocialActorDefinition, SocialChannel, SocialDecisionDiagnostic, SocialIntention, SocialInvitation, SocialMembership, SocialMessage, SocialSessionDefinition, VisibleMessagePage } from '../types.js';
 import { CivContextProvider } from '../environments/civ/civ-context-provider.js';
 import type { CivEnvironmentAdapter, CivSnapshot } from '../environments/civ/civ-environment-adapter.js';
 import { CivPlayerMind } from '../environments/civ/civ-player-mind.js';
@@ -78,6 +78,8 @@ export class SocialRuntime {
   public async canHumanSeeChannel(channelId: string): Promise<boolean> { return this.requireStore().isActiveMember(channelId, this.getHumanActorId()); }
   /** Return pending invitations addressed to the current human without transcript access. */
   public async listPendingInvitations(): Promise<SocialInvitation[]> { return this.requireStore().listPendingInvitations(this.getSessionId(), this.getHumanActorId()); }
+  /** Return sanitized model decision diagnostics for explicit developer inspection. */
+  public async listDecisionDiagnostics(limit = 100): Promise<SocialDecisionDiagnostic[]> { return this.requireStore().listDecisionDiagnostics(this.getSessionId(), limit); }
   /** Attach a live or mocked Civ game to this existing social session. */
   public async attachCivEnvironment(adapter: CivEnvironmentAdapter, snapshot: CivSnapshot, actorSeatById: Record<string, number>, port: CivMcpPort = mcpCivPort): Promise<void> { const store = this.requireStore(); const sessionId = this.getSessionId(); const eventBridge = new CivEventBridge({ enqueueIntention: (input) => this.enqueueIntention(input) }); adapter.configurePersistence(new SocialStoreEnvironmentEventJournal(store, sessionId, snapshot.environment), { list: (id, environmentType, gameId) => store.listEnvironmentBindings(id, environmentType, gameId), reconcile: (bindings) => store.reconcileEnvironmentBindings(bindings.map((binding) => ({ ...binding, environmentType: snapshot.environment }))) }, async (event) => { if (!event.actorId) return; const actor = (await this.listActors()).find((candidate) => candidate.id === event.actorId); if (actor?.control === 'model') await eventBridge.route(event, actor.id); }); await adapter.attach(sessionId, snapshot, await this.listActors(), actorSeatById); this.civEnvironment = adapter; this.civContext = new CivContextProvider(adapter); this.civGateway = new CivActionGateway(new SocialStoreCivActionJournal(store)); await registerExistingCivCapabilities(this.civGateway, port); adapter.start(port); }
   /** Return the bounded Civ environment layer for one actor, if a game is attached. */
