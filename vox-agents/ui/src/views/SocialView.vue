@@ -120,21 +120,40 @@ async function load(): Promise<void> {
     } catch { /* The curated free defaults keep setup usable without discovery credentials. */ }
     storedSessions.value = (await api.getStoredSocialSessions()).sessions
     if (isHome.value) return
-    let session: SocialSessionResponse
-    try { session = await api.getSocialSession() } catch { session = await api.resumeSocialSession(String(route.params.sessionId)) }
-    if (session.sessionId !== String(route.params.sessionId)) throw new Error('The selected sandbox is not the active sandbox')
+    const requestedSessionId = String(route.params.sessionId)
+    const session = await loadRequestedSession(requestedSessionId)
     sessionActive.value = true
     inspectionAvailable.value = session.inspectionAvailable === true
     actors.value = await migrateRemovedCleoModel(session.actors)
     syncModelSelections(actors.value)
     await loadChannels()
     connectEvents()
-  } catch {
+  } catch (caught) {
     sessionActive.value = false
+    actors.value = []
+    channels.value = []
+    messages.value = []
+    stopEvents?.()
+    stopEvents = undefined
+    error.value = caught instanceof Error ? caught.message : 'Could not load sandbox'
     try { storedSessions.value = (await api.getStoredSocialSessions()).sessions } catch { storedSessions.value = [] }
   } finally {
     loading.value = false
   }
+}
+
+/** Load the requested sandbox, switching away from another active sandbox when necessary. */
+async function loadRequestedSession(sessionId: string): Promise<SocialSessionResponse> {
+  let activeSession: SocialSessionResponse | undefined
+  try { activeSession = await api.getSocialSession() } catch { /* No sandbox is active. */ }
+  if (activeSession?.sessionId === sessionId) return activeSession
+  if (activeSession) {
+    stopEvents?.()
+    stopEvents = undefined
+    sessionActive.value = false
+    await api.stopSocialSession()
+  }
+  return api.resumeSocialSession(sessionId)
 }
 
 /** Refresh visible channels and select WORLD when the current channel disappears. */
