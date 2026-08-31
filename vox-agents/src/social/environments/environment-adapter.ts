@@ -9,4 +9,4 @@ export interface EnvironmentAdapter<TSnapshot extends EnvironmentSnapshot = Envi
 }
 
 /** A reconstructable stimulus with stable provenance and no prescribed reaction. */
-export interface EnvironmentEvent { gameId: string; turn: number; type: string; sourceKey: string; actorId?: string; payload: Record<string, string | number | boolean>; }
+export interface EnvironmentEvent { gameId: string; turn: number; type: string; sourceKey: string; actorId?: string; sourcePlayerId?: number; targetPlayerId?: number; occurredAt?: string; payload: Record<string, string | number | boolean>; }

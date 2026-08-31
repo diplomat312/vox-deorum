@@ -6,11 +6,17 @@ import { SocialEventHub } from '../events/social-event-hub.js';
 import { SocialStore } from '../store/social-store.js';
 import { SocialScheduler } from './social-scheduler.js';
 import type { SocialDecisionExecutor } from './social-model-executor.js';
+import { SocialDecisionExecutor as SocialDecisionApplier } from './social-decision-executor.js';
 import type { SocialActor, SocialActorDefinition, SocialChannel, SocialIntention, SocialInvitation, SocialMembership, SocialMessage, SocialSessionDefinition, VisibleMessagePage } from '../types.js';
 import { CivContextProvider } from '../environments/civ/civ-context-provider.js';
 import type { CivEnvironmentAdapter, CivSnapshot } from '../environments/civ/civ-environment-adapter.js';
 import { CivPlayerMind } from '../environments/civ/civ-player-mind.js';
 import { SocialContextBuilder } from '../context/social-context-builder.js';
+import { SocialStoreEnvironmentEventJournal } from '../environments/environment-event.js';
+import { SocialStoreCivActionJournal, CivActionGateway } from '../environments/civ/civ-action-gateway.js';
+import { CivEventBridge } from '../environments/civ/civ-event-bridge.js';
+import { mcpCivPort, type CivMcpPort } from '../environments/civ/civ-mcp-port.js';
+import { registerExistingCivCapabilities } from '../environments/civ/civ-mcp-capabilities.js';
 
 /** Configuration for one standalone social sandbox. */
 export interface SocialRuntimeConfig { sessionId?: string; humanActorId?: string; title?: string; actors: SocialActorDefinition[]; dataDirectory: string; modelExecutor?: SocialDecisionExecutor; }
@@ -25,6 +31,7 @@ export class SocialRuntime {
   private modelExecutor: SocialDecisionExecutor | undefined;
   private civEnvironment: CivEnvironmentAdapter | undefined;
   private civContext: CivContextProvider | undefined;
+  private civGateway: CivActionGateway | undefined;
 
   /** Create and persist a new social session. */
   public async start(config: SocialRuntimeConfig): Promise<void> {
@@ -50,7 +57,7 @@ export class SocialRuntime {
   public async deleteStoredSession(sessionId: string, dataDirectory: string): Promise<void> { if (!/^[a-zA-Z0-9_-]+$/.test(sessionId)) throw new Error('Invalid social session ID'); if (this.session?.id === sessionId) throw new Error('Stop the active social session before deleting it'); await unlink(path.join(dataDirectory, `${sessionId}.sqlite`)); }
 
   /** Stop the session and close the durable store. */
-  public async stop(): Promise<void> { this.scheduler?.stop(); await this.scheduler?.waitForIdle(); if (this.store) await this.store.close(); this.scheduler = undefined; this.store = undefined; this.session = undefined; this.civEnvironment = undefined; this.civContext = undefined; this.lanes.clear(); }
+  public async stop(): Promise<void> { this.scheduler?.stop(); await this.scheduler?.waitForIdle(); this.civEnvironment?.detach(); if (this.store) await this.store.close(); this.scheduler = undefined; this.store = undefined; this.session = undefined; this.civEnvironment = undefined; this.civContext = undefined; this.civGateway = undefined; this.lanes.clear(); }
   /** Return whether a session is active. */
   public isRunning(): boolean { return this.store !== undefined && this.session !== undefined; }
   /** Return the active session identifier. */
@@ -72,7 +79,7 @@ export class SocialRuntime {
   /** Return pending invitations addressed to the current human without transcript access. */
   public async listPendingInvitations(): Promise<SocialInvitation[]> { return this.requireStore().listPendingInvitations(this.getSessionId(), this.getHumanActorId()); }
   /** Attach a live or mocked Civ game to this existing social session. */
-  public async attachCivEnvironment(adapter: CivEnvironmentAdapter, snapshot: CivSnapshot, actorSeatById: Record<string, number>): Promise<void> { await adapter.attach(this.getSessionId(), snapshot, await this.listActors(), actorSeatById); this.civEnvironment = adapter; this.civContext = new CivContextProvider(adapter); }
+  public async attachCivEnvironment(adapter: CivEnvironmentAdapter, snapshot: CivSnapshot, actorSeatById: Record<string, number>, port: CivMcpPort = mcpCivPort): Promise<void> { const store = this.requireStore(); const sessionId = this.getSessionId(); const eventBridge = new CivEventBridge({ enqueueIntention: (input) => this.enqueueIntention(input) }); adapter.configurePersistence(new SocialStoreEnvironmentEventJournal(store, sessionId, snapshot.environment), { list: (id, environmentType, gameId) => store.listEnvironmentBindings(id, environmentType, gameId), reconcile: (bindings) => store.reconcileEnvironmentBindings(bindings.map((binding) => ({ ...binding, environmentType: snapshot.environment }))) }, async (event) => { if (!event.actorId) return; const actor = (await this.listActors()).find((candidate) => candidate.id === event.actorId); if (actor?.control === 'model') await eventBridge.route(event, actor.id); }); await adapter.attach(sessionId, snapshot, await this.listActors(), actorSeatById); this.civEnvironment = adapter; this.civContext = new CivContextProvider(adapter); this.civGateway = new CivActionGateway(new SocialStoreCivActionJournal(store)); await registerExistingCivCapabilities(this.civGateway, port); adapter.start(port); }
   /** Return the bounded Civ environment layer for one actor, if a game is attached. */
   public async civContextForActor(actor: SocialActor): Promise<string | undefined> { return this.civContext ? this.civContext.forActor(actor) : undefined; }
   /** Create a player-mind facade that shares this runtime's actor authority lane. */
@@ -80,16 +87,16 @@ export class SocialRuntime {
   /** Append a human message and publish the event after commit. */
   public async appendHumanMessage(channelId: string, content: string, replyToMessageId?: number): Promise<SocialMessage> { const mutation = await this.requireStore().commitHumanMessage({ sessionId: this.getSessionId(), actorId: this.getHumanActorId(), channelId, content, replyToMessageId, budget: { maxModelRuns: 24, maxCommittedModelMessages: 12, maxRepliesPerActor: 4, maxWallClockMs: 90_000 } }); this.events.publish({ type: 'message-added', message: mutation.message }); for (const intention of mutation.createdIntentions) this.events.publish({ type: 'intention-created', intention }); this.scheduler?.kick(); return mutation.message; }
   /** Create the durable scheduler for the current session. */
-  private createScheduler(): SocialScheduler { return new SocialScheduler(this.requireStore(), () => this.listActors(), this.lanes, this.events, this.modelExecutor, undefined, async () => {}, 4, async (actor) => this.civContextForActor(actor)); }
+  private createScheduler(): SocialScheduler { const store = this.requireStore(); const applier = new SocialDecisionApplier(store, this.events, async () => this.civEnvironment && this.civGateway ? { adapter: this.civEnvironment, gateway: this.civGateway } : undefined); return new SocialScheduler(store, () => this.listActors(), this.lanes, this.events, this.modelExecutor, undefined, async () => {}, 4, async (actor) => this.civContextForActor(actor), applier, async () => this.civGateway?.modelDecisionDefinitions() ?? []); }
   /** Enqueue listener intentions after each committed visible message. */
   private async enqueueListeners(message: SocialMessage, payload: { rootMessageId: number; depth: number; count: number } = { rootMessageId: message.id, depth: 0, count: 0 }): Promise<void> { const store = this.requireStore(); const actors = await store.listActiveModelActors(this.getSessionId(), message.channelId); for (const actor of actors.filter((candidate) => candidate.id !== message.speakerActorId)) { const intention = await store.enqueueIntention({ id: randomUUID(), actorId: actor.id, kind: 'consider-reply', channelId: message.channelId, sourceMessageId: message.id, priority: 0, state: 'queued', notBefore: new Date().toISOString(), payload: JSON.stringify(payload), dedupeKey: `social-message:${message.id}:${actor.id}` }); this.events.publish({ type: 'intention-created', intention }); } this.scheduler?.kick(); }
 
   /** Open a human DM with an actor. */
   public async openHumanDm(actorId: string, title?: string): Promise<SocialChannel> { const channel = await this.requireStore().openDm(this.getSessionId(), this.getHumanActorId(), actorId, title ?? `DM with ${actorId}`); this.events.publish({ type: 'channel-created', channel }); return channel; }
   /** Create a group owned by the human. */
-  public async createHumanGroup(title: string, invitedActorIds?: string[]): Promise<SocialChannel> { const channel = await this.requireStore().createGroup(this.getSessionId(), this.getHumanActorId(), title, invitedActorIds); this.events.publish({ type: 'channel-created', channel }); return channel; }
+  public async createHumanGroup(title: string, invitedActorIds?: string[]): Promise<SocialChannel> { const channel = await this.requireStore().createGroup(this.getSessionId(), this.getHumanActorId(), title, invitedActorIds); this.events.publish({ type: 'channel-created', channel }); this.scheduler?.kick(); return channel; }
   /** Invite an actor to a human-owned group. */
-  public async invite(channelId: string, actorId: string): Promise<SocialMembership> { const membership = await this.requireStore().invite(channelId, actorId, this.getHumanActorId()); this.events.publish({ type: 'membership-changed', membership }); return membership; }
+  public async invite(channelId: string, actorId: string): Promise<SocialMembership> { const membership = await this.requireStore().invite(channelId, actorId, this.getHumanActorId()); this.events.publish({ type: 'membership-changed', membership }); this.scheduler?.kick(); return membership; }
   /** Resolve the human's own pending invitation. */
   public async resolveHumanInvitation(channelId: string, accepted: boolean): Promise<SocialMembership> { const membership = await this.requireStore().resolveInvitation(channelId, this.getHumanActorId(), accepted); this.events.publish({ type: 'membership-changed', membership }); return membership; }
   /** Leave a human group. */

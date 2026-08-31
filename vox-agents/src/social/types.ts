@@ -4,6 +4,19 @@ export type SocialChannelKind = 'world' | 'dm' | 'group';
 export type SocialMembershipStatus = 'invited' | 'active' | 'declined' | 'left';
 export type SocialIntentionState = 'queued' | 'running' | 'deferred' | 'completed' | 'cancelled';
 export type SocialOperationClass = 'human-triggered' | 'ai-cascade' | 'invitation' | 'autonomous';
+export type SocialExecutionScope = 'channel-reaction' | 'player-mind';
+
+/** One validated side-effect proposal returned by an authoritative model run. */
+export type SocialDecision =
+  | { kind: 'pass'; reasonCode?: string }
+  | { kind: 'send_message'; channelId?: string; content: string; replyToMessageId?: number }
+  | { kind: 'send_dm'; targetActorId: string; content: string }
+  | { kind: 'create_group'; title: string; invitedActorIds: string[]; initialMessage?: string }
+  | { kind: 'invite_actor'; channelId: string; actorId: string }
+  | { kind: 'resolve_invitation'; channelId: string; accepted: boolean }
+  | { kind: 'leave_group'; channelId: string }
+  | { kind: 'update_memory'; expectedRevision: number; content: string }
+  | { kind: 'environment_action'; actionName: string; arguments: Record<string, unknown>; rationale?: string };
 
 export interface SocialActorDefinition { id: string; ordinal: number; control: SocialActorControl; displayName: string; modelRef?: string; profile?: string; }
 export interface SocialSessionDefinition { id: string; humanActorId: string; title?: string; archived?: boolean; createdAt?: string; updatedAt?: string; }
@@ -12,7 +25,7 @@ export interface SocialChannel { id: string; sessionId: string; kind: SocialChan
 export interface SocialMembership { id: string; channelId: string; actorId: string; status: SocialMembershipStatus; invitedByActorId: string | null; visibleAfterMessageId: number; leftAfterMessageId: number | null; createdAt: string; updatedAt: string; }
 export interface SocialMessage { id: number; channelId: string; speakerActorId: string; content: string; replyToMessageId: number | null; createdAt: string; intentionId: string | null; idempotencyKey: string | null; }
 export interface SocialMemory { actorId: string; revision: number; content: string; updatedAt: string; sourceRunId: string | null; }
-export interface SocialIntention { id: string; actorId: string; kind: string; channelId: string | null; sourceMessageId: number | null; priority: number; state: SocialIntentionState; notBefore: string; payload: string | null; dedupeKey: string | null; attemptCount: number; claimedAt?: string; result?: string; lastError: string | null; createdAt: string; updatedAt: string; cascadeId?: string; operationClass?: SocialOperationClass; completedAt?: string; }
+export interface SocialIntention { id: string; actorId: string; kind: string; channelId: string | null; sourceMessageId: number | null; priority: number; state: SocialIntentionState; notBefore: string; payload: string | null; dedupeKey: string | null; attemptCount: number; claimedAt?: string; result?: string; lastError: string | null; createdAt: string; updatedAt: string; cascadeId?: string | null; operationClass?: SocialOperationClass; completedAt?: string; }
 export interface SocialCascade { id: string; sessionId: string; rootKind: 'message' | 'autonomous' | 'system'; rootMessageId: number | null; state: 'active' | 'completed' | 'exhausted' | 'cancelled'; modelRuns: number; committedModelMessages: number; maxModelRuns: number; maxCommittedModelMessages: number; maxRepliesPerActor: number; maxWallClockMs: number; createdAt: string; updatedAt: string; }
 export interface SocialCascadeBudget { maxModelRuns: number; maxCommittedModelMessages: number; maxRepliesPerActor: number; maxWallClockMs: number; }
 export interface SocialInvitation { membershipId: string; channelId: string; channelTitle: string; invitedByActorId: string; invitedByDisplayName: string; createdAt: string; }
