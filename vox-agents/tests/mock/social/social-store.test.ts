@@ -73,7 +73,7 @@ describe('SocialStore', () => {
     tempDirectories.push(directory);
     const path = join(directory, 'social.sqlite');
     const first = new SocialStore(path);
-    await first.createSession({ id: 'session-4', humanActorId: 'human' }, [{ id: 'human', ordinal: 0, control: 'human', displayName: 'Human' }]);
+    await first.createSession({ id: 'session-4', humanActorId: 'human' }, [{ id: 'human', ordinal: 0, control: 'human', displayName: 'Human' }, { id: 'alice', ordinal: 1, control: 'model', displayName: 'Alice' }]);
     await first.updateMemory('human', 'remember this');
     await first.enqueueIntention({ id: 'intention-1', actorId: 'human', kind: 'idle', channelId: null, sourceMessageId: null, priority: 1, state: 'queued', notBefore: new Date().toISOString(), payload: null, dedupeKey: 'idle:human' });
     await first.close();

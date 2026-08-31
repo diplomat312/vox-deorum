@@ -50,6 +50,8 @@ const groupChannels = computed(() => channels.value.filter((channel) => channel.
 const isHome = computed(() => !route.params.sessionId)
 const activeStoredSessions = computed(() => storedSessions.value.filter((saved) => !saved.session.archived))
 const archivedStoredSessions = computed(() => storedSessions.value.filter((saved) => saved.session.archived))
+const inspectionEnabled = ref(false)
+const inspectionAvailable = ref(false)
 
 /** Keep persisted OpenRouter references compatible with the UI model catalog. */
 function normalizeModelRef(modelRef: string | undefined): string {
@@ -122,6 +124,7 @@ async function load(): Promise<void> {
     try { session = await api.getSocialSession() } catch { session = await api.resumeSocialSession(String(route.params.sessionId)) }
     if (session.sessionId !== String(route.params.sessionId)) throw new Error('The selected sandbox is not the active sandbox')
     sessionActive.value = true
+    inspectionAvailable.value = session.inspectionAvailable === true
     actors.value = await migrateRemovedCleoModel(session.actors)
     syncModelSelections(actors.value)
     await loadChannels()
@@ -136,7 +139,7 @@ async function load(): Promise<void> {
 
 /** Refresh visible channels and select WORLD when the current channel disappears. */
 async function loadChannels(): Promise<void> {
-  const response = await api.getSocialChannels()
+  const response = await api.getSocialChannels(inspectionEnabled.value)
   channels.value = response.channels
   if (!channels.value.some((channel) => channel.id === selectedChannelId.value)) selectedChannelId.value = 'world'
   await loadMessages()
@@ -145,7 +148,7 @@ async function loadChannels(): Promise<void> {
 /** Load the selected channel transcript. */
 async function loadMessages(): Promise<void> {
   if (!selectedChannelId.value) return
-  try { messages.value = (await api.getSocialMessages(selectedChannelId.value)).messages } catch (caught) { error.value = caught instanceof Error ? caught.message : 'Could not load messages' }
+  try { messages.value = (await api.getSocialMessages(selectedChannelId.value, inspectionEnabled.value)).messages } catch (caught) { error.value = caught instanceof Error ? caught.message : 'Could not load messages' }
   await scrollToLatest()
 }
 
@@ -164,7 +167,7 @@ async function start(): Promise<void> {
 }
 
 /** Add a model actor to the new-sandbox roster. */
-function addDraftActor(): void { const ordinal = draftActors.value.length; draftActors.value.push({ id: `actor-${ordinal + 1}`, ordinal, control: 'model', displayName: `Actor ${ordinal}`, modelRef: modelOptions.value[ordinal % modelOptions.value.length]?.value ?? 'openrouter/nvidia/nemotron-3.5-lightning:free', profile: '' }) }
+function addDraftActor(): void { const ordinal = draftActors.value.length; draftActors.value.push({ id: `actor-${crypto.randomUUID()}`, ordinal, control: 'model', displayName: `Actor ${ordinal}`, modelRef: modelOptions.value[ordinal % modelOptions.value.length]?.value ?? 'openrouter/nvidia/nemotron-3.5-lightning:free', profile: '' }) }
 
 /** Remove a model actor from the new-sandbox roster while retaining the human seat. */
 function removeDraftActor(actorId: string): void { if (draftActors.value.length <= 2 || actorId === 'human') return; draftActors.value = draftActors.value.filter((actor) => actor.id !== actorId).map((actor, ordinal) => ({ ...actor, ordinal })) }
@@ -219,7 +222,10 @@ async function selectChannel(channelId: string): Promise<void> { selectedChannel
 async function scrollToLatest(): Promise<void> { await nextTick(); if (messagesPane.value) messagesPane.value.scrollTop = messagesPane.value.scrollHeight }
 
 /** Connect the live event stream only after a social session exists. */
-function connectEvents(): void { stopEvents?.(); stopEvents = api.streamSocialEvents(async () => { await loadChannels() }) }
+function connectEvents(): void { stopEvents?.(); stopEvents = api.streamSocialEvents(async () => { await loadChannels() }, inspectionEnabled.value) }
+
+/** Toggle explicit developer inspection and reload the authorized view. */
+async function toggleInspection(): Promise<void> { await loadChannels(); connectEvents() }
 
 onMounted(async () => { await load() })
 watch(() => route.params.sessionId, async (sessionId, previousSessionId) => { if (sessionId !== previousSessionId) await load() })
@@ -234,7 +240,7 @@ onUnmounted(() => stopEvents?.())
     </div>
     <div v-if="error" class="social-error">{{ error }}</div>
     <div v-if="isHome" class="social-home">
-      <Card class="social-start-card create-card"><template #title>New sandbox</template><template #content><p class="text-muted">Create a 2–8 participant conversation space.</p><div class="flex gap-2"><InputText v-model="sandboxTitle" placeholder="Sandbox title" /><InputText v-model="displayName" placeholder="Your display name" /><Button label="Create sandbox" icon="pi pi-plus" :loading="loading" @click="start" /></div><div class="draft-roster"><div v-for="actor in draftActors" :key="actor.id" class="draft-actor"><InputText v-model="actor.displayName" :disabled="actor.control === 'human'" placeholder="Actor name" /><Dropdown v-if="actor.control === 'model'" v-model="actor.modelRef" :options="modelOptions" option-label="label" option-value="value" /><Button v-if="actor.control === 'model'" icon="pi pi-trash" text rounded severity="danger" aria-label="Remove actor" @click="removeDraftActor(actor.id)" /></div><Button label="Add model" icon="pi pi-user-plus" text size="small" :disabled="draftActors.length >= 8" @click="addDraftActor" /></div></template></Card>
+      <Card class="social-start-card create-card"><template #title>New sandbox</template><template #content><p class="text-muted">Create a 2–8 participant conversation space.</p><div class="flex gap-2"><InputText v-model="sandboxTitle" placeholder="Sandbox title" /><InputText v-model="displayName" placeholder="Your display name" /><Button label="Create sandbox" icon="pi pi-plus" :loading="loading" @click="start" /></div><div class="draft-roster"><div v-for="actor in draftActors" :key="actor.id" class="draft-actor"><InputText v-model="actor.displayName" :disabled="actor.control === 'human'" placeholder="Actor name" /><Dropdown v-if="actor.control === 'model'" v-model="actor.modelRef" :options="modelOptions" option-label="label" option-value="value" /><Textarea v-if="actor.control === 'model'" v-model="actor.profile" auto-resize rows="1" placeholder="Optional profile" /><Button v-if="actor.control === 'model'" icon="pi pi-trash" text rounded severity="danger" aria-label="Remove actor" @click="removeDraftActor(actor.id)" /></div><Button label="Add model" icon="pi pi-user-plus" text size="small" :disabled="draftActors.length >= 8" @click="addDraftActor" /></div></template></Card>
       <section class="sandbox-list"><div class="list-heading"><h2>Saved chats</h2><span class="text-muted">{{ activeStoredSessions.length }}</span></div><div v-if="!activeStoredSessions.length" class="empty-home">No saved chats yet.</div><article v-for="saved in activeStoredSessions" :key="saved.session.id" class="sandbox-card"><button class="sandbox-open" @click="openStoredSession(saved.session.id)"><strong>{{ saved.session.title || 'Untitled sandbox' }}</strong><small>{{ saved.actors.filter((actor) => actor.control === 'model').map((actor) => `${actor.displayName} · ${actor.modelRef || 'unconfigured'}`).join('  |  ') }}</small><small>{{ saved.session.updatedAt || saved.session.createdAt || 'No timestamp' }}</small></button><div class="sandbox-actions"><Button icon="pi pi-pencil" text rounded aria-label="Rename chat" @click="renameStoredSession(saved)" /><Button icon="pi pi-box" text rounded aria-label="Archive chat" @click="setArchived(saved, true)" /><Button icon="pi pi-trash" text rounded severity="danger" aria-label="Delete chat" @click="deleteStoredSession(saved)" /></div></article></section>
       <section class="sandbox-list archived-list"><div class="list-heading"><h2>Archived chats</h2><span class="text-muted">{{ archivedStoredSessions.length }}</span></div><article v-for="saved in archivedStoredSessions" :key="saved.session.id" class="sandbox-card"><button class="sandbox-open" @click="openStoredSession(saved.session.id)"><strong>{{ saved.session.title || 'Untitled sandbox' }}</strong><small>{{ saved.actors.filter((actor) => actor.control === 'model').map((actor) => actor.displayName).join('  |  ') }}</small></button><div class="sandbox-actions"><Button icon="pi pi-replay" text rounded aria-label="Restore chat" @click="setArchived(saved, false)" /><Button icon="pi pi-trash" text rounded severity="danger" aria-label="Delete chat" @click="deleteStoredSession(saved)" /></div></article></section>
     </div>
@@ -249,7 +255,7 @@ onUnmounted(() => stopEvents?.())
         <div class="group-create"><InputText v-model="groupTitle" placeholder="New group title" /><div v-for="actor in aiActors" :key="actor.id" class="flex align-items-center gap-2 mt-2"><Checkbox v-model="selectedInvitees" :input-id="actor.id" :value="actor.id" /><label :for="actor.id">{{ actor.displayName }}</label></div><Button class="mt-3" label="Create group" icon="pi pi-plus" size="small" :disabled="!groupTitle.trim()" @click="createGroup" /></div>
       </aside>
       <main class="social-conversation">
-        <header class="conversation-header"><div><h2>{{ selectedChannel?.title ?? 'WORLD' }}</h2><span class="text-muted">{{ selectedChannel?.kind === 'world' ? 'Everyone in the session' : 'Private conversation' }}</span></div><i class="pi pi-comments text-primary text-xl" /></header>
+        <header class="conversation-header"><div><h2>{{ selectedChannel?.title ?? 'WORLD' }}</h2><span class="text-muted">{{ selectedChannel?.kind === 'world' ? 'Everyone in the session' : 'Private conversation' }}</span></div><div class="flex align-items-center gap-2"><label v-if="inspectionAvailable" class="text-small"><Checkbox v-model="inspectionEnabled" binary @change="toggleInspection" /> Reveal AI-private rooms</label><i class="pi pi-comments text-primary text-xl" /></div></header>
         <div ref="messagesPane" class="social-messages"><div v-if="!messages.length" class="empty-state"><i class="pi pi-inbox" /><p>No messages yet. Start the conversation.</p></div><article v-for="message in messages" :key="message.id" class="social-message" :class="{ human: message.speakerActorId === 'human' }"><div class="message-author">{{ actorName(message.speakerActorId) }}<span>{{ new Date(message.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }}</span></div><div>{{ message.content }}</div></article></div>
         <div class="social-composer"><Textarea v-model="composer" auto-resize rows="2" placeholder="Say something to the group..." @keydown.enter.exact.prevent="send" /><Button icon="pi pi-send" aria-label="Send" :loading="sending" :disabled="!composer.trim()" @click="send" /></div>
       </main>

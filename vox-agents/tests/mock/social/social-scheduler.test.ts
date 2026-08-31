@@ -38,10 +38,9 @@ describe('SocialScheduler', () => {
     const events = new SocialEventHub();
     const lanes = new Map(actors.map((actor) => [actor.id, new ActorLane()]));
     const executor = new ScriptedExecutor();
-    const enqueue = async (message: { id: number; channelId: string; speakerActorId: string }, payload = { rootMessageId: message.id, depth: 0, count: 0 }): Promise<void> => { for (const actor of await store.listActiveModelActors('scheduler', message.channelId)) { if (actor.id === message.speakerActorId) continue; await store.enqueueIntention({ id: `${message.id}-${actor.id}-${payload.count}`, actorId: actor.id, kind: 'consider-reply', channelId: message.channelId, sourceMessageId: message.id, priority: 0, state: 'queued', notBefore: new Date().toISOString(), payload: JSON.stringify(payload), dedupeKey: `${message.id}:${actor.id}` }); } scheduler.kick(); };
-    const scheduler = new SocialScheduler(store, async () => actors, lanes, events, executor, undefined, enqueue, 6);
-    const humanMessage = await store.appendMessage({ sessionId: 'scheduler', actorId: 'human', channelId: 'world', content: 'Who wants to propose a plan?' });
-    await enqueue(humanMessage);
+    const scheduler = new SocialScheduler(store, async () => actors, lanes, events, executor);
+    const humanMutation = await store.commitHumanMessage({ sessionId: 'scheduler', actorId: 'human', channelId: 'world', content: 'Who wants to propose a plan?', budget: { maxModelRuns: 24, maxCommittedModelMessages: 12, maxRepliesPerActor: 4, maxWallClockMs: 90_000 } });
+    expect(humanMutation.createdIntentions.length).toBe(2);
     scheduler.kick();
     await scheduler.waitForIdle();
     scheduler.stop();

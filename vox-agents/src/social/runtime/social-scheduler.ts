@@ -14,27 +14,24 @@ export class SocialScheduler {
   private running = false;
   private stopped = false;
   private drainPromise: Promise<void> | undefined;
+  private kickRequested = false;
+  private wakeTimer: ReturnType<typeof setTimeout> | undefined;
+  private readonly activeControllers = new Set<AbortController>();
 
-  public constructor(private readonly store: SocialStore, private readonly actors: () => Promise<SocialActor[]>, private readonly lanes: Map<string, ActorLane>, private readonly events: SocialEventHub, private readonly executor: SocialDecisionExecutor = new SocialModelExecutor(), private readonly contextBuilder = new SocialContextBuilder(), private readonly onMessageCommitted: (message: SocialMessage, payload: CascadePayload) => Promise<void> = async () => {}, private readonly maxCascadeMessages = 12) {}
+  public constructor(private readonly store: SocialStore, private readonly actors: () => Promise<SocialActor[]>, private readonly lanes: Map<string, ActorLane>, private readonly events: SocialEventHub, private readonly executor: SocialDecisionExecutor = new SocialModelExecutor(), private readonly contextBuilder = new SocialContextBuilder(), private readonly onMessageCommitted: (message: SocialMessage, payload: CascadePayload) => Promise<void> = async () => {}, private readonly maxConcurrentExecutions = 4, private readonly environmentForActor: (actor: SocialActor) => Promise<string | undefined> = async () => undefined) {}
 
   /** Stop future claims and let the current bounded work finish. */
-  public stop(): void { this.stopped = true; }
+  public stop(): void { this.stopped = true; if (this.wakeTimer) clearTimeout(this.wakeTimer); this.wakeTimer = undefined; for (const controller of this.activeControllers) controller.abort(); }
 
   /** Start or wake the scheduler without awaiting the cascade from an HTTP request. */
-  public kick(): void { if (this.running || this.stopped) return; this.running = true; this.drainPromise = this.drain().finally(() => { this.running = false; this.drainPromise = undefined; }); }
+  public kick(): void { if (this.stopped) return; if (this.running) { this.kickRequested = true; return; } this.running = true; this.drainPromise = this.drain().finally(() => { this.running = false; this.drainPromise = undefined; if (this.kickRequested && !this.stopped) { this.kickRequested = false; this.kick(); } }); }
 
   /** Wait until currently claimed bounded work has finished. */
   public async waitForIdle(): Promise<void> { await this.drainPromise; }
 
   /** Drain all currently eligible durable intentions, including AI-to-AI cascades. */
   private async drain(): Promise<void> {
-    let processed = 0;
-    while (!this.stopped && processed < this.maxCascadeMessages) {
-      const intention = await this.store.claimNextIntention();
-      if (!intention) return;
-      processed += 1;
-      await this.execute(intention);
-    }
+    while (!this.stopped) { const tasks: Promise<void>[] = []; for (let index = 0; index < this.maxConcurrentExecutions; index += 1) { const intention = await this.store.claimNextIntention(); if (!intention) break; tasks.push(this.execute(intention)); } if (!tasks.length) { await this.scheduleWake(); return; } await Promise.all(tasks); }
   }
 
   /** Execute an intention with uniform actor-then-channel lane nesting. */
@@ -44,15 +41,16 @@ export class SocialScheduler {
     if (!actorLane) { await this.store.cancelIntention(intention.id, 'actor lane unavailable'); return; }
     const channelLane = this.channelLanes.get(intention.channelId) ?? new ChannelLane();
     this.channelLanes.set(intention.channelId, channelLane);
-    await actorLane.run(() => channelLane.run(() => this.decide(intention))).catch(async (error: unknown) => {
+    const controller = new AbortController(); this.activeControllers.add(controller);
+    await actorLane.run(() => channelLane.run(() => this.decide(intention, controller.signal))).catch(async (error: unknown) => {
       const message = error instanceof Error ? error.message : String(error);
-      if (/rate.?limit|temporar|timeout|network|429/i.test(message)) await this.store.deferIntention(intention.id, new Date(Date.now() + 30_000).toISOString(), message);
+      if (controller.signal.aborted || /rate.?limit|temporar|timeout|network|429/i.test(message)) await this.store.deferIntention(intention.id, new Date(Date.now() + (controller.signal.aborted ? 0 : 30_000)).toISOString(), message);
       else await this.store.cancelIntention(intention.id, message);
-    });
+    }).finally(() => this.activeControllers.delete(controller));
   }
 
   /** Build fresh authorized context, commit speech, and propagate its listeners. */
-  private async decide(intention: SocialIntention): Promise<void> {
+  private async decide(intention: SocialIntention, abortSignal: AbortSignal): Promise<void> {
     const allActors = await this.actors();
     const actorSeed = allActors.find((candidate) => candidate.id === intention.actorId);
     if (!actorSeed) { await this.store.completeIntention(intention.id, 'pass'); return; }
@@ -61,18 +59,19 @@ export class SocialScheduler {
     const actor = actors.find((candidate) => candidate.id === intention.actorId);
     if (!actor) { await this.store.completeIntention(intention.id, 'pass'); return; }
     const payload = this.readPayload(intention.payload);
+    if (intention.cascadeId) { const reservation = await this.store.reserveCascadeRun(intention.cascadeId, actor.id); if (!reservation.allowed) { await this.store.cancelIntention(intention.id, reservation.reason ?? 'cascade-budget-exhausted'); return; } }
     const messages = (await this.store.readMessages(actor.sessionId, intention.channelId, actor.id, 80)).messages;
     const memory = await this.store.getMemory(actor.id);
-    const context = this.contextBuilder.build(actor, actors, messages, intention, memory?.content);
-    const decision = await this.executor.decide(actor, context, actors.map((candidate) => candidate.displayName));
-    await this.store.completeIntention(intention.id, decision.outcome);
-    if (decision.outcome === 'speak') {
-      const reply = await this.store.appendMessage({ sessionId: actor.sessionId, actorId: actor.id, channelId: intention.channelId, content: decision.content, intentionId: intention.id, idempotencyKey: `social-intention:${intention.id}` });
-      this.events.publish({ type: 'message-added', message: reply });
-      if (payload.count < this.maxCascadeMessages) await this.onMessageCommitted(reply, { rootMessageId: payload.rootMessageId, depth: payload.depth + 1, count: payload.count + 1 });
-    }
+    const context = this.contextBuilder.build(actor, actors, messages, intention, memory?.content, { environment: await this.environmentForActor(actor), mode: intention.kind });
+    const decision = await this.executor.decide(actor, context, actors.map((candidate) => candidate.displayName), abortSignal);
+    if (decision.outcome === 'pass') { const completed = await this.store.completeIntention(intention.id, 'pass'); this.events.publish({ type: 'intention-created', intention: completed }); return; }
+    const mutation = await this.store.commitModelSpeech({ intentionId: intention.id, actorId: actor.id, channelId: intention.channelId, content: decision.content });
+    if (mutation.message) this.events.publish({ type: 'message-added', message: mutation.message });
+    for (const created of mutation.createdIntentions) this.events.publish({ type: 'intention-created', intention: created });
   }
 
   /** Read legacy/null payloads safely while retaining a bounded cascade. */
   private readPayload(payload: string | null): CascadePayload { if (!payload) return { rootMessageId: 0, depth: 0, count: 0 }; try { const value = JSON.parse(payload) as Partial<CascadePayload>; return { rootMessageId: typeof value.rootMessageId === 'number' ? value.rootMessageId : 0, depth: typeof value.depth === 'number' ? value.depth : 0, count: typeof value.count === 'number' ? value.count : 0 }; } catch { return { rootMessageId: 0, depth: 0, count: 0 }; } }
+  /** Retain one timer for the nearest deferred intention. */
+  private async scheduleWake(): Promise<void> { if (this.stopped) return; const next = await this.store.nextDeferredAt(); if (!next) return; const delay = Math.max(0, Date.parse(next) - Date.now()); if (this.wakeTimer) clearTimeout(this.wakeTimer); this.wakeTimer = setTimeout(() => { this.wakeTimer = undefined; this.kick(); }, delay); }
 }

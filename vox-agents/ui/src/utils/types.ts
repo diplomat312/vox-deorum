@@ -11,10 +11,11 @@ import type {
   DealReduction as DealReductionOf,
   ProposalOutcome as ProposalOutcomeOf,
 } from '@vox/utils/diplomacy/deal/deal-reduce';
-import type { SocialActor, SocialChannel, SocialMessage, VisibleMessagePage } from '../../../src/social/types';
+import type { SocialActor, SocialChannel, SocialInvitation, SocialMessage, VisibleMessagePage } from '../../../src/social/types';
 
 export type { SocialActor, SocialChannel, SocialMessage, VisibleMessagePage };
-export interface SocialSessionResponse { sessionId: string; humanActorId: string; actors: SocialActor[]; }
+export type { SocialInvitation };
+export interface SocialSessionResponse { sessionId: string; humanActorId: string; actors: SocialActor[]; inspectionAvailable?: boolean; }
 export interface SocialChannelsResponse { channels: SocialChannel[]; }
 export interface SocialStoredSession { session: { id: string; humanActorId: string; title?: string; archived?: boolean; createdAt?: string; updatedAt?: string }; actors: SocialActor[] }
 export interface SocialStoredSessionsResponse { sessions: SocialStoredSession[] }

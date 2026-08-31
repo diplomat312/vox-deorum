@@ -196,7 +196,7 @@ class ApiClient {
   /** List channels visible to the human. */
   async getSocialChannels(inspect = false): Promise<SocialChannelsResponse> { return this.fetchJson<SocialChannelsResponse>(`${this.baseUrl}/api/social/channels${inspect ? '?inspect=true' : ''}`); }
   /** Read one social channel. */
-  async getSocialMessages(channelId: string): Promise<VisibleMessagePage> { return this.fetchJson<VisibleMessagePage>(`${this.baseUrl}/api/social/channels/${encodeURIComponent(channelId)}/messages`); }
+  async getSocialMessages(channelId: string, inspect = false): Promise<VisibleMessagePage> { return this.fetchJson<VisibleMessagePage>(`${this.baseUrl}/api/social/channels/${encodeURIComponent(channelId)}/messages${inspect ? '?inspect=true' : ''}`); }
   /** Send a human message to a social channel. */
   async sendSocialMessage(channelId: string, content: string): Promise<SocialMessage> { return this.fetchJson<SocialMessage>(`${this.baseUrl}/api/social/channels/${encodeURIComponent(channelId)}/messages`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content }) }); }
   /** Change one model actor's model without interrupting the active social session. */
@@ -206,7 +206,7 @@ class ApiClient {
   /** Create a titled group. */
   async createSocialGroup(title: string, invitedActorIds: string[] = []): Promise<SocialChannel> { return this.fetchJson<SocialChannel>(`${this.baseUrl}/api/social/groups`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title, invitedActorIds }) }); }
   /** Subscribe to committed social events. */
-  streamSocialEvents(onEvent: () => void): () => void { let source: EventSource | undefined; let retryTimer: number | undefined; let closed = false; const handler = () => onEvent(); const connect = (): void => { if (closed) return; source = new EventSource(`${this.baseUrl}/api/social/events/stream`); ['channel-created', 'message-added', 'membership-changed', 'intention-created'].forEach((name) => source?.addEventListener(name, handler)); source.onerror = () => { source?.close(); if (!closed) retryTimer = window.setTimeout(connect, 2000); }; }; connect(); return () => { closed = true; if (retryTimer !== undefined) window.clearTimeout(retryTimer); source?.close(); }; }
+  streamSocialEvents(onEvent: () => void, inspect = false): () => void { let source: EventSource | undefined; let retryTimer: number | undefined; let closed = false; const handler = () => onEvent(); const connect = (): void => { if (closed) return; source = new EventSource(`${this.baseUrl}/api/social/events/stream${inspect ? '?inspect=true' : ''}`); ['channel-created', 'message-added', 'membership-changed', 'intention-created'].forEach((name) => source?.addEventListener(name, handler)); source.onerror = () => { source?.close(); if (!closed) retryTimer = window.setTimeout(connect, 2000); }; }; connect(); return () => { closed = true; if (retryTimer !== undefined) window.clearTimeout(retryTimer); source?.close(); }; }
 
   /**
    * Stream logs via Server-Sent Events
