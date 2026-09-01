@@ -1,0 +1,335 @@
+{
+  "generatedAt": "2026-09-01T05:06:21.555Z",
+  "results": [
+    {
+      "benchmarkVersion": "3.8.2.1",
+      "scenario": "single",
+      "promptVariant": "baseline",
+      "condition": {
+        "label": "Condition A",
+        "modelRefs": [
+          "opencode-go/muse-spark-1.2-contributor"
+        ],
+        "resolvedModels": [
+          {
+            "requestedModelRef": "opencode-go/muse-spark-1.2-contributor",
+            "resolvedProvider": "opencode-go",
+            "resolvedNativeModelId": "muse-spark-1.2-contributor",
+            "transportFamily": "responses"
+          }
+        ]
+      },
+      "preset": "screen",
+      "pacing": "quiet",
+      "actorCount": 2,
+      "requestedModels": [
+        "opencode-go/muse-spark-1.2-contributor"
+      ],
+      "resolvedModels": [
+        {
+          "requestedModelRef": "opencode-go/muse-spark-1.2-contributor",
+          "resolvedProvider": "opencode-go",
+          "resolvedNativeModelId": "muse-spark-1.2-contributor",
+          "transportFamily": "responses"
+        }
+      ],
+      "outputTokenLimit": 1024,
+      "timestamp": "2026-09-01T05:06:18.007Z",
+      "diagnosticsTruncated": false,
+      "exercised": {
+        "cascadeOutcomes": [
+          {
+            "settled": true,
+            "timedOut": false,
+            "state": "completed"
+          }
+        ]
+      },
+      "metrics": {
+        "decisions": 1,
+        "providerAttempts": 1,
+        "providerRetries": 0,
+        "providerFailures": {
+          "rate-limit": 0,
+          "timeout": 0,
+          "network": 0,
+          "other": 0
+        },
+        "providerFailureDetails": [],
+        "firstAttemptSuccesses": 1,
+        "semanticRetries": 0,
+        "failures": 0,
+        "runtimeRefusals": 0,
+        "passes": 0,
+        "committedModelSpeech": 1,
+        "worldSpeech": 1,
+        "dmSpeech": 0,
+        "groupSpeech": 0,
+        "actions": {
+          "reply": 1
+        },
+        "privateChannels": 0,
+        "actors": 2,
+        "latency": {
+          "medianMs": 4141,
+          "p95Ms": 4141
+        },
+        "queueWait": {
+          "medianMs": 3,
+          "p95Ms": 3
+        },
+        "tokens": {
+          "input": 0,
+          "output": 0,
+          "total": 0
+        },
+        "cost": 0,
+        "models": [
+          {
+            "model": "opencode-go/muse-spark-1.2-contributor",
+            "decisions": 1,
+            "providerAttempts": 1,
+            "providerRetries": 0,
+            "providerFailures": {
+              "rate-limit": 0,
+              "timeout": 0,
+              "network": 0,
+              "other": 0
+            },
+            "firstAttemptSuccesses": 1,
+            "semanticRetries": 0,
+            "passes": 0,
+            "actions": [
+              "reply"
+            ],
+            "latency": {
+              "medianMs": 4141,
+              "p95Ms": 4141
+            },
+            "tokens": {
+              "input": 0,
+              "output": 0,
+              "total": 0
+            },
+            "cost": 0
+          }
+        ]
+      },
+      "cascades": [
+        {
+          "id": "msg:1",
+          "state": "completed",
+          "modelRuns": 1,
+          "committedModelMessages": 1,
+          "durationMs": 4151,
+          "budgets": {
+            "maxModelRuns": 2,
+            "maxCommittedModelMessages": 2
+          }
+        }
+      ],
+      "transcripts": [
+        {
+          "kind": "world",
+          "title": "WORLD",
+          "messages": [
+            {
+              "speaker": "Human",
+              "text": "Protocol preflight: greet the room or pass if you have nothing useful to add."
+            },
+            {
+              "speaker": "Aurelia 1",
+              "text": "Greetings, world — Aurelia 1 here. Present and listening."
+            }
+          ]
+        }
+      ],
+      "reviewTranscripts": [
+        {
+          "condition": "Condition A",
+          "transcripts": [
+            {
+              "kind": "world",
+              "title": "WORLD",
+              "messages": [
+                {
+                  "speaker": "Human",
+                  "text": "Protocol preflight: greet the room or pass if you have nothing useful to add."
+                },
+                {
+                  "speaker": "Aurelia 1",
+                  "text": "Greetings, world — Aurelia 1 here. Present and listening."
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "benchmarkVersion": "3.8.2.1",
+      "scenario": "single",
+      "promptVariant": "baseline",
+      "condition": {
+        "label": "Condition B",
+        "modelRefs": [
+          "opencode-go/muse-spark-1.2-contributor"
+        ],
+        "resolvedModels": [
+          {
+            "requestedModelRef": "opencode-go/muse-spark-1.2-contributor",
+            "resolvedProvider": "opencode-go",
+            "resolvedNativeModelId": "muse-spark-1.2-contributor",
+            "transportFamily": "responses"
+          }
+        ]
+      },
+      "preset": "screen",
+      "pacing": "quiet",
+      "actorCount": 2,
+      "requestedModels": [
+        "opencode-go/muse-spark-1.2-contributor"
+      ],
+      "resolvedModels": [
+        {
+          "requestedModelRef": "opencode-go/muse-spark-1.2-contributor",
+          "resolvedProvider": "opencode-go",
+          "resolvedNativeModelId": "muse-spark-1.2-contributor",
+          "transportFamily": "responses"
+        }
+      ],
+      "outputTokenLimit": 1024,
+      "timestamp": "2026-09-01T05:06:21.546Z",
+      "diagnosticsTruncated": false,
+      "exercised": {
+        "cascadeOutcomes": [
+          {
+            "settled": true,
+            "timedOut": false,
+            "state": "completed"
+          }
+        ]
+      },
+      "metrics": {
+        "decisions": 1,
+        "providerAttempts": 1,
+        "providerRetries": 0,
+        "providerFailures": {
+          "rate-limit": 0,
+          "timeout": 0,
+          "network": 0,
+          "other": 0
+        },
+        "providerFailureDetails": [],
+        "firstAttemptSuccesses": 1,
+        "semanticRetries": 0,
+        "failures": 0,
+        "runtimeRefusals": 0,
+        "passes": 0,
+        "committedModelSpeech": 1,
+        "worldSpeech": 1,
+        "dmSpeech": 0,
+        "groupSpeech": 0,
+        "actions": {
+          "reply": 1
+        },
+        "privateChannels": 0,
+        "actors": 2,
+        "latency": {
+          "medianMs": 3396,
+          "p95Ms": 3396
+        },
+        "queueWait": {
+          "medianMs": 3,
+          "p95Ms": 3
+        },
+        "tokens": {
+          "input": 0,
+          "output": 0,
+          "total": 0
+        },
+        "cost": 0,
+        "models": [
+          {
+            "model": "opencode-go/muse-spark-1.2-contributor",
+            "decisions": 1,
+            "providerAttempts": 1,
+            "providerRetries": 0,
+            "providerFailures": {
+              "rate-limit": 0,
+              "timeout": 0,
+              "network": 0,
+              "other": 0
+            },
+            "firstAttemptSuccesses": 1,
+            "semanticRetries": 0,
+            "passes": 0,
+            "actions": [
+              "reply"
+            ],
+            "latency": {
+              "medianMs": 3396,
+              "p95Ms": 3396
+            },
+            "tokens": {
+              "input": 0,
+              "output": 0,
+              "total": 0
+            },
+            "cost": 0
+          }
+        ]
+      },
+      "cascades": [
+        {
+          "id": "msg:1",
+          "state": "completed",
+          "modelRuns": 1,
+          "committedModelMessages": 1,
+          "durationMs": 3404,
+          "budgets": {
+            "maxModelRuns": 2,
+            "maxCommittedModelMessages": 2
+          }
+        }
+      ],
+      "transcripts": [
+        {
+          "kind": "world",
+          "title": "WORLD",
+          "messages": [
+            {
+              "speaker": "Human",
+              "text": "Protocol preflight: greet the room or pass if you have nothing useful to add."
+            },
+            {
+              "speaker": "Aurelia 1",
+              "text": "Aurelia 1 here. Greetings to the room."
+            }
+          ]
+        }
+      ],
+      "reviewTranscripts": [
+        {
+          "condition": "Condition B",
+          "transcripts": [
+            {
+              "kind": "world",
+              "title": "WORLD",
+              "messages": [
+                {
+                  "speaker": "Human",
+                  "text": "Protocol preflight: greet the room or pass if you have nothing useful to add."
+                },
+                {
+                  "speaker": "Aurelia 1",
+                  "text": "Aurelia 1 here. Greetings to the room."
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
