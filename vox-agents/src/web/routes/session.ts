@@ -110,7 +110,7 @@ async function buildCivilizationMinds(session: NonNullable<ReturnType<typeof ses
     const snapshot = players[String(playerId)];
     const facts = typeof snapshot === 'object' && snapshot !== null ? snapshot : undefined;
     const humanPlayerId = session.getHumanPlayerId?.();
-    const memory = session.getPoliticalMemorySnapshot?.(playerId);
+    const memory = session.getCivilizationMemorySnapshot?.(playerId);
     const architecture = assignment?.mind === 'unified-mind'
       ? 'unified-mind' as const
       : humanPlayerId === playerId || assignment?.strategist === 'human-strategist'

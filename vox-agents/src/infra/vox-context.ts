@@ -61,12 +61,15 @@ import type {
   UnifiedWakeType,
 } from "./vox-run.js";
 import winston from "winston";
+import { appendStrategyFact } from "../civilization-memory/civilization-memory-ingestion.js";
+import type { StrategistParameters } from "../strategist/strategy-parameters.js";
 
 /** Resolve the unified civilization wake label without importing the agent adapters. */
 function unifiedWakeForAgent(agentName: string): UnifiedWakeType | undefined {
   if (agentName === "unified-mind-strategist") return "strategic";
   if (agentName === "unified-mind-diplomat") return "diplomacy";
   if (agentName === "unified-mind-negotiator") return "deal";
+  if (agentName === "unified-mind-memory") return "memory";
   return undefined;
 }
 
@@ -719,7 +722,9 @@ export class VoxContext<TParameters extends AgentParameters> {
                       : toolNames.has('close-conversation') ? 'close'
                         : toolNames.has('call-negotiator') ? 'deal'
                           : toolNames.has('send-message') ? 'spoke' : undefined
-                    : toolNames.has('accept-deal') ? 'accepted'
+                    : wake === 'memory'
+                      ? toolNames.has('save-long-term-chronicle') ? 'compacted' : undefined
+                      : toolNames.has('accept-deal') ? 'accepted'
                       : toolNames.has('reject-deal') ? 'rejected'
                         : toolNames.has('propose-deal') ? 'proposed' : undefined;
                 if (outcome) wakeState!.outcome = outcome;
@@ -727,6 +732,21 @@ export class VoxContext<TParameters extends AgentParameters> {
             }
 
             this.logger.info(`Agent execution completed: ${agentName} with ${allSteps.length} steps`);
+
+            // Record the authoritative strategy action as factual self-history after the agent loop
+            // succeeds. This is intentionally outside the model prompt and never classifies meaning.
+            const memoryParameters = params as unknown as StrategistParameters;
+            if (agentName === 'unified-mind-strategist' && memoryParameters.civilizationMemoryEnabled && memoryParameters.civilizationMemoryStore) {
+              for (const step of allSteps) {
+                for (const call of step.toolCalls) {
+                  const recordedCall = call as { toolName: string; args?: Record<string, unknown> };
+                  if (recordedCall.toolName !== 'set-strategy' && recordedCall.toolName !== 'set-flavors' && recordedCall.toolName !== 'keep-status-quo') continue;
+                  const args = recordedCall.args ?? {};
+                  const rationale = typeof args.Rationale === 'string' ? args.Rationale : '';
+                  appendStrategyFact(memoryParameters.civilizationMemoryStore!, memoryParameters, recordedCall.toolName, rationale, span.spanContext().traceId);
+                }
+              }
+            }
 
             // Accrue tokens to the active root's sink and the seat-wide totals.
             root.tokens.inputTokens += inputTokens;

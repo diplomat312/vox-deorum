@@ -34,6 +34,9 @@ export const unifiedDiplomatAgentName = "unified-mind-diplomat" as const;
 /** The binding deal wake used by unified seats. */
 export const unifiedNegotiatorAgentName = "unified-mind-negotiator" as const;
 
+/** The same configured mind used for longitudinal memory maintenance. */
+export const unifiedMemoryAgentName = "unified-mind-memory" as const;
+
 /** The single per-seat model override key used by both unified wake adapters. */
 export const unifiedMindModelKey = "unified-mind" as const;
 
@@ -89,6 +92,7 @@ export function unifiedModelOverrides(
     unifiedStrategistAgentName,
     unifiedDiplomatAgentName,
     unifiedNegotiatorAgentName,
+    unifiedMemoryAgentName,
     "negotiator",
     "specialized-briefer",
     "diplomatic-analyst",
@@ -131,17 +135,19 @@ function identityFrom(parameters: StrategistParameters): { civilization: string;
 /** Build the common political identity shared by strategic and social invocations. */
 export function buildUnifiedMindIdentity(
   parameters: StrategistParameters,
-  wake: "strategic" | "social" | "deal",
+  wake: "strategic" | "social" | "deal" | "memory",
 ): string {
   const wakeInstruction = wake === "strategic"
     ? "This is a strategic wake. Choose the available high-level strategy action or keep the status quo."
     : wake === "deal"
       ? "This is a deal-decision wake. Inspect the available terms and choose the binding deal action that best serves our strategy and commitments."
-      : "This is a diplomacy wake. Use the available conversation and deal tools when useful, or pass with the explicit non-spoken pass action.";
+      : wake === "memory"
+        ? "This is a memory-maintenance wake. Preserve politically meaningful continuity without inventing facts."
+        : "This is a diplomacy wake. Use the available conversation and deal tools when useful, or pass with the explicit non-spoken pass action.";
 
   return `${buildUnifiedMindCanonicalIdentity(parameters)} You are not an adviser, envoy, spokesperson, or external assistant. You are the civilization's decision-making political actor. You are responsible for strategy, diplomacy, promises, threats, coalition behavior, economic and military priorities, and the consistency of those choices over time.
 
-Treat each diplomatic channel's visibility scope as distinct. Never reveal a private message to actors who were not entitled to see it unless you deliberately choose to disclose your own information as a political act. Track what your civilization has promised, implied, threatened, requested, and learned. Adapt when the balance of power changes. Passing or maintaining the status quo is valid when intervention has no strategic value. Use political-memory support tools sparingly for durable goals, promises, threats, meaningful relationship changes, uncertain beliefs, major episodes, and ongoing projects. Do not record trivial conversation, and do not treat political memory as authoritative game facts.
+Treat each diplomatic channel's visibility scope as distinct. Never reveal a private message to actors who were not entitled to see it unless you deliberately choose to disclose your own information as a political act. Interpret factual history yourself. Your Current Outlook and Long-Term Chronicle are your own prose memory, not authoritative game facts. Update them only when your political or strategic self-understanding materially changes.
 
 ${wakeInstruction}
 Keep this civilization's identity, state, goals, posture, relationships, and commitments coherent across every wake.`;

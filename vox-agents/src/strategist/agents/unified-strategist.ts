@@ -14,8 +14,9 @@ import { VoxContext } from "../../infra/vox-context.js";
 import type { Model } from "../../types/config.js";
 import type { StrategistParameters } from "../strategy-parameters.js";
 import { buildRecentDiplomacyMessage, buildUnifiedMindCanonicalIdentity, buildUnifiedMindIdentity, getUnifiedMindModel } from "../unified-civilization-mind.js";
-import { getPoliticalMemoryContext, memoryToolNames } from "../../political-memory/political-memory-context.js";
-import { createPoliticalMemoryTools } from "../../political-memory/political-memory-tools.js";
+import { buildCivilizationMemoryContext, civilizationMemoryToolNames } from "../../civilization-memory/civilization-memory-context.js";
+import { createCivilizationMemoryTools } from "../../civilization-memory/civilization-memory-tools.js";
+import { runCivilizationMemoryMaintenance } from "../../civilization-memory/civilization-memory-maintenance.js";
 
 /** Strategic adapter that invokes the shared civilization-level policy. */
 export class UnifiedStrategist extends SimpleStrategist {
@@ -80,8 +81,9 @@ ${SimpleBriefer.eventsPrompt}`.trim();
     input: unknown,
     context: VoxContext<StrategistParameters>,
   ): Promise<ModelMessage[]> {
+    await runCivilizationMemoryMaintenance(context, parameters);
     const messages = await super.getInitialMessages(parameters, input, context);
-    const memory = getPoliticalMemoryContext(parameters, 'strategic');
+    const memory = buildCivilizationMemoryContext(parameters, 'strategic');
     if (memory) messages.push(memory);
     const diplomacy = await buildRecentDiplomacyMessage(parameters);
     if (diplomacy) messages.push(diplomacy);
@@ -90,11 +92,11 @@ ${SimpleBriefer.eventsPrompt}`.trim();
 
   /** Expose semantic-memory support tools alongside ordinary strategic actions. */
   override getExtraTools(context: VoxContext<StrategistParameters>) {
-    return createPoliticalMemoryTools(context);
+    return createCivilizationMemoryTools(context);
   }
 
   /** Make memory support actions available without changing the strategic terminal contract. */
   override getActiveTools(parameters: StrategistParameters): string[] | undefined {
-    return [...(super.getActiveTools(parameters) ?? []), ...memoryToolNames()];
+    return [...(super.getActiveTools(parameters) ?? []), ...civilizationMemoryToolNames()];
   }
 }

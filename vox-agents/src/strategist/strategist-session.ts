@@ -21,8 +21,8 @@ import { ProductionController } from "../infra/production-controller.js";
 import { config } from "../utils/config.js";
 import { SessionStatus, PlayerAssignment, PlayerRuntimeContext } from "../types/api.js";
 import { SeatingStateManager } from "../utils/game/seating/state.js";
-import { PoliticalMemoryStore } from "../political-memory/political-memory-store.js";
-import type { PoliticalMemorySnapshot } from "../political-memory/types.js";
+import { CivilizationMemoryStore } from "../civilization-memory/civilization-memory-store.js";
+import type { CivilizationMemorySnapshot } from "../civilization-memory/types.js";
 import path from 'node:path';
 import type { ObservedSeating, SeatingClaim } from "../utils/game/seating/types.js";
 import { getMetadata, setMetadata } from "../utils/game/metadata.js";
@@ -82,7 +82,7 @@ export class StrategistSession extends VoxSession<StrategistSessionConfig> {
   });
 
   /** Persistent stores keyed by game so crash recovery and resumed games retain semantic memory. */
-  private readonly politicalMemoryStores = new Map<string, PoliticalMemoryStore>();
+  private readonly civilizationMemoryStores = new Map<string, CivilizationMemoryStore>();
 
   /**
    * Single owner of seeding + seed-cycle state, always constructed. In the
@@ -394,8 +394,8 @@ export class StrategistSession extends VoxSession<StrategistSessionConfig> {
       // release mirrors the session outcome (no-op when no manager configured).
       await this.releaseSeatingClaim(this.victoryObserved);
     } finally {
-      for (const store of this.politicalMemoryStores.values()) store.close();
-      this.politicalMemoryStores.clear();
+      for (const store of this.civilizationMemoryStores.values()) store.close();
+      this.civilizationMemoryStores.clear();
       sessionRegistry.unregister(this.id);
       this.victoryResolve?.();
       this.onStateChange('stopped');
@@ -588,12 +588,12 @@ export class StrategistSession extends VoxSession<StrategistSessionConfig> {
     const seatingMap = this.seatingClaim!.seatingMap;
     await this.writeSeatingMetadata();
 
-    const politicalMemoryStore = this.getPoliticalMemoryStore(params.gameID);
+    const civilizationMemoryStore = this.getCivilizationMemoryStore(params.gameID);
 
     // Create new players using the seating map
     for (const [configSlotStr, playerConfig] of Object.entries(this.config.llmPlayers)) {
       const actualPlayerID = seatingMap[configSlotStr] ?? parseInt(configSlotStr);
-      const player = new VoxPlayer(actualPlayerID, playerConfig, params.gameID, params.turn, this.humanDecisionBus, this.seatingClaim?.seeds?.sync, this, politicalMemoryStore);
+      const player = new VoxPlayer(actualPlayerID, playerConfig, params.gameID, params.turn, this.humanDecisionBus, this.seatingClaim?.seeds?.sync, this, civilizationMemoryStore);
       await player.context.registerTools();
       this.activePlayers.set(actualPlayerID, player);
       player.execute();
@@ -1006,19 +1006,20 @@ ${overrideLine}Game.SetAIAutoPlay(${autoPlayTurnLimit}, -1);`
   }
 
   /** Return durable semantic political memory for a unified seat. */
-  override getPoliticalMemorySnapshot(playerId: number): PoliticalMemorySnapshot | undefined {
+  override getCivilizationMemorySnapshot(playerId: number): CivilizationMemorySnapshot | undefined {
     if (!this.gameID || this.getPlayerAssignments()[playerId]?.mind !== 'unified-mind') return undefined;
-    return this.politicalMemoryStores.get(this.gameID)?.getSnapshot(this.gameID, playerId, this.turn ?? 0);
+    const store = this.civilizationMemoryStores.get(this.gameID);
+    return store?.getSnapshot({ gameId: this.gameID, ownerPlayerId: playerId, turn: this.turn ?? 0 });
   }
 
   /** Open or reuse the game-scoped political memory database. */
-  private getPoliticalMemoryStore(gameID: string): PoliticalMemoryStore {
-    const existing = this.politicalMemoryStores.get(gameID);
+  private getCivilizationMemoryStore(gameID: string): CivilizationMemoryStore {
+    const existing = this.civilizationMemoryStores.get(gameID);
     if (existing) return existing;
     const directory = path.join(config.telemetryDir || 'telemetry', 'political-memory');
     const safeGameID = gameID.replace(/[^a-zA-Z0-9_-]/g, '_');
-    const store = new PoliticalMemoryStore(path.join(directory, `${safeGameID}.db`));
-    this.politicalMemoryStores.set(gameID, store);
+    const store = new CivilizationMemoryStore(path.join(directory, `${safeGameID}.db`));
+    this.civilizationMemoryStores.set(gameID, store);
     return store;
   }
 

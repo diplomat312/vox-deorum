@@ -11,6 +11,7 @@ import type { VictoryProgressReport } from "../../../mcp-server/dist/tools/knowl
 import type { GameMetadata } from "../../../mcp-server/dist/tools/knowledge/get-game-settings.js"
 import { StrategyDecisionType } from "../types/config.js";
 import type { HumanDecisionBus } from "./human-decision-bus.js";
+import type { CivilizationMemoryStore } from "../civilization-memory/civilization-memory-store.js";
 import type { PoliticalMemoryStore } from "../political-memory/political-memory-store.js";
 
 /**
@@ -37,7 +38,13 @@ export interface StrategistParameters extends AgentParameters {
    * for every seat by VoxPlayer, but only the human strategist reads it to block on
    * and receive the panel's submission. */
   _humanDecisionBus?: HumanDecisionBus;
-  /** Shared civilization-owned political memory for all unified wake adapters. */
+  /** Shared civilization-owned plaintext continuity for all unified wake adapters. */
+  civilizationMemoryStore?: CivilizationMemoryStore;
+  /** Whether this seat is an active unified civilization memory owner. */
+  civilizationMemoryEnabled?: boolean;
+  /** Revision observed when the current wake assembled its Current Outlook. */
+  civilizationMemoryOutlookRevision?: number;
+  /** @deprecated Retained only so old analysis fixtures can be replayed during migration. */
   politicalMemoryStore?: PoliticalMemoryStore;
 }
 

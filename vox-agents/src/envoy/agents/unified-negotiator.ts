@@ -14,8 +14,8 @@ import type { StrategistParameters } from "../../strategist/strategy-parameters.
 import { buildGameContextMessages } from "../../strategist/strategy-parameters.js";
 import { buildUnifiedMindIdentity, getUnifiedMindModel } from "../../strategist/unified-civilization-mind.js";
 import type { NegotiatorInput } from "../context/negotiator-utils.js";
-import { getPoliticalMemoryContext, memoryToolNames } from "../../political-memory/political-memory-context.js";
-import { createPoliticalMemoryTools } from "../../political-memory/political-memory-tools.js";
+import { buildCivilizationMemoryContext, civilizationMemoryToolNames } from "../../civilization-memory/civilization-memory-context.js";
+import { createCivilizationMemoryTools } from "../../civilization-memory/civilization-memory-tools.js";
 
 /** Deal adapter that keeps binding authority inside the unified civilization mind. */
 export class UnifiedNegotiator extends Negotiator {
@@ -57,12 +57,12 @@ ${this.getDealMechanicsPrompt().replace("# Deal mechanics\n", "")}
 
   /** Expose the same semantic-memory support actions without changing deal terminal actions. */
   override getExtraTools(context: VoxContext<StrategistParameters>) {
-    return { ...super.getExtraTools(context), ...createPoliticalMemoryTools(context) };
+    return { ...super.getExtraTools(context), ...createCivilizationMemoryTools(context) };
   }
 
   /** Add shared memory support tools while retaining exactly one deal terminal action. */
   override getActiveTools(_parameters: StrategistParameters): string[] | undefined {
-    return ["get-briefing", "get-diplomatic-events", ...memoryToolNames(), ...this.completionTools];
+    return ["get-briefing", "get-diplomatic-events", ...civilizationMemoryToolNames(), ...this.completionTools];
   }
 
   /** Insert counterpart-focused political memory into the common deal prompt. */
@@ -74,7 +74,7 @@ ${this.getDealMechanicsPrompt().replace("# Deal mechanics\n", "")}
     const messages = await super.getInitialMessages(parameters, input, context);
     const thread = input.thread;
     const counterpart = thread.agent === thread.player1ID ? thread.player2ID : thread.player1ID;
-    const memory = getPoliticalMemoryContext(parameters, 'deal', counterpart >= 0 ? counterpart : undefined);
+    const memory = buildCivilizationMemoryContext(parameters, 'deal', counterpart >= 0 ? counterpart : undefined);
     if (memory) messages.splice(Math.max(0, messages.length - 1), 0, memory);
     return messages;
   }

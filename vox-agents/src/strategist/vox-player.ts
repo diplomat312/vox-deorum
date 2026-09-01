@@ -19,7 +19,8 @@ import { PlayerConfig } from "../types/config.js";
 import { HumanDecisionBus } from "./human-decision-bus.js";
 import { isScheduledDecision, normalizePacing, shouldInterruptDecision, type NormalizedPacingConfig } from "./pacing.js";
 import { isUnifiedMindPlayer, strategicAgentForPlayer, unifiedModelOverrides } from "./unified-civilization-mind.js";
-import type { PoliticalMemoryStore } from "../political-memory/political-memory-store.js";
+import type { CivilizationMemoryStore } from "../civilization-memory/civilization-memory-store.js";
+import { appendGameEventFacts } from "../civilization-memory/civilization-memory-ingestion.js";
 
 /**
  * Manages a single player's strategist execution within a game session.
@@ -54,7 +55,7 @@ export class VoxPlayer {
     humanDecisionBus: HumanDecisionBus,
     syncSeed?: number,
     session?: VoxSession,
-    politicalMemoryStore?: PoliticalMemoryStore
+    civilizationMemoryStore?: CivilizationMemoryStore
   ) {
     this.logger = createLogger(`VoxPlayer-${playerID}`);
     // Throws on an unknown interruption name so misconfiguration fails fast.
@@ -85,7 +86,8 @@ export class VoxPlayer {
       // Populated for every seat; only the human strategist reads it (to block
       // on and receive the in-game panel's submission).
       _humanDecisionBus: humanDecisionBus,
-      politicalMemoryStore
+      civilizationMemoryStore,
+      civilizationMemoryEnabled: playerConfig.mind === "unified-mind"
     };
 
     // The persistent event cursor starts where the strategist begins fetching.
@@ -201,6 +203,9 @@ export class VoxPlayer {
                 // Refresh all strategy parameters
                 const cullLimit = Math.max(10, this.pacing.everyTurns + 1);
                 const state = await ensureGameState(this.context, params, cullLimit);
+                if (params.civilizationMemoryEnabled && params.civilizationMemoryStore) {
+                  appendGameEventFacts(params.civilizationMemoryStore, params, state.mergedEvents ?? state.events);
+                }
                 // Advance the event cursor: we've now fetched events through this turn. The next
                 // refresh fetches from here, so a turn dropped before it was processed folds its
                 // events into the following fetch (nothing is lost). A failed refresh throws above,
@@ -369,7 +374,7 @@ export class VoxPlayer {
   }
 
   /** Return active unified wakes without exposing prompts, model input, or private messages. */
-  getActiveUnifiedWakes(): Array<{ runId: string; wake: 'strategic' | 'diplomacy' | 'deal'; startedAt: number }> {
+  getActiveUnifiedWakes(): Array<{ runId: string; wake: 'strategic' | 'diplomacy' | 'deal' | 'memory'; startedAt: number }> {
     return this.context.getActiveUnifiedWakes();
   }
 

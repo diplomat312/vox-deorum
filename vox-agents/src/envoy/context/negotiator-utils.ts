@@ -36,6 +36,7 @@ import {
   formatResolutionErrors,
 } from "../ledger/ledger-resolver.js";
 import type { DealPayload, PromiseTerm } from "../../../../mcp-server/dist/utils/deal-schema.js";
+import { appendDealFact } from "../../civilization-memory/civilization-memory-ingestion.js";
 import {
   endpoints,
   formatDealLedger,
@@ -258,7 +259,7 @@ export function createNegotiatorTerminalTools(context: VoxContext<StrategistPara
           .string()
           .describe("One single sentence the diplomat will voice to the counterpart, conveying the acceptance."),
       }),
-      execute: async (args, _parameters, options) => {
+      execute: async (args, parameters, options) => {
         const ni = input();
         if (!ni) return "No negotiation context is active.";
         const claimed = claimStep(options, "accept-deal");
@@ -286,6 +287,9 @@ export function createNegotiatorTerminalTools(context: VoxContext<StrategistPara
             proposalMessageID: ni.activeProposal.messageID,
             enact,
           };
+          if (parameters.civilizationMemoryEnabled && parameters.civilizationMemoryStore) {
+            appendDealFact(parameters.civilizationMemoryStore, parameters, ni.thread, ni.activeProposal.messageID, parameters.turn, `Deal accepted with ${args.Message}`);
+          }
           return `Accepted proposal #${ni.activeProposal.messageID} ${
             enact.enacted
               ? "(enacted)."
@@ -322,7 +326,7 @@ export function createNegotiatorTerminalTools(context: VoxContext<StrategistPara
             "menu of what the counterpart can give (same format as Give)."
         ),
       }),
-      execute: async (args, _parameters, options) => {
+      execute: async (args, parameters, options) => {
         const ni = input();
         if (!ni) return "No negotiation context is active.";
         const claimed = claimStep(options, "propose-deal");
@@ -389,6 +393,9 @@ export function createNegotiatorTerminalTools(context: VoxContext<StrategistPara
             inspection,
             turn,
           };
+          if (parameters.civilizationMemoryEnabled && parameters.civilizationMemoryStore) {
+            appendDealFact(parameters.civilizationMemoryStore, parameters, ni.thread, id, parameters.turn, `${isCounter ? 'Deal countered' : 'Deal proposed'} with ${args.Message}. Terms: ${JSON.stringify(storedDeal)}`);
+          }
           return `${isCounter ? "Counter" : "Proposal"} recorded as deal message #${id}.`;
         } catch (error) {
           // An untradeable term: reframe each per-item reason in Give/Receive terms so the model can fix it.
@@ -414,7 +421,7 @@ export function createNegotiatorTerminalTools(context: VoxContext<StrategistPara
           .string()
           .describe("One single sentence the diplomat will voice to the counterpart, conveying the rejection."),
       }),
-      execute: async (args, _parameters, options) => {
+      execute: async (args, parameters, options) => {
         const ni = input();
         if (!ni) return "No negotiation context is active.";
         const claimed = claimStep(options, "reject-deal");
@@ -444,6 +451,9 @@ export function createNegotiatorTerminalTools(context: VoxContext<StrategistPara
             proposalMessageID: ni.activeProposal.messageID,
             rejectMessageID: id,
           };
+          if (parameters.civilizationMemoryEnabled && parameters.civilizationMemoryStore) {
+            appendDealFact(parameters.civilizationMemoryStore, parameters, ni.thread, id, parameters.turn, `Deal rejected with ${args.Message}`);
+          }
           return `Rejected proposal #${ni.activeProposal.messageID} (deal-reject #${id}).`;
         } catch (error) {
           logger.error("Failed to record rejection", { error });

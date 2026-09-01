@@ -11,12 +11,12 @@ import type { ModelSize } from './config.js';
 import type { PlayersReport } from '../../../mcp-server/dist/tools/knowledge/get-players.js';
 // Pinned deal contract shared across interactive-diplomacy stages 4–6.
 import type { DealPayload, DealTranscriptMessage } from '../../../mcp-server/dist/utils/deal-schema.js';
-import type { PoliticalMemorySnapshot } from '../political-memory/types.js';
+import type { CivilizationMemorySnapshot } from '../civilization-memory/types.js';
 
 // Re-export types that are used in API responses
 export type { PlayersReport };
 export type { DealPayload, TradeItem, PromiseTerm, PerItemValueMap, DealMessagePayload, DealTranscriptMessage } from '../../../mcp-server/dist/utils/deal-schema.js';
-export type { PoliticalMemorySnapshot } from '../political-memory/types.js';
+export type { CivilizationMemorySnapshot } from '../civilization-memory/types.js';
 // The enriched `inspect-deal` result shape is owned by the tool (interactive-diplomacy stage 4);
 // re-export it (and its normalized range / candidate / promise-target types) verbatim so the Web
 // deal board consumes the same explicit interfaces the tool returns rather than loose records.
@@ -639,7 +639,7 @@ export interface PlayersSummaryResponse {
 /** One active unified wake exposed by the live runtime, before span export. */
 export interface CivilizationMindActivityWake {
   runId: string;
-  wake: 'strategic' | 'diplomacy' | 'deal';
+  wake: 'strategic' | 'diplomacy' | 'deal' | 'memory';
   startedAt: number;
 }
 
@@ -661,7 +661,7 @@ export interface CivilizationMindTokens {
 
 /** Completed canonical unified wake metadata shown in the monitoring UI. */
 export interface CivilizationMindWakeRecord {
-  wake: 'strategic' | 'diplomacy' | 'deal';
+  wake: 'strategic' | 'diplomacy' | 'deal' | 'memory';
   turn?: number;
   outcome: string;
   model?: string;
@@ -684,7 +684,7 @@ export interface CivilizationMindReadModel {
   game: { score?: number; currentResearch?: string; activeAgreementCount: number };
   recentWakes: CivilizationMindWakeRecord[];
   /** Durable semantic political state for unified seats. */
-  memory?: PoliticalMemorySnapshot;
+  memory?: CivilizationMemorySnapshot;
 }
 
 /** GET /api/session/minds response. */

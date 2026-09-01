@@ -7,7 +7,7 @@
 
 import { v4 as uuidv4 } from 'uuid';
 import type { SessionConfig } from '../types/config.js';
-import type { PlayerAssignment, PlayerRuntimeContext, PoliticalMemorySnapshot, SessionState, SessionStatus } from '../types/api.js';
+import type { PlayerAssignment, PlayerRuntimeContext, CivilizationMemorySnapshot, SessionState, SessionStatus } from '../types/api.js';
 
 /**
  * Abstract base class for all Vox session types.
@@ -82,7 +82,7 @@ export abstract class VoxSession<TConfig extends SessionConfig = SessionConfig> 
   }
 
   /** Return the current civilization-owned political memory for one seat, when supported. */
-  getPoliticalMemorySnapshot(_playerId: number): PoliticalMemorySnapshot | undefined {
+  getCivilizationMemorySnapshot(_playerId: number): CivilizationMemorySnapshot | undefined {
     return undefined;
   }
 

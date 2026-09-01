@@ -23,6 +23,7 @@ import { appendTranscriptMessageRow } from "../../utils/diplomacy/transcript/tra
 import { reportSpokenRow } from "../../utils/diplomacy/turn/active-turn-state.js";
 import { speakerLabel } from "../../utils/diplomacy/transcript/transcript-utils.js";
 import { stripSpokenEcho } from "../../utils/models/text-cleaning.js";
+import { appendDiplomacyFact } from "../../civilization-memory/civilization-memory-ingestion.js";
 
 // The canonical name lives in a zero-dependency leaf so the archival reducer and the streamer can
 // share it without pulling in this tool's heavy deps; re-export it here for tool-module importers.
@@ -47,7 +48,7 @@ export function createSendMessageTool(context: VoxContext<StrategistParameters>)
             "What you say to the counterpart, in your own diplomatic voice."
           ),
       }),
-      execute: async (input) => {
+      execute: async (input, parameters) => {
         const thread = context.currentInput as EnvoyThread | undefined;
         if (thread?.diplomacy) {
           const content = stripSpokenEcho(input.Message, speakerLabel(thread, thread.agent));
@@ -57,6 +58,9 @@ export function createSendMessageTool(context: VoxContext<StrategistParameters>)
           // A failed append must reject the tool call. Returning a normal confirmation would let the
           // model and client treat an undurable spoken message as delivered.
           const row = await appendTranscriptMessageRow(thread, thread.agent, content);
+          if (parameters.civilizationMemoryEnabled && parameters.civilizationMemoryStore) {
+            appendDiplomacyFact(parameters.civilizationMemoryStore, parameters, thread, row);
+          }
           // This call is the only writer that knows which durable row carries the spoken reply, so it
           // names it for the turn instead of leaving reconciliation to infer it from the row set.
           reportSpokenRow(thread, row);
