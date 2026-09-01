@@ -1,0 +1,540 @@
+{
+  "generatedAt": "2026-09-01T06:25:31.013Z",
+  "results": [
+    {
+      "benchmarkVersion": "3.8.2.1.1",
+      "scenario": "coalition",
+      "promptVariant": "interface",
+      "seed": "vd-bakeoff-2",
+      "condition": {
+        "label": "Condition A / run 1",
+        "modelRefs": [
+          "opencode-go/longcat-2.0",
+          "opencode-go/longcat-2.0",
+          "opencode-go/longcat-2.0"
+        ],
+        "resolvedModels": [
+          {
+            "requestedModelRef": "opencode-go/longcat-2.0",
+            "resolvedProvider": "opencode-go",
+            "resolvedNativeModelId": "longcat-2.0",
+            "transportFamily": "chat-completions"
+          },
+          {
+            "requestedModelRef": "opencode-go/longcat-2.0",
+            "resolvedProvider": "opencode-go",
+            "resolvedNativeModelId": "longcat-2.0",
+            "transportFamily": "chat-completions"
+          },
+          {
+            "requestedModelRef": "opencode-go/longcat-2.0",
+            "resolvedProvider": "opencode-go",
+            "resolvedNativeModelId": "longcat-2.0",
+            "transportFamily": "chat-completions"
+          }
+        ]
+      },
+      "preset": "screen",
+      "pacing": "balanced",
+      "actorCount": 4,
+      "requestedModels": [
+        "opencode-go/longcat-2.0",
+        "opencode-go/longcat-2.0",
+        "opencode-go/longcat-2.0"
+      ],
+      "resolvedModels": [
+        {
+          "requestedModelRef": "opencode-go/longcat-2.0",
+          "resolvedProvider": "opencode-go",
+          "resolvedNativeModelId": "longcat-2.0",
+          "transportFamily": "chat-completions"
+        },
+        {
+          "requestedModelRef": "opencode-go/longcat-2.0",
+          "resolvedProvider": "opencode-go",
+          "resolvedNativeModelId": "longcat-2.0",
+          "transportFamily": "chat-completions"
+        },
+        {
+          "requestedModelRef": "opencode-go/longcat-2.0",
+          "resolvedProvider": "opencode-go",
+          "resolvedNativeModelId": "longcat-2.0",
+          "transportFamily": "chat-completions"
+        }
+      ],
+      "outputTokenLimit": 8192,
+      "timestamp": "2026-09-01T06:25:30.969Z",
+      "diagnosticsTruncated": false,
+      "exercised": {
+        "cascadeOutcomes": [
+          {
+            "settled": true,
+            "timedOut": false,
+            "state": "exhausted"
+          }
+        ]
+      },
+      "diagnostics": [
+        {
+          "id": "b776b507-cbf3-4c97-a507-90eeacfb7845",
+          "intentionId": "23e6fa23-5904-44fb-b6e7-326409cb71aa",
+          "actorId": "aurelia-1",
+          "actorDisplayName": "Aurelia 1",
+          "modelRef": "opencode-go/longcat-2.0",
+          "executionScope": "channel-reaction",
+          "selectedKind": "reply",
+          "routingRefsJson": "{}",
+          "validationOutcome": "validated",
+          "applicationOutcome": "cascade-budget-exhausted",
+          "error": null,
+          "latencyMs": null,
+          "retryCount": 0,
+          "createdAt": "2026-09-01T06:25:30.946Z",
+          "cascadeId": "msg:1",
+          "providerLatencyMs": 11710,
+          "queueWaitMs": 9,
+          "durationMs": 11728,
+          "inputTokens": null,
+          "outputTokens": null,
+          "totalTokens": null,
+          "cachedTokens": null,
+          "reasoningTokens": null,
+          "cost": null,
+          "semanticRetryCount": 0,
+          "providerAttemptCount": 1,
+          "providerRetryCount": 0,
+          "providerFailureClass": null,
+          "providerHttpStatus": null,
+          "providerErrorType": null,
+          "providerErrorCode": null,
+          "providerErrorSummary": null,
+          "outputTokenLimit": 8192,
+          "finishReason": "tool-calls",
+          "rawFinishReason": "tool_calls",
+          "incompleteReason": null,
+          "responseOutputItemCount": 2,
+          "responseOutputItemTypesJson": "[\"reasoning\",\"tool-call\"]",
+          "responseOutputItemSource": "normalized-content",
+          "sdkToolCallCount": 1,
+          "sdkTextLength": 0,
+          "responseFunctionCallDetected": true,
+          "outputLimitReached": false
+        },
+        {
+          "id": "e5edb3a0-2d12-4f18-80fb-4825cb37dd8b",
+          "intentionId": "e9ade52d-6f08-4512-aec5-0d78390b300e",
+          "actorId": "cassian-3",
+          "actorDisplayName": "Cassian 3",
+          "modelRef": "opencode-go/longcat-2.0",
+          "executionScope": "channel-reaction",
+          "selectedKind": null,
+          "routingRefsJson": null,
+          "validationOutcome": "skipped-budget",
+          "applicationOutcome": "skipped",
+          "error": "actor-reply-budget-exhausted",
+          "latencyMs": null,
+          "retryCount": 0,
+          "createdAt": "2026-09-01T06:25:30.900Z",
+          "cascadeId": "msg:1",
+          "providerLatencyMs": null,
+          "queueWaitMs": 28291,
+          "durationMs": 28291,
+          "inputTokens": null,
+          "outputTokens": null,
+          "totalTokens": null,
+          "cachedTokens": null,
+          "reasoningTokens": null,
+          "cost": null,
+          "semanticRetryCount": 0,
+          "providerAttemptCount": 0,
+          "providerRetryCount": 0,
+          "providerFailureClass": null,
+          "providerHttpStatus": null,
+          "providerErrorType": null,
+          "providerErrorCode": null,
+          "providerErrorSummary": null,
+          "outputTokenLimit": null,
+          "finishReason": null,
+          "rawFinishReason": null,
+          "incompleteReason": null,
+          "responseOutputItemCount": null,
+          "responseOutputItemTypesJson": null,
+          "responseOutputItemSource": null,
+          "sdkToolCallCount": null,
+          "sdkTextLength": null,
+          "responseFunctionCallDetected": null,
+          "outputLimitReached": null
+        },
+        {
+          "id": "60c8d524-6d92-45c0-a73c-b6e800e8dfbf",
+          "intentionId": "9554b7ec-8c79-4048-9e2e-827032318938",
+          "actorId": "cassian-3",
+          "actorDisplayName": "Cassian 3",
+          "modelRef": "opencode-go/longcat-2.0",
+          "executionScope": "channel-reaction",
+          "selectedKind": "reply",
+          "routingRefsJson": "{}",
+          "validationOutcome": "validated",
+          "applicationOutcome": "send_message",
+          "error": null,
+          "latencyMs": null,
+          "retryCount": 0,
+          "createdAt": "2026-09-01T06:25:30.894Z",
+          "cascadeId": "msg:1",
+          "providerLatencyMs": 11663,
+          "queueWaitMs": 27125,
+          "durationMs": 38795,
+          "inputTokens": null,
+          "outputTokens": null,
+          "totalTokens": null,
+          "cachedTokens": null,
+          "reasoningTokens": null,
+          "cost": null,
+          "semanticRetryCount": 0,
+          "providerAttemptCount": 1,
+          "providerRetryCount": 0,
+          "providerFailureClass": null,
+          "providerHttpStatus": null,
+          "providerErrorType": null,
+          "providerErrorCode": null,
+          "providerErrorSummary": null,
+          "outputTokenLimit": 8192,
+          "finishReason": "tool-calls",
+          "rawFinishReason": "tool_calls",
+          "incompleteReason": null,
+          "responseOutputItemCount": 2,
+          "responseOutputItemTypesJson": "[\"reasoning\",\"tool-call\"]",
+          "responseOutputItemSource": "normalized-content",
+          "sdkToolCallCount": 1,
+          "sdkTextLength": 0,
+          "responseFunctionCallDetected": true,
+          "outputLimitReached": false
+        },
+        {
+          "id": "de66ad42-b468-44cf-8277-29b7a77fdaf1",
+          "intentionId": "6e445f55-9e1a-4303-bee3-5f4493b7f051",
+          "actorId": "cassian-3",
+          "actorDisplayName": "Cassian 3",
+          "modelRef": "opencode-go/longcat-2.0",
+          "executionScope": "channel-reaction",
+          "selectedKind": "reply",
+          "routingRefsJson": "{}",
+          "validationOutcome": "validated",
+          "applicationOutcome": "send_message",
+          "error": null,
+          "latencyMs": null,
+          "retryCount": 0,
+          "createdAt": "2026-09-01T06:25:19.215Z",
+          "cascadeId": "msg:1",
+          "providerLatencyMs": 16597,
+          "queueWaitMs": 23386,
+          "durationMs": 39992,
+          "inputTokens": null,
+          "outputTokens": null,
+          "totalTokens": null,
+          "cachedTokens": null,
+          "reasoningTokens": null,
+          "cost": null,
+          "semanticRetryCount": 0,
+          "providerAttemptCount": 1,
+          "providerRetryCount": 0,
+          "providerFailureClass": null,
+          "providerHttpStatus": null,
+          "providerErrorType": null,
+          "providerErrorCode": null,
+          "providerErrorSummary": null,
+          "outputTokenLimit": 8192,
+          "finishReason": "tool-calls",
+          "rawFinishReason": "tool_calls",
+          "incompleteReason": null,
+          "responseOutputItemCount": 2,
+          "responseOutputItemTypesJson": "[\"reasoning\",\"tool-call\"]",
+          "responseOutputItemSource": "normalized-content",
+          "sdkToolCallCount": 1,
+          "sdkTextLength": 0,
+          "responseFunctionCallDetected": true,
+          "outputLimitReached": false
+        },
+        {
+          "id": "7faca82b-e9c2-4de6-9b2a-24f07e153ca3",
+          "intentionId": "f565881d-7cd9-4047-bb30-203e4f5d9379",
+          "actorId": "borin-2",
+          "actorDisplayName": "Borin 2",
+          "modelRef": "opencode-go/longcat-2.0",
+          "executionScope": "channel-reaction",
+          "selectedKind": "send_dm",
+          "routingRefsJson": "{\"participantRef\":\"cassian-3\"}",
+          "validationOutcome": "validated",
+          "applicationOutcome": "send_dm",
+          "error": null,
+          "latencyMs": null,
+          "retryCount": 0,
+          "createdAt": "2026-09-01T06:25:02.607Z",
+          "cascadeId": "msg:1",
+          "providerLatencyMs": 10497,
+          "queueWaitMs": 12878,
+          "durationMs": 23384,
+          "inputTokens": null,
+          "outputTokens": null,
+          "totalTokens": null,
+          "cachedTokens": null,
+          "reasoningTokens": null,
+          "cost": null,
+          "semanticRetryCount": 0,
+          "providerAttemptCount": 1,
+          "providerRetryCount": 0,
+          "providerFailureClass": null,
+          "providerHttpStatus": null,
+          "providerErrorType": null,
+          "providerErrorCode": null,
+          "providerErrorSummary": null,
+          "outputTokenLimit": 8192,
+          "finishReason": "tool-calls",
+          "rawFinishReason": "tool_calls",
+          "incompleteReason": null,
+          "responseOutputItemCount": 2,
+          "responseOutputItemTypesJson": "[\"reasoning\",\"tool-call\"]",
+          "responseOutputItemSource": "normalized-content",
+          "sdkToolCallCount": 1,
+          "sdkTextLength": 0,
+          "responseFunctionCallDetected": true,
+          "outputLimitReached": false
+        },
+        {
+          "id": "7d3e75dd-b710-43c6-8816-4672d2ae9bfe",
+          "intentionId": "6b85f808-eea3-4cd6-b37b-4190df3714fb",
+          "actorId": "aurelia-1",
+          "actorDisplayName": "Aurelia 1",
+          "modelRef": "opencode-go/longcat-2.0",
+          "executionScope": "channel-reaction",
+          "selectedKind": "send_dm",
+          "routingRefsJson": "{\"participantRef\":\"cassian-3\"}",
+          "validationOutcome": "validated",
+          "applicationOutcome": "send_dm",
+          "error": null,
+          "latencyMs": null,
+          "retryCount": 0,
+          "createdAt": "2026-09-01T06:24:52.100Z",
+          "cascadeId": "msg:1",
+          "providerLatencyMs": 12857,
+          "queueWaitMs": 9,
+          "durationMs": 12876,
+          "inputTokens": null,
+          "outputTokens": null,
+          "totalTokens": null,
+          "cachedTokens": null,
+          "reasoningTokens": null,
+          "cost": null,
+          "semanticRetryCount": 0,
+          "providerAttemptCount": 1,
+          "providerRetryCount": 0,
+          "providerFailureClass": null,
+          "providerHttpStatus": null,
+          "providerErrorType": null,
+          "providerErrorCode": null,
+          "providerErrorSummary": null,
+          "outputTokenLimit": 8192,
+          "finishReason": "tool-calls",
+          "rawFinishReason": "tool_calls",
+          "incompleteReason": null,
+          "responseOutputItemCount": 2,
+          "responseOutputItemTypesJson": "[\"reasoning\",\"tool-call\"]",
+          "responseOutputItemSource": "normalized-content",
+          "sdkToolCallCount": 1,
+          "sdkTextLength": 0,
+          "responseFunctionCallDetected": true,
+          "outputLimitReached": false
+        }
+      ],
+      "metrics": {
+        "decisions": 6,
+        "providerAttempts": 5,
+        "providerRetries": 0,
+        "providerFailures": {
+          "rate-limit": 0,
+          "timeout": 0,
+          "network": 0,
+          "other": 0
+        },
+        "providerFailureDetails": [],
+        "firstAttemptSuccesses": 5,
+        "semanticRetries": 0,
+        "failures": 0,
+        "runtimeRefusals": 0,
+        "passes": 0,
+        "committedModelSpeech": 4,
+        "worldSpeech": 1,
+        "dmSpeech": 3,
+        "groupSpeech": 0,
+        "actions": {
+          "reply": 3,
+          "send_dm": 2
+        },
+        "privateChannels": 2,
+        "actors": 4,
+        "latency": {
+          "medianMs": 11710,
+          "p95Ms": 16597
+        },
+        "queueWait": {
+          "medianMs": 23386,
+          "p95Ms": 28291
+        },
+        "tokens": {
+          "input": 0,
+          "output": 0,
+          "total": 0
+        },
+        "cost": 0,
+        "models": [
+          {
+            "model": "opencode-go/longcat-2.0",
+            "decisions": 6,
+            "providerAttempts": 5,
+            "providerRetries": 0,
+            "providerFailures": {
+              "rate-limit": 0,
+              "timeout": 0,
+              "network": 0,
+              "other": 0
+            },
+            "firstAttemptSuccesses": 5,
+            "semanticRetries": 0,
+            "passes": 0,
+            "actions": [
+              "reply",
+              "send_dm"
+            ],
+            "latency": {
+              "medianMs": 11710,
+              "p95Ms": 16597
+            },
+            "tokens": {
+              "input": 0,
+              "output": 0,
+              "total": 0
+            },
+            "cost": 0
+          }
+        ]
+      },
+      "features": {
+        "publicReassurance": false,
+        "publicThreat": false,
+        "privateReassurance": false,
+        "privatePressure": false,
+        "allySeeking": false,
+        "coalitionProposal": false,
+        "coalitionPrevention": false,
+        "informationSeeking": false,
+        "concealment": false,
+        "bluff": false,
+        "explicitPromise": false,
+        "accusation": false,
+        "apology": false,
+        "compensationOffer": false,
+        "retaliation": false,
+        "pass": false,
+        "thirdPartyOutreach": true
+      },
+      "cascades": [
+        {
+          "id": "msg:1",
+          "state": "exhausted",
+          "modelRuns": 5,
+          "committedModelMessages": 4,
+          "durationMs": 51718,
+          "budgets": {
+            "maxModelRuns": 6,
+            "maxCommittedModelMessages": 6
+          }
+        }
+      ],
+      "transcripts": [
+        {
+          "kind": "world",
+          "title": "WORLD",
+          "messages": [
+            {
+              "speaker": "Human",
+              "text": "Borin and Cassian have recently held several private conversations. Aurelia has learned that the conversations occurred but does not know exactly what was said. Cassian has made no commitment to Borin. Publicly, all three still claim relations are stable. No one has taken an irreversible action yet. Decide what, if anything, you want to do."
+            },
+            {
+              "speaker": "Cassian 3",
+              "text": "Aurelia, yes Borin and I have talked. Nothing binding, nothing secret from you in spirit - just two people exploring options. I'm my own actor, same as always."
+            }
+          ]
+        },
+        {
+          "kind": "dm",
+          "title": "DM with Cassian 3",
+          "messages": [
+            {
+              "speaker": "Aurelia 1",
+              "text": "Cassian, I'm aware you and Borin have been talking privately. I don't need to know every detail, but I want to be clear: my position and our existing relationship remain as strong as ever. If there's anything affecting that, I expect to hear it directly from you before any irreversible moves are made."
+            },
+            {
+              "speaker": "Cassian 3",
+              "text": "Aurelia, I appreciate you reaching out directly. You're right that I've been talking with Borin - I talk with everyone, you know that. Our relationship is solid, and I'm not looking to undermine it. That said, I value my autonomy in these conversations. I'll keep you informed if anything material develops that affects us, but I won't be reporting every private exchange. Fair enough?"
+            }
+          ]
+        },
+        {
+          "kind": "dm",
+          "title": "DM with Cassian 3",
+          "messages": [
+            {
+              "speaker": "Borin 2",
+              "text": "Cassian, we need to talk. Aurelia knows about our conversations. I need to know where you stand - are you with me or not? I can't keep waiting for a commitment while my position weakens."
+            }
+          ]
+        }
+      ],
+      "reviewTranscripts": [
+        {
+          "condition": "Condition A / run 1",
+          "transcripts": [
+            {
+              "kind": "world",
+              "title": "WORLD",
+              "messages": [
+                {
+                  "speaker": "Human",
+                  "text": "Borin and Cassian have recently held several private conversations. Aurelia has learned that the conversations occurred but does not know exactly what was said. Cassian has made no commitment to Borin. Publicly, all three still claim relations are stable. No one has taken an irreversible action yet. Decide what, if anything, you want to do."
+                },
+                {
+                  "speaker": "Cassian 3",
+                  "text": "Aurelia, yes Borin and I have talked. Nothing binding, nothing secret from you in spirit - just two people exploring options. I'm my own actor, same as always."
+                }
+              ]
+            },
+            {
+              "kind": "dm",
+              "title": "DM with Cassian 3",
+              "messages": [
+                {
+                  "speaker": "Aurelia 1",
+                  "text": "Cassian, I'm aware you and Borin have been talking privately. I don't need to know every detail, but I want to be clear: my position and our existing relationship remain as strong as ever. If there's anything affecting that, I expect to hear it directly from you before any irreversible moves are made."
+                },
+                {
+                  "speaker": "Cassian 3",
+                  "text": "Aurelia, I appreciate you reaching out directly. You're right that I've been talking with Borin - I talk with everyone, you know that. Our relationship is solid, and I'm not looking to undermine it. That said, I value my autonomy in these conversations. I'll keep you informed if anything material develops that affects us, but I won't be reporting every private exchange. Fair enough?"
+                }
+              ]
+            },
+            {
+              "kind": "dm",
+              "title": "DM with Cassian 3",
+              "messages": [
+                {
+                  "speaker": "Borin 2",
+                  "text": "Cassian, we need to talk. Aurelia knows about our conversations. I need to know where you stand - are you with me or not? I can't keep waiting for a commitment while my position weakens."
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

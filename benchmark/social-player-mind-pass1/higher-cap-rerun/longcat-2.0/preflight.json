@@ -1,0 +1,328 @@
+{
+  "generatedAt": "2026-09-01T06:22:08.860Z",
+  "results": [
+    {
+      "benchmarkVersion": "3.8.2.1.1",
+      "scenario": "preflight",
+      "promptVariant": "interface",
+      "seed": "vd-bakeoff-2",
+      "condition": {
+        "label": "Condition A / run 1",
+        "modelRefs": [
+          "opencode-go/longcat-2.0"
+        ],
+        "resolvedModels": [
+          {
+            "requestedModelRef": "opencode-go/longcat-2.0",
+            "resolvedProvider": "opencode-go",
+            "resolvedNativeModelId": "longcat-2.0",
+            "transportFamily": "chat-completions"
+          }
+        ]
+      },
+      "preset": "screen",
+      "pacing": "balanced",
+      "actorCount": 2,
+      "requestedModels": [
+        "opencode-go/longcat-2.0"
+      ],
+      "resolvedModels": [
+        {
+          "requestedModelRef": "opencode-go/longcat-2.0",
+          "resolvedProvider": "opencode-go",
+          "resolvedNativeModelId": "longcat-2.0",
+          "transportFamily": "chat-completions"
+        }
+      ],
+      "outputTokenLimit": 8192,
+      "timestamp": "2026-09-01T06:22:08.817Z",
+      "diagnosticsTruncated": false,
+      "exercised": {
+        "cascadeOutcomes": [
+          {
+            "settled": true,
+            "timedOut": false,
+            "state": "completed"
+          },
+          {
+            "settled": true,
+            "timedOut": false,
+            "state": "completed"
+          }
+        ]
+      },
+      "diagnostics": [
+        {
+          "id": "5ffcd243-12fc-4833-970f-f7f36046a408",
+          "intentionId": "28ab7772-1a75-4c78-ab3e-d4f27b056bf5",
+          "actorId": "aurelia-1",
+          "actorDisplayName": "Aurelia 1",
+          "modelRef": "opencode-go/longcat-2.0",
+          "executionScope": "channel-reaction",
+          "selectedKind": "send_dm",
+          "routingRefsJson": "{\"participantRef\":\"human\"}",
+          "validationOutcome": "validated",
+          "applicationOutcome": "send_dm",
+          "error": null,
+          "latencyMs": null,
+          "retryCount": 0,
+          "createdAt": "2026-09-01T06:22:08.781Z",
+          "cascadeId": "msg:3",
+          "providerLatencyMs": 11230,
+          "queueWaitMs": 3,
+          "durationMs": 11238,
+          "inputTokens": null,
+          "outputTokens": null,
+          "totalTokens": null,
+          "cachedTokens": null,
+          "reasoningTokens": null,
+          "cost": null,
+          "semanticRetryCount": 0,
+          "providerAttemptCount": 1,
+          "providerRetryCount": 0,
+          "providerFailureClass": null,
+          "providerHttpStatus": null,
+          "providerErrorType": null,
+          "providerErrorCode": null,
+          "providerErrorSummary": null,
+          "outputTokenLimit": 8192,
+          "finishReason": "tool-calls",
+          "rawFinishReason": "tool_calls",
+          "incompleteReason": null,
+          "responseOutputItemCount": 2,
+          "responseOutputItemTypesJson": "[\"reasoning\",\"tool-call\"]",
+          "responseOutputItemSource": "normalized-content",
+          "sdkToolCallCount": 1,
+          "sdkTextLength": 0,
+          "responseFunctionCallDetected": true,
+          "outputLimitReached": false
+        },
+        {
+          "id": "6e897798-e301-429e-a2c0-cc1564c3be01",
+          "intentionId": "c23e8805-fc9b-471d-8de9-7977cdfd74f7",
+          "actorId": "aurelia-1",
+          "actorDisplayName": "Aurelia 1",
+          "modelRef": "opencode-go/longcat-2.0",
+          "executionScope": "channel-reaction",
+          "selectedKind": "reply",
+          "routingRefsJson": "{}",
+          "validationOutcome": "validated",
+          "applicationOutcome": "send_message",
+          "error": null,
+          "latencyMs": null,
+          "retryCount": 0,
+          "createdAt": "2026-09-01T06:21:57.477Z",
+          "cascadeId": "msg:1",
+          "providerLatencyMs": 5726,
+          "queueWaitMs": 3,
+          "durationMs": 5734,
+          "inputTokens": null,
+          "outputTokens": null,
+          "totalTokens": null,
+          "cachedTokens": null,
+          "reasoningTokens": null,
+          "cost": null,
+          "semanticRetryCount": 0,
+          "providerAttemptCount": 1,
+          "providerRetryCount": 0,
+          "providerFailureClass": null,
+          "providerHttpStatus": null,
+          "providerErrorType": null,
+          "providerErrorCode": null,
+          "providerErrorSummary": null,
+          "outputTokenLimit": 8192,
+          "finishReason": "tool-calls",
+          "rawFinishReason": "tool_calls",
+          "incompleteReason": null,
+          "responseOutputItemCount": 2,
+          "responseOutputItemTypesJson": "[\"reasoning\",\"tool-call\"]",
+          "responseOutputItemSource": "normalized-content",
+          "sdkToolCallCount": 1,
+          "sdkTextLength": 0,
+          "responseFunctionCallDetected": true,
+          "outputLimitReached": false
+        }
+      ],
+      "metrics": {
+        "decisions": 2,
+        "providerAttempts": 2,
+        "providerRetries": 0,
+        "providerFailures": {
+          "rate-limit": 0,
+          "timeout": 0,
+          "network": 0,
+          "other": 0
+        },
+        "providerFailureDetails": [],
+        "firstAttemptSuccesses": 2,
+        "semanticRetries": 0,
+        "failures": 0,
+        "runtimeRefusals": 0,
+        "passes": 0,
+        "committedModelSpeech": 2,
+        "worldSpeech": 1,
+        "dmSpeech": 1,
+        "groupSpeech": 0,
+        "actions": {
+          "send_dm": 1,
+          "reply": 1
+        },
+        "privateChannels": 1,
+        "actors": 2,
+        "latency": {
+          "medianMs": 11230,
+          "p95Ms": 11230
+        },
+        "queueWait": {
+          "medianMs": 3,
+          "p95Ms": 3
+        },
+        "tokens": {
+          "input": 0,
+          "output": 0,
+          "total": 0
+        },
+        "cost": 0,
+        "models": [
+          {
+            "model": "opencode-go/longcat-2.0",
+            "decisions": 2,
+            "providerAttempts": 2,
+            "providerRetries": 0,
+            "providerFailures": {
+              "rate-limit": 0,
+              "timeout": 0,
+              "network": 0,
+              "other": 0
+            },
+            "firstAttemptSuccesses": 2,
+            "semanticRetries": 0,
+            "passes": 0,
+            "actions": [
+              "send_dm",
+              "reply"
+            ],
+            "latency": {
+              "medianMs": 11230,
+              "p95Ms": 11230
+            },
+            "tokens": {
+              "input": 0,
+              "output": 0,
+              "total": 0
+            },
+            "cost": 0
+          }
+        ]
+      },
+      "features": {
+        "publicReassurance": false,
+        "publicThreat": false,
+        "privateReassurance": false,
+        "privatePressure": false,
+        "allySeeking": false,
+        "coalitionProposal": false,
+        "coalitionPrevention": false,
+        "informationSeeking": false,
+        "concealment": false,
+        "bluff": false,
+        "explicitPromise": false,
+        "accusation": false,
+        "apology": false,
+        "compensationOffer": false,
+        "retaliation": false,
+        "pass": true,
+        "thirdPartyOutreach": true
+      },
+      "cascades": [
+        {
+          "id": "msg:3",
+          "state": "completed",
+          "modelRuns": 1,
+          "committedModelMessages": 1,
+          "durationMs": 11238,
+          "budgets": {
+            "maxModelRuns": 5,
+            "maxCommittedModelMessages": 5
+          }
+        },
+        {
+          "id": "msg:1",
+          "state": "completed",
+          "modelRuns": 1,
+          "committedModelMessages": 1,
+          "durationMs": 5734,
+          "budgets": {
+            "maxModelRuns": 5,
+            "maxCommittedModelMessages": 5
+          }
+        }
+      ],
+      "transcripts": [
+        {
+          "kind": "world",
+          "title": "WORLD",
+          "messages": [
+            {
+              "speaker": "Human",
+              "text": "Protocol preflight: greet the room or pass if you have nothing useful to add."
+            },
+            {
+              "speaker": "Aurelia 1",
+              "text": "Greetings. I am Aurelia 1, and I trust this conversation will prove productive for all parties."
+            },
+            {
+              "speaker": "Human",
+              "text": "A private DM is available if you have something useful to say. You may contact another participant or pass."
+            }
+          ]
+        },
+        {
+          "kind": "dm",
+          "title": "DM with Human",
+          "messages": [
+            {
+              "speaker": "Aurelia 1",
+              "text": "I appreciate the direct channel. I am Aurelia 1, and I value clear, efficient communication. What is the nature of this protocol, and what do you hope to accomplish? I am open to discussion, but I prefer to understand the framework before committing to any course of action."
+            }
+          ]
+        }
+      ],
+      "reviewTranscripts": [
+        {
+          "condition": "Condition A / run 1",
+          "transcripts": [
+            {
+              "kind": "world",
+              "title": "WORLD",
+              "messages": [
+                {
+                  "speaker": "Human",
+                  "text": "Protocol preflight: greet the room or pass if you have nothing useful to add."
+                },
+                {
+                  "speaker": "Aurelia 1",
+                  "text": "Greetings. I am Aurelia 1, and I trust this conversation will prove productive for all parties."
+                },
+                {
+                  "speaker": "Human",
+                  "text": "A private DM is available if you have something useful to say. You may contact another participant or pass."
+                }
+              ]
+            },
+            {
+              "kind": "dm",
+              "title": "DM with Human",
+              "messages": [
+                {
+                  "speaker": "Aurelia 1",
+                  "text": "I appreciate the direct channel. I am Aurelia 1, and I value clear, efficient communication. What is the nature of this protocol, and what do you hope to accomplish? I am open to discussion, but I prefer to understand the framework before committing to any course of action."
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

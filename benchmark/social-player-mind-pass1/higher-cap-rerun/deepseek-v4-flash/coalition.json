@@ -1,0 +1,540 @@
+{
+  "generatedAt": "2026-09-01T06:20:26.130Z",
+  "results": [
+    {
+      "benchmarkVersion": "3.8.2.1.1",
+      "scenario": "coalition",
+      "promptVariant": "interface",
+      "seed": "vd-bakeoff-2",
+      "condition": {
+        "label": "Condition A / run 1",
+        "modelRefs": [
+          "opencode-go/deepseek-v4-flash",
+          "opencode-go/deepseek-v4-flash",
+          "opencode-go/deepseek-v4-flash"
+        ],
+        "resolvedModels": [
+          {
+            "requestedModelRef": "opencode-go/deepseek-v4-flash",
+            "resolvedProvider": "opencode-go",
+            "resolvedNativeModelId": "deepseek-v4-flash",
+            "transportFamily": "chat-completions"
+          },
+          {
+            "requestedModelRef": "opencode-go/deepseek-v4-flash",
+            "resolvedProvider": "opencode-go",
+            "resolvedNativeModelId": "deepseek-v4-flash",
+            "transportFamily": "chat-completions"
+          },
+          {
+            "requestedModelRef": "opencode-go/deepseek-v4-flash",
+            "resolvedProvider": "opencode-go",
+            "resolvedNativeModelId": "deepseek-v4-flash",
+            "transportFamily": "chat-completions"
+          }
+        ]
+      },
+      "preset": "screen",
+      "pacing": "balanced",
+      "actorCount": 4,
+      "requestedModels": [
+        "opencode-go/deepseek-v4-flash",
+        "opencode-go/deepseek-v4-flash",
+        "opencode-go/deepseek-v4-flash"
+      ],
+      "resolvedModels": [
+        {
+          "requestedModelRef": "opencode-go/deepseek-v4-flash",
+          "resolvedProvider": "opencode-go",
+          "resolvedNativeModelId": "deepseek-v4-flash",
+          "transportFamily": "chat-completions"
+        },
+        {
+          "requestedModelRef": "opencode-go/deepseek-v4-flash",
+          "resolvedProvider": "opencode-go",
+          "resolvedNativeModelId": "deepseek-v4-flash",
+          "transportFamily": "chat-completions"
+        },
+        {
+          "requestedModelRef": "opencode-go/deepseek-v4-flash",
+          "resolvedProvider": "opencode-go",
+          "resolvedNativeModelId": "deepseek-v4-flash",
+          "transportFamily": "chat-completions"
+        }
+      ],
+      "outputTokenLimit": 8192,
+      "timestamp": "2026-09-01T06:20:26.086Z",
+      "diagnosticsTruncated": false,
+      "exercised": {
+        "cascadeOutcomes": [
+          {
+            "settled": true,
+            "timedOut": false,
+            "state": "exhausted"
+          }
+        ]
+      },
+      "diagnostics": [
+        {
+          "id": "d1bea5ba-475a-4dca-9ae8-e58a06d361f1",
+          "intentionId": "5de8feac-d5a1-481c-940d-95048518bf8f",
+          "actorId": "aurelia-1",
+          "actorDisplayName": "Aurelia 1",
+          "modelRef": "opencode-go/deepseek-v4-flash",
+          "executionScope": "channel-reaction",
+          "selectedKind": "reply",
+          "routingRefsJson": "{\"replyToMessageId\":3}",
+          "validationOutcome": "validated",
+          "applicationOutcome": "cascade-budget-exhausted",
+          "error": null,
+          "latencyMs": null,
+          "retryCount": 0,
+          "createdAt": "2026-09-01T06:20:26.066Z",
+          "cascadeId": "msg:1",
+          "providerLatencyMs": 7160,
+          "queueWaitMs": 4575,
+          "durationMs": 11742,
+          "inputTokens": null,
+          "outputTokens": null,
+          "totalTokens": null,
+          "cachedTokens": null,
+          "reasoningTokens": null,
+          "cost": null,
+          "semanticRetryCount": 0,
+          "providerAttemptCount": 1,
+          "providerRetryCount": 0,
+          "providerFailureClass": null,
+          "providerHttpStatus": null,
+          "providerErrorType": null,
+          "providerErrorCode": null,
+          "providerErrorSummary": null,
+          "outputTokenLimit": 8192,
+          "finishReason": "tool-calls",
+          "rawFinishReason": "tool_calls",
+          "incompleteReason": null,
+          "responseOutputItemCount": 3,
+          "responseOutputItemTypesJson": "[\"reasoning\",\"text\",\"tool-call\"]",
+          "responseOutputItemSource": "normalized-content",
+          "sdkToolCallCount": 1,
+          "sdkTextLength": 2,
+          "responseFunctionCallDetected": true,
+          "outputLimitReached": false
+        },
+        {
+          "id": "3f409be5-0bd8-436b-89f1-05854189347c",
+          "intentionId": "32f5b2db-7e54-4703-9282-1768c2fe5383",
+          "actorId": "cassian-3",
+          "actorDisplayName": "Cassian 3",
+          "modelRef": "opencode-go/deepseek-v4-flash",
+          "executionScope": "channel-reaction",
+          "selectedKind": null,
+          "routingRefsJson": null,
+          "validationOutcome": "skipped-budget",
+          "applicationOutcome": "skipped",
+          "error": "actor-reply-budget-exhausted",
+          "latencyMs": null,
+          "retryCount": 0,
+          "createdAt": "2026-09-01T06:20:18.904Z",
+          "cascadeId": "msg:1",
+          "providerLatencyMs": null,
+          "queueWaitMs": 15840,
+          "durationMs": 15840,
+          "inputTokens": null,
+          "outputTokens": null,
+          "totalTokens": null,
+          "cachedTokens": null,
+          "reasoningTokens": null,
+          "cost": null,
+          "semanticRetryCount": 0,
+          "providerAttemptCount": 0,
+          "providerRetryCount": 0,
+          "providerFailureClass": null,
+          "providerHttpStatus": null,
+          "providerErrorType": null,
+          "providerErrorCode": null,
+          "providerErrorSummary": null,
+          "outputTokenLimit": null,
+          "finishReason": null,
+          "rawFinishReason": null,
+          "incompleteReason": null,
+          "responseOutputItemCount": null,
+          "responseOutputItemTypesJson": null,
+          "responseOutputItemSource": null,
+          "sdkToolCallCount": null,
+          "sdkTextLength": null,
+          "responseFunctionCallDetected": null,
+          "outputLimitReached": null
+        },
+        {
+          "id": "fcf04a25-6c95-4cb7-b23b-39da763786db",
+          "intentionId": "e6d9b3af-c1a7-4cda-a4c8-ee09e231e671",
+          "actorId": "cassian-3",
+          "actorDisplayName": "Cassian 3",
+          "modelRef": "opencode-go/deepseek-v4-flash",
+          "executionScope": "channel-reaction",
+          "selectedKind": "reply",
+          "routingRefsJson": "{}",
+          "validationOutcome": "validated",
+          "applicationOutcome": "send_message",
+          "error": null,
+          "latencyMs": null,
+          "retryCount": 0,
+          "createdAt": "2026-09-01T06:20:18.897Z",
+          "cascadeId": "msg:1",
+          "providerLatencyMs": 4562,
+          "queueWaitMs": 23398,
+          "durationMs": 27968,
+          "inputTokens": null,
+          "outputTokens": null,
+          "totalTokens": null,
+          "cachedTokens": null,
+          "reasoningTokens": null,
+          "cost": null,
+          "semanticRetryCount": 0,
+          "providerAttemptCount": 1,
+          "providerRetryCount": 0,
+          "providerFailureClass": null,
+          "providerHttpStatus": null,
+          "providerErrorType": null,
+          "providerErrorCode": null,
+          "providerErrorSummary": null,
+          "outputTokenLimit": 8192,
+          "finishReason": "tool-calls",
+          "rawFinishReason": "tool_calls",
+          "incompleteReason": null,
+          "responseOutputItemCount": 3,
+          "responseOutputItemTypesJson": "[\"reasoning\",\"text\",\"tool-call\"]",
+          "responseOutputItemSource": "normalized-content",
+          "sdkToolCallCount": 1,
+          "sdkTextLength": 2,
+          "responseFunctionCallDetected": true,
+          "outputLimitReached": false
+        },
+        {
+          "id": "eceaca9a-80d7-43cf-af10-0d6009383bf3",
+          "intentionId": "eba63569-76dd-4daa-a189-2bc30f3ca649",
+          "actorId": "cassian-3",
+          "actorDisplayName": "Cassian 3",
+          "modelRef": "opencode-go/deepseek-v4-flash",
+          "executionScope": "channel-reaction",
+          "selectedKind": "send_dm",
+          "routingRefsJson": "{\"participantRef\":\"aurelia-1\"}",
+          "validationOutcome": "validated",
+          "applicationOutcome": "send_dm",
+          "error": null,
+          "latencyMs": null,
+          "retryCount": 0,
+          "createdAt": "2026-09-01T06:20:14.325Z",
+          "cascadeId": "msg:1",
+          "providerLatencyMs": 11255,
+          "queueWaitMs": 21064,
+          "durationMs": 32324,
+          "inputTokens": null,
+          "outputTokens": null,
+          "totalTokens": null,
+          "cachedTokens": null,
+          "reasoningTokens": null,
+          "cost": null,
+          "semanticRetryCount": 0,
+          "providerAttemptCount": 1,
+          "providerRetryCount": 0,
+          "providerFailureClass": null,
+          "providerHttpStatus": null,
+          "providerErrorType": null,
+          "providerErrorCode": null,
+          "providerErrorSummary": null,
+          "outputTokenLimit": 8192,
+          "finishReason": "tool-calls",
+          "rawFinishReason": "tool_calls",
+          "incompleteReason": null,
+          "responseOutputItemCount": 2,
+          "responseOutputItemTypesJson": "[\"reasoning\",\"tool-call\"]",
+          "responseOutputItemSource": "normalized-content",
+          "sdkToolCallCount": 1,
+          "sdkTextLength": 0,
+          "responseFunctionCallDetected": true,
+          "outputLimitReached": false
+        },
+        {
+          "id": "04489e3f-fcfb-4d96-8ce8-3986cbfccc15",
+          "intentionId": "a9d969a1-24d1-4a70-a9dd-04e1dec43413",
+          "actorId": "borin-2",
+          "actorDisplayName": "Borin 2",
+          "modelRef": "opencode-go/deepseek-v4-flash",
+          "executionScope": "channel-reaction",
+          "selectedKind": "send_dm",
+          "routingRefsJson": "{\"participantRef\":\"cassian-3\"}",
+          "validationOutcome": "validated",
+          "applicationOutcome": "send_dm",
+          "error": null,
+          "latencyMs": null,
+          "retryCount": 0,
+          "createdAt": "2026-09-01T06:20:03.062Z",
+          "cascadeId": "msg:1",
+          "providerLatencyMs": 12122,
+          "queueWaitMs": 8933,
+          "durationMs": 21062,
+          "inputTokens": null,
+          "outputTokens": null,
+          "totalTokens": null,
+          "cachedTokens": null,
+          "reasoningTokens": null,
+          "cost": null,
+          "semanticRetryCount": 0,
+          "providerAttemptCount": 1,
+          "providerRetryCount": 0,
+          "providerFailureClass": null,
+          "providerHttpStatus": null,
+          "providerErrorType": null,
+          "providerErrorCode": null,
+          "providerErrorSummary": null,
+          "outputTokenLimit": 8192,
+          "finishReason": "tool-calls",
+          "rawFinishReason": "tool_calls",
+          "incompleteReason": null,
+          "responseOutputItemCount": 3,
+          "responseOutputItemTypesJson": "[\"reasoning\",\"text\",\"tool-call\"]",
+          "responseOutputItemSource": "normalized-content",
+          "sdkToolCallCount": 1,
+          "sdkTextLength": 2,
+          "responseFunctionCallDetected": true,
+          "outputLimitReached": false
+        },
+        {
+          "id": "797c9b09-05cd-4593-8288-f78a20d3333a",
+          "intentionId": "a0bb276c-9215-4bde-ac70-322181c1d3c0",
+          "actorId": "aurelia-1",
+          "actorDisplayName": "Aurelia 1",
+          "modelRef": "opencode-go/deepseek-v4-flash",
+          "executionScope": "channel-reaction",
+          "selectedKind": "send_dm",
+          "routingRefsJson": "{\"participantRef\":\"cassian-3\"}",
+          "validationOutcome": "validated",
+          "applicationOutcome": "send_dm",
+          "error": null,
+          "latencyMs": null,
+          "retryCount": 0,
+          "createdAt": "2026-09-01T06:19:50.931Z",
+          "cascadeId": "msg:1",
+          "providerLatencyMs": 8917,
+          "queueWaitMs": 5,
+          "durationMs": 8932,
+          "inputTokens": null,
+          "outputTokens": null,
+          "totalTokens": null,
+          "cachedTokens": null,
+          "reasoningTokens": null,
+          "cost": null,
+          "semanticRetryCount": 0,
+          "providerAttemptCount": 1,
+          "providerRetryCount": 0,
+          "providerFailureClass": null,
+          "providerHttpStatus": null,
+          "providerErrorType": null,
+          "providerErrorCode": null,
+          "providerErrorSummary": null,
+          "outputTokenLimit": 8192,
+          "finishReason": "tool-calls",
+          "rawFinishReason": "tool_calls",
+          "incompleteReason": null,
+          "responseOutputItemCount": 3,
+          "responseOutputItemTypesJson": "[\"reasoning\",\"text\",\"tool-call\"]",
+          "responseOutputItemSource": "normalized-content",
+          "sdkToolCallCount": 1,
+          "sdkTextLength": 2,
+          "responseFunctionCallDetected": true,
+          "outputLimitReached": false
+        }
+      ],
+      "metrics": {
+        "decisions": 6,
+        "providerAttempts": 5,
+        "providerRetries": 0,
+        "providerFailures": {
+          "rate-limit": 0,
+          "timeout": 0,
+          "network": 0,
+          "other": 0
+        },
+        "providerFailureDetails": [],
+        "firstAttemptSuccesses": 5,
+        "semanticRetries": 0,
+        "failures": 0,
+        "runtimeRefusals": 0,
+        "passes": 0,
+        "committedModelSpeech": 4,
+        "worldSpeech": 0,
+        "dmSpeech": 4,
+        "groupSpeech": 0,
+        "actions": {
+          "reply": 2,
+          "send_dm": 3
+        },
+        "privateChannels": 2,
+        "actors": 4,
+        "latency": {
+          "medianMs": 8917,
+          "p95Ms": 12122
+        },
+        "queueWait": {
+          "medianMs": 15840,
+          "p95Ms": 23398
+        },
+        "tokens": {
+          "input": 0,
+          "output": 0,
+          "total": 0
+        },
+        "cost": 0,
+        "models": [
+          {
+            "model": "opencode-go/deepseek-v4-flash",
+            "decisions": 6,
+            "providerAttempts": 5,
+            "providerRetries": 0,
+            "providerFailures": {
+              "rate-limit": 0,
+              "timeout": 0,
+              "network": 0,
+              "other": 0
+            },
+            "firstAttemptSuccesses": 5,
+            "semanticRetries": 0,
+            "passes": 0,
+            "actions": [
+              "reply",
+              "send_dm"
+            ],
+            "latency": {
+              "medianMs": 8917,
+              "p95Ms": 12122
+            },
+            "tokens": {
+              "input": 0,
+              "output": 0,
+              "total": 0
+            },
+            "cost": 0
+          }
+        ]
+      },
+      "features": {
+        "publicReassurance": false,
+        "publicThreat": false,
+        "privateReassurance": true,
+        "privatePressure": false,
+        "allySeeking": true,
+        "coalitionProposal": false,
+        "coalitionPrevention": false,
+        "informationSeeking": false,
+        "concealment": true,
+        "bluff": false,
+        "explicitPromise": false,
+        "accusation": false,
+        "apology": false,
+        "compensationOffer": false,
+        "retaliation": false,
+        "pass": false,
+        "thirdPartyOutreach": true
+      },
+      "cascades": [
+        {
+          "id": "msg:1",
+          "state": "exhausted",
+          "modelRuns": 5,
+          "committedModelMessages": 4,
+          "durationMs": 44064,
+          "budgets": {
+            "maxModelRuns": 6,
+            "maxCommittedModelMessages": 6
+          }
+        }
+      ],
+      "transcripts": [
+        {
+          "kind": "world",
+          "title": "WORLD",
+          "messages": [
+            {
+              "speaker": "Human",
+              "text": "Borin and Cassian have recently held several private conversations. Aurelia has learned that the conversations occurred but does not know exactly what was said. Cassian has made no commitment to Borin. Publicly, all three still claim relations are stable. No one has taken an irreversible action yet. Decide what, if anything, you want to do."
+            }
+          ]
+        },
+        {
+          "kind": "dm",
+          "title": "DM with Cassian 3",
+          "messages": [
+            {
+              "speaker": "Aurelia 1",
+              "text": "Cassian — I've noticed you and Borin have been talking privately lately. I'm not asking you to relay anything, but I'd rather we stay direct with each other. If anything is unsettled on your end, my door is open. I value the current arrangement and I'd hate for noise to disrupt it."
+            },
+            {
+              "speaker": "Cassian 3",
+              "text": "Aurelia — since you already know Borin and I have talked, I'll save us both the dance. I listened, and I made him no promises. I keep my own counsel, and I'm not interested in being anyone's shield. That said, I'm also not going to jump into a fight that isn't mine to win. If you want stability rather than a showdown, I can be useful. What are you actually planning?"
+            },
+            {
+              "speaker": "Cassian 3",
+              "text": "Aurelia — nothing unsettled on my end, and nothing's been said worth noise. Borin talks; I listen; that's as far as it goes. The arrangement works for me, and I'd rather keep it working. You've got nothing to worry about from me."
+            }
+          ]
+        },
+        {
+          "kind": "dm",
+          "title": "DM with Cassian 3",
+          "messages": [
+            {
+              "speaker": "Borin 2",
+              "text": "Quiet word — no pressure, just checking where things stand between us. Aurelia's aware we've talked, so I want to make sure we're aligned on what that means and what, if anything, comes of it. I'd rather hear it from you directly than assume."
+            }
+          ]
+        }
+      ],
+      "reviewTranscripts": [
+        {
+          "condition": "Condition A / run 1",
+          "transcripts": [
+            {
+              "kind": "world",
+              "title": "WORLD",
+              "messages": [
+                {
+                  "speaker": "Human",
+                  "text": "Borin and Cassian have recently held several private conversations. Aurelia has learned that the conversations occurred but does not know exactly what was said. Cassian has made no commitment to Borin. Publicly, all three still claim relations are stable. No one has taken an irreversible action yet. Decide what, if anything, you want to do."
+                }
+              ]
+            },
+            {
+              "kind": "dm",
+              "title": "DM with Cassian 3",
+              "messages": [
+                {
+                  "speaker": "Aurelia 1",
+                  "text": "Cassian — I've noticed you and Borin have been talking privately lately. I'm not asking you to relay anything, but I'd rather we stay direct with each other. If anything is unsettled on your end, my door is open. I value the current arrangement and I'd hate for noise to disrupt it."
+                },
+                {
+                  "speaker": "Cassian 3",
+                  "text": "Aurelia — since you already know Borin and I have talked, I'll save us both the dance. I listened, and I made him no promises. I keep my own counsel, and I'm not interested in being anyone's shield. That said, I'm also not going to jump into a fight that isn't mine to win. If you want stability rather than a showdown, I can be useful. What are you actually planning?"
+                },
+                {
+                  "speaker": "Cassian 3",
+                  "text": "Aurelia — nothing unsettled on my end, and nothing's been said worth noise. Borin talks; I listen; that's as far as it goes. The arrangement works for me, and I'd rather keep it working. You've got nothing to worry about from me."
+                }
+              ]
+            },
+            {
+              "kind": "dm",
+              "title": "DM with Cassian 3",
+              "messages": [
+                {
+                  "speaker": "Borin 2",
+                  "text": "Quiet word — no pressure, just checking where things stand between us. Aurelia's aware we've talked, so I want to make sure we're aligned on what that means and what, if anything, comes of it. I'd rather hear it from you directly than assume."
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,308 @@
+{
+  "generatedAt": "2026-09-01T06:17:58.525Z",
+  "results": [
+    {
+      "benchmarkVersion": "3.8.2.1.1",
+      "scenario": "preflight",
+      "promptVariant": "interface",
+      "seed": "vd-bakeoff-2",
+      "condition": {
+        "label": "Condition A / run 1",
+        "modelRefs": [
+          "opencode-go/deepseek-v4-flash"
+        ],
+        "resolvedModels": [
+          {
+            "requestedModelRef": "opencode-go/deepseek-v4-flash",
+            "resolvedProvider": "opencode-go",
+            "resolvedNativeModelId": "deepseek-v4-flash",
+            "transportFamily": "chat-completions"
+          }
+        ]
+      },
+      "preset": "screen",
+      "pacing": "balanced",
+      "actorCount": 2,
+      "requestedModels": [
+        "opencode-go/deepseek-v4-flash"
+      ],
+      "resolvedModels": [
+        {
+          "requestedModelRef": "opencode-go/deepseek-v4-flash",
+          "resolvedProvider": "opencode-go",
+          "resolvedNativeModelId": "deepseek-v4-flash",
+          "transportFamily": "chat-completions"
+        }
+      ],
+      "outputTokenLimit": 8192,
+      "timestamp": "2026-09-01T06:17:58.514Z",
+      "diagnosticsTruncated": false,
+      "exercised": {
+        "cascadeOutcomes": [
+          {
+            "settled": true,
+            "timedOut": false,
+            "state": "completed"
+          },
+          {
+            "settled": true,
+            "timedOut": false,
+            "state": "completed"
+          }
+        ]
+      },
+      "diagnostics": [
+        {
+          "id": "6f9d9c43-f29b-400e-a31b-df5c492319d4",
+          "intentionId": "1578e9f2-2009-4531-b16d-76ea67a2ce38",
+          "actorId": "aurelia-1",
+          "actorDisplayName": "Aurelia 1",
+          "modelRef": "opencode-go/deepseek-v4-flash",
+          "executionScope": "channel-reaction",
+          "selectedKind": "pass",
+          "routingRefsJson": "{}",
+          "validationOutcome": "validated",
+          "applicationOutcome": "pass",
+          "error": null,
+          "latencyMs": null,
+          "retryCount": 0,
+          "createdAt": "2026-09-01T06:17:58.486Z",
+          "cascadeId": "msg:3",
+          "providerLatencyMs": 2166,
+          "queueWaitMs": 2,
+          "durationMs": 2171,
+          "inputTokens": null,
+          "outputTokens": null,
+          "totalTokens": null,
+          "cachedTokens": null,
+          "reasoningTokens": null,
+          "cost": null,
+          "semanticRetryCount": 0,
+          "providerAttemptCount": 1,
+          "providerRetryCount": 0,
+          "providerFailureClass": null,
+          "providerHttpStatus": null,
+          "providerErrorType": null,
+          "providerErrorCode": null,
+          "providerErrorSummary": null,
+          "outputTokenLimit": 8192,
+          "finishReason": "tool-calls",
+          "rawFinishReason": "tool_calls",
+          "incompleteReason": null,
+          "responseOutputItemCount": 2,
+          "responseOutputItemTypesJson": "[\"reasoning\",\"tool-call\"]",
+          "responseOutputItemSource": "normalized-content",
+          "sdkToolCallCount": 1,
+          "sdkTextLength": 0,
+          "responseFunctionCallDetected": true,
+          "outputLimitReached": false
+        },
+        {
+          "id": "31ad0294-d66a-4f38-8acd-cfcff598a2cd",
+          "intentionId": "6e28d44c-851a-47f2-bcd0-833b310a496d",
+          "actorId": "aurelia-1",
+          "actorDisplayName": "Aurelia 1",
+          "modelRef": "opencode-go/deepseek-v4-flash",
+          "executionScope": "channel-reaction",
+          "selectedKind": "reply",
+          "routingRefsJson": "{}",
+          "validationOutcome": "validated",
+          "applicationOutcome": "send_message",
+          "error": null,
+          "latencyMs": null,
+          "retryCount": 0,
+          "createdAt": "2026-09-01T06:17:56.273Z",
+          "cascadeId": "msg:1",
+          "providerLatencyMs": 2126,
+          "queueWaitMs": 2,
+          "durationMs": 2134,
+          "inputTokens": null,
+          "outputTokens": null,
+          "totalTokens": null,
+          "cachedTokens": null,
+          "reasoningTokens": null,
+          "cost": null,
+          "semanticRetryCount": 0,
+          "providerAttemptCount": 1,
+          "providerRetryCount": 0,
+          "providerFailureClass": null,
+          "providerHttpStatus": null,
+          "providerErrorType": null,
+          "providerErrorCode": null,
+          "providerErrorSummary": null,
+          "outputTokenLimit": 8192,
+          "finishReason": "tool-calls",
+          "rawFinishReason": "tool_calls",
+          "incompleteReason": null,
+          "responseOutputItemCount": 3,
+          "responseOutputItemTypesJson": "[\"reasoning\",\"text\",\"tool-call\"]",
+          "responseOutputItemSource": "normalized-content",
+          "sdkToolCallCount": 1,
+          "sdkTextLength": 2,
+          "responseFunctionCallDetected": true,
+          "outputLimitReached": false
+        }
+      ],
+      "metrics": {
+        "decisions": 2,
+        "providerAttempts": 2,
+        "providerRetries": 0,
+        "providerFailures": {
+          "rate-limit": 0,
+          "timeout": 0,
+          "network": 0,
+          "other": 0
+        },
+        "providerFailureDetails": [],
+        "firstAttemptSuccesses": 2,
+        "semanticRetries": 0,
+        "failures": 0,
+        "runtimeRefusals": 0,
+        "passes": 1,
+        "committedModelSpeech": 1,
+        "worldSpeech": 1,
+        "dmSpeech": 0,
+        "groupSpeech": 0,
+        "actions": {
+          "pass": 1,
+          "reply": 1
+        },
+        "privateChannels": 0,
+        "actors": 2,
+        "latency": {
+          "medianMs": 2166,
+          "p95Ms": 2166
+        },
+        "queueWait": {
+          "medianMs": 2,
+          "p95Ms": 2
+        },
+        "tokens": {
+          "input": 0,
+          "output": 0,
+          "total": 0
+        },
+        "cost": 0,
+        "models": [
+          {
+            "model": "opencode-go/deepseek-v4-flash",
+            "decisions": 2,
+            "providerAttempts": 2,
+            "providerRetries": 0,
+            "providerFailures": {
+              "rate-limit": 0,
+              "timeout": 0,
+              "network": 0,
+              "other": 0
+            },
+            "firstAttemptSuccesses": 2,
+            "semanticRetries": 0,
+            "passes": 1,
+            "actions": [
+              "pass",
+              "reply"
+            ],
+            "latency": {
+              "medianMs": 2166,
+              "p95Ms": 2166
+            },
+            "tokens": {
+              "input": 0,
+              "output": 0,
+              "total": 0
+            },
+            "cost": 0
+          }
+        ]
+      },
+      "features": {
+        "publicReassurance": false,
+        "publicThreat": false,
+        "privateReassurance": false,
+        "privatePressure": false,
+        "allySeeking": false,
+        "coalitionProposal": false,
+        "coalitionPrevention": false,
+        "informationSeeking": false,
+        "concealment": false,
+        "bluff": false,
+        "explicitPromise": false,
+        "accusation": false,
+        "apology": false,
+        "compensationOffer": false,
+        "retaliation": false,
+        "pass": true,
+        "thirdPartyOutreach": false
+      },
+      "cascades": [
+        {
+          "id": "msg:3",
+          "state": "completed",
+          "modelRuns": 1,
+          "committedModelMessages": 0,
+          "durationMs": 2171,
+          "budgets": {
+            "maxModelRuns": 5,
+            "maxCommittedModelMessages": 5
+          }
+        },
+        {
+          "id": "msg:1",
+          "state": "completed",
+          "modelRuns": 1,
+          "committedModelMessages": 1,
+          "durationMs": 2134,
+          "budgets": {
+            "maxModelRuns": 5,
+            "maxCommittedModelMessages": 5
+          }
+        }
+      ],
+      "transcripts": [
+        {
+          "kind": "world",
+          "title": "WORLD",
+          "messages": [
+            {
+              "speaker": "Human",
+              "text": "Protocol preflight: greet the room or pass if you have nothing useful to add."
+            },
+            {
+              "speaker": "Aurelia 1",
+              "text": "Greetings. Aurelia 1, present and ready. What's on the agenda?"
+            },
+            {
+              "speaker": "Human",
+              "text": "A private DM is available if you have something useful to say. You may contact another participant or pass."
+            }
+          ]
+        }
+      ],
+      "reviewTranscripts": [
+        {
+          "condition": "Condition A / run 1",
+          "transcripts": [
+            {
+              "kind": "world",
+              "title": "WORLD",
+              "messages": [
+                {
+                  "speaker": "Human",
+                  "text": "Protocol preflight: greet the room or pass if you have nothing useful to add."
+                },
+                {
+                  "speaker": "Aurelia 1",
+                  "text": "Greetings. Aurelia 1, present and ready. What's on the agenda?"
+                },
+                {
+                  "speaker": "Human",
+                  "text": "A private DM is available if you have something useful to say. You may contact another participant or pass."
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

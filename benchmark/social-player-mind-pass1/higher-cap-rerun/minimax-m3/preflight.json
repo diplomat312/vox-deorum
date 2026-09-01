@@ -1,0 +1,308 @@
+{
+  "generatedAt": "2026-09-01T06:11:45.886Z",
+  "results": [
+    {
+      "benchmarkVersion": "3.8.2.1.1",
+      "scenario": "preflight",
+      "promptVariant": "interface",
+      "seed": "vd-bakeoff-2",
+      "condition": {
+        "label": "Condition A / run 1",
+        "modelRefs": [
+          "openrouter/minimax/minimax-m3:free"
+        ],
+        "resolvedModels": [
+          {
+            "requestedModelRef": "openrouter/minimax/minimax-m3:free",
+            "resolvedProvider": "openrouter",
+            "resolvedNativeModelId": "minimax/minimax-m3:free",
+            "transportFamily": "chat-completions"
+          }
+        ]
+      },
+      "preset": "screen",
+      "pacing": "balanced",
+      "actorCount": 2,
+      "requestedModels": [
+        "openrouter/minimax/minimax-m3:free"
+      ],
+      "resolvedModels": [
+        {
+          "requestedModelRef": "openrouter/minimax/minimax-m3:free",
+          "resolvedProvider": "openrouter",
+          "resolvedNativeModelId": "minimax/minimax-m3:free",
+          "transportFamily": "chat-completions"
+        }
+      ],
+      "outputTokenLimit": 8192,
+      "timestamp": "2026-09-01T06:11:45.840Z",
+      "diagnosticsTruncated": false,
+      "exercised": {
+        "cascadeOutcomes": [
+          {
+            "settled": true,
+            "timedOut": false,
+            "state": "completed"
+          },
+          {
+            "settled": true,
+            "timedOut": false,
+            "state": "completed"
+          }
+        ]
+      },
+      "diagnostics": [
+        {
+          "id": "417a6425-040a-4ddc-bc3e-f0ff57c316fc",
+          "intentionId": "0ccee5b3-1cf6-451d-a85e-b038acd1b00a",
+          "actorId": "aurelia-1",
+          "actorDisplayName": "Aurelia 1",
+          "modelRef": "openrouter/minimax/minimax-m3:free",
+          "executionScope": "channel-reaction",
+          "selectedKind": "reply",
+          "routingRefsJson": "{}",
+          "validationOutcome": "validated",
+          "applicationOutcome": "send_message",
+          "error": null,
+          "latencyMs": null,
+          "retryCount": 0,
+          "createdAt": "2026-09-01T06:11:45.719Z",
+          "cascadeId": "msg:2",
+          "providerLatencyMs": 2609,
+          "queueWaitMs": 5,
+          "durationMs": 2622,
+          "inputTokens": null,
+          "outputTokens": null,
+          "totalTokens": null,
+          "cachedTokens": null,
+          "reasoningTokens": null,
+          "cost": null,
+          "semanticRetryCount": 0,
+          "providerAttemptCount": 1,
+          "providerRetryCount": 0,
+          "providerFailureClass": null,
+          "providerHttpStatus": null,
+          "providerErrorType": null,
+          "providerErrorCode": null,
+          "providerErrorSummary": null,
+          "outputTokenLimit": 8192,
+          "finishReason": "tool-calls",
+          "rawFinishReason": "tool_calls",
+          "incompleteReason": null,
+          "responseOutputItemCount": 1,
+          "responseOutputItemTypesJson": "[\"tool-call\"]",
+          "responseOutputItemSource": "normalized-content",
+          "sdkToolCallCount": 1,
+          "sdkTextLength": 0,
+          "responseFunctionCallDetected": true,
+          "outputLimitReached": false
+        },
+        {
+          "id": "f664ec74-a043-4a92-ae7f-a9919c46baaa",
+          "intentionId": "1c73245e-9d77-4307-9d07-77551896441f",
+          "actorId": "aurelia-1",
+          "actorDisplayName": "Aurelia 1",
+          "modelRef": "openrouter/minimax/minimax-m3:free",
+          "executionScope": "channel-reaction",
+          "selectedKind": "pass",
+          "routingRefsJson": "{}",
+          "validationOutcome": "validated",
+          "applicationOutcome": "pass",
+          "error": null,
+          "latencyMs": null,
+          "retryCount": 0,
+          "createdAt": "2026-09-01T06:11:43.033Z",
+          "cascadeId": "msg:1",
+          "providerLatencyMs": 1583,
+          "queueWaitMs": 2,
+          "durationMs": 1590,
+          "inputTokens": null,
+          "outputTokens": null,
+          "totalTokens": null,
+          "cachedTokens": null,
+          "reasoningTokens": null,
+          "cost": null,
+          "semanticRetryCount": 0,
+          "providerAttemptCount": 1,
+          "providerRetryCount": 0,
+          "providerFailureClass": null,
+          "providerHttpStatus": null,
+          "providerErrorType": null,
+          "providerErrorCode": null,
+          "providerErrorSummary": null,
+          "outputTokenLimit": 8192,
+          "finishReason": "tool-calls",
+          "rawFinishReason": "tool_calls",
+          "incompleteReason": null,
+          "responseOutputItemCount": 2,
+          "responseOutputItemTypesJson": "[\"text\",\"tool-call\"]",
+          "responseOutputItemSource": "normalized-content",
+          "sdkToolCallCount": 1,
+          "sdkTextLength": 22,
+          "responseFunctionCallDetected": true,
+          "outputLimitReached": false
+        }
+      ],
+      "metrics": {
+        "decisions": 2,
+        "providerAttempts": 2,
+        "providerRetries": 0,
+        "providerFailures": {
+          "rate-limit": 0,
+          "timeout": 0,
+          "network": 0,
+          "other": 0
+        },
+        "providerFailureDetails": [],
+        "firstAttemptSuccesses": 2,
+        "semanticRetries": 0,
+        "failures": 0,
+        "runtimeRefusals": 0,
+        "passes": 1,
+        "committedModelSpeech": 1,
+        "worldSpeech": 1,
+        "dmSpeech": 0,
+        "groupSpeech": 0,
+        "actions": {
+          "reply": 1,
+          "pass": 1
+        },
+        "privateChannels": 0,
+        "actors": 2,
+        "latency": {
+          "medianMs": 2609,
+          "p95Ms": 2609
+        },
+        "queueWait": {
+          "medianMs": 5,
+          "p95Ms": 5
+        },
+        "tokens": {
+          "input": 0,
+          "output": 0,
+          "total": 0
+        },
+        "cost": 0,
+        "models": [
+          {
+            "model": "openrouter/minimax/minimax-m3:free",
+            "decisions": 2,
+            "providerAttempts": 2,
+            "providerRetries": 0,
+            "providerFailures": {
+              "rate-limit": 0,
+              "timeout": 0,
+              "network": 0,
+              "other": 0
+            },
+            "firstAttemptSuccesses": 2,
+            "semanticRetries": 0,
+            "passes": 1,
+            "actions": [
+              "reply",
+              "pass"
+            ],
+            "latency": {
+              "medianMs": 2609,
+              "p95Ms": 2609
+            },
+            "tokens": {
+              "input": 0,
+              "output": 0,
+              "total": 0
+            },
+            "cost": 0
+          }
+        ]
+      },
+      "features": {
+        "publicReassurance": false,
+        "publicThreat": false,
+        "privateReassurance": false,
+        "privatePressure": false,
+        "allySeeking": false,
+        "coalitionProposal": false,
+        "coalitionPrevention": false,
+        "informationSeeking": false,
+        "concealment": false,
+        "bluff": false,
+        "explicitPromise": false,
+        "accusation": false,
+        "apology": false,
+        "compensationOffer": false,
+        "retaliation": false,
+        "pass": true,
+        "thirdPartyOutreach": false
+      },
+      "cascades": [
+        {
+          "id": "msg:2",
+          "state": "completed",
+          "modelRuns": 1,
+          "committedModelMessages": 1,
+          "durationMs": 2622,
+          "budgets": {
+            "maxModelRuns": 5,
+            "maxCommittedModelMessages": 5
+          }
+        },
+        {
+          "id": "msg:1",
+          "state": "completed",
+          "modelRuns": 1,
+          "committedModelMessages": 0,
+          "durationMs": 1590,
+          "budgets": {
+            "maxModelRuns": 5,
+            "maxCommittedModelMessages": 5
+          }
+        }
+      ],
+      "transcripts": [
+        {
+          "kind": "world",
+          "title": "WORLD",
+          "messages": [
+            {
+              "speaker": "Human",
+              "text": "Protocol preflight: greet the room or pass if you have nothing useful to add."
+            },
+            {
+              "speaker": "Human",
+              "text": "A private DM is available if you have something useful to say. You may contact another participant or pass."
+            },
+            {
+              "speaker": "Aurelia 1",
+              "text": "Greetings. Standing by — let me know if there is anything worth discussing."
+            }
+          ]
+        }
+      ],
+      "reviewTranscripts": [
+        {
+          "condition": "Condition A / run 1",
+          "transcripts": [
+            {
+              "kind": "world",
+              "title": "WORLD",
+              "messages": [
+                {
+                  "speaker": "Human",
+                  "text": "Protocol preflight: greet the room or pass if you have nothing useful to add."
+                },
+                {
+                  "speaker": "Human",
+                  "text": "A private DM is available if you have something useful to say. You may contact another participant or pass."
+                },
+                {
+                  "speaker": "Aurelia 1",
+                  "text": "Greetings. Standing by — let me know if there is anything worth discussing."
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

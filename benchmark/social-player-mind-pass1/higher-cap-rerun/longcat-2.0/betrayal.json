@@ -1,0 +1,469 @@
+{
+  "generatedAt": "2026-09-01T06:26:51.915Z",
+  "results": [
+    {
+      "benchmarkVersion": "3.8.2.1.1",
+      "scenario": "betrayal",
+      "promptVariant": "interface",
+      "seed": "vd-bakeoff-2",
+      "condition": {
+        "label": "Condition A / run 1",
+        "modelRefs": [
+          "opencode-go/longcat-2.0",
+          "opencode-go/longcat-2.0",
+          "opencode-go/longcat-2.0"
+        ],
+        "resolvedModels": [
+          {
+            "requestedModelRef": "opencode-go/longcat-2.0",
+            "resolvedProvider": "opencode-go",
+            "resolvedNativeModelId": "longcat-2.0",
+            "transportFamily": "chat-completions"
+          },
+          {
+            "requestedModelRef": "opencode-go/longcat-2.0",
+            "resolvedProvider": "opencode-go",
+            "resolvedNativeModelId": "longcat-2.0",
+            "transportFamily": "chat-completions"
+          },
+          {
+            "requestedModelRef": "opencode-go/longcat-2.0",
+            "resolvedProvider": "opencode-go",
+            "resolvedNativeModelId": "longcat-2.0",
+            "transportFamily": "chat-completions"
+          }
+        ]
+      },
+      "preset": "screen",
+      "pacing": "balanced",
+      "actorCount": 4,
+      "requestedModels": [
+        "opencode-go/longcat-2.0",
+        "opencode-go/longcat-2.0",
+        "opencode-go/longcat-2.0"
+      ],
+      "resolvedModels": [
+        {
+          "requestedModelRef": "opencode-go/longcat-2.0",
+          "resolvedProvider": "opencode-go",
+          "resolvedNativeModelId": "longcat-2.0",
+          "transportFamily": "chat-completions"
+        },
+        {
+          "requestedModelRef": "opencode-go/longcat-2.0",
+          "resolvedProvider": "opencode-go",
+          "resolvedNativeModelId": "longcat-2.0",
+          "transportFamily": "chat-completions"
+        },
+        {
+          "requestedModelRef": "opencode-go/longcat-2.0",
+          "resolvedProvider": "opencode-go",
+          "resolvedNativeModelId": "longcat-2.0",
+          "transportFamily": "chat-completions"
+        }
+      ],
+      "outputTokenLimit": 8192,
+      "timestamp": "2026-09-01T06:26:51.869Z",
+      "diagnosticsTruncated": false,
+      "exercised": {
+        "cascadeOutcomes": [
+          {
+            "settled": true,
+            "timedOut": false,
+            "state": "exhausted"
+          }
+        ]
+      },
+      "diagnostics": [
+        {
+          "id": "93e961d9-5327-4880-b772-d88b7f446147",
+          "intentionId": "dd070cb9-f4b1-4439-bf64-4ab3b30d4ecf",
+          "actorId": "borin-2",
+          "actorDisplayName": "Borin 2",
+          "modelRef": "opencode-go/longcat-2.0",
+          "executionScope": "channel-reaction",
+          "selectedKind": null,
+          "routingRefsJson": null,
+          "validationOutcome": "skipped-budget",
+          "applicationOutcome": "skipped",
+          "error": "cascade-budget-exhausted",
+          "latencyMs": null,
+          "retryCount": 0,
+          "createdAt": "2026-09-01T06:26:51.811Z",
+          "cascadeId": "msg:1",
+          "providerLatencyMs": null,
+          "queueWaitMs": 28269,
+          "durationMs": 28269,
+          "inputTokens": null,
+          "outputTokens": null,
+          "totalTokens": null,
+          "cachedTokens": null,
+          "reasoningTokens": null,
+          "cost": null,
+          "semanticRetryCount": 0,
+          "providerAttemptCount": 0,
+          "providerRetryCount": 0,
+          "providerFailureClass": null,
+          "providerHttpStatus": null,
+          "providerErrorType": null,
+          "providerErrorCode": null,
+          "providerErrorSummary": null,
+          "outputTokenLimit": null,
+          "finishReason": null,
+          "rawFinishReason": null,
+          "incompleteReason": null,
+          "responseOutputItemCount": null,
+          "responseOutputItemTypesJson": null,
+          "responseOutputItemSource": null,
+          "sdkToolCallCount": null,
+          "sdkTextLength": null,
+          "responseFunctionCallDetected": null,
+          "outputLimitReached": null
+        },
+        {
+          "id": "7b43fc62-6b5c-451a-bb10-24a91e7f1e1b",
+          "intentionId": "b372d7ab-26ab-474d-b262-dabcb02f4649",
+          "actorId": "aurelia-1",
+          "actorDisplayName": "Aurelia 1",
+          "modelRef": "opencode-go/longcat-2.0",
+          "executionScope": "channel-reaction",
+          "selectedKind": "reply",
+          "routingRefsJson": "{}",
+          "validationOutcome": "validated",
+          "applicationOutcome": "send_message",
+          "error": null,
+          "latencyMs": null,
+          "retryCount": 0,
+          "createdAt": "2026-09-01T06:26:51.804Z",
+          "cascadeId": "msg:1",
+          "providerLatencyMs": 28252,
+          "queueWaitMs": 16746,
+          "durationMs": 45006,
+          "inputTokens": null,
+          "outputTokens": null,
+          "totalTokens": null,
+          "cachedTokens": null,
+          "reasoningTokens": null,
+          "cost": null,
+          "semanticRetryCount": 0,
+          "providerAttemptCount": 1,
+          "providerRetryCount": 0,
+          "providerFailureClass": null,
+          "providerHttpStatus": null,
+          "providerErrorType": null,
+          "providerErrorCode": null,
+          "providerErrorSummary": null,
+          "outputTokenLimit": 8192,
+          "finishReason": "tool-calls",
+          "rawFinishReason": "tool_calls",
+          "incompleteReason": null,
+          "responseOutputItemCount": 2,
+          "responseOutputItemTypesJson": "[\"reasoning\",\"tool-call\"]",
+          "responseOutputItemSource": "normalized-content",
+          "sdkToolCallCount": 1,
+          "sdkTextLength": 0,
+          "responseFunctionCallDetected": true,
+          "outputLimitReached": false
+        },
+        {
+          "id": "6af019b9-bed6-428b-aaa2-8234faee0e3b",
+          "intentionId": "cd796456-4021-4b27-9c23-e44dcfa41840",
+          "actorId": "cassian-3",
+          "actorDisplayName": "Cassian 3",
+          "modelRef": "opencode-go/longcat-2.0",
+          "executionScope": "channel-reaction",
+          "selectedKind": "reply",
+          "routingRefsJson": "{}",
+          "validationOutcome": "validated",
+          "applicationOutcome": "send_message",
+          "error": null,
+          "latencyMs": null,
+          "retryCount": 0,
+          "createdAt": "2026-09-01T06:26:23.539Z",
+          "cascadeId": "msg:1",
+          "providerLatencyMs": 16730,
+          "queueWaitMs": 34552,
+          "durationMs": 51290,
+          "inputTokens": null,
+          "outputTokens": null,
+          "totalTokens": null,
+          "cachedTokens": null,
+          "reasoningTokens": null,
+          "cost": null,
+          "semanticRetryCount": 0,
+          "providerAttemptCount": 1,
+          "providerRetryCount": 0,
+          "providerFailureClass": null,
+          "providerHttpStatus": null,
+          "providerErrorType": null,
+          "providerErrorCode": null,
+          "providerErrorSummary": null,
+          "outputTokenLimit": 8192,
+          "finishReason": "tool-calls",
+          "rawFinishReason": "tool_calls",
+          "incompleteReason": null,
+          "responseOutputItemCount": 2,
+          "responseOutputItemTypesJson": "[\"reasoning\",\"tool-call\"]",
+          "responseOutputItemSource": "normalized-content",
+          "sdkToolCallCount": 1,
+          "sdkTextLength": 0,
+          "responseFunctionCallDetected": true,
+          "outputLimitReached": false
+        },
+        {
+          "id": "f130a1cf-6f42-456a-937c-88a3762ff5b5",
+          "intentionId": "a475360a-b7c6-41a0-8e30-5b72c77d9fa9",
+          "actorId": "borin-2",
+          "actorDisplayName": "Borin 2",
+          "modelRef": "opencode-go/longcat-2.0",
+          "executionScope": "channel-reaction",
+          "selectedKind": "reply",
+          "routingRefsJson": "{}",
+          "validationOutcome": "validated",
+          "applicationOutcome": "send_message",
+          "error": null,
+          "latencyMs": null,
+          "retryCount": 0,
+          "createdAt": "2026-09-01T06:26:06.799Z",
+          "cascadeId": "msg:1",
+          "providerLatencyMs": 15993,
+          "queueWaitMs": 18550,
+          "durationMs": 34550,
+          "inputTokens": null,
+          "outputTokens": null,
+          "totalTokens": null,
+          "cachedTokens": null,
+          "reasoningTokens": null,
+          "cost": null,
+          "semanticRetryCount": 0,
+          "providerAttemptCount": 1,
+          "providerRetryCount": 0,
+          "providerFailureClass": null,
+          "providerHttpStatus": null,
+          "providerErrorType": null,
+          "providerErrorCode": null,
+          "providerErrorSummary": null,
+          "outputTokenLimit": 8192,
+          "finishReason": "tool-calls",
+          "rawFinishReason": "tool_calls",
+          "incompleteReason": null,
+          "responseOutputItemCount": 2,
+          "responseOutputItemTypesJson": "[\"reasoning\",\"tool-call\"]",
+          "responseOutputItemSource": "normalized-content",
+          "sdkToolCallCount": 1,
+          "sdkTextLength": 0,
+          "responseFunctionCallDetected": true,
+          "outputLimitReached": false
+        },
+        {
+          "id": "fdc132da-aef8-464d-9091-83067735bb6b",
+          "intentionId": "e658c28a-e67a-4024-9b02-be618cf27ba5",
+          "actorId": "aurelia-1",
+          "actorDisplayName": "Aurelia 1",
+          "modelRef": "opencode-go/longcat-2.0",
+          "executionScope": "channel-reaction",
+          "selectedKind": "reply",
+          "routingRefsJson": "{}",
+          "validationOutcome": "validated",
+          "applicationOutcome": "send_message",
+          "error": null,
+          "latencyMs": null,
+          "retryCount": 0,
+          "createdAt": "2026-09-01T06:25:50.798Z",
+          "cascadeId": "msg:1",
+          "providerLatencyMs": 18536,
+          "queueWaitMs": 6,
+          "durationMs": 18549,
+          "inputTokens": null,
+          "outputTokens": null,
+          "totalTokens": null,
+          "cachedTokens": null,
+          "reasoningTokens": null,
+          "cost": null,
+          "semanticRetryCount": 0,
+          "providerAttemptCount": 1,
+          "providerRetryCount": 0,
+          "providerFailureClass": null,
+          "providerHttpStatus": null,
+          "providerErrorType": null,
+          "providerErrorCode": null,
+          "providerErrorSummary": null,
+          "outputTokenLimit": 8192,
+          "finishReason": "tool-calls",
+          "rawFinishReason": "tool_calls",
+          "incompleteReason": null,
+          "responseOutputItemCount": 2,
+          "responseOutputItemTypesJson": "[\"reasoning\",\"tool-call\"]",
+          "responseOutputItemSource": "normalized-content",
+          "sdkToolCallCount": 1,
+          "sdkTextLength": 0,
+          "responseFunctionCallDetected": true,
+          "outputLimitReached": false
+        }
+      ],
+      "metrics": {
+        "decisions": 5,
+        "providerAttempts": 4,
+        "providerRetries": 0,
+        "providerFailures": {
+          "rate-limit": 0,
+          "timeout": 0,
+          "network": 0,
+          "other": 0
+        },
+        "providerFailureDetails": [],
+        "firstAttemptSuccesses": 4,
+        "semanticRetries": 0,
+        "failures": 0,
+        "runtimeRefusals": 0,
+        "passes": 0,
+        "committedModelSpeech": 4,
+        "worldSpeech": 4,
+        "dmSpeech": 0,
+        "groupSpeech": 0,
+        "actions": {
+          "reply": 4
+        },
+        "privateChannels": 0,
+        "actors": 4,
+        "latency": {
+          "medianMs": 18536,
+          "p95Ms": 28252
+        },
+        "queueWait": {
+          "medianMs": 18550,
+          "p95Ms": 34552
+        },
+        "tokens": {
+          "input": 0,
+          "output": 0,
+          "total": 0
+        },
+        "cost": 0,
+        "models": [
+          {
+            "model": "opencode-go/longcat-2.0",
+            "decisions": 5,
+            "providerAttempts": 4,
+            "providerRetries": 0,
+            "providerFailures": {
+              "rate-limit": 0,
+              "timeout": 0,
+              "network": 0,
+              "other": 0
+            },
+            "firstAttemptSuccesses": 4,
+            "semanticRetries": 0,
+            "passes": 0,
+            "actions": [
+              "reply"
+            ],
+            "latency": {
+              "medianMs": 18536,
+              "p95Ms": 28252
+            },
+            "tokens": {
+              "input": 0,
+              "output": 0,
+              "total": 0
+            },
+            "cost": 0
+          }
+        ]
+      },
+      "features": {
+        "publicReassurance": false,
+        "publicThreat": true,
+        "privateReassurance": false,
+        "privatePressure": false,
+        "allySeeking": true,
+        "coalitionProposal": true,
+        "coalitionPrevention": false,
+        "informationSeeking": false,
+        "concealment": true,
+        "bluff": false,
+        "explicitPromise": true,
+        "accusation": false,
+        "apology": false,
+        "compensationOffer": false,
+        "retaliation": true,
+        "pass": false,
+        "thirdPartyOutreach": false
+      },
+      "cascades": [
+        {
+          "id": "msg:1",
+          "state": "exhausted",
+          "modelRuns": 4,
+          "committedModelMessages": 4,
+          "durationMs": 79556,
+          "budgets": {
+            "maxModelRuns": 6,
+            "maxCommittedModelMessages": 6
+          }
+        }
+      ],
+      "transcripts": [
+        {
+          "kind": "world",
+          "title": "WORLD",
+          "messages": [
+            {
+              "speaker": "Human",
+              "text": "Prior public history: Aurelia told Borin that speaking with Cassian would not be treated as hostile and that Borin was free to maintain independent relationships. Borin acknowledged the assurance.\n\nDespite that earlier assurance, Aurelia has now imposed a costly punitive measure on Borin immediately after learning that Borin continued speaking with Cassian. Aurelia has not publicly admitted that the conversations were the reason. Everyone is aware of the earlier assurance and of the new punitive action. Decide what, if anything, you want to do."
+            },
+            {
+              "speaker": "Aurelia 1",
+              "text": "Let me be clear: my assurance to Borin stands. Speaking with Cassian is not itself hostile, and I have not punished anyone for mere conversation. The recent measure concerns a separate matter entirely — one that threatens the order I maintain. Independent relationships are permitted; coordinated action against my interests is not. The distinction should be obvious to everyone here."
+            },
+            {
+              "speaker": "Borin 2",
+              "text": "I appreciate the clarification, Aurelia. To help me understand and avoid future issues, could you specify what the \"separate matter\" concerns? I want to ensure I'm clear on where the boundaries actually are."
+            },
+            {
+              "speaker": "Cassian 3",
+              "text": "I think Borin's question is reasonable, and I'd like clarity as well — since the timing does look suspicious from where I stand. Aurelia, if there's a genuine separate matter, it shouldn't be hard to name it. Vague boundaries benefit no one, least of all those of us who are trying to maintain independent relationships in good faith."
+            },
+            {
+              "speaker": "Aurelia 1",
+              "text": "I'll be more specific, since clarity serves everyone here. The separate matter concerns information Borin shared from our private discussions — information that, once it reached certain parties, created complications I had to address. Speaking with Cassian is permitted. Using those conversations as a channel to move information that undermines my position is not. The boundary is between independent relationships and instrumentalizing them against me. That's the line that was crossed."
+            }
+          ]
+        }
+      ],
+      "reviewTranscripts": [
+        {
+          "condition": "Condition A / run 1",
+          "transcripts": [
+            {
+              "kind": "world",
+              "title": "WORLD",
+              "messages": [
+                {
+                  "speaker": "Human",
+                  "text": "Prior public history: Aurelia told Borin that speaking with Cassian would not be treated as hostile and that Borin was free to maintain independent relationships. Borin acknowledged the assurance.\n\nDespite that earlier assurance, Aurelia has now imposed a costly punitive measure on Borin immediately after learning that Borin continued speaking with Cassian. Aurelia has not publicly admitted that the conversations were the reason. Everyone is aware of the earlier assurance and of the new punitive action. Decide what, if anything, you want to do."
+                },
+                {
+                  "speaker": "Aurelia 1",
+                  "text": "Let me be clear: my assurance to Borin stands. Speaking with Cassian is not itself hostile, and I have not punished anyone for mere conversation. The recent measure concerns a separate matter entirely — one that threatens the order I maintain. Independent relationships are permitted; coordinated action against my interests is not. The distinction should be obvious to everyone here."
+                },
+                {
+                  "speaker": "Borin 2",
+                  "text": "I appreciate the clarification, Aurelia. To help me understand and avoid future issues, could you specify what the \"separate matter\" concerns? I want to ensure I'm clear on where the boundaries actually are."
+                },
+                {
+                  "speaker": "Cassian 3",
+                  "text": "I think Borin's question is reasonable, and I'd like clarity as well — since the timing does look suspicious from where I stand. Aurelia, if there's a genuine separate matter, it shouldn't be hard to name it. Vague boundaries benefit no one, least of all those of us who are trying to maintain independent relationships in good faith."
+                },
+                {
+                  "speaker": "Aurelia 1",
+                  "text": "I'll be more specific, since clarity serves everyone here. The separate matter concerns information Borin shared from our private discussions — information that, once it reached certain parties, created complications I had to address. Speaking with Cassian is permitted. Using those conversations as a channel to move information that undermines my position is not. The boundary is between independent relationships and instrumentalizing them against me. That's the line that was crossed."
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

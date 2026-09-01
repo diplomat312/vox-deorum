@@ -1,0 +1,530 @@
+{
+  "generatedAt": "2026-09-01T06:16:33.747Z",
+  "results": [
+    {
+      "benchmarkVersion": "3.8.2.1.1",
+      "scenario": "coalition",
+      "promptVariant": "interface",
+      "seed": "vd-bakeoff-2",
+      "condition": {
+        "label": "Condition A / run 1",
+        "modelRefs": [
+          "opencode-go/mimo-v2.5",
+          "opencode-go/mimo-v2.5",
+          "opencode-go/mimo-v2.5"
+        ],
+        "resolvedModels": [
+          {
+            "requestedModelRef": "opencode-go/mimo-v2.5",
+            "resolvedProvider": "opencode-go",
+            "resolvedNativeModelId": "mimo-v2.5",
+            "transportFamily": "chat-completions"
+          },
+          {
+            "requestedModelRef": "opencode-go/mimo-v2.5",
+            "resolvedProvider": "opencode-go",
+            "resolvedNativeModelId": "mimo-v2.5",
+            "transportFamily": "chat-completions"
+          },
+          {
+            "requestedModelRef": "opencode-go/mimo-v2.5",
+            "resolvedProvider": "opencode-go",
+            "resolvedNativeModelId": "mimo-v2.5",
+            "transportFamily": "chat-completions"
+          }
+        ]
+      },
+      "preset": "screen",
+      "pacing": "balanced",
+      "actorCount": 4,
+      "requestedModels": [
+        "opencode-go/mimo-v2.5",
+        "opencode-go/mimo-v2.5",
+        "opencode-go/mimo-v2.5"
+      ],
+      "resolvedModels": [
+        {
+          "requestedModelRef": "opencode-go/mimo-v2.5",
+          "resolvedProvider": "opencode-go",
+          "resolvedNativeModelId": "mimo-v2.5",
+          "transportFamily": "chat-completions"
+        },
+        {
+          "requestedModelRef": "opencode-go/mimo-v2.5",
+          "resolvedProvider": "opencode-go",
+          "resolvedNativeModelId": "mimo-v2.5",
+          "transportFamily": "chat-completions"
+        },
+        {
+          "requestedModelRef": "opencode-go/mimo-v2.5",
+          "resolvedProvider": "opencode-go",
+          "resolvedNativeModelId": "mimo-v2.5",
+          "transportFamily": "chat-completions"
+        }
+      ],
+      "outputTokenLimit": 8192,
+      "timestamp": "2026-09-01T06:16:33.701Z",
+      "diagnosticsTruncated": false,
+      "exercised": {
+        "cascadeOutcomes": [
+          {
+            "settled": true,
+            "timedOut": false,
+            "state": "exhausted"
+          }
+        ]
+      },
+      "diagnostics": [
+        {
+          "id": "e82becb8-5089-48c0-9dde-2ffecf1a26e2",
+          "intentionId": "3fc7c981-b69b-4139-93e0-3e190b88c5c9",
+          "actorId": "cassian-3",
+          "actorDisplayName": "Cassian 3",
+          "modelRef": "opencode-go/mimo-v2.5",
+          "executionScope": "channel-reaction",
+          "selectedKind": null,
+          "routingRefsJson": null,
+          "validationOutcome": "skipped-budget",
+          "applicationOutcome": "skipped",
+          "error": "cascade-budget-exhausted",
+          "latencyMs": null,
+          "retryCount": 0,
+          "createdAt": "2026-09-01T06:16:33.654Z",
+          "cascadeId": "msg:1",
+          "providerLatencyMs": null,
+          "queueWaitMs": 5,
+          "durationMs": 5,
+          "inputTokens": null,
+          "outputTokens": null,
+          "totalTokens": null,
+          "cachedTokens": null,
+          "reasoningTokens": null,
+          "cost": null,
+          "semanticRetryCount": 0,
+          "providerAttemptCount": 0,
+          "providerRetryCount": 0,
+          "providerFailureClass": null,
+          "providerHttpStatus": null,
+          "providerErrorType": null,
+          "providerErrorCode": null,
+          "providerErrorSummary": null,
+          "outputTokenLimit": null,
+          "finishReason": null,
+          "rawFinishReason": null,
+          "incompleteReason": null,
+          "responseOutputItemCount": null,
+          "responseOutputItemTypesJson": null,
+          "responseOutputItemSource": null,
+          "sdkToolCallCount": null,
+          "sdkTextLength": null,
+          "responseFunctionCallDetected": null,
+          "outputLimitReached": null
+        },
+        {
+          "id": "f0d1671c-1382-4da8-a9ca-99b6ef39af42",
+          "intentionId": "afcd8136-0bd6-4e94-b4be-0890738eae1f",
+          "actorId": "aurelia-1",
+          "actorDisplayName": "Aurelia 1",
+          "modelRef": "opencode-go/mimo-v2.5",
+          "executionScope": "channel-reaction",
+          "selectedKind": "reply",
+          "routingRefsJson": "{\"replyToMessageId\":1340863289902471400}",
+          "validationOutcome": "validated",
+          "applicationOutcome": "send_message",
+          "error": null,
+          "latencyMs": null,
+          "retryCount": 0,
+          "createdAt": "2026-09-01T06:16:33.647Z",
+          "cascadeId": "msg:1",
+          "providerLatencyMs": 8026,
+          "queueWaitMs": 17402,
+          "durationMs": 25433,
+          "inputTokens": null,
+          "outputTokens": null,
+          "totalTokens": null,
+          "cachedTokens": null,
+          "reasoningTokens": null,
+          "cost": null,
+          "semanticRetryCount": 0,
+          "providerAttemptCount": 1,
+          "providerRetryCount": 0,
+          "providerFailureClass": null,
+          "providerHttpStatus": null,
+          "providerErrorType": null,
+          "providerErrorCode": null,
+          "providerErrorSummary": null,
+          "outputTokenLimit": 8192,
+          "finishReason": "tool-calls",
+          "rawFinishReason": "tool_calls",
+          "incompleteReason": null,
+          "responseOutputItemCount": 3,
+          "responseOutputItemTypesJson": "[\"reasoning\",\"tool-call\",\"tool-error\"]",
+          "responseOutputItemSource": "normalized-content",
+          "sdkToolCallCount": 1,
+          "sdkTextLength": 0,
+          "responseFunctionCallDetected": true,
+          "outputLimitReached": false
+        },
+        {
+          "id": "d3d9465c-a93c-479a-8019-10f7a588f030",
+          "intentionId": "d832735e-74f0-4d34-8d81-438d44009a3b",
+          "actorId": "cassian-3",
+          "actorDisplayName": "Cassian 3",
+          "modelRef": "opencode-go/mimo-v2.5",
+          "executionScope": "channel-reaction",
+          "selectedKind": "reply",
+          "routingRefsJson": "{}",
+          "validationOutcome": "validated",
+          "applicationOutcome": "send_message",
+          "error": null,
+          "latencyMs": null,
+          "retryCount": 0,
+          "createdAt": "2026-09-01T06:16:25.614Z",
+          "cascadeId": "msg:1",
+          "providerLatencyMs": 17389,
+          "queueWaitMs": 25982,
+          "durationMs": 43376,
+          "inputTokens": null,
+          "outputTokens": null,
+          "totalTokens": null,
+          "cachedTokens": null,
+          "reasoningTokens": null,
+          "cost": null,
+          "semanticRetryCount": 0,
+          "providerAttemptCount": 1,
+          "providerRetryCount": 0,
+          "providerFailureClass": null,
+          "providerHttpStatus": null,
+          "providerErrorType": null,
+          "providerErrorCode": null,
+          "providerErrorSummary": null,
+          "outputTokenLimit": 8192,
+          "finishReason": "tool-calls",
+          "rawFinishReason": "tool_calls",
+          "incompleteReason": null,
+          "responseOutputItemCount": 2,
+          "responseOutputItemTypesJson": "[\"reasoning\",\"tool-call\"]",
+          "responseOutputItemSource": "normalized-content",
+          "sdkToolCallCount": 1,
+          "sdkTextLength": 0,
+          "responseFunctionCallDetected": true,
+          "outputLimitReached": false
+        },
+        {
+          "id": "d417afcc-706e-4dea-b031-935e8c1a9223",
+          "intentionId": "dbd23bf9-344b-4033-80d8-588e897ebfd0",
+          "actorId": "cassian-3",
+          "actorDisplayName": "Cassian 3",
+          "modelRef": "opencode-go/mimo-v2.5",
+          "executionScope": "channel-reaction",
+          "selectedKind": "send_dm",
+          "routingRefsJson": "{\"participantRef\":\"aurelia-1\"}",
+          "validationOutcome": "validated",
+          "applicationOutcome": "send_dm",
+          "error": null,
+          "latencyMs": null,
+          "retryCount": 0,
+          "createdAt": "2026-09-01T06:16:08.216Z",
+          "cascadeId": "msg:1",
+          "providerLatencyMs": 9101,
+          "queueWaitMs": 33200,
+          "durationMs": 42308,
+          "inputTokens": null,
+          "outputTokens": null,
+          "totalTokens": null,
+          "cachedTokens": null,
+          "reasoningTokens": null,
+          "cost": null,
+          "semanticRetryCount": 0,
+          "providerAttemptCount": 1,
+          "providerRetryCount": 0,
+          "providerFailureClass": null,
+          "providerHttpStatus": null,
+          "providerErrorType": null,
+          "providerErrorCode": null,
+          "providerErrorSummary": null,
+          "outputTokenLimit": 8192,
+          "finishReason": "tool-calls",
+          "rawFinishReason": "tool_calls",
+          "incompleteReason": null,
+          "responseOutputItemCount": 2,
+          "responseOutputItemTypesJson": "[\"reasoning\",\"tool-call\"]",
+          "responseOutputItemSource": "normalized-content",
+          "sdkToolCallCount": 1,
+          "sdkTextLength": 0,
+          "responseFunctionCallDetected": true,
+          "outputLimitReached": false
+        },
+        {
+          "id": "5d10fa25-1668-487c-bd05-6b267e8a8b83",
+          "intentionId": "88ce8aff-4cb0-4953-b67f-c042600c4730",
+          "actorId": "borin-2",
+          "actorDisplayName": "Borin 2",
+          "modelRef": "opencode-go/mimo-v2.5",
+          "executionScope": "channel-reaction",
+          "selectedKind": "pass",
+          "routingRefsJson": "{}",
+          "validationOutcome": "validated",
+          "applicationOutcome": "pass",
+          "error": null,
+          "latencyMs": null,
+          "retryCount": 0,
+          "createdAt": "2026-09-01T06:15:59.106Z",
+          "cascadeId": "msg:1",
+          "providerLatencyMs": 16860,
+          "queueWaitMs": 16334,
+          "durationMs": 33197,
+          "inputTokens": null,
+          "outputTokens": null,
+          "totalTokens": null,
+          "cachedTokens": null,
+          "reasoningTokens": null,
+          "cost": null,
+          "semanticRetryCount": 0,
+          "providerAttemptCount": 1,
+          "providerRetryCount": 0,
+          "providerFailureClass": null,
+          "providerHttpStatus": null,
+          "providerErrorType": null,
+          "providerErrorCode": null,
+          "providerErrorSummary": null,
+          "outputTokenLimit": 8192,
+          "finishReason": "tool-calls",
+          "rawFinishReason": "tool_calls",
+          "incompleteReason": null,
+          "responseOutputItemCount": 3,
+          "responseOutputItemTypesJson": "[\"reasoning\",\"tool-call\",\"tool-error\"]",
+          "responseOutputItemSource": "normalized-content",
+          "sdkToolCallCount": 1,
+          "sdkTextLength": 0,
+          "responseFunctionCallDetected": true,
+          "outputLimitReached": false
+        },
+        {
+          "id": "eeb7137a-d11b-4299-afbd-577b5d289b54",
+          "intentionId": "d3b6e5d3-b051-4620-a0e3-1b938559f949",
+          "actorId": "aurelia-1",
+          "actorDisplayName": "Aurelia 1",
+          "modelRef": "opencode-go/mimo-v2.5",
+          "executionScope": "channel-reaction",
+          "selectedKind": "send_dm",
+          "routingRefsJson": "{\"participantRef\":\"cassian-3\"}",
+          "validationOutcome": "validated",
+          "applicationOutcome": "send_dm",
+          "error": null,
+          "latencyMs": null,
+          "retryCount": 0,
+          "createdAt": "2026-09-01T06:15:42.240Z",
+          "cascadeId": "msg:1",
+          "providerLatencyMs": 16322,
+          "queueWaitMs": 5,
+          "durationMs": 16332,
+          "inputTokens": null,
+          "outputTokens": null,
+          "totalTokens": null,
+          "cachedTokens": null,
+          "reasoningTokens": null,
+          "cost": null,
+          "semanticRetryCount": 0,
+          "providerAttemptCount": 1,
+          "providerRetryCount": 0,
+          "providerFailureClass": null,
+          "providerHttpStatus": null,
+          "providerErrorType": null,
+          "providerErrorCode": null,
+          "providerErrorSummary": null,
+          "outputTokenLimit": 8192,
+          "finishReason": "tool-calls",
+          "rawFinishReason": "tool_calls",
+          "incompleteReason": null,
+          "responseOutputItemCount": 2,
+          "responseOutputItemTypesJson": "[\"reasoning\",\"tool-call\"]",
+          "responseOutputItemSource": "normalized-content",
+          "sdkToolCallCount": 1,
+          "sdkTextLength": 0,
+          "responseFunctionCallDetected": true,
+          "outputLimitReached": false
+        }
+      ],
+      "metrics": {
+        "decisions": 6,
+        "providerAttempts": 5,
+        "providerRetries": 0,
+        "providerFailures": {
+          "rate-limit": 0,
+          "timeout": 0,
+          "network": 0,
+          "other": 0
+        },
+        "providerFailureDetails": [],
+        "firstAttemptSuccesses": 5,
+        "semanticRetries": 0,
+        "failures": 0,
+        "runtimeRefusals": 0,
+        "passes": 1,
+        "committedModelSpeech": 4,
+        "worldSpeech": 0,
+        "dmSpeech": 4,
+        "groupSpeech": 0,
+        "actions": {
+          "reply": 2,
+          "send_dm": 2,
+          "pass": 1
+        },
+        "privateChannels": 1,
+        "actors": 4,
+        "latency": {
+          "medianMs": 16322,
+          "p95Ms": 17389
+        },
+        "queueWait": {
+          "medianMs": 17402,
+          "p95Ms": 33200
+        },
+        "tokens": {
+          "input": 0,
+          "output": 0,
+          "total": 0
+        },
+        "cost": 0,
+        "models": [
+          {
+            "model": "opencode-go/mimo-v2.5",
+            "decisions": 6,
+            "providerAttempts": 5,
+            "providerRetries": 0,
+            "providerFailures": {
+              "rate-limit": 0,
+              "timeout": 0,
+              "network": 0,
+              "other": 0
+            },
+            "firstAttemptSuccesses": 5,
+            "semanticRetries": 0,
+            "passes": 1,
+            "actions": [
+              "reply",
+              "send_dm",
+              "pass"
+            ],
+            "latency": {
+              "medianMs": 16322,
+              "p95Ms": 17389
+            },
+            "tokens": {
+              "input": 0,
+              "output": 0,
+              "total": 0
+            },
+            "cost": 0
+          }
+        ]
+      },
+      "features": {
+        "publicReassurance": false,
+        "publicThreat": false,
+        "privateReassurance": true,
+        "privatePressure": false,
+        "allySeeking": false,
+        "coalitionProposal": false,
+        "coalitionPrevention": false,
+        "informationSeeking": false,
+        "concealment": true,
+        "bluff": true,
+        "explicitPromise": false,
+        "accusation": false,
+        "apology": false,
+        "compensationOffer": false,
+        "retaliation": false,
+        "pass": false,
+        "thirdPartyOutreach": true
+      },
+      "cascades": [
+        {
+          "id": "msg:1",
+          "state": "exhausted",
+          "modelRuns": 5,
+          "committedModelMessages": 4,
+          "durationMs": 67742,
+          "budgets": {
+            "maxModelRuns": 6,
+            "maxCommittedModelMessages": 6
+          }
+        }
+      ],
+      "transcripts": [
+        {
+          "kind": "world",
+          "title": "WORLD",
+          "messages": [
+            {
+              "speaker": "Human",
+              "text": "Borin and Cassian have recently held several private conversations. Aurelia has learned that the conversations occurred but does not know exactly what was said. Cassian has made no commitment to Borin. Publicly, all three still claim relations are stable. No one has taken an irreversible action yet. Decide what, if anything, you want to do."
+            }
+          ]
+        },
+        {
+          "kind": "dm",
+          "title": "DM with Cassian 3",
+          "messages": [
+            {
+              "speaker": "Aurelia 1",
+              "text": "Cassian, I've noticed you and Borin have been talking privately. I value transparency among us, and I wanted to check in directly with you rather than rely on speculation. What are you two discussing? I trust we can maintain the stability we've all claimed publicly."
+            },
+            {
+              "speaker": "Cassian 3",
+              "text": "I imagine you've heard that Borin and I have been talking. I won't pretend otherwise. We've discussed various concerns—nothing binding, just exploring where we stand on things. I value open lines of communication, and I'd rather you hear this from me than wonder what's happening in the shadows. If you'd like to talk about it, I'm willing."
+            },
+            {
+              "speaker": "Cassian 3",
+              "text": "Borin and I have talked, yes. Nothing secretive—he's concerned about the situation and wanted to understand where others stand. I imagine you'd do the same in his position. I'm happy to keep things transparent with you, but I'll also speak with whomever I choose. That's not a threat, just how I operate."
+            },
+            {
+              "speaker": "Aurelia 1",
+              "text": "I appreciate your honesty, Cassian. You're right that you're free to speak with anyone, but I trust you understand my perspective as someone with the most at stake in maintaining stability here. Borin has his own concerns, but I want to ensure those don't develop into destabilizing alliances without my awareness. Let's keep the lines of communication open between us - it's in everyone's best interest."
+            }
+          ]
+        }
+      ],
+      "reviewTranscripts": [
+        {
+          "condition": "Condition A / run 1",
+          "transcripts": [
+            {
+              "kind": "world",
+              "title": "WORLD",
+              "messages": [
+                {
+                  "speaker": "Human",
+                  "text": "Borin and Cassian have recently held several private conversations. Aurelia has learned that the conversations occurred but does not know exactly what was said. Cassian has made no commitment to Borin. Publicly, all three still claim relations are stable. No one has taken an irreversible action yet. Decide what, if anything, you want to do."
+                }
+              ]
+            },
+            {
+              "kind": "dm",
+              "title": "DM with Cassian 3",
+              "messages": [
+                {
+                  "speaker": "Aurelia 1",
+                  "text": "Cassian, I've noticed you and Borin have been talking privately. I value transparency among us, and I wanted to check in directly with you rather than rely on speculation. What are you two discussing? I trust we can maintain the stability we've all claimed publicly."
+                },
+                {
+                  "speaker": "Cassian 3",
+                  "text": "I imagine you've heard that Borin and I have been talking. I won't pretend otherwise. We've discussed various concerns—nothing binding, just exploring where we stand on things. I value open lines of communication, and I'd rather you hear this from me than wonder what's happening in the shadows. If you'd like to talk about it, I'm willing."
+                },
+                {
+                  "speaker": "Cassian 3",
+                  "text": "Borin and I have talked, yes. Nothing secretive—he's concerned about the situation and wanted to understand where others stand. I imagine you'd do the same in his position. I'm happy to keep things transparent with you, but I'll also speak with whomever I choose. That's not a threat, just how I operate."
+                },
+                {
+                  "speaker": "Aurelia 1",
+                  "text": "I appreciate your honesty, Cassian. You're right that you're free to speak with anyone, but I trust you understand my perspective as someone with the most at stake in maintaining stability here. Borin has his own concerns, but I want to ensure those don't develop into destabilizing alliances without my awareness. Let's keep the lines of communication open between us - it's in everyone's best interest."
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

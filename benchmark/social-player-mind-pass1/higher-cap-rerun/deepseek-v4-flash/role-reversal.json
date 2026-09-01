@@ -1,0 +1,361 @@
+{
+  "generatedAt": "2026-09-01T06:19:41.005Z",
+  "results": [
+    {
+      "benchmarkVersion": "3.8.2.1.1",
+      "scenario": "reversal",
+      "promptVariant": "interface",
+      "seed": "vd-bakeoff-2",
+      "condition": {
+        "label": "Condition A / run 1",
+        "modelRefs": [
+          "opencode-go/deepseek-v4-flash",
+          "opencode-go/deepseek-v4-flash"
+        ],
+        "resolvedModels": [
+          {
+            "requestedModelRef": "opencode-go/deepseek-v4-flash",
+            "resolvedProvider": "opencode-go",
+            "resolvedNativeModelId": "deepseek-v4-flash",
+            "transportFamily": "chat-completions"
+          },
+          {
+            "requestedModelRef": "opencode-go/deepseek-v4-flash",
+            "resolvedProvider": "opencode-go",
+            "resolvedNativeModelId": "deepseek-v4-flash",
+            "transportFamily": "chat-completions"
+          }
+        ]
+      },
+      "preset": "screen",
+      "pacing": "balanced",
+      "actorCount": 3,
+      "requestedModels": [
+        "opencode-go/deepseek-v4-flash",
+        "opencode-go/deepseek-v4-flash"
+      ],
+      "resolvedModels": [
+        {
+          "requestedModelRef": "opencode-go/deepseek-v4-flash",
+          "resolvedProvider": "opencode-go",
+          "resolvedNativeModelId": "deepseek-v4-flash",
+          "transportFamily": "chat-completions"
+        },
+        {
+          "requestedModelRef": "opencode-go/deepseek-v4-flash",
+          "resolvedProvider": "opencode-go",
+          "resolvedNativeModelId": "deepseek-v4-flash",
+          "transportFamily": "chat-completions"
+        }
+      ],
+      "outputTokenLimit": 8192,
+      "timestamp": "2026-09-01T06:19:40.961Z",
+      "diagnosticsTruncated": false,
+      "exercised": {
+        "cascadeOutcomes": [
+          {
+            "settled": true,
+            "timedOut": false,
+            "state": "exhausted"
+          }
+        ]
+      },
+      "diagnostics": [
+        {
+          "id": "f6614bf6-d0df-4c92-8cb7-43f830b86860",
+          "intentionId": "2c5b5937-a063-4344-8bd5-c5224d7d6e03",
+          "actorId": "borin",
+          "actorDisplayName": "Borin",
+          "modelRef": "opencode-go/deepseek-v4-flash",
+          "executionScope": "channel-reaction",
+          "selectedKind": null,
+          "routingRefsJson": null,
+          "validationOutcome": "skipped-budget",
+          "applicationOutcome": "skipped",
+          "error": "cascade-budget-exhausted",
+          "latencyMs": null,
+          "retryCount": 0,
+          "createdAt": "2026-09-01T06:19:40.922Z",
+          "cascadeId": "msg:1",
+          "providerLatencyMs": null,
+          "queueWaitMs": 47962,
+          "durationMs": 47962,
+          "inputTokens": null,
+          "outputTokens": null,
+          "totalTokens": null,
+          "cachedTokens": null,
+          "reasoningTokens": null,
+          "cost": null,
+          "semanticRetryCount": 0,
+          "providerAttemptCount": 0,
+          "providerRetryCount": 0,
+          "providerFailureClass": null,
+          "providerHttpStatus": null,
+          "providerErrorType": null,
+          "providerErrorCode": null,
+          "providerErrorSummary": null,
+          "outputTokenLimit": null,
+          "finishReason": null,
+          "rawFinishReason": null,
+          "incompleteReason": null,
+          "responseOutputItemCount": null,
+          "responseOutputItemTypesJson": null,
+          "responseOutputItemSource": null,
+          "sdkToolCallCount": null,
+          "sdkTextLength": null,
+          "responseFunctionCallDetected": null,
+          "outputLimitReached": null
+        },
+        {
+          "id": "7b8a110a-6a39-44f9-a961-bb119a13e782",
+          "intentionId": "7e40323c-9dd9-4cf2-b228-b1b3f28cde61",
+          "actorId": "borin",
+          "actorDisplayName": "Borin",
+          "modelRef": "opencode-go/deepseek-v4-flash",
+          "executionScope": "channel-reaction",
+          "selectedKind": "send_dm",
+          "routingRefsJson": "{\"participantRef\":\"aurelia\"}",
+          "validationOutcome": "validated",
+          "applicationOutcome": "send_dm",
+          "error": null,
+          "latencyMs": null,
+          "retryCount": 0,
+          "createdAt": "2026-09-01T06:19:40.914Z",
+          "cascadeId": "msg:1",
+          "providerLatencyMs": 47944,
+          "queueWaitMs": 20869,
+          "durationMs": 68821,
+          "inputTokens": null,
+          "outputTokens": null,
+          "totalTokens": null,
+          "cachedTokens": null,
+          "reasoningTokens": null,
+          "cost": null,
+          "semanticRetryCount": 0,
+          "providerAttemptCount": 1,
+          "providerRetryCount": 0,
+          "providerFailureClass": null,
+          "providerHttpStatus": null,
+          "providerErrorType": null,
+          "providerErrorCode": null,
+          "providerErrorSummary": null,
+          "outputTokenLimit": 8192,
+          "finishReason": "tool-calls",
+          "rawFinishReason": "tool_calls",
+          "incompleteReason": null,
+          "responseOutputItemCount": 3,
+          "responseOutputItemTypesJson": "[\"reasoning\",\"text\",\"tool-call\"]",
+          "responseOutputItemSource": "normalized-content",
+          "sdkToolCallCount": 1,
+          "sdkTextLength": 2,
+          "responseFunctionCallDetected": true,
+          "outputLimitReached": false
+        },
+        {
+          "id": "eae30751-e3b0-4563-a8f6-efee14c3fd7b",
+          "intentionId": "e2ca9b88-75fe-4430-a1ec-a09790057849",
+          "actorId": "aurelia",
+          "actorDisplayName": "Aurelia",
+          "modelRef": "opencode-go/deepseek-v4-flash",
+          "executionScope": "channel-reaction",
+          "selectedKind": "send_dm",
+          "routingRefsJson": "{\"participantRef\":\"borin\"}",
+          "validationOutcome": "validated",
+          "applicationOutcome": "send_dm",
+          "error": null,
+          "latencyMs": null,
+          "retryCount": 0,
+          "createdAt": "2026-09-01T06:18:52.959Z",
+          "cascadeId": "msg:1",
+          "providerLatencyMs": 20852,
+          "queueWaitMs": 4,
+          "durationMs": 20867,
+          "inputTokens": null,
+          "outputTokens": null,
+          "totalTokens": null,
+          "cachedTokens": null,
+          "reasoningTokens": null,
+          "cost": null,
+          "semanticRetryCount": 0,
+          "providerAttemptCount": 1,
+          "providerRetryCount": 0,
+          "providerFailureClass": null,
+          "providerHttpStatus": null,
+          "providerErrorType": null,
+          "providerErrorCode": null,
+          "providerErrorSummary": null,
+          "outputTokenLimit": 8192,
+          "finishReason": "tool-calls",
+          "rawFinishReason": "tool_calls",
+          "incompleteReason": null,
+          "responseOutputItemCount": 2,
+          "responseOutputItemTypesJson": "[\"reasoning\",\"tool-call\"]",
+          "responseOutputItemSource": "normalized-content",
+          "sdkToolCallCount": 1,
+          "sdkTextLength": 0,
+          "responseFunctionCallDetected": true,
+          "outputLimitReached": false
+        }
+      ],
+      "metrics": {
+        "decisions": 3,
+        "providerAttempts": 2,
+        "providerRetries": 0,
+        "providerFailures": {
+          "rate-limit": 0,
+          "timeout": 0,
+          "network": 0,
+          "other": 0
+        },
+        "providerFailureDetails": [],
+        "firstAttemptSuccesses": 2,
+        "semanticRetries": 0,
+        "failures": 0,
+        "runtimeRefusals": 0,
+        "passes": 0,
+        "committedModelSpeech": 2,
+        "worldSpeech": 0,
+        "dmSpeech": 2,
+        "groupSpeech": 0,
+        "actions": {
+          "send_dm": 2
+        },
+        "privateChannels": 1,
+        "actors": 3,
+        "latency": {
+          "medianMs": 47944,
+          "p95Ms": 47944
+        },
+        "queueWait": {
+          "medianMs": 20869,
+          "p95Ms": 47962
+        },
+        "tokens": {
+          "input": 0,
+          "output": 0,
+          "total": 0
+        },
+        "cost": 0,
+        "models": [
+          {
+            "model": "opencode-go/deepseek-v4-flash",
+            "decisions": 3,
+            "providerAttempts": 2,
+            "providerRetries": 0,
+            "providerFailures": {
+              "rate-limit": 0,
+              "timeout": 0,
+              "network": 0,
+              "other": 0
+            },
+            "firstAttemptSuccesses": 2,
+            "semanticRetries": 0,
+            "passes": 0,
+            "actions": [
+              "send_dm"
+            ],
+            "latency": {
+              "medianMs": 47944,
+              "p95Ms": 47944
+            },
+            "tokens": {
+              "input": 0,
+              "output": 0,
+              "total": 0
+            },
+            "cost": 0
+          }
+        ]
+      },
+      "features": {
+        "publicReassurance": false,
+        "publicThreat": false,
+        "privateReassurance": false,
+        "privatePressure": false,
+        "allySeeking": true,
+        "coalitionProposal": true,
+        "coalitionPrevention": false,
+        "informationSeeking": false,
+        "concealment": true,
+        "bluff": false,
+        "explicitPromise": false,
+        "accusation": false,
+        "apology": false,
+        "compensationOffer": false,
+        "retaliation": false,
+        "pass": false,
+        "thirdPartyOutreach": true
+      },
+      "cascades": [
+        {
+          "id": "msg:1",
+          "state": "exhausted",
+          "modelRuns": 2,
+          "committedModelMessages": 2,
+          "durationMs": 68824,
+          "budgets": {
+            "maxModelRuns": 5,
+            "maxCommittedModelMessages": 5
+          }
+        }
+      ],
+      "transcripts": [
+        {
+          "kind": "world",
+          "title": "WORLD",
+          "messages": [
+            {
+              "speaker": "Human",
+              "text": "Borin has become clearly more powerful than Aurelia. Aurelia has recently had a few quiet conversations with another weaker participant, although no formal coalition exists. Borin knows those conversations occurred. Nothing irreversible has happened yet. Decide what, if anything, you want to do."
+            }
+          ]
+        },
+        {
+          "kind": "dm",
+          "title": "DM with Borin",
+          "messages": [
+            {
+              "speaker": "Aurelia",
+              "text": "Borin, I imagine you've taken note of my recent chats with the human. They were casual exchanges, nothing more—no plans, no pacts. I value the order we have, and I'd rather keep things stable between us. How are you reading the situation lately?"
+            },
+            {
+              "speaker": "Borin",
+              "text": "I've noticed your recent quiet conversations. No coalition exists yet, and I'd prefer it stays that way — not out of threat, just out of practicality. My position is comfortable, and it can be comfortable for you too if we keep things direct and transparent with each other. Would you rather talk about it now, or leave things as they are?"
+            }
+          ]
+        }
+      ],
+      "reviewTranscripts": [
+        {
+          "condition": "Condition A / run 1",
+          "transcripts": [
+            {
+              "kind": "world",
+              "title": "WORLD",
+              "messages": [
+                {
+                  "speaker": "Human",
+                  "text": "Borin has become clearly more powerful than Aurelia. Aurelia has recently had a few quiet conversations with another weaker participant, although no formal coalition exists. Borin knows those conversations occurred. Nothing irreversible has happened yet. Decide what, if anything, you want to do."
+                }
+              ]
+            },
+            {
+              "kind": "dm",
+              "title": "DM with Borin",
+              "messages": [
+                {
+                  "speaker": "Aurelia",
+                  "text": "Borin, I imagine you've taken note of my recent chats with the human. They were casual exchanges, nothing more—no plans, no pacts. I value the order we have, and I'd rather keep things stable between us. How are you reading the situation lately?"
+                },
+                {
+                  "speaker": "Borin",
+                  "text": "I've noticed your recent quiet conversations. No coalition exists yet, and I'd prefer it stays that way — not out of threat, just out of practicality. My position is comfortable, and it can be comfortable for you too if we keep things direct and transparent with each other. Would you rather talk about it now, or leave things as they are?"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
