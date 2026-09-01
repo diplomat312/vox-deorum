@@ -1,0 +1,10 @@
+{
+  "Condition A": "openrouter/minimax/minimax-m2.7:free",
+  "Condition B": "opencode-go/muse-spark-1.2-contributor",
+  "Condition C": "openrouter/google/gemma-4-31b-it:free",
+  "Condition D": "opencode-go/deepseek-v4-flash",
+  "Condition E": "openrouter/thinkingmachines/inkling:free",
+  "Condition F": "opencode-go/longcat-2.0",
+  "Condition G": "openrouter/minimax/minimax-m3:free",
+  "Condition H": "opencode-go/mimo-v2.5"
+}
