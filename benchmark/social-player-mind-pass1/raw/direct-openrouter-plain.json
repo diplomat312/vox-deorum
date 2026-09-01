@@ -1,0 +1,20 @@
+[
+  {
+    "model": "meituan/longcat-2.0:free",
+    "mode": "plain",
+    "httpStatus": 404,
+    "success": false,
+    "errorCode": "404",
+    "errorType": "",
+    "errorMessage": "This model is unavailable for free. The paid version is available now - use this slug instead: meituan/longcat-2.0"
+  },
+  {
+    "model": "deepseek/deepseek-v4-flash:free",
+    "mode": "plain",
+    "httpStatus": 404,
+    "success": false,
+    "errorCode": "404",
+    "errorType": "",
+    "errorMessage": "This model is unavailable for free. The paid version is available now - use this slug instead: deepseek/deepseek-v4-flash"
+  }
+]
