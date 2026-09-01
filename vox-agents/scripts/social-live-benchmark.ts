@@ -7,7 +7,7 @@ interface SocialDiagnostic { actorId: string; actorDisplayName: string; modelRef
 interface SocialCascade { id: string; state: string; modelRuns: number; committedModelMessages: number; maxModelRuns: number; maxCommittedModelMessages: number; createdAt: string; updatedAt: string; }
 interface SocialChannel { id: string; kind: string; title: string; }
 interface SocialCascadeWait { cascade?: SocialCascade; settled: boolean; timedOut: boolean; }
-interface JsonResponse { id?: string; title?: string; channels?: SocialChannel[]; actors?: SocialActor[]; diagnostics?: SocialDiagnostic[]; cascades?: SocialCascade[]; messages?: SocialMessage[]; cascade?: SocialCascade; settled?: boolean; timedOut?: boolean; error?: string; }
+interface JsonResponse { id?: string; title?: string; channels?: SocialChannel[]; actors?: SocialActor[]; diagnostics?: SocialDiagnostic[]; diagnosticsTruncated?: boolean; cascades?: SocialCascade[]; messages?: SocialMessage[]; cascade?: SocialCascade; settled?: boolean; timedOut?: boolean; error?: string; }
 
 const baseUrl = readOption('--base-url', process.env.SOCIAL_LIVE_BASE_URL ?? 'http://127.0.0.1:5555');
 const selectedScenario = readOption('--scenario', '');
@@ -60,7 +60,7 @@ async function runScenario(scenario: string, selectedModels: string[]): Promise<
     const diagnosticsResponse = await request<JsonResponse>('/api/social/diagnostics?limit=10000');
     const allChannels = await request<JsonResponse>('/api/social/channels?inspect=true');
     const transcripts = await readTranscripts(allChannels.channels ?? [], actors);
-    return { benchmarkVersion: '3.8.2', scenario, preset: selectedPreset, pacing, actorCount: actors.length, requestedModels: selectedModels, resolvedModels: selectedModels.map(modelResolution), outputTokenLimit: 1024, timestamp: new Date().toISOString(), exercised, metrics: summarizeDiagnostics(diagnosticsResponse.diagnostics ?? [], transcripts, actors), cascades: summarizeCascades(diagnosticsResponse.cascades ?? []), transcripts, reviewTranscripts: anonymizeTranscripts(transcripts) };
+    return { benchmarkVersion: '3.8.2', scenario, preset: selectedPreset, pacing, actorCount: actors.length, requestedModels: selectedModels, resolvedModels: selectedModels.map(modelResolution), outputTokenLimit: 1024, timestamp: new Date().toISOString(), diagnosticsTruncated: diagnosticsResponse.diagnosticsTruncated === true, exercised, metrics: summarizeDiagnostics(diagnosticsResponse.diagnostics ?? [], transcripts, actors), cascades: summarizeCascades(diagnosticsResponse.cascades ?? []), transcripts, reviewTranscripts: anonymizeTranscripts(transcripts) };
   } finally { await request('/api/social/session/stop', 'POST').catch(() => undefined); }
 }
 
