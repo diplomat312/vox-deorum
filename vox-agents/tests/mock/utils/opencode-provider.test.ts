@@ -66,21 +66,23 @@ describe('OpenCode provider registry', () => {
   });
 
   it('maps Muse required decisions to auto while retaining the semantic instruction', async () => {
-    const model = buildOpenCodeModel({ provider: 'opencode', name: 'muse-spark-1.2-contributor-free' } as any);
+    const model = buildOpenCodeModel({ provider: 'opencode', name: 'muse-spark-1.2-contributor-free' } as any, { completionTools: ['social_pass'], completionCardinality: 'exactly-one' });
     await (model as any).doGenerate(requiredParams());
     const call = mocks.responses.doGenerateCalls.at(-1);
     expect(call.toolChoice).toEqual({ type: 'auto' });
     expect(call.tools[0].strict).toBe(false);
-    expect(call.prompt[0].content).toContain('tool calls');
+    expect(call.prompt[0].content).toContain('terminal decision tools');
     expect(call.prompt[0].content).toContain('social_pass');
+    expect(call.prompt[0].content).toContain('Choose exactly one');
   });
 
   it('applies the same Responses compatibility policy to Muse Go', async () => {
-    const model = buildOpenCodeModel({ provider: 'opencode-go', name: 'muse-spark-1.2-contributor' } as any);
+    const model = buildOpenCodeModel({ provider: 'opencode-go', name: 'muse-spark-1.2-contributor' } as any, { completionTools: ['social_pass'], completionCardinality: 'exactly-one' });
     await (model as any).doGenerate(requiredParams());
     const call = mocks.responses.doGenerateCalls.at(-1);
     expect(call.toolChoice).toEqual({ type: 'auto' });
     expect(call.tools[0].strict).toBe(false);
+    expect(call.prompt[0].content).toContain('Choose exactly one');
   });
 
   it('keeps required tool choice for a compatible OpenCode chat transport', async () => {

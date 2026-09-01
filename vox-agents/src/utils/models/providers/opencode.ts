@@ -5,6 +5,7 @@ import { wrapLanguageModel } from 'ai';
 import type { LanguageModelV3 } from '@ai-sdk/provider';
 import type { Model } from '../../../types/index.js';
 import { requiredToolChoiceMiddleware } from './required-tool-choice.js';
+import type { RequiredToolChoiceOptions } from './required-tool-choice.js';
 
 /** OpenCode wire transports supported by the provider adapter. */
 export type OpenCodeTransport = 'chat-completions' | 'responses' | 'messages';
@@ -69,7 +70,7 @@ export function getOpenCodeToolChoiceCapability(provider: string, modelName: str
 export function getOpenCodeApiKey(): string | undefined { return process.env.OPENCODE_API_KEY || process.env.OPENCODE_ZEN_API_KEY; }
 
 /** Build an OpenCode Zen or Go model with the documented endpoint and tool policy. */
-export function buildOpenCodeModel(config: Model, options: { completionTools?: string[] } = {}): LanguageModelV3 {
+export function buildOpenCodeModel(config: Model, options: RequiredToolChoiceOptions = {}): LanguageModelV3 {
   const baseURL = config.provider === 'opencode'
     ? 'https://opencode.ai/zen/v1'
     : 'https://opencode.ai/zen/go/v1';
@@ -82,5 +83,5 @@ export function buildOpenCodeModel(config: Model, options: { completionTools?: s
       : createOpenAICompatible({ baseURL, name: config.provider, apiKey }).chatModel(config.name);
   if (getOpenCodeToolChoiceCapability(config.provider, config.name) !== 'auto-only') return model;
   const relaxStrictSchemas = config.name === 'muse-spark-1.2-contributor-free' || config.name === 'muse-spark-1.2-contributor';
-  return wrapLanguageModel({ model, middleware: requiredToolChoiceMiddleware({ completionTools: options.completionTools, relaxStrictSchemas }) });
+  return wrapLanguageModel({ model, middleware: requiredToolChoiceMiddleware({ completionTools: options.completionTools, completionCardinality: options.completionCardinality, relaxStrictSchemas }) });
 }

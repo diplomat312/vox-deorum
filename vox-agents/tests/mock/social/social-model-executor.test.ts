@@ -36,6 +36,16 @@ describe('SocialModelExecutorImpl provider telemetry', () => {
     expect(run.semanticRetryCount).toBe(0);
   });
 
+  it('passes the active social decisions as exactly-one terminal tools', async () => {
+    providerSuccess(result());
+    const decisionTools = { social_pass: {} as any, social_reply: {} as any };
+    await new SocialModelExecutorImpl().decideWithTelemetry(actor, { ...context, decisionTools }, []);
+    expect(mocks.getModel).toHaveBeenCalledWith(
+      { provider: 'openrouter', name: 'test-model' },
+      { completionTools: ['social_pass', 'social_reply'], completionCardinality: 'exactly-one' },
+    );
+  });
+
   it('keeps one transport retry separate from semantic retries', async () => {
     providerSuccess(result(), 1);
     const run = await new SocialModelExecutorImpl().decideWithTelemetry(actor, context, []);
@@ -51,6 +61,13 @@ describe('SocialModelExecutorImpl provider telemetry', () => {
     expect(run.providerAttemptCount).toBe(2);
     expect(run.providerRetryCount).toBe(0);
     expect(run.semanticRetryCount).toBe(1);
+  });
+
+  it('rejects multiple terminal decisions instead of selecting one', async () => {
+    const invalid = { steps: [{ toolCalls: [{ toolName: 'social_pass', input: { reason: 'one' } }, { toolName: 'social_pass', input: { reason: 'two' } }] }] };
+    providerSuccess(invalid);
+    providerSuccess(invalid);
+    await expect(new SocialModelExecutorImpl().decideWithTelemetry(actor, context, [])).rejects.toMatchObject({ name: 'SocialDecisionExecutionError', telemetry: { semanticRetryCount: 1, providerAttemptCount: 2 } });
   });
 
   it('preserves terminal provider telemetry after multiple attempts', async () => {

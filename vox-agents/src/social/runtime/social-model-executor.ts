@@ -42,6 +42,7 @@ export class SocialModelExecutorImpl implements InstrumentedSocialModelExecutor 
     const modelConfig = getStrictModelConfig(actor.modelRef ?? 'default');
     const extra = context.decisionToolDefinitions ?? [];
     const tools = context.decisionTools ?? createSocialDecisionTools((context.executionScope ?? 'player-mind') as SocialDecisionToolScope, context.references, extra);
+    const activeToolNames = Object.keys(tools);
     let messages = context.messages as ModelMessage[];
     let lastError: unknown;
     let providerAttemptCount = 0;
@@ -51,11 +52,11 @@ export class SocialModelExecutorImpl implements InstrumentedSocialModelExecutor 
     for (let attempt = 0; attempt < 2; attempt += 1) {
       try {
         const result = await streamTextWithConcurrency(withModelConfig({
-          model: getModel(modelConfig),
+          model: getModel(modelConfig, { completionTools: activeToolNames, completionCardinality: 'exactly-one' }),
           system: context.system,
           messages,
           tools,
-          activeTools: Object.keys(tools),
+          activeTools: activeToolNames,
           toolChoice: 'required',
           maxOutputTokens: socialDecisionOutputTokenLimit,
           stopWhen: () => true,

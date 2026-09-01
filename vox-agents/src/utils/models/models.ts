@@ -31,6 +31,7 @@ import { synthesizeModelConfig } from './rules.js';
 import { parseModelReference } from './model-reference.js';
 import { getRuntimeModel } from './resolution.js';
 import { buildOpenCodeModel, getOpenCodeTransport, openCodeModelNames } from './providers/opencode.js';
+import type { CompletionCardinality } from './providers/required-tool-choice.js';
 
 export type { ModelRuntimeIdentity } from './providers/host-tools.js';
 export type { ModelSize } from '../../types/config.js';
@@ -173,6 +174,8 @@ export function getModel(config: Model, options?: {
   onToolFraming?: (info: { framing: ToolCallFraming }) => void;
   /** The calling agent's completion tools, named by the required-tool-choice instruction. */
   completionTools?: string[];
+  /** Whether the caller requires one terminal decision or permits multiple tool calls. */
+  completionCardinality?: CompletionCardinality;
 }): LanguageModel {
   let result: LanguageModelV3;
   // Terminology preset for the prompt-mode tool instructions (see resolveToolFraming):
@@ -185,7 +188,7 @@ export function getModel(config: Model, options?: {
       break;
     case "opencode":
     case "opencode-go":
-      result = buildOpenCodeModel(config, { completionTools: options?.completionTools });
+      result = buildOpenCodeModel(config, { completionTools: options?.completionTools, completionCardinality: options?.completionCardinality });
       break;
     case "chutes":
       result = createOpenAICompatible({
@@ -227,7 +230,7 @@ export function getModel(config: Model, options?: {
         // Claude on Vertex shares Anthropic's required-tool-choice rejection.
         result = wrapLanguageModel({
           model: provider(config.name),
-          middleware: requiredToolChoiceMiddleware({ completionTools: options?.completionTools })
+          middleware: requiredToolChoiceMiddleware({ completionTools: options?.completionTools, completionCardinality: options?.completionCardinality })
         });
       } else {
         const useVertex = process.env.GOOGLE_GENAI_USE_VERTEXAI === 'true';
@@ -243,7 +246,7 @@ export function getModel(config: Model, options?: {
       // ones that end the turn so a support call cannot read as a way to finish.
       result = wrapLanguageModel({
         model: createAnthropic()(config.name),
-        middleware: requiredToolChoiceMiddleware({ completionTools: options?.completionTools })
+        middleware: requiredToolChoiceMiddleware({ completionTools: options?.completionTools, completionCardinality: options?.completionCardinality })
       });
       break;
     case "claude-code": {
@@ -255,7 +258,7 @@ export function getModel(config: Model, options?: {
       break;
     }
     case "codex":
-      result = buildCodexModel(config, { completionTools: options?.completionTools });
+      result = buildCodexModel(config, { completionTools: options?.completionTools, completionCardinality: options?.completionCardinality });
       break;
     case "aws":
       result = createAmazonBedrock()(config.name);

@@ -113,6 +113,23 @@ describe('SocialScheduler', () => {
     expect(diagnostic).toMatchObject({ validationOutcome: 'failed', providerAttemptCount: 3, providerRetryCount: 2, semanticRetryCount: 0, providerFailureClass: 'rate-limit', providerHttpStatus: 429, providerErrorType: 'FreeUsageLimitError', providerErrorCode: 'rate_limit_exceeded', providerErrorSummary: 'free usage limit exceeded', providerLatencyMs: 123 });
   });
 
+  it('should persist transient provider details when a later retry succeeds', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'vox-deorum-social-provider-retry-success-'));
+    const store = new SocialStore(join(directory, 'scheduler.sqlite'));
+    cleanups.push(async () => { await store.close(); rmSync(directory, { recursive: true, force: true }); });
+    const actors: SocialActorType[] = [
+      { id: 'human', ordinal: 0, control: 'human', displayName: 'Human', sessionId: 'provider-retry-success', createdAt: new Date().toISOString(), status: 'active' },
+      { id: 'alice', ordinal: 1, control: 'model', displayName: 'Alice', modelRef: 'openrouter/test/alice', sessionId: 'provider-retry-success', createdAt: new Date().toISOString(), status: 'active' },
+    ];
+    await store.createSession({ id: 'provider-retry-success', humanActorId: 'human' }, actors);
+    const events = new SocialEventHub(); const lanes = new Map(actors.map((actor) => [actor.id, new ActorLane()]));
+    const executor = { decideWithTelemetry: vi.fn(async () => ({ decision: { kind: 'pass' as const, reasonCode: 'quiet' }, retryCount: 1, semanticRetryCount: 1, providerAttemptCount: 2, providerRetryCount: 1, providerFailureClass: 'rate-limit', providerHttpStatus: 429, providerErrorType: 'FreeUsageLimitError', providerErrorCode: 'rate_limit_exceeded', providerErrorSummary: 'try again later', latencyMs: 456 })) };
+    const scheduler = new SocialScheduler(store, async () => actors, lanes, events, executor);
+    await store.commitHumanMessage({ sessionId: 'provider-retry-success', actorId: 'human', channelId: 'world', content: 'Retry once', budget: { maxModelRuns: 1, maxCommittedModelMessages: 1, maxRepliesPerActor: 1, maxWallClockMs: 60_000 } });
+    scheduler.kick(); await scheduler.waitForDrain(); scheduler.stop();
+    expect((await store.listDecisionDiagnostics('provider-retry-success'))[0]).toMatchObject({ validationOutcome: 'validated', providerAttemptCount: 2, providerRetryCount: 1, semanticRetryCount: 1, providerFailureClass: 'rate-limit', providerHttpStatus: 429, providerErrorType: 'FreeUsageLimitError', providerErrorCode: 'rate_limit_exceeded', providerErrorSummary: 'try again later' });
+  });
+
   it('resolves an invitation after the speech cap and prevents follow-up speech', async () => {
     const directory = mkdtempSync(join(tmpdir(), 'vox-deorum-social-invitation-cap-'));
     const store = new SocialStore(join(directory, 'scheduler.sqlite'));

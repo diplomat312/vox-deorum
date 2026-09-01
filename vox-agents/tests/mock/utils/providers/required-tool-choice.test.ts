@@ -116,6 +116,14 @@ describe('requiredToolChoiceMiddleware', () => {
     // The caller's params survive untouched for outer retries.
     expect(params.toolChoice).toEqual({ type: 'required' });
     expect(params.prompt[0].content).toBe('Make sound strategic decisions.');
+    expect(out.prompt[0].content).toContain('as many as you need');
+  });
+
+  it('supports exactly-one terminal decisions without changing the default mode', async () => {
+    const out: any = await (requiredToolChoiceMiddleware({ completionTools: ['found_city'], completionCardinality: 'exactly-one' }).transformParams as any)({ params: requiredParams() });
+    expect(out.prompt[0].content).toContain('Choose exactly one');
+    expect(out.prompt[0].content).toContain('Do not issue multiple terminal decisions');
+    expect(out.prompt[0].content).not.toContain('as many as you need');
   });
 
   it('can relax only the provider wire strictness without changing the caller params', async () => {

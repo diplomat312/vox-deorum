@@ -20,9 +20,14 @@ import { formatToolChoiceList } from '../../tools/tool-names.js';
 /** Installation options: the calling agent's completion tools, when it declares any. */
 export interface RequiredToolChoiceOptions {
   completionTools?: string[];
+  /** Describe whether the caller completes with one decision or may batch several tools. */
+  completionCardinality?: CompletionCardinality;
   /** Relax provider schema strictness when an endpoint rejects optional properties in strict mode. */
   relaxStrictSchemas?: boolean;
 }
+
+/** Cardinality of the caller's terminal completion tools. */
+export type CompletionCardinality = 'one-or-more' | 'exactly-one';
 
 /** Return the declared client function tool names, deduplicated in declaration order. */
 export function clientFunctionToolNames(params: LanguageModelV3CallOptions): string[] {
@@ -48,13 +53,14 @@ export function requiredToolChoiceInstruction(
   clientNames: string[],
   completionNames: string[],
   withBuiltInTools: boolean,
+  completionCardinality: CompletionCardinality = 'one-or-more',
 ): string | undefined {
   const clientList = formatToolChoiceList(clientNames);
   if (!clientList) return undefined;
 
-  // "one or more", never "a tool call": agent prompts encourage batching several calls in one reply,
-  // and this restatement must not read as a cap. One step is one reply, so it is addressed as such.
-  const opening = 'IMPORTANT: You must issue tool calls to collect information or make actions, as many as you need. Plain text response goes nowhere.';
+  const opening = completionCardinality === 'exactly-one'
+    ? 'IMPORTANT: Choose exactly one of the available terminal decision tools to complete this turn. Plain text does not complete the turn. Do not issue multiple terminal decisions.'
+    : 'IMPORTANT: You must issue tool calls to collect information or make actions, as many as you need. Plain text response goes nowhere.';
 
   const completionList = formatToolChoiceList(completionNames);
   if (!completionList) {
@@ -109,6 +115,7 @@ export function requiredToolChoiceMiddleware(options?: RequiredToolChoiceOptions
         names,
         names.filter((name) => completionTools.has(name)),
         hasProviderTools(params),
+        options?.completionCardinality,
       );
       if (!instruction) return transformed;
       return {
