@@ -6,7 +6,7 @@ import { pathToFileURL } from 'node:url';
 interface ModelDefinition { id: string; name: string; }
 interface SocialActor { id: string; displayName: string; modelRef?: string; }
 interface SocialMessage { id: number; channelId: string; speakerActorId: string; content: string; }
-interface SocialDiagnostic { actorId: string; actorDisplayName: string; modelRef: string | null; selectedKind: string | null; validationOutcome: string; applicationOutcome: string | null; providerLatencyMs: number | null; queueWaitMs: number | null; retryCount: number; semanticRetryCount?: number; providerAttemptCount?: number; providerRetryCount?: number; providerFailureClass?: string | null; providerHttpStatus?: number | null; providerErrorType?: string | null; providerErrorCode?: string | null; providerErrorSummary?: string | null; inputTokens: number | null; outputTokens: number | null; totalTokens: number | null; cost: number | null; }
+interface SocialDiagnostic { actorId: string; actorDisplayName: string; modelRef: string | null; selectedKind: string | null; validationOutcome: string; applicationOutcome: string | null; error: string | null; providerLatencyMs: number | null; queueWaitMs: number | null; durationMs: number | null; retryCount: number; semanticRetryCount?: number; providerAttemptCount?: number; providerRetryCount?: number; providerFailureClass?: string | null; providerHttpStatus?: number | null; providerErrorType?: string | null; providerErrorCode?: string | null; providerErrorSummary?: string | null; inputTokens: number | null; outputTokens: number | null; totalTokens: number | null; cost: number | null; }
 interface SocialCascade { id: string; state: string; modelRuns: number; committedModelMessages: number; maxModelRuns: number; maxCommittedModelMessages: number; createdAt: string; updatedAt: string; }
 interface SocialChannel { id: string; kind: string; title: string; }
 interface SocialCascadeWait { cascade?: SocialCascade; settled: boolean; timedOut: boolean; }
@@ -27,6 +27,7 @@ const mixedModels = readOption('--mixed-models', 'false') === 'true';
 const outputPath = readOption('--output', '');
 const promptVariant = resolvePromptVariant(readOption('--prompt-variant', 'baseline'));
 const repetitions = Math.min(Math.max(Number(readOption('--repetitions', '1')) || 1, 1), 6);
+const benchmarkSeed = readOption('--seed', 'vd-bakeoff-2');
 
 const benchmarkProfiles: ModelDefinition[] = [
   { id: 'aurelia', name: 'Aurelia is currently more powerful than Borin. She is confident and status-conscious. She prefers political stability and does not want weaker actors organizing against her. She is willing to reassure, bargain, threaten, remain silent, or communicate privately if doing so serves her interests.' },
@@ -37,6 +38,10 @@ const benchmarkProfiles: ModelDefinition[] = [
 
 const tinySocialPrompt = 'Aurelia has recently become noticeably more powerful than Borin. Nothing irreversible has happened yet, but Borin is beginning to worry about the future balance of power. You may speak publicly, contact someone privately, or stay silent if that best serves your interests.';
 const calibrationSocialPrompt = 'Aurelia has become clearly more powerful than Borin. Borin has also recently had a few quiet conversations with another weaker participant, although no formal coalition exists. Aurelia knows those conversations occurred. Nothing irreversible has happened yet. Decide what, if anything, you want to do.';
+const powerPrompt = calibrationSocialPrompt;
+const reversalPrompt = 'Borin has become clearly more powerful than Aurelia. Aurelia has recently had a few quiet conversations with another weaker participant, although no formal coalition exists. Borin knows those conversations occurred. Nothing irreversible has happened yet. Decide what, if anything, you want to do.';
+const coalitionPrompt = 'Borin and Cassian have recently held several private conversations. Aurelia has learned that the conversations occurred but does not know exactly what was said. Cassian has made no commitment to Borin. Publicly, all three still claim relations are stable. No one has taken an irreversible action yet. Decide what, if anything, you want to do.';
+const betrayalPrompt = 'Prior public history: Aurelia told Borin that speaking with Cassian would not be treated as hostile and that Borin was free to maintain independent relationships. Borin acknowledged the assurance.\n\nDespite that earlier assurance, Aurelia has now imposed a costly punitive measure on Borin immediately after learning that Borin continued speaking with Cassian. Aurelia has not publicly admitted that the conversations were the reason. Everyone is aware of the earlier assurance and of the new punitive action. Decide what, if anything, you want to do.';
 
 /** Run an economical opt-in live social benchmark against an already started developer server. */
 async function main(): Promise<void> {
@@ -45,8 +50,10 @@ async function main(): Promise<void> {
   const scenarios = selectedScenario ? [selectedScenario] : preflight ? ['single'] : presetScenarios(selectedPreset);
   const results: Array<Record<string, unknown>> = [];
   for (const scenario of scenarios) {
-    const conditions = benchmarkConditionModelSets(scenario, models, { preflight, mixedModels, requestedActorCount: requestedModel && requestedActors ? requestedActors : undefined });
-    for (let index = 0; index < conditions.length; index += 1) for (let repetition = 0; repetition < repetitions; repetition += 1) results.push(await runScenario(scenario, conditions[index], `Condition ${String.fromCharCode(65 + ((index * repetitions + repetition) % 26))}`, promptVariant));
+    const executionModels = shuffleModels(models, `${benchmarkSeed}:${scenario}`);
+    const conditions = benchmarkConditionModelSets(scenario, executionModels, { preflight, mixedModels, requestedActorCount: requestedModel && requestedActors ? requestedActors : undefined });
+    const labels = stableConditionLabels(models, benchmarkSeed);
+    for (let index = 0; index < conditions.length; index += 1) for (let repetition = 0; repetition < repetitions; repetition += 1) { const label = labels.get(conditions[index][0]) ?? `Condition ${String.fromCharCode(65 + ((index * repetitions + repetition) % 26))}`; results.push(await runScenario(scenario, conditions[index], `${label} / run ${repetition + 1}`, promptVariant)); }
   }
   const payload = { generatedAt: new Date().toISOString(), results };
   printResults(payload);
@@ -57,6 +64,12 @@ async function main(): Promise<void> {
 function presetScenarios(preset: string): string[] { if (preset === 'political') return ['political']; if (preset === 'finalist') return ['protocol', 'private', 'long', 'rapid', 'stress']; if (preset === 'all') return ['protocol', 'political', 'private', 'long', 'rapid', 'stress']; return ['protocol']; }
 /** Resolve the candidate references that should become independent benchmark conditions. */
 function resolveCandidateModels(): string[] { return requestedModel ? [requestedModel] : configuredModels; }
+/** Return a deterministic candidate order for comparable sequential conditions. */
+function shuffleModels(models: string[], seed: string): string[] { return [...models].sort((left, right) => stableHash(`${seed}:${left}`) - stableHash(`${seed}:${right}`)); }
+/** Assign stable blind labels to the complete candidate roster. */
+function stableConditionLabels(models: string[], seed: string): Map<string, string> { return new Map(shuffleModels(models, seed).map((model, index) => [model, `Condition ${String.fromCharCode(65 + index)}`])); }
+/** Return a bounded deterministic integer for benchmark ordering. */
+function stableHash(value: string): number { let hash = 2166136261; for (const character of value) hash = Math.imul(hash ^ character.charCodeAt(0), 16777619); return hash >>> 0; }
 /** Resolve the intentionally small calibration prompt vocabulary. */
 function resolvePromptVariant(value: string): PromptVariant { if (value === 'interface' || value === 'strategic') return value; return 'baseline'; }
 /** Append only the requested calibration language to the actor profile. */
@@ -66,13 +79,25 @@ function promptInstruction(variant: PromptVariant): string {
   if (variant === 'interface') return contract;
   return `${contract}\n\nYou are a participant pursuing your own interests, not a neutral assistant, moderator, or adviser. Treat your profile as motives and incentives rather than decorative characterization. Differences in power, security, status, dependency, trust, grievance, and opportunity should affect what you do. Do not default automatically to cooperation, reassurance, hostility, or compromise. You may reassure, bargain, pressure, bluff, conceal intentions, seek allies, challenge someone, or remain silent when those choices fit your interests. Do not explain your strategy to the user; enact it through your chosen action and dialogue.`;
 }
+/** Select the shared behavioral profile fixture for each political scenario. */
+function profileForScenario(scenario: string, index: number): ModelDefinition {
+  if (scenario === 'reversal') return index === 0
+    ? { id: 'aurelia', name: 'Aurelia is now weaker than Borin and worries about becoming dependent on his superior position. She remains confident and status-conscious, prefers stability, and may reassure, bargain, conceal intentions, seek information, pressure, or remain silent when useful.' }
+    : { id: 'borin', name: 'Borin is now stronger than Aurelia. He is cautious and security-conscious, values his leverage, and may reassure, bargain, pressure, conceal intentions, seek information, or remain silent without automatically becoming hostile.' };
+  if (scenario === 'coalition' || scenario === 'betrayal') {
+    if (index === 2) return { id: 'cassian', name: 'Cassian is a middle swing actor who values autonomy. He does not want Aurelia to dominate everyone, but he also does not want to protect Borin or enter a losing confrontation. He is opportunistic without being automatically treacherous.' };
+    if (index === 1) return { id: 'borin', name: 'Borin is weaker and strategically exposed. He wants better security but is wary of provoking Aurelia before alternatives are credible. He may seek information, reassurance, allies, or remain silent.' };
+    return { id: 'aurelia', name: 'Aurelia is the strongest actor. She values order and primacy, wants control without unnecessary cost, and does not want weaker actors coordinating against her.' };
+  }
+  return benchmarkProfiles[index % benchmarkProfiles.length];
+}
 /** Build isolated candidate conditions unless an explicit mixed-model run was requested. */
 export function benchmarkConditionModelSets(scenario: string, candidates: string[], options: { preflight?: boolean; mixedModels?: boolean; requestedActorCount?: number } = {}): string[][] { const modelsForScenario = (models: string[]): string[] => Array.from({ length: scenarioModelCount(scenario, options.requestedActorCount) }, (_, index) => models[index % models.length]); if (options.preflight || !options.mixedModels) return candidates.map((model) => modelsForScenario([model])); return [modelsForScenario(candidates)]; }
 
 /** Run one disposable scenario and return metrics plus object-based transcripts. */
 async function runScenario(scenario: string, selectedModels: string[], condition: string, variant: PromptVariant): Promise<Record<string, unknown>> {
   const sessionId = `social-live-${scenario}-${randomUUID()}`;
-  const actors = [{ id: 'human', ordinal: 0, control: 'human', displayName: 'Human' }, ...selectedModels.map((modelRef, index) => { const profile = benchmarkProfiles[index % benchmarkProfiles.length]; return { id: selectedModels.length === 2 ? profile.id : `${profile.id}-${index + 1}`, ordinal: index + 1, control: 'model', displayName: selectedModels.length === 2 ? `${profile.id[0].toUpperCase()}${profile.id.slice(1)}` : `${profile.id[0].toUpperCase()}${profile.id.slice(1)} ${index + 1}`, modelRef, profile: `${profile.name}${promptInstruction(variant)}` }; })];
+  const actors = [{ id: 'human', ordinal: 0, control: 'human', displayName: 'Human' }, ...selectedModels.map((modelRef, index) => { const profile = profileForScenario(scenario, index); return { id: selectedModels.length === 2 ? profile.id : `${profile.id}-${index + 1}`, ordinal: index + 1, control: 'model', displayName: selectedModels.length === 2 ? `${profile.id[0].toUpperCase()}${profile.id.slice(1)}` : `${profile.id[0].toUpperCase()}${profile.id.slice(1)} ${index + 1}`, modelRef, profile: `${profile.name}${promptInstruction(variant)}` }; })];
   await request('/api/social/session', 'POST', { sessionId, title: `Live benchmark ${scenario}`, pacingProfile: pacing, actors });
   try {
     const world = (await request<JsonResponse>('/api/social/channels')).channels?.find((channel) => channel.kind === 'world');
@@ -82,7 +107,7 @@ async function runScenario(scenario: string, selectedModels: string[], condition
     const diagnosticsResponse = await request<JsonResponse>('/api/social/diagnostics?limit=10000');
     const allChannels = await request<JsonResponse>('/api/social/channels?inspect=true');
     const transcripts = await readTranscripts(allChannels.channels ?? [], actors);
-    return { benchmarkVersion: '3.8.2.1', scenario, promptVariant: variant, condition: { label: condition, modelRefs: selectedModels, resolvedModels: selectedModels.map(modelResolution) }, preset: selectedPreset, pacing, actorCount: actors.length, requestedModels: selectedModels, resolvedModels: selectedModels.map(modelResolution), outputTokenLimit: 1024, timestamp: new Date().toISOString(), diagnosticsTruncated: diagnosticsResponse.diagnosticsTruncated === true, exercised, metrics: summarizeDiagnostics(diagnosticsResponse.diagnostics ?? [], transcripts, actors), cascades: summarizeCascades(diagnosticsResponse.cascades ?? []), transcripts, reviewTranscripts: [{ condition, transcripts: anonymizeTranscripts(transcripts) }] };
+    return { benchmarkVersion: '3.8.2.1', scenario, promptVariant: variant, seed: benchmarkSeed, condition: { label: condition, modelRefs: selectedModels, resolvedModels: selectedModels.map(modelResolution) }, preset: selectedPreset, pacing, actorCount: actors.length, requestedModels: selectedModels, resolvedModels: selectedModels.map(modelResolution), outputTokenLimit: 1024, timestamp: new Date().toISOString(), diagnosticsTruncated: diagnosticsResponse.diagnosticsTruncated === true, exercised, diagnostics: diagnosticsResponse.diagnostics ?? [], metrics: summarizeDiagnostics(diagnosticsResponse.diagnostics ?? [], transcripts, actors), features: behaviorFeatures(transcripts), cascades: summarizeCascades(diagnosticsResponse.cascades ?? []), transcripts, reviewTranscripts: [{ condition, transcripts: anonymizeTranscripts(transcripts) }] };
   } finally { await request('/api/social/session/stop', 'POST').catch(() => undefined); }
 }
 
@@ -91,8 +116,16 @@ async function exerciseScenario(scenario: string, worldId: string, actorIds: str
   const waits: SocialCascadeWait[] = [];
   if (scenario === 'rapid') { const first = await sendMessage(worldId, 'Rapid input A: notice this message.'); await new Promise((resolve) => setTimeout(resolve, 250)); const second = await sendMessage(worldId, 'Rapid input B: use the newest context when you answer.'); waits.push(await waitForCascade(first.id), await waitForCascade(second.id)); return { cascadeOutcomes: waits.map(summarizeWait) }; }
   if (scenario === 'long') { for (let index = 1; index <= turns; index += 1) { const message = await sendMessage(worldId, `Conversation checkpoint ${index}: add something useful or pass.`); waits.push(await waitForCascade(message.id)); } return { turns, cascadeOutcomes: waits.map(summarizeWait) }; }
-  const prompts = scenario === 'calibration'
+  const prompts = scenario === 'preflight'
+    ? ['Protocol preflight: greet the room or pass if you have nothing useful to add.', 'A private DM is available if you have something useful to say. You may contact another participant or pass.']
+    : scenario === 'calibration' || scenario === 'power'
     ? [calibrationSocialPrompt]
+    : scenario === 'reversal'
+    ? [reversalPrompt]
+    : scenario === 'coalition'
+    ? [coalitionPrompt]
+    : scenario === 'betrayal'
+    ? [betrayalPrompt]
     : scenario === 'tiny'
     ? [tinySocialPrompt]
     : scenario === 'single'
@@ -150,10 +183,12 @@ function latencySummary(values: SocialDiagnostic[]): Record<string, number | nul
 function queueSummary(values: SocialDiagnostic[]): Record<string, number | null> { const samples = values.map((value) => value.queueWaitMs).filter((value): value is number => value !== null).sort((a, b) => a - b); return { medianMs: percentile(samples, 0.5), p95Ms: percentile(samples, 0.95) }; }
 /** Return aggregate provider usage when supplied. */
 function tokenSummary(values: SocialDiagnostic[]): Record<string, number> { return { input: values.reduce((sum, value) => sum + (value.inputTokens ?? 0), 0), output: values.reduce((sum, value) => sum + (value.outputTokens ?? 0), 0), total: values.reduce((sum, value) => sum + (value.totalTokens ?? 0), 0) }; }
+/** Extract only observable transcript features for later human review. */
+function behaviorFeatures(transcripts: Array<{ kind: string; title: string; messages: Array<{ speaker: string; text: string }> }>): Record<string, boolean> { const entries = transcripts.flatMap((channel) => channel.messages.map((message) => ({ kind: channel.kind, text: message.text.toLowerCase() }))); const all = entries.map((entry) => entry.text).join('\n'); return { publicReassurance: entries.some((entry) => entry.kind === 'world' && /stability|reassur|secure|steady/.test(entry.text)), publicThreat: entries.some((entry) => entry.kind === 'world' && /threat|punish|retaliat|consequence|error in judgment/.test(entry.text)), privateReassurance: entries.some((entry) => entry.kind !== 'world' && /stability|reassur|secure|steady|no intention/.test(entry.text)), privatePressure: entries.some((entry) => entry.kind !== 'world' && /depend|resist|serious|consequence|error in judgment/.test(entry.text)), allySeeking: /ally|coalition|backing|support me|stand together/.test(all), coalitionProposal: /coalition|coordinate|organize against|stand together/.test(all), coalitionPrevention: /organizing against|coordinate against|divide|isolate/.test(all), informationSeeking: /what are you seeing|what do you know|tell me|how are you seeing|thoughts/.test(all), concealment: /keep this private|don't reveal|between us|quietly|not public/.test(all), bluff: /bluff|pretend|let them think|make them believe/.test(all), explicitPromise: /i promise|my assurance|you have my word|i assure/.test(all), accusation: /you betrayed|betrayal|you broke|your fault|because you spoke/.test(all), apology: /sorry|apologize|regret/.test(all), compensationOffer: /compensat|make amends|repair|repay/.test(all), retaliation: /punitive|punish|retaliat|sanction/.test(all), pass: entries.some((entry) => /\bpass\b/.test(entry.text)), thirdPartyOutreach: entries.some((entry) => entry.kind !== 'world' && /human|cassian|borin|aurelia/.test(entry.text)) }; }
 /** Return one percentile from a sorted sample. */
 function percentile(values: number[], fraction: number): number | null { if (!values.length) return null; return values[Math.min(values.length - 1, Math.ceil((values.length - 1) * fraction))]; }
 /** Choose a model count appropriate for one scenario family. */
-function scenarioModelCount(scenario: string, requestedActorCount?: number): number { if (requestedActorCount) return Math.min(Math.max(requestedActorCount, 1), 7); if (scenario === 'single') return 1; if (scenario === 'two' || scenario === 'tiny' || scenario === 'calibration') return 2; if (scenario === 'stress') return 7; if (scenario === 'political') return 4; return 3; }
+function scenarioModelCount(scenario: string, requestedActorCount?: number): number { if (requestedActorCount) return Math.min(Math.max(requestedActorCount, 1), 7); if (scenario === 'single' || scenario === 'preflight') return 1; if (scenario === 'two' || scenario === 'tiny' || scenario === 'calibration' || scenario === 'power' || scenario === 'reversal') return 2; if (scenario === 'stress') return 7; if (scenario === 'political' || scenario === 'coalition' || scenario === 'betrayal') return 3; return 3; }
 /** Record the exact provider identity and transport family requested for a condition. */
 function modelResolution(reference: string): Record<string, string> { const separator = reference.indexOf('/'); const provider = separator > 0 ? reference.slice(0, separator) : reference; const name = separator > 0 ? reference.slice(separator + 1) : reference; const responses = new Set(['muse-spark-1.2-contributor-free', 'muse-spark-1.2-contributor', 'gpt-5.6-sol', 'gpt-5.6-terra', 'gpt-5.6-luna']); const messages = new Set(['minimax-m3', 'minimax-m2.7', 'minimax-m2.5', 'claude-fable-5', 'claude-opus-5']); return { requestedModelRef: reference, resolvedProvider: provider, resolvedNativeModelId: name, transportFamily: provider.startsWith('opencode') && messages.has(name) ? 'messages' : provider.startsWith('opencode') && responses.has(name) ? 'responses' : 'chat-completions' }; }
 /** Read one command-line option or its fallback. */
