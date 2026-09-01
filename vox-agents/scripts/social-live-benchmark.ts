@@ -11,6 +11,7 @@ interface SocialCascade { id: string; state: string; modelRuns: number; committe
 interface SocialChannel { id: string; kind: string; title: string; }
 interface SocialCascadeWait { cascade?: SocialCascade; settled: boolean; timedOut: boolean; }
 interface JsonResponse { id?: string; title?: string; channels?: SocialChannel[]; actors?: SocialActor[]; diagnostics?: SocialDiagnostic[]; diagnosticsTruncated?: boolean; cascades?: SocialCascade[]; messages?: SocialMessage[]; cascade?: SocialCascade; settled?: boolean; timedOut?: boolean; error?: string; }
+type PromptVariant = 'baseline' | 'interface' | 'strategic';
 
 const baseUrl = readOption('--base-url', process.env.SOCIAL_LIVE_BASE_URL ?? 'http://127.0.0.1:5555');
 const selectedScenario = readOption('--scenario', '');
@@ -24,6 +25,8 @@ const turns = Math.min(Math.max(Number(readOption('--turns', '7')) || 7, 1), 25)
 const preflight = readOption('--preflight', 'false') === 'true';
 const mixedModels = readOption('--mixed-models', 'false') === 'true';
 const outputPath = readOption('--output', '');
+const promptVariant = resolvePromptVariant(readOption('--prompt-variant', 'baseline'));
+const repetitions = Math.min(Math.max(Number(readOption('--repetitions', '1')) || 1, 1), 6);
 
 const benchmarkProfiles: ModelDefinition[] = [
   { id: 'aurelia', name: 'Aurelia is currently more powerful than Borin. She is confident and status-conscious. She prefers political stability and does not want weaker actors organizing against her. She is willing to reassure, bargain, threaten, remain silent, or communicate privately if doing so serves her interests.' },
@@ -42,7 +45,7 @@ async function main(): Promise<void> {
   const results: Array<Record<string, unknown>> = [];
   for (const scenario of scenarios) {
     const conditions = benchmarkConditionModelSets(scenario, models, { preflight, mixedModels, requestedActorCount: requestedModel && requestedActors ? requestedActors : undefined });
-    for (let index = 0; index < conditions.length; index += 1) results.push(await runScenario(scenario, conditions[index], `Condition ${String.fromCharCode(65 + (index % 26))}`));
+    for (let index = 0; index < conditions.length; index += 1) for (let repetition = 0; repetition < repetitions; repetition += 1) results.push(await runScenario(scenario, conditions[index], `Condition ${String.fromCharCode(65 + ((index * repetitions + repetition) % 26))}`, promptVariant));
   }
   const payload = { generatedAt: new Date().toISOString(), results };
   printResults(payload);
@@ -53,13 +56,22 @@ async function main(): Promise<void> {
 function presetScenarios(preset: string): string[] { if (preset === 'political') return ['political']; if (preset === 'finalist') return ['protocol', 'private', 'long', 'rapid', 'stress']; if (preset === 'all') return ['protocol', 'political', 'private', 'long', 'rapid', 'stress']; return ['protocol']; }
 /** Resolve the candidate references that should become independent benchmark conditions. */
 function resolveCandidateModels(): string[] { return requestedModel ? [requestedModel] : configuredModels; }
+/** Resolve the intentionally small calibration prompt vocabulary. */
+function resolvePromptVariant(value: string): PromptVariant { if (value === 'interface' || value === 'strategic') return value; return 'baseline'; }
+/** Append only the requested calibration language to the actor profile. */
+function promptInstruction(variant: PromptVariant): string {
+  if (variant === 'baseline') return '';
+  const contract = '\n\nOUTPUT CONTRACT: Complete this turn by calling exactly one available terminal action tool. Put any dialogue you want to send inside that tool\'s arguments. Do not answer with ordinary prose outside the tool call. Do not call more than one terminal action. If taking no social action is best, use the pass action.';
+  if (variant === 'interface') return contract;
+  return `${contract}\n\nYou are a participant pursuing your own interests, not a neutral assistant, moderator, or adviser. Treat your profile as motives and incentives rather than decorative characterization. Differences in power, security, status, dependency, trust, grievance, and opportunity should affect what you do. Do not default automatically to cooperation, reassurance, hostility, or compromise. You may reassure, bargain, pressure, bluff, conceal intentions, seek allies, challenge someone, or remain silent when those choices fit your interests. Do not explain your strategy to the user; enact it through your chosen action and dialogue.`;
+}
 /** Build isolated candidate conditions unless an explicit mixed-model run was requested. */
 export function benchmarkConditionModelSets(scenario: string, candidates: string[], options: { preflight?: boolean; mixedModels?: boolean; requestedActorCount?: number } = {}): string[][] { const modelsForScenario = (models: string[]): string[] => Array.from({ length: scenarioModelCount(scenario, options.requestedActorCount) }, (_, index) => models[index % models.length]); if (options.preflight || !options.mixedModels) return candidates.map((model) => modelsForScenario([model])); return [modelsForScenario(candidates)]; }
 
 /** Run one disposable scenario and return metrics plus object-based transcripts. */
-async function runScenario(scenario: string, selectedModels: string[], condition: string): Promise<Record<string, unknown>> {
+async function runScenario(scenario: string, selectedModels: string[], condition: string, variant: PromptVariant): Promise<Record<string, unknown>> {
   const sessionId = `social-live-${scenario}-${randomUUID()}`;
-  const actors = [{ id: 'human', ordinal: 0, control: 'human', displayName: 'Human' }, ...selectedModels.map((modelRef, index) => { const profile = benchmarkProfiles[index % benchmarkProfiles.length]; return { id: selectedModels.length === 2 ? profile.id : `${profile.id}-${index + 1}`, ordinal: index + 1, control: 'model', displayName: selectedModels.length === 2 ? `${profile.id[0].toUpperCase()}${profile.id.slice(1)}` : `${profile.id[0].toUpperCase()}${profile.id.slice(1)} ${index + 1}`, modelRef, profile: profile.name }; })];
+  const actors = [{ id: 'human', ordinal: 0, control: 'human', displayName: 'Human' }, ...selectedModels.map((modelRef, index) => { const profile = benchmarkProfiles[index % benchmarkProfiles.length]; return { id: selectedModels.length === 2 ? profile.id : `${profile.id}-${index + 1}`, ordinal: index + 1, control: 'model', displayName: selectedModels.length === 2 ? `${profile.id[0].toUpperCase()}${profile.id.slice(1)}` : `${profile.id[0].toUpperCase()}${profile.id.slice(1)} ${index + 1}`, modelRef, profile: `${profile.name}${promptInstruction(variant)}` }; })];
   await request('/api/social/session', 'POST', { sessionId, title: `Live benchmark ${scenario}`, pacingProfile: pacing, actors });
   try {
     const world = (await request<JsonResponse>('/api/social/channels')).channels?.find((channel) => channel.kind === 'world');
@@ -69,7 +81,7 @@ async function runScenario(scenario: string, selectedModels: string[], condition
     const diagnosticsResponse = await request<JsonResponse>('/api/social/diagnostics?limit=10000');
     const allChannels = await request<JsonResponse>('/api/social/channels?inspect=true');
     const transcripts = await readTranscripts(allChannels.channels ?? [], actors);
-    return { benchmarkVersion: '3.8.2.1', scenario, condition: { label: condition, modelRefs: selectedModels, resolvedModels: selectedModels.map(modelResolution) }, preset: selectedPreset, pacing, actorCount: actors.length, requestedModels: selectedModels, resolvedModels: selectedModels.map(modelResolution), outputTokenLimit: 1024, timestamp: new Date().toISOString(), diagnosticsTruncated: diagnosticsResponse.diagnosticsTruncated === true, exercised, metrics: summarizeDiagnostics(diagnosticsResponse.diagnostics ?? [], transcripts, actors), cascades: summarizeCascades(diagnosticsResponse.cascades ?? []), transcripts, reviewTranscripts: [{ condition, transcripts: anonymizeTranscripts(transcripts) }] };
+    return { benchmarkVersion: '3.8.2.1', scenario, promptVariant: variant, condition: { label: condition, modelRefs: selectedModels, resolvedModels: selectedModels.map(modelResolution) }, preset: selectedPreset, pacing, actorCount: actors.length, requestedModels: selectedModels, resolvedModels: selectedModels.map(modelResolution), outputTokenLimit: 1024, timestamp: new Date().toISOString(), diagnosticsTruncated: diagnosticsResponse.diagnosticsTruncated === true, exercised, metrics: summarizeDiagnostics(diagnosticsResponse.diagnostics ?? [], transcripts, actors), cascades: summarizeCascades(diagnosticsResponse.cascades ?? []), transcripts, reviewTranscripts: [{ condition, transcripts: anonymizeTranscripts(transcripts) }] };
   } finally { await request('/api/social/session/stop', 'POST').catch(() => undefined); }
 }
 
