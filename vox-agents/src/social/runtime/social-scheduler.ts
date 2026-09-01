@@ -38,7 +38,33 @@ export class SocialScheduler {
   /** Start or wake the scheduler without awaiting the cascade from an HTTP request. */
   public kick(): void { if (this.stopped) return; if (this.running) { this.kickRequested = true; return; } this.running = true; this.drainPromise = this.drain().finally(() => { this.running = false; this.drainPromise = undefined; if (this.kickRequested && !this.stopped) { this.kickRequested = false; this.kick(); } }); }
   /** Wait until currently claimed bounded work has finished. */
-  public async waitForIdle(): Promise<void> { while (this.drainPromise) { const current = this.drainPromise; await current; } }
+  public async waitForIdle(timeoutMs = 90_000): Promise<{ settled: boolean; timedOut: boolean }> { return this.waitForSettled(timeoutMs); }
+  /** Wait only for work already executing so shutdown does not wait on deferred retries. */
+  public async waitForDrain(timeoutMs = 15_000): Promise<{ settled: boolean; timedOut: boolean }> {
+    const deadline = Date.now() + Math.max(0, timeoutMs);
+    while (this.running) {
+      const current = this.drainPromise;
+      if (!current) break;
+      await new Promise<void>((resolve) => {
+        const timer = setTimeout(resolve, Math.max(1, deadline - Date.now()));
+        void current.then(() => { clearTimeout(timer); resolve(); }, () => { clearTimeout(timer); resolve(); });
+      });
+      if (Date.now() >= deadline && this.running) return { settled: false, timedOut: true };
+    }
+    return { settled: true, timedOut: false };
+  }
+  /** Wait for the complete session intention set to settle, including deferred retries. */
+  public async waitForSettled(timeoutMs = 90_000): Promise<{ settled: boolean; timedOut: boolean }> {
+    this.kick();
+    const deadline = Date.now() + Math.max(0, timeoutMs);
+    while (true) {
+      while (this.drainPromise) { const current = this.drainPromise; await current; }
+      if (!await this.store.hasUnsettledIntentions((await this.actors())[0]?.sessionId ?? '')) return { settled: true, timedOut: false };
+      if (Date.now() >= deadline) return { settled: false, timedOut: true };
+      await new Promise((resolve) => setTimeout(resolve, Math.min(100, Math.max(1, deadline - Date.now()))));
+      this.kick();
+    }
+  }
   /** Wait for one durable cascade to reach completed, exhausted, or cancelled. */
   public async waitForCascadeSettled(cascadeId: string, timeoutMs = 90_000): Promise<{ cascade: import('../types.js').SocialCascade | undefined; settled: boolean; timedOut: boolean }> {
     this.kick();
@@ -69,16 +95,17 @@ export class SocialScheduler {
       const reservation = await this.store.reserveCascadeRun(intention.cascadeId, actor.id);
       if (!reservation.allowed) { await this.store.completeIntention(intention.id, `pass:${reservation.reason ?? 'cascade-budget-exhausted'}`); if (reservation.reason?.includes('exhausted') || reservation.reason === 'cascade-inactive') await this.store.exhaustCascade(intention.cascadeId, reservation.reason); await this.store.insertDecisionDiagnostic({ intentionId: intention.id, actorId: actor.id, actorDisplayName: actor.displayName, modelRef: actor.modelRef ?? null, executionScope: scope, cascadeId: intention.cascadeId ?? null, selectedKind: null, routingRefsJson: null, validationOutcome: 'skipped-budget', applicationOutcome: 'skipped', error: reservation.reason ?? 'cascade-budget-exhausted', providerLatencyMs: null, queueWaitMs: this.queueWaitMs(intention), durationMs: this.intentionDurationMs(intention), inputTokens: null, outputTokens: null, totalTokens: null, cachedTokens: null, reasoningTokens: null, cost: null, retryCount: 0 }); return; }
     }
-    const memory = await this.store.getMemory(actor.id); const environment = await this.environmentForActor(actor); const definitions = await this.decisionDefinitionsForActor(actor, intention); let context;
-    if (scope === 'channel-reaction') { const channelId = intention.channelId!; const visibleActors = await this.store.listActiveActors(actor.sessionId, channelId); if (!visibleActors.some((candidate) => candidate.id === actor.id)) { await this.store.completeIntention(intention.id, 'pass:not-visible'); return; } const channel = await this.store.getChannel(actor.sessionId, channelId); const messages = (await this.store.readMessages(actor.sessionId, channelId, actor.id, 80)).messages; context = this.contextBuilder.build(actor, visibleActors, messages, intention, memory?.content, { environment, mode: intention.kind, currentChannel: channel ?? undefined, references: createSocialReferenceSet(visibleActors, channel ? [channel] : []) }); }
-    else { const activity = await this.store.listVisibleActivity(actor.sessionId, actor.id, 20); context = this.contextBuilder.buildPlayerMind(actor, allActors, activity, intention, memory?.content, { environment, mode: intention.kind, references: createSocialReferenceSet(allActors, activity.map(({ channel }) => channel)) }); }
-    context.references = await this.legalReferences(actor, context.references); context.decisionToolDefinitions = definitions; context.decisionTools = createSocialDecisionTools(this.toolScope(scope, intention), context.references, definitions); const startedIntention = await this.store.markModelStarted(intention.id); const providerStartedAt = Date.now(); let diagnosticId: string | undefined;
+    const frozenIntention = await this.store.markModelStarted(intention.id);
+    const memory = await this.store.getMemory(actor.id); const environment = await this.environmentForActor(actor); const definitions = await this.decisionDefinitionsForActor(actor, frozenIntention); let context;
+    if (scope === 'channel-reaction') { const channelId = frozenIntention.channelId!; const visibleActors = await this.store.listActiveActors(actor.sessionId, channelId); if (!visibleActors.some((candidate) => candidate.id === actor.id)) { await this.store.completeIntention(frozenIntention.id, 'pass:not-visible'); return; } const channel = await this.store.getChannel(actor.sessionId, channelId); const messages = (await this.store.readMessages(actor.sessionId, channelId, actor.id, 80)).messages; context = this.contextBuilder.build(actor, visibleActors, messages, frozenIntention, memory?.content, { environment, mode: frozenIntention.kind, currentChannel: channel ?? undefined, references: createSocialReferenceSet(visibleActors, channel ? [channel] : []) }); }
+    else { const activity = await this.store.listVisibleActivity(actor.sessionId, actor.id, 20); context = this.contextBuilder.buildPlayerMind(actor, allActors, activity, frozenIntention, memory?.content, { environment, mode: frozenIntention.kind, references: createSocialReferenceSet(allActors, activity.map(({ channel }) => channel)) }); }
+    context.references = await this.legalReferences(actor, context.references); context.decisionToolDefinitions = definitions; context.decisionTools = createSocialDecisionTools(this.toolScope(scope, frozenIntention), context.references, definitions); const providerStartedAt = Date.now(); let diagnosticId: string | undefined;
     try {
       const run = await this.runModel(actor, context, allActors.map((candidate) => candidate.displayName), abortSignal, providerStartedAt);
-      const diagnostic = await this.store.insertDecisionDiagnostic({ intentionId: intention.id, actorId: actor.id, actorDisplayName: actor.displayName, modelRef: actor.modelRef ?? null, executionScope: scope, cascadeId: intention.cascadeId ?? null, selectedKind: run.decision.kind, routingRefsJson: JSON.stringify(decisionRoutingSummary(run.decision)), validationOutcome: 'validated', applicationOutcome: null, error: null, providerLatencyMs: run.latencyMs, queueWaitMs: this.queueWaitMs(startedIntention), durationMs: this.intentionDurationMs(startedIntention), inputTokens: run.usage?.inputTokens ?? null, outputTokens: run.usage?.outputTokens ?? null, totalTokens: run.usage?.totalTokens ?? null, cachedTokens: run.usage?.cachedTokens ?? null, reasoningTokens: run.usage?.reasoningTokens ?? null, cost: run.usage?.cost ?? null, retryCount: run.retryCount }); diagnosticId = diagnostic.id;
-      const applied = await this.decisionExecutor.apply(actor, intention, run.decision, context.references); await this.store.updateDecisionDiagnostic(diagnostic.id, { applicationOutcome: applied.result, durationMs: this.intentionDurationMs(startedIntention) });
+      const diagnostic = await this.store.insertDecisionDiagnostic({ intentionId: frozenIntention.id, actorId: actor.id, actorDisplayName: actor.displayName, modelRef: actor.modelRef ?? null, executionScope: scope, cascadeId: frozenIntention.cascadeId ?? null, selectedKind: run.decision.kind, routingRefsJson: JSON.stringify(decisionRoutingSummary(run.decision)), validationOutcome: 'validated', applicationOutcome: null, error: null, providerLatencyMs: run.latencyMs, queueWaitMs: this.queueWaitMs(frozenIntention), durationMs: this.intentionDurationMs(frozenIntention), inputTokens: run.usage?.inputTokens ?? null, outputTokens: run.usage?.outputTokens ?? null, totalTokens: run.usage?.totalTokens ?? null, cachedTokens: run.usage?.cachedTokens ?? null, reasoningTokens: run.usage?.reasoningTokens ?? null, cost: run.usage?.cost ?? null, retryCount: run.retryCount }); diagnosticId = diagnostic.id;
+      const applied = await this.decisionExecutor.apply(actor, frozenIntention, run.decision, context.references); await this.store.updateDecisionDiagnostic(diagnostic.id, { applicationOutcome: applied.result, durationMs: this.intentionDurationMs(frozenIntention) });
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error); if (diagnosticId) await this.store.updateDecisionDiagnostic(diagnosticId, { applicationOutcome: 'error', error: message.slice(0, 500), durationMs: this.intentionDurationMs(startedIntention) }); else await this.store.insertDecisionDiagnostic({ intentionId: intention.id, actorId: actor.id, actorDisplayName: actor.displayName, modelRef: actor.modelRef ?? null, executionScope: scope, cascadeId: intention.cascadeId ?? null, selectedKind: null, routingRefsJson: null, validationOutcome: 'failed', applicationOutcome: null, error: message.slice(0, 500), providerLatencyMs: Date.now() - providerStartedAt, queueWaitMs: this.queueWaitMs(startedIntention), durationMs: this.intentionDurationMs(startedIntention), inputTokens: null, outputTokens: null, totalTokens: null, cachedTokens: null, reasoningTokens: null, cost: null, retryCount: 0 }); throw error;
+      const message = error instanceof Error ? error.message : String(error); if (diagnosticId) await this.store.updateDecisionDiagnostic(diagnosticId, { applicationOutcome: 'error', error: message.slice(0, 500), durationMs: this.intentionDurationMs(frozenIntention) }); else await this.store.insertDecisionDiagnostic({ intentionId: frozenIntention.id, actorId: actor.id, actorDisplayName: actor.displayName, modelRef: actor.modelRef ?? null, executionScope: scope, cascadeId: frozenIntention.cascadeId ?? null, selectedKind: null, routingRefsJson: null, validationOutcome: 'failed', applicationOutcome: null, error: message.slice(0, 500), providerLatencyMs: Date.now() - providerStartedAt, queueWaitMs: this.queueWaitMs(frozenIntention), durationMs: this.intentionDurationMs(frozenIntention), inputTokens: null, outputTokens: null, totalTokens: null, cachedTokens: null, reasoningTokens: null, cost: null, retryCount: 0 }); throw error;
     }
   }
 

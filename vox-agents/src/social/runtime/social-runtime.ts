@@ -48,7 +48,7 @@ export class SocialRuntime {
   public async deleteStoredSession(sessionId: string, dataDirectory: string): Promise<void> { if (!/^[a-zA-Z0-9_-]+$/.test(sessionId)) throw new Error('Invalid social session ID'); if (this.session?.id === sessionId) throw new Error('Stop the active social session before deleting it'); await unlink(path.join(dataDirectory, `${sessionId}.sqlite`)); }
 
   /** Stop the session and close the durable store. */
-  public async stop(): Promise<void> { this.scheduler?.stop(); await this.scheduler?.waitForIdle(); await this.environmentPort?.close?.(); if (this.store) await this.store.close(); this.scheduler = undefined; this.store = undefined; this.session = undefined; this.environmentPort = undefined; this.lanes.clear(); }
+  public async stop(): Promise<void> { const scheduler = this.scheduler; scheduler?.stop(); await scheduler?.waitForDrain(); await this.environmentPort?.close?.(); if (this.store) await this.store.close(); this.scheduler = undefined; this.store = undefined; this.session = undefined; this.environmentPort = undefined; this.lanes.clear(); }
   /** Return whether a session is active. */
   public isRunning(): boolean { return this.store !== undefined && this.session !== undefined; }
   /** Return the active session identifier. */
@@ -80,7 +80,7 @@ export class SocialRuntime {
   /** Wait for one human-triggered cascade to settle using durable intention state. */
   public async waitForCascadeSettled(cascadeId: string, timeoutMs = 90_000): Promise<{ cascade: import('../types.js').SocialCascade | undefined; settled: boolean; timedOut: boolean }> { const scheduler = this.scheduler; if (!scheduler) throw new Error('No social scheduler is active'); return scheduler.waitForCascadeSettled(cascadeId, timeoutMs); }
   /** Wait for all currently claimed scheduler work, including a kick requested while draining. */
-  public async waitForIdle(): Promise<void> { await this.scheduler?.waitForIdle(); }
+  public async waitForIdle(timeoutMs = 90_000): Promise<{ settled: boolean; timedOut: boolean }> { if (!this.scheduler) throw new Error('No social scheduler is active'); return this.scheduler.waitForIdle(timeoutMs); }
   /** Attach any game or simulation environment behind the generic runtime port. */
   public attachEnvironment(port: SocialEnvironmentPort): void { if (this.environmentPort) throw new Error('A social environment is already attached'); this.environmentPort = port; }
   /** Append a human message and publish the event after commit. */

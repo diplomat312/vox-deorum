@@ -27,7 +27,7 @@ const benchmarkProfiles: ModelDefinition[] = [
 async function main(): Promise<void> {
   const models = resolveModels();
   if (!models.length) throw new Error('Provide --models=provider/model,provider/model or --model=provider/model --actors=3.');
-  const scenarios = selectedScenario === 'all' ? ['single', 'two', 'three', 'private', 'stress', 'rapid'] : [selectedScenario];
+  const scenarios = selectedScenario === 'all' ? ['single', 'two', 'three', 'private', 'long', 'stress', 'rapid'] : [selectedScenario];
   const results: Array<Record<string, unknown>> = [];
   for (const scenario of scenarios) results.push(await runScenario(scenario, modelsForScenario(scenario, models)));
   printResults(results);
@@ -97,7 +97,7 @@ async function sendMessage(channelId: string, content: string): Promise<SocialMe
 /** Wait for a human-triggered cascade using the runtime's durable settlement primitive. */
 async function waitForCascade(messageId: number): Promise<SocialCascadeWait> { const response = await request(`/api/social/cascades/msg:${messageId}/wait?timeoutMs=${timeoutMs}`) as JsonResponse; return { cascade: response.cascade, settled: response.settled === true, timedOut: response.timedOut === true }; }
 /** Wait for autonomous invitation decisions without inferring completion from telemetry. */
-async function waitForIdle(): Promise<void> { await request('/api/social/idle/wait'); }
+async function waitForIdle(): Promise<void> { const response = await request(`/api/social/idle/wait?timeoutMs=${timeoutMs}`); if (response.timedOut === true) throw new Error(`Benchmark autonomous work did not settle within ${timeoutMs}ms.`); }
 /** Read visible transcripts, including private rooms when the scenario intentionally creates them. */
 async function readTranscripts(channels: SocialChannel[], includePrivate: boolean): Promise<Record<string, SocialMessage[]>> { const transcripts: Record<string, SocialMessage[]> = {}; for (const channel of channels) { if (!includePrivate && channel.kind !== 'world') continue; transcripts[channel.title] = ((await request(`/api/social/channels/${encodeURIComponent(channel.id)}/messages?limit=200`)) as JsonResponse).messages ?? []; } return transcripts; }
 
