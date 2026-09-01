@@ -31,6 +31,12 @@ Vox Deorum works with any of these providers, and you can mix several in one gam
 
 If you're just starting out and want the widest selection from one account, OpenRouter is simplest. Otherwise, pick the provider whose models you want.
 
+## Provider transport and tools
+
+Providers can expose models through different wire transports, including OpenAI Chat Completions, OpenAI Responses, and Anthropic Messages. Vox Deorum keeps that transport choice inside the provider adapter, so the social runtime can use the same semantic decision contract for every model.
+
+Some endpoints do not accept a wire-level required tool choice. For those models, Vox Deorum sends an automatic tool choice plus a concise instruction to select one available action, then validates the result before applying anything. Prose, multiple actions, or invalid arguments remain rejected by the runtime. The model chooses the meaning of an action, while Vox Deorum supplies identity, routing, and authority.
+
 ## Connecting a provider
 
 On a fresh install, Vox Deorum opens the Setup wizard automatically. It asks how you want to connect and collects the needed key or account sign-in. API-backed providers and local servers validate the connection by fetching their current model lists. Codex uses bundled choices and validates your ChatGPT account through its proxy. Claude Code also uses bundled choices, but listing them does not verify that the app is installed or signed in. Authentication, network, and provider errors are shown in the wizard so you can correct the problem before continuing. Keys stay on your own machine and go only to the provider you're using.

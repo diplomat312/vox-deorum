@@ -14,7 +14,7 @@ vi.mock('../../../src/utils/models/concurrency.js', async (importOriginal) => ({
 }));
 vi.mock('../../../src/utils/models/models.js', () => ({ getModel: mocks.getModel, getStrictModelConfig: mocks.getStrictModelConfig }));
 
-import { SocialDecisionExecutionError, SocialModelExecutorImpl } from '../../../src/social/runtime/social-model-executor.js';
+import { extractProviderFailureDetails, SocialDecisionExecutionError, SocialModelExecutorImpl } from '../../../src/social/runtime/social-model-executor.js';
 
 const actor: SocialActor = { id: 'alice', ordinal: 1, control: 'model', displayName: 'Alice', modelRef: 'openrouter/test-model', sessionId: 'executor', createdAt: new Date().toISOString(), status: 'active' };
 const context: SocialContextBundle = { system: 'Choose one action.', messages: [], references: { actors: [], channels: [], dmActors: [], groupParticipants: [], messageRooms: [], inviteRooms: [], inviteParticipants: [], inviteTargets: [], leaveRooms: [] }, executionScope: 'player-mind' };
@@ -62,5 +62,36 @@ describe('SocialModelExecutorImpl provider telemetry', () => {
       name: 'SocialDecisionExecutionError',
       telemetry: { providerAttemptCount: 3, providerRetryCount: 2, semanticRetryCount: 0, providerFailureClass: 'rate-limit' },
     } as Partial<SocialDecisionExecutionError>);
+  });
+
+  it('preserves sanitized provider status, type, code, and summary on terminal failure', async () => {
+    const error = Object.assign(new Error('provider request failed'), {
+      statusCode: 400,
+      responseBody: JSON.stringify({ error: { type: 'invalid_request_error', code: 'unsupported_parameter', message: 'tool_choice must be auto; Bearer secret-value' } }),
+    });
+    mocks.stream.mockImplementationOnce(async (_params: unknown, callContext: { onProviderAttempt?: (attempt: number) => void; onProviderError?: (error: unknown) => void }) => {
+      for (let attempt = 0; attempt < 3; attempt += 1) { callContext.onProviderAttempt?.(attempt); callContext.onProviderError?.(error); }
+      throw error;
+    });
+    await expect(new SocialModelExecutorImpl().decideWithTelemetry(actor, context, [])).rejects.toMatchObject({
+      telemetry: {
+        providerAttemptCount: 3,
+        providerRetryCount: 2,
+        providerFailureClass: 'provider',
+        providerHttpStatus: 400,
+        providerErrorType: 'invalid_request_error',
+        providerErrorCode: 'unsupported_parameter',
+        providerErrorSummary: 'tool_choice must be auto; Bearer [redacted]',
+      },
+    });
+  });
+
+  it('classifies a provider usage limit from structured error fields', () => {
+    expect(extractProviderFailureDetails({ statusCode: 429, responseBody: JSON.stringify({ error: { type: 'FreeUsageLimitError', code: 'rate_limit_exceeded', message: 'Please try again later.' } }) })).toEqual({
+      providerHttpStatus: 429,
+      providerErrorType: 'FreeUsageLimitError',
+      providerErrorCode: 'rate_limit_exceeded',
+      providerErrorSummary: 'Please try again later.',
+    });
   });
 });

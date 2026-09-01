@@ -20,6 +20,8 @@ import { formatToolChoiceList } from '../../tools/tool-names.js';
 /** Installation options: the calling agent's completion tools, when it declares any. */
 export interface RequiredToolChoiceOptions {
   completionTools?: string[];
+  /** Relax provider schema strictness when an endpoint rejects optional properties in strict mode. */
+  relaxStrictSchemas?: boolean;
 }
 
 /** Return the declared client function tool names, deduplicated in declaration order. */
@@ -101,7 +103,7 @@ export function requiredToolChoiceMiddleware(options?: RequiredToolChoiceOptions
     specificationVersion: 'v3',
     transformParams: async ({ params }) => {
       if (params.toolChoice?.type !== 'required') return params;
-      const transformed = { ...params, toolChoice: { type: 'auto' as const } };
+      const transformed = { ...params, toolChoice: { type: 'auto' as const }, ...(options?.relaxStrictSchemas ? { tools: relaxFunctionToolSchemas(params.tools) } : {}) };
       const names = clientFunctionToolNames(params);
       const instruction = requiredToolChoiceInstruction(
         names,
@@ -115,4 +117,9 @@ export function requiredToolChoiceMiddleware(options?: RequiredToolChoiceOptions
       };
     },
   };
+}
+
+/** Make function schemas permissive on the wire while leaving runtime argument validation intact. */
+function relaxFunctionToolSchemas(tools: LanguageModelV3CallOptions['tools']): LanguageModelV3CallOptions['tools'] {
+  return tools?.map((tool) => tool.type === 'function' ? { ...tool, strict: false } : tool);
 }

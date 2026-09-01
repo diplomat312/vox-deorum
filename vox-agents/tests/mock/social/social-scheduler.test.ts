@@ -105,12 +105,12 @@ describe('SocialScheduler', () => {
     ];
     await store.createSession({ id: 'provider-failure', humanActorId: 'human' }, actors);
     const events = new SocialEventHub(); const lanes = new Map(actors.map((actor) => [actor.id, new ActorLane()]));
-    const executor = { decideWithTelemetry: vi.fn(async () => { throw new SocialDecisionExecutionError('429 rate limit', { retryCount: 0, semanticRetryCount: 0, providerAttemptCount: 3, providerRetryCount: 2, providerFailureClass: 'rate-limit', latencyMs: 123 }); }) };
+    const executor = { decideWithTelemetry: vi.fn(async () => { throw new SocialDecisionExecutionError('free usage limit exceeded', { retryCount: 0, semanticRetryCount: 0, providerAttemptCount: 3, providerRetryCount: 2, providerFailureClass: 'rate-limit', providerHttpStatus: 429, providerErrorType: 'FreeUsageLimitError', providerErrorCode: 'rate_limit_exceeded', providerErrorSummary: 'free usage limit exceeded', latencyMs: 123 }); }) };
     const scheduler = new SocialScheduler(store, async () => actors, lanes, events, executor);
     await store.commitHumanMessage({ sessionId: 'provider-failure', actorId: 'human', channelId: 'world', content: 'Try once', budget: { maxModelRuns: 1, maxCommittedModelMessages: 1, maxRepliesPerActor: 1, maxWallClockMs: 60_000 } });
     scheduler.kick(); await scheduler.waitForDrain(); scheduler.stop();
     const diagnostic = (await store.listDecisionDiagnostics('provider-failure'))[0];
-    expect(diagnostic).toMatchObject({ validationOutcome: 'failed', providerAttemptCount: 3, providerRetryCount: 2, semanticRetryCount: 0, providerFailureClass: 'rate-limit', providerLatencyMs: 123 });
+    expect(diagnostic).toMatchObject({ validationOutcome: 'failed', providerAttemptCount: 3, providerRetryCount: 2, semanticRetryCount: 0, providerFailureClass: 'rate-limit', providerHttpStatus: 429, providerErrorType: 'FreeUsageLimitError', providerErrorCode: 'rate_limit_exceeded', providerErrorSummary: 'free usage limit exceeded', providerLatencyMs: 123 });
   });
 
   it('resolves an invitation after the speech cap and prevents follow-up speech', async () => {

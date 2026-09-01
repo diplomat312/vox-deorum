@@ -185,7 +185,7 @@ export function getModel(config: Model, options?: {
       break;
     case "opencode":
     case "opencode-go":
-      result = buildOpenCodeModel(config);
+      result = buildOpenCodeModel(config, { completionTools: options?.completionTools });
       break;
     case "chutes":
       result = createOpenAICompatible({

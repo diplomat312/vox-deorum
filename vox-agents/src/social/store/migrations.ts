@@ -1,6 +1,6 @@
 import Database from 'better-sqlite3';
 
-export const currentSocialSchemaVersion = 13;
+export const currentSocialSchemaVersion = 14;
 type Sqlite = InstanceType<typeof Database>;
 
 /** Apply ordered social schema migrations without rewriting current databases. */
@@ -25,6 +25,7 @@ function applyMigration(sqlite: Sqlite, version: number): void {
   if (version === 11) { addColumn(sqlite, 'socialSessions', 'pacingProfile', "TEXT NOT NULL DEFAULT 'balanced'"); addColumn(sqlite, 'socialDecisionDiagnostics', 'cascadeId', 'TEXT'); addColumn(sqlite, 'socialDecisionDiagnostics', 'providerLatencyMs', 'INTEGER'); addColumn(sqlite, 'socialDecisionDiagnostics', 'queueWaitMs', 'INTEGER'); addColumn(sqlite, 'socialDecisionDiagnostics', 'durationMs', 'INTEGER'); addColumn(sqlite, 'socialDecisionDiagnostics', 'inputTokens', 'INTEGER'); addColumn(sqlite, 'socialDecisionDiagnostics', 'outputTokens', 'INTEGER'); addColumn(sqlite, 'socialDecisionDiagnostics', 'totalTokens', 'INTEGER'); addColumn(sqlite, 'socialDecisionDiagnostics', 'cachedTokens', 'INTEGER'); addColumn(sqlite, 'socialDecisionDiagnostics', 'reasoningTokens', 'INTEGER'); addColumn(sqlite, 'socialDecisionDiagnostics', 'cost', 'REAL'); }
   if (version === 12) addColumn(sqlite, 'socialIntentions', 'modelStartedAt', 'TEXT');
   if (version === 13) { addColumn(sqlite, 'socialDecisionDiagnostics', 'semanticRetryCount', 'INTEGER NOT NULL DEFAULT 0'); addColumn(sqlite, 'socialDecisionDiagnostics', 'providerAttemptCount', 'INTEGER NOT NULL DEFAULT 0'); addColumn(sqlite, 'socialDecisionDiagnostics', 'providerRetryCount', 'INTEGER NOT NULL DEFAULT 0'); addColumn(sqlite, 'socialDecisionDiagnostics', 'providerFailureClass', 'TEXT'); }
+  if (version === 14) { addColumn(sqlite, 'socialDecisionDiagnostics', 'providerHttpStatus', 'INTEGER'); addColumn(sqlite, 'socialDecisionDiagnostics', 'providerErrorType', 'TEXT'); addColumn(sqlite, 'socialDecisionDiagnostics', 'providerErrorCode', 'TEXT'); addColumn(sqlite, 'socialDecisionDiagnostics', 'providerErrorSummary', 'TEXT'); }
 }
 
 /** Add a column only when upgrading a legacy table that lacks it. */

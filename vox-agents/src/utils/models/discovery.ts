@@ -7,7 +7,7 @@
 import type { DiscoveredModel, DiscoveryErrorKind } from '../../types/api.js';
 import { applyModelRules } from './rules.js';
 import { ensureCodexProxy, getActiveCodexProxyPort, getCodexProxyApiBase } from './providers/codex-proxy.js';
-import { openCodeModelNames } from './providers/opencode.js';
+import { getOpenCodeApiKey, openCodeModelNames } from './providers/opencode.js';
 
 /** The credentials supplied by the configuration UI, keyed by environment variable name. */
 export type DiscoveryCredentials = Record<string, string | undefined>;
@@ -191,7 +191,8 @@ export async function discoverModels(provider: string, credentials: DiscoveryCre
     }
     case 'opencode':
     case 'opencode-go': {
-      const key = requireCredential(credentials, 'OPENCODE_API_KEY', provider === 'opencode' ? 'OpenCode Zen' : 'OpenCode Go');
+      const key = getCredential(credentials, 'OPENCODE_API_KEY') || getCredential(credentials, 'OPENCODE_ZEN_API_KEY') || getOpenCodeApiKey();
+      if (!key) throw new DiscoveryError('missing-credential', 400, `${provider === 'opencode' ? 'OpenCode Zen' : 'OpenCode Go'} requires OPENCODE_API_KEY.`);
       const endpoint = provider === 'opencode' ? 'https://opencode.ai/zen/v1' : 'https://opencode.ai/zen/go/v1';
       try {
         return await openAiCompatibleModels(provider, endpoint, { headers: { Authorization: `Bearer ${key}` } }, provider === 'opencode' ? 'OpenCode Zen' : 'OpenCode Go');

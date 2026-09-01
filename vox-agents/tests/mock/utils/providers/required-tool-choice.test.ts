@@ -118,6 +118,14 @@ describe('requiredToolChoiceMiddleware', () => {
     expect(params.prompt[0].content).toBe('Make sound strategic decisions.');
   });
 
+  it('can relax only the provider wire strictness without changing the caller params', async () => {
+    const params = requiredParams();
+    const out: any = await (requiredToolChoiceMiddleware({ relaxStrictSchemas: true }).transformParams as any)({ params });
+    expect(out.tools[0].strict).toBe(false);
+    expect(params.tools[0].strict).toBeUndefined();
+    expect(out.toolChoice).toEqual({ type: 'auto' });
+  });
+
   it('names the caller\'s completion tools as the ones that end the turn', async () => {
     const middleware = requiredToolChoiceMiddleware({ completionTools: ['found_city'] });
     const out: any = await (middleware.transformParams as any)({ params: requiredParams() });
