@@ -12,8 +12,10 @@ const props = defineProps<{
   players: Record<number, PlayerConfig>;
   autoPlay: boolean;
   strategistOptions: SelectOption<string>[];
+  modelOptions: SelectOption<string>[];
   interruptionOptions: SelectOption<PacingInterruption>[];
   loadingStrategists: boolean;
+  loadingModels: boolean;
   loadingInterruptions: boolean;
 }>();
 
@@ -27,6 +29,23 @@ const playerListEntries = computed<PlayerListEntry[]>(() => sortedPlayerIds.valu
   .map(id => ({ id, player: props.players[id]! })));
 const selectedPlayer = computed(() => selectedPlayerId.value === null ? null : props.players[selectedPlayerId.value] ?? null);
 const selectedPlayerTitle = computed(() => selectedPlayerId.value === null ? 'No Player Selected' : `Player ${selectedPlayerId.value}`);
+const architectureOptions: SelectOption<'unified' | 'legacy'>[] = [
+  { label: 'Unified Civilization Mind', value: 'unified', description: 'One model governs strategy, diplomacy, and deals.' },
+  { label: 'Legacy Agent Architecture', value: 'legacy', description: 'Use the existing strategist and diplomacy agents.' },
+];
+const selectedIsUnified = computed(() => selectedPlayer.value?.mind === 'unified-mind');
+const selectedModel = computed(() => {
+  const model = selectedPlayer.value?.llms?.['unified-mind'];
+  if (typeof model === 'string') return model;
+  return model ? `${model.provider}/${model.name}` : '';
+});
+const selectedModelOptions = computed(() => {
+  const options = [...props.modelOptions];
+  if (selectedModel.value && !options.some(option => option.value === selectedModel.value)) {
+    options.unshift({ label: selectedModel.value, value: selectedModel.value, description: 'Saved model' });
+  }
+  return options;
+});
 
 /** Keep selection valid when the parent replaces the player collection. */
 watch(() => props.players, () => {
@@ -50,7 +69,7 @@ function addPlayer(): void {
   const nextId = Math.max(startingId, ...Object.keys(props.players).map(Number)) + 1;
   const players = { ...props.players };
   players[nextId] = {
-    strategist: props.strategistOptions[0]?.value || '',
+    strategist: props.strategistOptions[0]?.value || 'simple-strategist',
     pacing: { everyTurns: 1, interruption: 'none' },
     llms: {}
   };
@@ -99,6 +118,39 @@ function updateStrategist(value: string | null): void {
   updateSelectedPlayer({ strategist: value ?? '' });
 }
 
+/** Switch the selected seat between the player-level architectures. */
+function updateArchitecture(value: 'unified' | 'legacy' | null): void {
+  const player = selectedPlayer.value;
+  if (!player || !value) return;
+  if (value === 'unified') {
+    const model = selectedModel.value || props.modelOptions[0]?.value || '';
+    updateSelectedPlayer({
+      strategist: 'simple-strategist',
+      mind: 'unified-mind',
+      llms: { ...(player.llms ?? {}), 'unified-mind': model },
+    });
+    return;
+  }
+  const next: PlayerConfig = { ...player };
+  delete next.mind;
+  if (next.strategist === 'simple-strategist' && props.strategistOptions[0]?.value) {
+    next.strategist = props.strategistOptions[0].value;
+  }
+  if (next.llms) {
+    const llms = { ...next.llms };
+    delete llms['unified-mind'];
+    next.llms = Object.keys(llms).length > 0 ? llms : undefined;
+  }
+  emit('update:players', { ...props.players, [selectedPlayerId.value!]: next });
+}
+
+/** Update the unified model while preserving unrelated seat model aliases. */
+function updateUnifiedModel(value: string | null): void {
+  const player = selectedPlayer.value;
+  if (!player || !value) return;
+  updateSelectedPlayer({ llms: { ...(player.llms ?? {}), 'unified-mind': value } });
+}
+
 /** Update the selected pacing cadence. */
 function updateEveryTurns(value: number | null): void {
   const player = selectedPlayer.value;
@@ -116,6 +168,17 @@ function updateInterruption(value: PacingInterruption | null): void {
 /** Return the display label for a strategist value. */
 function strategistLabel(value: string): string {
   return props.strategistOptions.find(option => option.value === value)?.label || value || 'No strategist';
+}
+
+/** Return the player-facing architecture label for a seat. */
+function architectureLabel(player: PlayerConfig): string {
+  return player.mind === 'unified-mind' ? 'Unified Civilization Mind' : strategistLabel(player.strategist);
+}
+
+/** Resolve a saved unified model reference for the compact player list. */
+function selectedModelFor(player: PlayerConfig): string {
+  const model = player.llms?.['unified-mind'];
+  return typeof model === 'string' ? model : model ? `${model.provider}/${model.name}` : '';
 }
 
 /** Return a compact pacing summary for the player list. */
@@ -149,7 +212,8 @@ function pacingSummary(player: PlayerConfig): string {
               <span class="player-label">Player {{ entry.id }}</span>
               <Button icon="pi pi-trash" severity="danger" text rounded size="small" v-tooltip="'Remove player'" @click.stop="removePlayer(entry.id)" />
             </span>
-            <span class="player-strategist text-truncate">{{ strategistLabel(entry.player.strategist) }}</span>
+            <span class="player-strategist text-truncate">{{ architectureLabel(entry.player) }}</span>
+            <span v-if="entry.player.mind === 'unified-mind'" class="player-model text-truncate">{{ selectedModelFor(entry.player) || 'Model not configured' }}</span>
             <span class="player-pacing">{{ pacingSummary(entry.player) }}</span>
           </div>
         </div>
@@ -157,6 +221,27 @@ function pacingSummary(player: PlayerConfig): string {
         <div v-if="selectedPlayer && selectedPlayer.pacing" class="player-detail">
           <div class="player-detail-header"><h4>{{ selectedPlayerTitle }}</h4></div>
           <div class="detail-field">
+            <label :for="`architecture-${selectedPlayerId}`">Architecture</label>
+            <Dropdown :id="`architecture-${selectedPlayerId}`" :modelValue="selectedIsUnified ? 'unified' : 'legacy'"
+              :options="architectureOptions" optionLabel="label" optionValue="value" class="detail-input"
+              @update:modelValue="updateArchitecture">
+              <template #option="{ option }">
+                <div class="dropdown-option"><span>{{ option.label }}</span><small v-if="option.description">{{ option.description }}</small></div>
+              </template>
+            </Dropdown>
+          </div>
+          <div v-if="selectedIsUnified" class="detail-field">
+            <label :for="`unified-model-${selectedPlayerId}`">Civilization model</label>
+            <Dropdown :id="`unified-model-${selectedPlayerId}`" :modelValue="selectedModel" :options="selectedModelOptions"
+              optionLabel="label" optionValue="value" placeholder="Select a model" :loading="loadingModels"
+              class="detail-input" @update:modelValue="updateUnifiedModel">
+              <template #option="{ option }">
+                <div class="dropdown-option"><span>{{ option.label }}</span><small v-if="option.description">{{ option.description }}</small></div>
+              </template>
+            </Dropdown>
+            <small v-if="!selectedModel" class="detail-error">Choose a model before saving this unified seat.</small>
+          </div>
+          <div v-else class="detail-field">
             <label :for="`strategist-${selectedPlayerId}`">Strategist</label>
             <Dropdown :id="`strategist-${selectedPlayerId}`" :modelValue="selectedPlayer.strategist"
               :options="strategistOptions" optionLabel="label" optionValue="value" placeholder="Select strategist"
@@ -197,6 +282,7 @@ function pacingSummary(player: PlayerConfig): string {
 .player-row-main { align-items: center; display: flex; gap: 0.5rem; justify-content: space-between; }
 .player-strategist { color: var(--p-text-color); font-weight: 500; }
 .player-pacing { color: var(--p-text-muted-color); font-size: 0.875rem; }
+.player-model { color: var(--p-text-muted-color); font-size: 0.8rem; }
 .player-detail { border: 1px solid var(--p-content-border-color); border-radius: 6px; display: flex; flex-direction: column; gap: 0.75rem; min-width: 0; padding: 0.85rem; }
 .player-detail-header h4 { font-size: 1rem; margin: 0; }
 .detail-grid { align-items: end; display: grid; gap: 0.75rem; grid-template-columns: 7.5rem minmax(12rem, 1fr); }
@@ -207,6 +293,7 @@ function pacingSummary(player: PlayerConfig): string {
 .cadence-input :deep(.p-inputnumber-input) { width: 4rem; }
 .dropdown-option { display: flex; flex-direction: column; gap: 0.15rem; min-width: 0; }
 .dropdown-option small { color: var(--p-text-muted-color); white-space: normal; }
+.detail-error { color: var(--p-red-700); }
 
 @media (max-width: 760px) {
   .player-master-detail, .detail-grid { grid-template-columns: 1fr; }

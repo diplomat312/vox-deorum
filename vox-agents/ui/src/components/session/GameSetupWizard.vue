@@ -13,7 +13,7 @@ import { useConfirm } from 'primevue/useconfirm';
 import { api } from '@/api/client';
 import SeatSummaryTable from './SeatSummaryTable.vue';
 import type { LLMConfig, StrategistSessionConfig } from '@/utils/types';
-import { buildSeats, describeConfig, type SetupAgent, type WizardAnswers, type WizardRole } from '@/utils/session-summary';
+import { buildSeats, describeConfig, type SetupAgent, type WizardAnswers, type WizardArchitecture, type WizardRole } from '@/utils/session-summary';
 
 /** Props supplied by the session view's shared catalogue state. */
 interface Props {
@@ -39,6 +39,7 @@ const confirm = useConfirm();
 
 const step = ref(1);
 const role = ref<WizardRole>('play');
+const architecture = ref<WizardArchitecture>('unified');
 const civCount = ref(8);
 const agenticCount = ref(3);
 const strategist = ref('');
@@ -77,10 +78,21 @@ const numericValidationError = computed(() => {
   return '';
 });
 
+/** Requires an explicit model because unified seats cannot inherit an unrelated global default. */
+const unifiedModelError = computed(() => architecture.value === 'unified' && !modelId.value
+  ? 'Choose a civilization model for the unified minds.'
+  : '');
+
 const roleOptions: Array<{ value: WizardRole; label: string; description: string; badge?: string }> = [
   { value: 'play', label: 'Play the game yourself', description: 'You take one civilization. Agentic AI runs the rivals.', badge: 'Recommended' },
   { value: 'watch', label: 'Watch AI self-play', description: 'The game plays itself with agentic AI and Vox Populi AI.' },
   { value: 'direct', label: 'Direct a civilization like an agent', description: 'You set the strategy each decision turn while Civ V handles units and cities.', badge: 'Advanced' },
+];
+
+/** Presents the player-level architecture instead of internal execution adapters. */
+const architectureOptions: Array<{ value: WizardArchitecture; label: string; description: string; badge?: string }> = [
+  { value: 'unified', label: 'Unified Civilization Mind', description: 'One model governs each civilization\'s strategy, diplomacy, and deals.', badge: 'Recommended' },
+  { value: 'legacy', label: 'Legacy Agent Architecture', description: 'Use the existing strategist and diplomacy agent configuration.' },
 ];
 
 /** Ensures a role's agentic count leaves its protected human seat intact. */
@@ -114,10 +126,12 @@ const modelOptions = computed(() => {
     options.push({ label: model.name, value: model.id });
     grouped.set(model.provider, options);
   }
+  const providerGroups = [...grouped.entries()].map(([provider, items]) => ({ label: provider, items }));
+  if (architecture.value === 'unified') return providerGroups;
   const defaultName = defaultModel.value?.name ?? globalDefaultLabel();
   return [
     { label: 'My default', items: [{ label: `My default, ${defaultName}`, value: '' }] },
-    ...[...grouped.entries()].map(([provider, items]) => ({ label: provider, items })),
+    ...providerGroups,
   ];
 });
 
@@ -131,6 +145,7 @@ const decisionEstimate = computed(() => Math.ceil(300 / Math.max(1, everyTurns.v
 function answers(): WizardAnswers {
   return {
     role: role.value,
+    architecture: architecture.value,
     civCount: civCount.value,
     agenticCount: agenticCount.value,
     strategist: strategist.value,
@@ -163,6 +178,7 @@ const generatedConfigJson = computed(() => JSON.stringify(generatedConfig(), nul
 function reset(): void {
   step.value = 1;
   role.value = 'play';
+  architecture.value = 'unified';
   civCount.value = 8;
   agenticCount.value = 3;
   strategist.value = offeredStrategists.value[0]?.name ?? '';
@@ -219,6 +235,9 @@ async function loadModelChoices(force = false): Promise<void> {
     const catalogue = await api.getConfigModels();
     defaultModel.value = catalogue.defaultModel;
     models.value = catalogue.models;
+    if (architecture.value === 'unified' && !modelId.value) {
+      modelId.value = catalogue.defaultModel?.id ?? catalogue.models[0]?.id ?? '';
+    }
     modelsError.value = catalogue.failures.length > 0
       ? `Some providers could not be reached: ${catalogue.failures.join(' ')}`
       : '';
@@ -239,6 +258,10 @@ async function loadMindChoices(): Promise<void> {
 async function goTo(nextStep: number): Promise<void> {
   if (nextStep > step.value && numericValidationError.value) {
     saveError.value = numericValidationError.value;
+    return;
+  }
+  if (nextStep > step.value && step.value === 3 && unifiedModelError.value) {
+    saveError.value = unifiedModelError.value;
     return;
   }
   step.value = nextStep;
@@ -297,6 +320,13 @@ watch([role, civCount], () => {
   agenticCount.value = Math.min(agenticCount.value, maxAgenticCount.value);
 });
 
+watch(architecture, (value, previous) => {
+  if (value === 'legacy' && previous === 'unified') modelId.value = '';
+  if (value === 'unified' && !modelId.value && modelsLoaded.value) {
+    modelId.value = defaultModel.value?.id ?? models.value[0]?.id ?? '';
+  }
+});
+
 watch(offeredStrategists, options => {
   if (!options.some(agent => agent.name === strategist.value)) strategist.value = options[0]?.name ?? '';
 }, { immediate: true });
@@ -342,8 +372,21 @@ watch(offeredStrategists, options => {
     </section>
 
     <section v-else-if="step === 3" class="setup-wizard-step">
-      <div class="setup-wizard-heading"><h2>How do the agentic AI civilizations think?</h2></div>
-      <div v-if="!strategist" class="setup-wizard-error-panel" role="status">
+      <div class="setup-wizard-heading"><h2>How should the agentic AI civilizations be governed?</h2><p>Choose the player-level architecture first. The runtime adapters stay internal.</p></div>
+      <fieldset class="setup-wizard-choices border-none p-0 m-0">
+        <legend>AI architecture</legend>
+        <label v-for="choice in architectureOptions" :key="choice.value" class="setup-wizard-choice">
+          <input v-model="architecture" name="wizard-architecture" type="radio" :value="choice.value">
+          <span>
+            <span class="setup-wizard-choice-title">
+              <strong>{{ choice.label }}</strong>
+              <small v-if="choice.badge">{{ choice.badge }}</small>
+            </span>
+            <small>{{ choice.description }}</small>
+          </span>
+        </label>
+      </fieldset>
+      <div v-if="architecture === 'legacy' && !strategist" class="setup-wizard-error-panel" role="status">
         <p v-if="agentsLoading">Loading game setup styles...</p>
         <template v-else-if="agentsError">
           <strong>Game setup styles could not be loaded.</strong>
@@ -360,11 +403,14 @@ watch(offeredStrategists, options => {
         </template>
       </div>
       <template v-else>
-        <div class="setup-wizard-field"><label for="wizard-style">Style</label><Select id="wizard-style" v-model="strategist" :options="strategistOptions" option-label="label" option-value="value" /></div>
-        <p v-if="selectedStrategist" class="text-muted text-small">{{ selectedStrategist.description }}</p>
+        <template v-if="architecture === 'legacy'">
+          <div class="setup-wizard-field"><label for="wizard-style">Style</label><Select id="wizard-style" v-model="strategist" :options="strategistOptions" option-label="label" option-value="value" /></div>
+          <p v-if="selectedStrategist" class="text-muted text-small">{{ selectedStrategist.description }}</p>
+        </template>
         <div class="setup-wizard-field"><label for="wizard-pace">Re-think every turns</label><InputNumber id="wizard-pace" v-model="everyTurns" :min="1" :min-fraction-digits="0" :max-fraction-digits="0" /></div>
         <div class="setup-wizard-field"><label for="wizard-interruption">React to</label><Select id="wizard-interruption" v-model="interruption" :options="interruptions" option-label="label" option-value="value" /></div>
-        <div class="setup-wizard-field"><label for="wizard-model">Model</label><Select id="wizard-model" v-model="modelId" :options="modelOptions" option-group-label="label" option-group-children="items" option-label="label" option-value="value" /></div>
+        <div class="setup-wizard-field"><label for="wizard-model">{{ architecture === 'unified' ? 'Civilization model' : 'Model' }}</label><Select id="wizard-model" v-model="modelId" :options="modelOptions" option-group-label="label" option-group-children="items" option-label="label" option-value="value" placeholder="Select a model" /></div>
+        <p v-if="architecture === 'unified'" class="text-muted text-small">This model controls the civilization's strategic, diplomatic, and deal decisions.</p>
         <div v-if="summary" class="setup-wizard-summary"><p>{{ agenticCount }} agentic civilizations deciding every {{ everyTurns }} turns is ~{{ decisionEstimate }} decisions across a full game.</p></div>
         <p v-if="numericValidationError" class="setup-wizard-error">{{ numericValidationError }}</p>
         <ProgressSpinner v-if="loadingChoices" class="setup-wizard-spinner" />
@@ -375,9 +421,10 @@ watch(offeredStrategists, options => {
         </div>
         <div v-if="modelsError" class="setup-wizard-error-panel" role="status">
           <strong>{{ models.length > 0 ? 'Some model providers could not be reached.' : 'Model choices could not be loaded.' }}</strong>
-          <p>{{ modelsError }} My default remains available.</p>
+          <p>{{ modelsError }}<span v-if="architecture !== 'unified'"> My default remains available.</span></p>
           <Button label="Retry model choices" severity="secondary" @click="loadModelChoices(true)" />
         </div>
+        <p v-if="unifiedModelError" class="setup-wizard-error">{{ unifiedModelError }}</p>
       </template>
     </section>
 
@@ -398,7 +445,7 @@ watch(offeredStrategists, options => {
         <Button label="Cancel" severity="secondary" :disabled="saving" @click="close" />
         <div class="setup-wizard-footer-next">
           <Button v-if="step > 1" label="Back" severity="secondary" :disabled="saving" @click="goTo(step - 1)" />
-          <Button v-if="step < 4" label="Next" :disabled="!!numericValidationError || (step === 3 && !strategist)" @click="goTo(step + 1)" />
+          <Button v-if="step < 4" label="Next" :disabled="!!numericValidationError || (step === 3 && (!!unifiedModelError || (architecture === 'legacy' && !strategist)))" @click="goTo(step + 1)" />
           <Button v-else label="Save only" severity="secondary" :disabled="saving || !name.trim() || !!numericValidationError" @click="save(false)" />
           <Button v-if="step === 4" label="Save & Play" :loading="saving" :disabled="!name.trim() || !!numericValidationError" @click="save(true)" />
         </div>

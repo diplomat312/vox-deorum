@@ -5,12 +5,16 @@ import type { AgentInfo, LLMConfig, StrategistSessionConfig } from '@/utils/type
 /** The roles offered by the game setup wizard. */
 export type WizardRole = 'play' | 'watch' | 'direct';
 
+/** The player-level AI architectures offered by the setup wizard. */
+export type WizardArchitecture = 'unified' | 'legacy';
+
 /** An agent shape with the setup metadata supplied by the agent catalogue. */
 export type SetupAgent = AgentInfo;
 
 /** Values collected by the game setup wizard before a config is saved. */
 export interface WizardAnswers {
   role: WizardRole;
+  architecture?: WizardArchitecture;
   civCount: number;
   agenticCount: number;
   strategist: string;
@@ -100,7 +104,12 @@ function resolveModel(reference: string, seatLlms: Record<string, LLMConfig | st
 /** Chooses a strategist model using the backend's agent then size precedence. */
 function strategistModel(player: { strategist: string; mind?: 'unified-mind'; llms?: Record<string, LLMConfig | string> }, agents: readonly SetupAgent[], globalLlms: Record<string, LLMConfig | string>): string {
   const seatLlms = player.llms ?? {};
-  const modelKey = player.mind === 'unified-mind' ? 'unified-mind' : player.strategist;
+  if (player.mind === 'unified-mind') {
+    return seatLlms['unified-mind'] === undefined
+      ? 'Not configured'
+      : resolveModel('unified-mind', seatLlms, globalLlms);
+  }
+  const modelKey = player.strategist;
   const size = agents.find(agent => agent.name === player.strategist)?.modelSize ?? 'default';
   const reference = seatLlms[modelKey] !== undefined ? modelKey
     : globalLlms[modelKey] !== undefined ? modelKey
@@ -135,6 +144,7 @@ export function buildSeats(answers: WizardAnswers): StrategistSessionConfig['llm
   assertSupportedAgenticCount(answers.agenticCount, answers.role, civCount);
   assertSupportedPacing(answers.pacing.everyTurns);
   const count = answers.agenticCount;
+  const architecture = answers.architecture ?? 'legacy';
   const firstAgenticSeat = answers.role === 'play' ? 1 : 0;
   const lastAgenticSeat = firstAgenticSeat + count - 1;
   const players: StrategistSessionConfig['llmPlayers'] = {};
@@ -146,9 +156,12 @@ export function buildSeats(answers: WizardAnswers): StrategistSessionConfig['llm
       ? { strategist: 'human-strategist', mode: 'Flavor', pacing: { ...answers.pacing } }
       : isAgenticSeat
         ? {
-          strategist: answers.strategist,
+          strategist: architecture === 'unified' ? 'simple-strategist' : answers.strategist,
+          ...(architecture === 'unified' ? { mind: 'unified-mind' as const } : {}),
           pacing: { ...answers.pacing },
-          ...(answers.modelId ? { llms: { default: answers.modelId } } : {})
+          ...(answers.modelId
+            ? { llms: { [architecture === 'unified' ? 'unified-mind' : 'default']: answers.modelId } }
+            : {})
         }
         : { strategist: 'none-strategist' };
   }
@@ -168,7 +181,7 @@ export function describeConfig(config: StrategistSessionConfig, agents: readonly
   });
   const styles = [...new Set(agenticSeats.map(seat => {
     const player = config.llmPlayers[seat]!;
-    return player.mind === 'unified-mind' ? 'Unified civilization mind' : agentLabel(player.strategist, agents);
+    return player.mind === 'unified-mind' ? 'Unified Civilization Mind' : agentLabel(player.strategist, agents);
   }))];
   const agenticCount = agenticSeats.length;
   const pacings = agenticSeats.map(seat => config.llmPlayers[seat]?.pacing ?? { everyTurns: 1, interruption: 'none' });
@@ -183,7 +196,7 @@ export function describeConfig(config: StrategistSessionConfig, agents: readonly
     return {
       seat,
       role: 'Agentic AI',
-      style: player.mind === 'unified-mind' ? 'Unified civilization mind' : agentLabel(player.strategist, agents),
+      style: player.mind === 'unified-mind' ? 'Unified Civilization Mind' : agentLabel(player.strategist, agents),
       model: strategistModel(player, agents, globalLlms),
     };
   });

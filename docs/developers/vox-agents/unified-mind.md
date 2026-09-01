@@ -6,6 +6,8 @@ Vox Deorum supports an additive `unified-mind` mode for AI seats. A unified seat
 
 Use [configs/unified-mind-play-5civ.json](../../../configs/unified-mind-play-5civ.json) for normal native Civ V play. Seat 0 is the native human seat and is intentionally absent from `llmPlayers`; seats 1 through 4 are separate unified civilization minds. The configured reference models are MiniMax M3 through OpenRouter, MiMo V2.5 through OpenCode, Muse Spark 1.2 Contributor through OpenCode Go, and MiniMax M3 again.
 
+The dashboard Setup wizard presents this as a player-level choice: select Unified Civilization Mind to use one explicit civilization model for strategy, diplomacy, and deals, or select Legacy Agent Architecture to keep the older strategist configuration. The internal adapter names are not setup choices. The advanced configuration editor supports the same architecture switch for each configured seat and preserves unrelated model aliases when you edit it.
+
 From the repository root, run:
 
 `npm install`

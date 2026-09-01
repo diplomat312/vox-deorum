@@ -54,6 +54,8 @@ const localConfig = ref<StrategistSessionConfig>({
 const localName = ref('');
 const strategistOptions = ref<SelectOption<string>[]>([]);
 const loadingStrategists = ref(false);
+const modelOptions = ref<SelectOption<string>[]>([]);
+const loadingModels = ref(false);
 const interruptionOptions = ref<SelectOption<PacingInterruption>[]>([
   { label: 'None', value: 'none' }
 ]);
@@ -71,6 +73,13 @@ const dialogTitle = computed(() => {
 const isEditMode = computed(() => props.mode === 'edit');
 
 const hasRunControlError = computed(() => validateRunControls(runControlState.value) !== null);
+
+/** Prevent saving a unified seat without the explicit model required by backend validation. */
+const unifiedModelError = computed(() => Object.values(localConfig.value.llmPlayers).some(player => {
+  if (player.mind !== 'unified-mind') return false;
+  const model = player.llms?.['unified-mind'];
+  return !(typeof model === 'string' ? model.trim() : model?.name);
+}) ? 'Every Unified Civilization Mind seat needs a civilization model.' : '');
 
 /** Drop list-endpoint metadata so it cannot be written into a configuration file. */
 function plainConfig(config: StrategistSessionConfig): StrategistSessionConfig {
@@ -124,7 +133,7 @@ function updatePlayers(players: StrategistSessionConfig['llmPlayers']): void {
  * Handle save action
  */
 function handleSave() {
-  if (hasRunControlError.value) return;
+  if (hasRunControlError.value || unifiedModelError.value) return;
 
   const configToSave: StrategistSessionConfig = plainConfig(JSON.parse(JSON.stringify(localConfig.value)));
   cleanDefaultPacing(configToSave);
@@ -171,6 +180,23 @@ async function loadStrategistOptions() {
   }
 }
 
+/** Load configured and discovered models for the advanced unified-seat editor. */
+async function loadModelOptions(): Promise<void> {
+  loadingModels.value = true;
+  try {
+    const response = await api.getConfigModels();
+    modelOptions.value = response.models.map(model => ({
+      label: model.name,
+      value: model.id,
+      description: model.provider,
+    }));
+  } catch {
+    // Saved model references remain visible in the player editor when discovery is unavailable.
+  } finally {
+    loadingModels.value = false;
+  }
+}
+
 /**
  * Load available pacing interruption strategies from the backend registry.
  */
@@ -201,6 +227,7 @@ async function loadPacingInterruptionOptions() {
 // Load strategist options on mount
 onMounted(() => {
   loadStrategistOptions();
+  loadModelOptions();
   loadPacingInterruptionOptions();
 });
 </script>
@@ -267,11 +294,14 @@ onMounted(() => {
         :players="localConfig.llmPlayers"
         :auto-play="localConfig.autoPlay"
         :strategist-options="strategistOptions"
+        :model-options="modelOptions"
         :interruption-options="interruptionOptions"
         :loading-strategists="loadingStrategists"
+        :loading-models="loadingModels"
         :loading-interruptions="loadingInterruptions"
         @update:players="updatePlayers"
       />
+      <p v-if="unifiedModelError" class="config-error">{{ unifiedModelError }}</p>
     </div>
 
     <!-- Dialog Footer -->
@@ -286,7 +316,7 @@ onMounted(() => {
         label="Save"
         icon="pi pi-check"
         @click="handleSave"
-        :disabled="!localName.trim() || hasRunControlError"
+        :disabled="!localName.trim() || hasRunControlError || !!unifiedModelError"
       />
     </template>
   </Dialog>
@@ -319,6 +349,11 @@ onMounted(() => {
 .config-dialog-content .field-row {
   gap: 0.65rem;
   margin-bottom: 0.25rem;
+}
+
+.config-error {
+  color: var(--p-red-700);
+  margin: 0;
 }
 
 </style>

@@ -61,6 +61,8 @@ A mid-tier model from your chosen provider is a sensible starting point. Move up
 
 For a ready-made mixed-model Civilization V game, use the unified civilization mind examples in the developer guide. The native-play example reserves the runtime's supported native human seat, seat 0, while four AI civilizations use separate unified model assignments. The direct example uses the strategic influence panel instead of normal native play.
 
+In the Setup wizard, choose Unified Civilization Mind when one model should own each AI civilization's strategy, diplomacy, and deals. Choose Legacy Agent Architecture only when you specifically want the older strategist setup. The advanced editor lets you make this choice per configured player and shows the saved civilization model for unified seats.
+
 ## Controlling cost
 
 Every AI decision and every spokesperson reply is a call to the provider. **A game that uses a paid model costs money as you play.** A few ways to keep it down:

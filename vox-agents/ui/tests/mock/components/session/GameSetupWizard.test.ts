@@ -30,6 +30,7 @@ const SliderStub = defineComponent({
 
 const agents: SetupAgent[] = [
   { name: 'simple-strategist', displayName: 'Simple LLM Strategist', description: '', tags: ['strategist'], modelSize: 'default', offeredInSetup: true },
+  { name: 'unified-mind-strategist', displayName: 'Unified Civilization Mind (internal)', description: '', tags: ['strategist'], modelSize: 'default', offeredInSetup: false },
   { name: 'hidden-strategist', displayName: 'Hidden', description: '', tags: ['strategist'], modelSize: 'default', offeredInSetup: false },
   { name: 'simple-strategist-staffed', displayName: 'Staffed LLM Strategist', description: '', tags: ['strategist'], modelSize: 'small', offeredInSetup: true },
 ];
@@ -74,13 +75,15 @@ describe('GameSetupWizard', () => {
     await click(wrapper, 'Next');
     await flushPromises();
 
-    expect(wrapper.text()).toContain('How do the agentic AI civilizations think?');
+    expect(wrapper.text()).toContain('How should the agentic AI civilizations be governed?');
     expect(api.getPacingInterruptions).toHaveBeenCalledOnce();
     expect(api.getConfigModels).toHaveBeenCalledOnce();
-    expect(wrapper.find('select').text()).toContain('Simple LLM Strategist');
+    expect(wrapper.text()).toContain('Unified Civilization Mind');
+    expect(wrapper.text()).toContain('Civilization model');
+    expect(wrapper.text()).not.toContain('Unified Civilization Mind (internal)');
     expect(wrapper.find('select').text()).not.toContain('Hidden');
-    expect(wrapper.find('#wizard-model').text()).toContain('My default');
-    expect(wrapper.find('#wizard-model').findAll('optgroup').map(group => group.attributes('label'))).toEqual(['My default', 'openai', 'openrouter']);
+    expect(wrapper.find('#wizard-model').text()).toContain('gpt-5');
+    expect(wrapper.find('#wizard-model').findAll('optgroup').map(group => group.attributes('label'))).toEqual(['openai', 'openrouter']);
   });
 
   it('keeps model choices when pacing choices fail', async () => {
@@ -89,6 +92,7 @@ describe('GameSetupWizard', () => {
     await click(wrapper, 'Next');
     await click(wrapper, 'Next');
     await flushPromises();
+    await wrapper.find('input[value="legacy"]').setValue(true);
 
     expect(wrapper.find('#wizard-model').text()).toContain('gpt-5');
     expect(wrapper.text()).toContain('Pacing choices could not be loaded.');
@@ -101,6 +105,7 @@ describe('GameSetupWizard', () => {
     await click(wrapper, 'Next');
     await click(wrapper, 'Next');
     await flushPromises();
+    await wrapper.find('input[value="legacy"]').setValue(true);
 
     expect(wrapper.find('#wizard-interruption').text()).toContain('Important events');
     expect(wrapper.text()).toContain('Model choices could not be loaded.');
@@ -144,6 +149,7 @@ describe('GameSetupWizard', () => {
     expect(wrapper.findAll('input[type="radio"]').every(input => input.attributes('name') === 'wizard-role')).toBe(true);
     await click(wrapper, 'Next');
     await click(wrapper, 'Next');
+    await wrapper.find('input[value="legacy"]').setValue(true);
     expect(wrapper.text()).toContain('Game setup styles could not be loaded.');
     await click(wrapper, 'Retry styles');
     await click(wrapper, 'Open Advanced Configuration');
@@ -187,6 +193,7 @@ describe('GameSetupWizard', () => {
     await click(wrapper, 'Next');
     await click(wrapper, 'Next');
     await flushPromises();
+    await wrapper.find('input[value="legacy"]').setValue(true);
     await click(wrapper, 'Next');
     await click(wrapper, 'Save only');
     await flushPromises();
@@ -196,6 +203,7 @@ describe('GameSetupWizard', () => {
     await click(explicit, 'Next');
     await click(explicit, 'Next');
     await flushPromises();
+    await explicit.find('input[value="legacy"]').setValue(true);
     await explicit.find('#wizard-model').setValue('openai/gpt-5');
     await click(explicit, 'Next');
     await click(explicit, 'Save only');

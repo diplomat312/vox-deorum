@@ -30,6 +30,19 @@ const agents: SetupAgent[] = [
 ];
 
 describe('buildSeats', () => {
+  it('writes the explicit unified mind model assignment for unified seats', () => {
+    const seats = buildSeats(answers({
+      architecture: 'unified', civCount: 4, agenticCount: 3, modelId: 'openrouter/muse-spark',
+    }));
+
+    expect(seats[0]).toBeUndefined();
+    expect(seats[1]).toMatchObject({
+      strategist: 'simple-strategist', mind: 'unified-mind',
+      llms: { 'unified-mind': 'openrouter/muse-spark' },
+    });
+    expect(seats[2]?.llms).toEqual({ 'unified-mind': 'openrouter/muse-spark' });
+  });
+
   it.each([
     ['play', 2], ['play', 4], ['play', 6], ['play', 8], ['play', 10], ['play', 12],
     ['watch', 2], ['watch', 4], ['watch', 6], ['watch', 8], ['watch', 10], ['watch', 12],
@@ -64,6 +77,11 @@ describe('buildSeats', () => {
     expect(seats[0]?.llms).toEqual({ default: 'openai/gpt-5-mini' });
     expect(seats[1]?.llms).toEqual({ default: 'openai/gpt-5-mini' });
     expect(seats[2]).toEqual({ strategist: 'none-strategist' });
+  });
+
+  it('keeps legacy model assignments on the default architecture path', () => {
+    const seats = buildSeats(answers({ role: 'watch', civCount: 4, agenticCount: 2, modelId: 'openai/gpt-5-mini' }));
+    expect(seats[0]?.llms).toEqual({ default: 'openai/gpt-5-mini' });
   });
 });
 
@@ -101,6 +119,21 @@ describe('describeConfig', () => {
       { seats: '2', role: 'Agentic AI', style: 'Staffed LLM Strategist', model: 'openai/model-b' },
       { seats: '3', role: 'Vox Populi AI', style: 'None', model: 'None' },
     ]);
+  });
+
+  it('labels unified seats as a player architecture and uses their explicit model', () => {
+    const config: StrategistSessionConfig = {
+      name: 'unified', type: 'strategist', autoPlay: true,
+      llmPlayers: {
+        0: { strategist: 'simple-strategist', mind: 'unified-mind', llms: { 'unified-mind': 'openrouter/model-a' } },
+        1: { strategist: 'simple-strategist', mind: 'unified-mind', llms: { 'unified-mind': 'openrouter/model-a' } },
+      },
+    };
+
+    expect(describeConfig(config, agents, {}).styleLabel).toBe('2 × Unified Civilization Mind');
+    expect(describeConfig(config, agents, {}).seatRows[0]).toEqual({
+      seats: '0-1', role: 'Agentic AI', style: 'Unified Civilization Mind', model: 'openrouter/model-a',
+    });
   });
 
   it('uses agent mappings before size aliases, then falls through the two-tier defaults', () => {

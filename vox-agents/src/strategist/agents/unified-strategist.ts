@@ -23,6 +23,12 @@ export class UnifiedStrategist extends SimpleStrategist {
   /** Player-facing description of the common civilization policy. */
   override readonly description = "Unified civilization mind strategic wake";
 
+  /** This adapter is selected by the player-level architecture, never as a standalone style. */
+  override offeredInSetup = false;
+
+  /** Keep the internal adapter name out of player-facing setup controls. */
+  override displayName = "Unified Civilization Mind (internal)";
+
   /** Keep the legacy strategic context aligned with the canonical unified identity. */
   protected override getInitialIdentity(parameters: StrategistParameters): string {
     return buildUnifiedMindCanonicalIdentity(parameters);

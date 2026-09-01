@@ -6,7 +6,7 @@ import type { StrategistSessionConfig } from '@/utils/types';
 import { ButtonStub } from '../../../helpers/stubs.js';
 
 const { api } = vi.hoisted(() => ({
-  api: { getAgents: vi.fn(), getPacingInterruptions: vi.fn() },
+  api: { getAgents: vi.fn(), getPacingInterruptions: vi.fn(), getConfigModels: vi.fn() },
 }));
 
 vi.mock('@/api/client', async importOriginal => ({ ...(await importOriginal<typeof import('@/api/client')>()), api }));
@@ -50,6 +50,7 @@ describe('ConfigDialog', () => {
     vi.clearAllMocks();
     api.getAgents.mockResolvedValue({ agents: [] });
     api.getPacingInterruptions.mockResolvedValue({ interruptions: [] });
+    api.getConfigModels.mockResolvedValue({ defaultModel: undefined, models: [], failures: [] });
   });
 
   it('strips list transport metadata before saving an edited configuration', async () => {

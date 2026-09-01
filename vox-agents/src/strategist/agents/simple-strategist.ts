@@ -25,7 +25,7 @@ export class SimpleStrategist extends SimpleStrategistBase {
    */
   readonly name: string = "simple-strategist";
 
-  readonly displayName = "Simple LLM Strategist";
+  readonly displayName: string = "Simple LLM Strategist";
 
   /** Offer this direct strategist style in the game setup wizard. */
   public offeredInSetup = true;
