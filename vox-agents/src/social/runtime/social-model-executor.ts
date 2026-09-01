@@ -69,10 +69,13 @@ export class SocialModelExecutorImpl implements InstrumentedSocialModelExecutor 
         return { decision: decodeSocialDecision(calls, extra), retryCount: semanticRetryCount, semanticRetryCount, providerAttemptCount, providerRetryCount: Math.max(0, providerAttemptCount - (semanticRetryCount + 1)), ...(providerFailureClass ? { providerFailureClass } : {}), ...providerFailureDetails, latencyMs: Date.now() - startedAt, ...(usage ? { usage } : {}) };
       } catch (error) {
         lastError = error;
-        const details = extractProviderFailureDetails(error);
-        providerFailureDetails = mergeProviderFailureDetails(providerFailureDetails, details);
-        providerFailureClass ??= classifyProviderFailure(error, details);
-        if (abortSignal?.aborted || !(error instanceof Error && error.message.startsWith('invalid-output:')) || attempt === 1) break;
+        const semanticOutputError = error instanceof Error && error.message.startsWith('invalid-output:');
+        if (!semanticOutputError) {
+          const details = extractProviderFailureDetails(error);
+          providerFailureDetails = mergeProviderFailureDetails(providerFailureDetails, details);
+          providerFailureClass ??= classifyProviderFailure(error, details);
+        }
+        if (abortSignal?.aborted || !semanticOutputError || attempt === 1) break;
         semanticRetryCount += 1;
         messages = [...messages, { role: 'user', content: 'Your previous response was not a valid decision tool call. Choose exactly one available decision tool, with schema-valid arguments. Do not write prose.' }];
       }

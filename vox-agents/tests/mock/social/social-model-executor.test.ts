@@ -61,6 +61,7 @@ describe('SocialModelExecutorImpl provider telemetry', () => {
     expect(run.providerAttemptCount).toBe(2);
     expect(run.providerRetryCount).toBe(0);
     expect(run.semanticRetryCount).toBe(1);
+    expect(run.providerFailureClass).toBeUndefined();
   });
 
   it('rejects multiple terminal decisions instead of selecting one', async () => {
