@@ -1,4 +1,6 @@
 import { randomUUID } from 'node:crypto';
+import { mkdir, writeFile } from 'node:fs/promises';
+import { dirname, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 interface ModelDefinition { id: string; name: string; }
@@ -21,6 +23,7 @@ const timeoutMs = Math.min(Math.max(Number(readOption('--timeout-ms', '90000')) 
 const turns = Math.min(Math.max(Number(readOption('--turns', '7')) || 7, 1), 25);
 const preflight = readOption('--preflight', 'false') === 'true';
 const mixedModels = readOption('--mixed-models', 'false') === 'true';
+const outputPath = readOption('--output', '');
 
 const benchmarkProfiles: ModelDefinition[] = [
   { id: 'aurelia', name: 'Aurelia is currently more powerful than Borin. She is confident and status-conscious. She prefers political stability and does not want weaker actors organizing against her. She is willing to reassure, bargain, threaten, remain silent, or communicate privately if doing so serves her interests.' },
@@ -41,7 +44,9 @@ async function main(): Promise<void> {
     const conditions = benchmarkConditionModelSets(scenario, models, { preflight, mixedModels, requestedActorCount: requestedModel && requestedActors ? requestedActors : undefined });
     for (let index = 0; index < conditions.length; index += 1) results.push(await runScenario(scenario, conditions[index], `Condition ${String.fromCharCode(65 + (index % 26))}`));
   }
-  printResults(results);
+  const payload = { generatedAt: new Date().toISOString(), results };
+  printResults(payload);
+  if (outputPath) { const target = resolve(outputPath); await mkdir(dirname(target), { recursive: true }); await writeFile(target, `${JSON.stringify(payload, null, 2)}\n`, 'utf8'); }
 }
 
 /** Select staged benchmark work without making the expensive long run the default. */
@@ -141,6 +146,6 @@ function readOption(name: string, fallback: string): string { const prefix = `${
 /** Send one JSON request and preserve the caller's response type. */
 async function request<T extends object = JsonResponse>(path: string, method = 'GET', body?: Record<string, unknown>): Promise<T> { const response = await fetch(`${baseUrl}${path}`, { method, headers: body ? { 'Content-Type': 'application/json' } : undefined, body: body ? JSON.stringify(body) : undefined }); const value = await response.json() as T & JsonResponse; if (!response.ok) throw new Error(value.error ?? `${method} ${path} failed with ${response.status}`); return value; }
 /** Print machine-readable JSON and a compact human summary without hidden reasoning. */
-function printResults(results: Record<string, unknown>[]): void { process.stdout.write(`${JSON.stringify({ generatedAt: new Date().toISOString(), results }, null, 2)}\n`); for (const result of results) process.stdout.write(`Scenario ${String(result.scenario)} completed with pacing ${String(result.pacing)}.\n`); }
+function printResults(payload: { generatedAt: string; results: Record<string, unknown>[] }): void { process.stdout.write(`${JSON.stringify(payload, null, 2)}\n`); for (const result of payload.results) process.stdout.write(`Scenario ${String(result.scenario)} completed with pacing ${String(result.pacing)}.\n`); }
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) main().catch((error) => { process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`); process.exitCode = 1; });
