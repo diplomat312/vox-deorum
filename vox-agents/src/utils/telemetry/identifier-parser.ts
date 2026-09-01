@@ -56,13 +56,14 @@ export function parseContextIdentifier(contextId: string): GameIdentifierInfo {
  * @returns Parsed game and player information with optional folder path
  */
 export function parseDatabaseIdentifier(databasePath: string, basePath?: string): GameIdentifierInfo {
-  const nameWithoutExt = path.basename(databasePath, '.db');
+  const pathModule = databasePath.includes('\\') ? path.win32 : path;
+  const nameWithoutExt = pathModule.basename(databasePath, '.db');
   const result: GameIdentifierInfo = parseContextIdentifier(nameWithoutExt);
 
   // Extract folder path if base path is provided
   if (basePath) {
-    const dir = path.dirname(databasePath);
-    const relativePath = path.relative(basePath, dir);
+    const dir = pathModule.dirname(databasePath);
+    const relativePath = pathModule.relative(basePath, dir);
     result.folderPath = relativePath.replace(/\\/g, '/');
   }
 

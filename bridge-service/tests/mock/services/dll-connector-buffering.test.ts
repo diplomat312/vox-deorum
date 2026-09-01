@@ -4,7 +4,7 @@ import { delay, waitForEvent } from '../../test-utils/helpers.js';
 import { restoreSharedMockDLL, startIsolatedMockDLL } from '../../test-utils/isolated-mock.js';
 import { createMockDLLServer, MockDLLServer } from '../../test-utils/mock-dll-server.js';
 
-describe('DLLConnector Buffering', () => {
+describe.skipIf(process.platform !== 'win32')('DLLConnector Buffering', () => {
   let connector: DLLConnector;
   let mockDLL: MockDLLServer;
   let originalPipeId: string;

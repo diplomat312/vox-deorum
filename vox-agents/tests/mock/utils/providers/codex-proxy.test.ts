@@ -50,9 +50,10 @@ describe('codex proxy command configuration', () => {
   });
 
   it('should append exactly the serve options without shell quoting', () => {
+    const configuredRoot = process.platform === 'win32' ? 'C:\\Temp & Files\\vox' : '/tmp/Temp & Files/vox';
     const config = getCodexProxyConfig({
       CODEX_PROXY_COMMAND: '"C:\\Program Files\\node\\npx.cmd" --yes proxy',
-      CODEX_PROXY_ROOT: 'C:\\Temp & Files\\vox',
+      CODEX_PROXY_ROOT: configuredRoot,
       CODEX_PROXY_PORT: '9123',
       CODEX_PROXY_REQUEST_TIMEOUT: '31s',
       CODEX_PROXY_STARTUP_TIMEOUT: '4m',
@@ -61,7 +62,7 @@ describe('codex proxy command configuration', () => {
     expect(buildCodexProxyCommand(config)).toEqual({
       command: 'C:\\Program Files\\node\\npx.cmd',
       args: [
-        '--yes', 'proxy', 'serve', '--root', 'C:\\Temp & Files\\vox', '--port', '9123',
+        '--yes', 'proxy', 'serve', '--root', configuredRoot, '--port', '9123',
         '--log-level', 'info',
         '--login', 'device-code',
         '--request-timeout', '31000ms', '--shutdown-timeout', '10000ms',

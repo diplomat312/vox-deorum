@@ -10,7 +10,7 @@ import { execFile, execFileSync, spawn } from 'node:child_process';
 import { mkdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { existsSync } from 'node:fs';
-import { dirname, isAbsolute, join } from 'node:path';
+import { dirname, isAbsolute, join, win32 } from 'node:path';
 import { stripVTControlCharacters } from 'node:util';
 import type { SpawnOptions } from 'node:child_process';
 import { createLogger } from '../../logger.js';
@@ -391,7 +391,9 @@ export class CodexProxyManager {
     let child: CodexProxyChild;
     try {
       const windowsDefault = this.dependencies.platform === 'win32' && config.command === codexProxyCommandDefault;
-      const npmCli = join(dirname(this.dependencies.execPath), 'node_modules', 'npm', 'bin', 'npx-cli.js');
+      const npmCli = this.dependencies.platform === 'win32'
+        ? win32.join(win32.dirname(this.dependencies.execPath), 'node_modules', 'npm', 'bin', 'npx-cli.js')
+        : join(dirname(this.dependencies.execPath), 'node_modules', 'npm', 'bin', 'npx-cli.js');
       if (windowsDefault && !this.dependencies.fileExists(npmCli)) {
         throw new CodexProxyError(`Could not find npm's npx CLI at ${npmCli}.`, false);
       }
