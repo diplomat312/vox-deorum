@@ -29,7 +29,7 @@ export function createCivilizationMemoryTools(context: VoxContext<StrategistPara
         const revision = parameters.civilizationMemoryOutlookRevision ?? store.getOutlook(scope)?.revision ?? 0;
         const outlook = store.updateOutlook(scope, input.Outlook, revision, options.toolCallId);
         parameters.civilizationMemoryOutlookRevision = outlook.revision;
-        return `Current Outlook updated for our future wakes (revision ${outlook.revision}). Continue this wake and choose its normal terminal action.`;
+        return 'Current Outlook updated for our future wakes. Continue this wake and choose its normal terminal action.';
       },
     }, context),
   };

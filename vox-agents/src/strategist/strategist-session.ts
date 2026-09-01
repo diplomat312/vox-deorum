@@ -593,6 +593,7 @@ export class StrategistSession extends VoxSession<StrategistSessionConfig> {
     // Create new players using the seating map
     for (const [configSlotStr, playerConfig] of Object.entries(this.config.llmPlayers)) {
       const actualPlayerID = seatingMap[configSlotStr] ?? parseInt(configSlotStr);
+      if (playerConfig.mind === "unified-mind") civilizationMemoryStore.registerOwner(actualPlayerID);
       const player = new VoxPlayer(actualPlayerID, playerConfig, params.gameID, params.turn, this.humanDecisionBus, this.seatingClaim?.seeds?.sync, this, civilizationMemoryStore);
       await player.context.registerTools();
       this.activePlayers.set(actualPlayerID, player);
