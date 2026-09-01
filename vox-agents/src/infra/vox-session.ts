@@ -7,7 +7,7 @@
 
 import { v4 as uuidv4 } from 'uuid';
 import type { SessionConfig } from '../types/config.js';
-import type { PlayerAssignment, PlayerRuntimeContext, SessionState, SessionStatus } from '../types/api.js';
+import type { PlayerAssignment, PlayerRuntimeContext, PoliticalMemorySnapshot, SessionState, SessionStatus } from '../types/api.js';
 
 /**
  * Abstract base class for all Vox session types.
@@ -74,6 +74,16 @@ export abstract class VoxSession<TConfig extends SessionConfig = SessionConfig> 
   /** Return live player runtime contexts for read-only monitoring surfaces. */
   getPlayerRuntimeContexts(): Record<number, PlayerRuntimeContext> {
     return {};
+  }
+
+  /** Return the authoritative native-human seat, when this session has one. */
+  getHumanPlayerId(): number | undefined {
+    return undefined;
+  }
+
+  /** Return the current civilization-owned political memory for one seat, when supported. */
+  getPoliticalMemorySnapshot(_playerId: number): PoliticalMemorySnapshot | undefined {
+    return undefined;
   }
 
   /**

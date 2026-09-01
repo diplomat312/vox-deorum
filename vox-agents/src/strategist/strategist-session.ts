@@ -21,6 +21,9 @@ import { ProductionController } from "../infra/production-controller.js";
 import { config } from "../utils/config.js";
 import { SessionStatus, PlayerAssignment, PlayerRuntimeContext } from "../types/api.js";
 import { SeatingStateManager } from "../utils/game/seating/state.js";
+import { PoliticalMemoryStore } from "../political-memory/political-memory-store.js";
+import type { PoliticalMemorySnapshot } from "../political-memory/types.js";
+import path from 'node:path';
 import type { ObservedSeating, SeatingClaim } from "../utils/game/seating/types.js";
 import { getMetadata, setMetadata } from "../utils/game/metadata.js";
 import { agentRegistry } from '../infra/agent-registry.js';
@@ -77,6 +80,9 @@ export class StrategistSession extends VoxSession<StrategistSessionConfig> {
     getCounterpartContext: (playerID) => this.activePlayers.get(playerID)?.context,
     getAssignments: () => this.getPlayerAssignments(),
   });
+
+  /** Persistent stores keyed by game so crash recovery and resumed games retain semantic memory. */
+  private readonly politicalMemoryStores = new Map<string, PoliticalMemoryStore>();
 
   /**
    * Single owner of seeding + seed-cycle state, always constructed. In the
@@ -388,6 +394,8 @@ export class StrategistSession extends VoxSession<StrategistSessionConfig> {
       // release mirrors the session outcome (no-op when no manager configured).
       await this.releaseSeatingClaim(this.victoryObserved);
     } finally {
+      for (const store of this.politicalMemoryStores.values()) store.close();
+      this.politicalMemoryStores.clear();
       sessionRegistry.unregister(this.id);
       this.victoryResolve?.();
       this.onStateChange('stopped');
@@ -580,10 +588,12 @@ export class StrategistSession extends VoxSession<StrategistSessionConfig> {
     const seatingMap = this.seatingClaim!.seatingMap;
     await this.writeSeatingMetadata();
 
+    const politicalMemoryStore = this.getPoliticalMemoryStore(params.gameID);
+
     // Create new players using the seating map
     for (const [configSlotStr, playerConfig] of Object.entries(this.config.llmPlayers)) {
       const actualPlayerID = seatingMap[configSlotStr] ?? parseInt(configSlotStr);
-      const player = new VoxPlayer(actualPlayerID, playerConfig, params.gameID, params.turn, this.humanDecisionBus, this.seatingClaim?.seeds?.sync, this);
+      const player = new VoxPlayer(actualPlayerID, playerConfig, params.gameID, params.turn, this.humanDecisionBus, this.seatingClaim?.seeds?.sync, this, politicalMemoryStore);
       await player.context.registerTools();
       this.activePlayers.set(actualPlayerID, player);
       player.execute();
@@ -987,6 +997,28 @@ ${overrideLine}Game.SetAIAutoPlay(${autoPlayTurnLimit}, -1);`
       };
     }
     return result;
+  }
+
+  /** Resolve the human seat from direct control semantics or the human-strategist assignment. */
+  override getHumanPlayerId(): number | undefined {
+    if (this.humanPlayerID !== undefined) return this.humanPlayerID;
+    return this.isInteractiveMode && this.config.llmPlayers[0] === undefined ? 0 : undefined;
+  }
+
+  /** Return durable semantic political memory for a unified seat. */
+  override getPoliticalMemorySnapshot(playerId: number): PoliticalMemorySnapshot | undefined {
+    if (!this.gameID || this.getPlayerAssignments()[playerId]?.mind !== 'unified-mind') return undefined;
+    return this.politicalMemoryStores.get(this.gameID)?.getSnapshot(this.gameID, playerId, this.turn ?? 0);
+  }
+
+  /** Open or reuse the game-scoped political memory database. */
+  private getPoliticalMemoryStore(gameID: string): PoliticalMemoryStore {
+    const existing = this.politicalMemoryStores.get(gameID);
+    if (existing) return existing;
+    const directory = path.join(config.telemetryDir || 'telemetry', 'political-memory');
+    const store = new PoliticalMemoryStore(path.join(directory, `${gameID}.db`));
+    this.politicalMemoryStores.set(gameID, store);
+    return store;
   }
 
   /**

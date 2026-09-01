@@ -16,6 +16,9 @@ import { buildUnifiedMindCanonicalIdentity, buildUnifiedMindIdentity, getUnified
 import { worldContext, communicationStyle, audienceSection } from "../context/envoy-prompts.js";
 import { createPassDiplomacyTool } from "../tools/pass-diplomacy-tool.js";
 import { terminalActionTools } from "../../utils/diplomacy/transcript/transcript-utils.js";
+import { getPoliticalMemoryContext, memoryToolNames } from "../../political-memory/political-memory-context.js";
+import { createPoliticalMemoryTools } from "../../political-memory/political-memory-tools.js";
+import type { LiveEnvoyContext } from "../live-envoy.js";
 
 /** Social adapter that invokes the shared civilization-level policy. */
 export class UnifiedDiplomat extends Diplomat {
@@ -55,6 +58,7 @@ export class UnifiedDiplomat extends Diplomat {
       "call-diplomatic-analyst",
       "close-conversation",
       "call-negotiator",
+      ...memoryToolNames(),
     ];
   }
 
@@ -63,7 +67,20 @@ export class UnifiedDiplomat extends Diplomat {
     return {
       ...super.getExtraTools(context),
       "pass-diplomacy": createPassDiplomacyTool(context),
+      ...createPoliticalMemoryTools(context),
     };
+  }
+
+  /** Add the same counterpart-focused political memory to every unified diplomacy wake. */
+  protected override async getExtraContext(
+    parameters: StrategistParameters,
+    input: EnvoyThread,
+    context: VoxContext<StrategistParameters>,
+  ): Promise<LiveEnvoyContext> {
+    const extra = await super.getExtraContext(parameters, input, context);
+    const counterpart = input.agent === input.player1ID ? input.player2ID : input.player1ID;
+    const memory = getPoliticalMemoryContext(parameters, 'diplomacy', counterpart >= 0 ? counterpart : undefined);
+    return memory ? { ...extra, preamble: [...(extra.preamble ?? []), memory] } : extra;
   }
 
   /** Build the common identity plus the existing diplomacy tool contract. */

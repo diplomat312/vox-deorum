@@ -904,5 +904,40 @@ describe('session routes', () => {
       expect(res.body.minds[1]).toMatchObject({ architecture: 'legacy', model: 'model-b' });
       expect(res.body.minds[2]).toMatchObject({ architecture: 'native' });
     });
+
+    it('uses session human-seat semantics instead of treating every unassigned seat as native', async () => {
+      vi.spyOn(sessionRegistry, 'getActive').mockReturnValue({
+        id: 's1',
+        getPlayerAssignments: () => ({}),
+        getPlayerRuntimeContexts: () => ({}),
+        getHumanPlayerId: () => 0,
+      } as never);
+      const mcp = installMockMcpClient();
+      mcp.respondWith('get-players', structuredResult({
+        '0': { IsMajor: true, Civilization: 'Rome', Leader: 'Caesar' },
+        '1': { IsMajor: true, Civilization: 'Greece', Leader: 'Pericles' },
+      }));
+
+      const res = await request(app).get('/api/session/minds');
+
+      expect(res.status).toBe(200);
+      expect(res.body.minds.map((mind: { architecture: string }) => mind.architecture)).toEqual(['human', 'native']);
+    });
+
+    it('returns persisted political memory from the session read model', async () => {
+      vi.spyOn(sessionRegistry, 'getActive').mockReturnValue({
+        id: 's1',
+        getPlayerAssignments: () => ({ 0: { strategist: 'unified-mind', mind: 'unified-mind', model: 'model-a', configSlot: 0 } }),
+        getPlayerRuntimeContexts: () => ({}),
+        getPoliticalMemorySnapshot: () => ({ goals: [{ id: 'g1', gameId: 'game-1', ownerPlayerId: 0, title: 'Protect the border', priority: 'high', status: 'active', createdTurn: 1, updatedTurn: 2, evidence: [] }], commitments: [], relationships: [], beliefs: [], episodes: [], projects: [] }),
+      } as never);
+      const mcp = installMockMcpClient();
+      mcp.respondWith('get-players', structuredResult({ '0': { IsMajor: true, Civilization: 'Rome', Leader: 'Caesar' } }));
+
+      const res = await request(app).get('/api/session/minds');
+
+      expect(res.status).toBe(200);
+      expect(res.body.minds[0].memory.goals[0].title).toBe('Protect the border');
+    });
   });
 });

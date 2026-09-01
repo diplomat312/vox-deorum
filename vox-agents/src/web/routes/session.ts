@@ -109,9 +109,11 @@ async function buildCivilizationMinds(session: NonNullable<ReturnType<typeof ses
     const runtime = runtimeContexts[playerId];
     const snapshot = players[String(playerId)];
     const facts = typeof snapshot === 'object' && snapshot !== null ? snapshot : undefined;
+    const humanPlayerId = session.getHumanPlayerId?.();
+    const memory = session.getPoliticalMemorySnapshot?.(playerId);
     const architecture = assignment?.mind === 'unified-mind'
       ? 'unified-mind' as const
-      : assignment?.strategist === 'human-strategist'
+      : humanPlayerId === playerId || assignment?.strategist === 'human-strategist'
         ? 'human' as const
         : assignment ? 'legacy' as const : 'native' as const;
     const recentWakes = runtime ? await getCompletedUnifiedWakes(runtime.contextId) : [];
@@ -131,6 +133,9 @@ async function buildCivilizationMinds(session: NonNullable<ReturnType<typeof ses
           .filter(deal => deal.TurnsRemaining > 0).length,
       },
       recentWakes,
+      ...(architecture === 'unified-mind' && memory
+        ? { memory }
+        : {}),
     } satisfies CivilizationMindReadModel;
   }));
 }

@@ -25,7 +25,7 @@ const stubs = {
 };
 
 const minds = [
-  { playerId: 0, civilization: 'Rome', leader: 'Augustus', architecture: 'unified-mind', model: 'openrouter/minimax-m3', runtimeContextId: 'game-player-0', activity: { activeWakes: [{ runId: 'run-1', wake: 'diplomacy', startedAt: 2_000 }] }, game: { score: 100, activeAgreementCount: 0 }, recentWakes: [{ wake: 'strategic', turn: 41, outcome: 'keep-status-quo', model: 'openrouter/minimax-m3', durationMs: 100, tokens: { input: 12, output: 8 }, timestamp: 1_000, traceId: 'trace-1', spanId: 'wake-1' }, { wake: 'diplomacy', turn: 42, outcome: 'spoke', model: 'openrouter/minimax-m3', durationMs: 100, tokens: {}, timestamp: 2_000, traceId: 'trace-2', spanId: 'wake-2' }] },
+  { playerId: 0, civilization: 'Rome', leader: 'Augustus', architecture: 'unified-mind', model: 'openrouter/minimax-m3', runtimeContextId: 'game-player-0', activity: { activeWakes: [{ runId: 'run-1', wake: 'diplomacy', startedAt: 2_000 }] }, game: { score: 100, activeAgreementCount: 0 }, memory: { goals: [{ id: 'goal-1', gameId: 'g', ownerPlayerId: 0, title: 'Repair Greece ties', priority: 'high', status: 'active', createdTurn: 1, updatedTurn: 2, evidence: [] }], commitments: [], relationships: [], beliefs: [], episodes: [], projects: [] }, recentWakes: [{ wake: 'strategic', turn: 41, outcome: 'keep-status-quo', model: 'openrouter/minimax-m3', durationMs: 100, tokens: { input: 12, output: 8 }, timestamp: 1_000, traceId: 'trace-1', spanId: 'wake-1' }, { wake: 'diplomacy', turn: 42, outcome: 'spoke', model: 'openrouter/minimax-m3', durationMs: 100, tokens: {}, timestamp: 2_000, traceId: 'trace-2', spanId: 'wake-2' }] },
   { playerId: 1, civilization: 'Greece', leader: 'Pericles', architecture: 'legacy', model: 'openrouter/mimo-v2.5', activity: { activeWakes: [] }, game: { score: 90, activeAgreementCount: 0 }, recentWakes: [] },
   { playerId: 2, civilization: 'Egypt', leader: 'Cleopatra', architecture: 'native', activity: { activeWakes: [] }, game: { score: 80, activeAgreementCount: 0 }, recentWakes: [] },
 ];
@@ -63,5 +63,7 @@ describe('CivilizationMindsDialog', () => {
     expect(wrapper.text()).toContain('Active agreements');
     expect(wrapper.find('details').exists()).toBe(true);
     expect(wrapper.find('details').attributes('open')).toBeUndefined();
+    expect(wrapper.text()).toContain('Political memory');
+    expect(wrapper.text()).toContain('Repair Greece ties');
   });
 });

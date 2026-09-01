@@ -93,6 +93,27 @@ const gameSwitched = (s: StrategistSession, turn: number, gameID = 'G1') =>
 const luaScripts = () => mcp.calls('lua-executor').map((c) => String(c.args.Script));
 
 describe('handleGameSwitched autoplay reconciliation', () => {
+  it('classifies normal interactive Play as human seat 0 without creating an AI assignment', () => {
+    const s = session(false);
+    expect(s.getHumanPlayerId()).toBe(0);
+    expect(s.getPlayerAssignments()).toEqual({});
+    const assigned = new StrategistSession({
+      name: 'assigned', type: 'strategist', production: 'none', autoPlay: false, gameMode: 'start',
+      llmPlayers: { 0: { strategist: 'simple-strategist', llms: {} } },
+    } as any, {} as never, null);
+    expect(assigned.getHumanPlayerId()).toBeUndefined();
+  });
+
+  it('keeps autoplay unassigned seats native and recognizes direct human strategist mode', () => {
+    const autoplay = session(true);
+    expect(autoplay.getHumanPlayerId()).toBeUndefined();
+    const direct = new StrategistSession({
+      name: 'direct', type: 'strategist', production: 'none', autoPlay: false, gameMode: 'start',
+      llmPlayers: { 4: { strategist: 'human-strategist', llms: {} } },
+    } as any, {} as never, { seatingMap: {}, rotation: 0, seedIndex: 0 } as any);
+    expect(direct.getHumanPlayerId()).toBe(4);
+  });
+
   it('models the native-play sample as seat 0 human plus four unified AI seats', () => {
     const config = {
       name: 'native-play',

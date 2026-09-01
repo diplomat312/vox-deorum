@@ -24,7 +24,7 @@ import { VoxContext } from '../../../src/infra/vox-context.js';
 import { VoxAgent } from '../../../src/infra/vox-agent.js';
 import { agentRegistry } from '../../../src/infra/agent-registry.js';
 import { streamTextWithConcurrency } from '../../../src/utils/models/concurrency.js';
-import { spanProcessor } from '../../../src/instrumentation.js';
+import { spanProcessor, sqliteExporter } from '../../../src/instrumentation.js';
 import { VoxSpanExporter } from '../../../src/utils/telemetry/vox-exporter.js';
 import type { StrategistParameters } from '../../../src/strategist/strategy-parameters.js';
 import { makeStrategistParameters } from '../../helpers/fake-vox-context.js';
@@ -172,6 +172,16 @@ class UnifiedWakeAgent extends StepAgent {
   constructor() { super('unified-mind-strategist'); }
 }
 
+/** Unified diplomacy wake with three deterministic implementation steps. */
+class MultiStepUnifiedDiplomat extends VoxAgent<StrategistParameters> {
+  readonly name = 'unified-mind-diplomat';
+  readonly description = 'multi-step canonical wake test agent';
+  override getModel(): Model { return { provider: 'test', name: 'test' }; }
+  async getSystem(): Promise<string> { return 'system'; }
+  override getActiveTools(): string[] { return []; }
+  override stopCheck(_p: StrategistParameters, _i: unknown, _s: any, allSteps: any[]): boolean { return allSteps.length >= 3; }
+}
+
 beforeAll(() => {
   agentRegistry.register(new StepAgent('test-step-a') as any);
   agentRegistry.register(new StepAgent('test-step-b') as any);
@@ -182,6 +192,7 @@ beforeAll(() => {
   agentRegistry.register(new NestingAgent('test-nesting', 'test-step-child') as any);
   agentRegistry.register(new DiplomacyOnlyAgent('test-diplomacy-only') as any);
   agentRegistry.register(new UnifiedWakeAgent() as any);
+  agentRegistry.register(new MultiStepUnifiedDiplomat() as any);
 });
 
 beforeEach(() => {
@@ -190,6 +201,36 @@ beforeEach(() => {
 });
 
 describe('VoxContext.execute token accounting', () => {
+  it('exports one canonical wake and one step span per implementation step', async () => {
+    const contextId = `exec-canonical-wake-${Date.now()}`;
+    const ctx = new VoxContext<StrategistParameters>({}, contextId);
+    let call = 0;
+    stc.mockImplementation(async () => {
+      call += 1;
+      const toolName = call === 3 ? 'pass-diplomacy' : 'get-briefing';
+      return {
+        steps: [{ text: '', usage: { inputTokens: 10, reasoningTokens: 0, outputTokens: 2 }, response: { messages: [] }, toolCalls: [{ toolName }], toolResults: [] }],
+        text: '',
+      } as any;
+    });
+
+    await ctx.withRun({ parameters: makeStrategistParameters({ turn: 41 }) }, async () => {
+      await ctx.execute('unified-mind-diplomat', {});
+    });
+    await spanProcessor.forceFlush();
+
+    const rows = await sqliteExporter.getDatabase(contextId).selectFrom('spans').selectAll().where('contextId', '=', contextId).execute();
+    const attributes = rows.map(row => ({ ...row, parsed: row.attributes ? JSON.parse(row.attributes) as Record<string, string | number> : {} }));
+    const wakes = attributes.filter(row => row.parsed['mind.span_role'] === 'wake');
+    const steps = attributes.filter(row => row.parsed['mind.span_role'] === 'step');
+    expect(wakes).toHaveLength(1);
+    expect(steps).toHaveLength(3);
+    expect(wakes[0].parsed['mind.wake']).toBe('diplomacy');
+    expect(wakes[0].parsed['mind.outcome']).toBe('pass');
+    expect(wakes[0].parsed['tokens.input']).toBe(30);
+    await sqliteExporter.closeContext(contextId);
+  });
+
   it('tracks one root-scoped unified wake before export and isolates concurrent outcomes', async () => {
     const ctx = new VoxContext<StrategistParameters>({}, 'exec-unified-activity');
     const seen: Array<{ turn: number | undefined; wakes: number }> = [];

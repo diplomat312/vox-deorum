@@ -19,6 +19,7 @@ import { PlayerConfig } from "../types/config.js";
 import { HumanDecisionBus } from "./human-decision-bus.js";
 import { isScheduledDecision, normalizePacing, shouldInterruptDecision, type NormalizedPacingConfig } from "./pacing.js";
 import { isUnifiedMindPlayer, strategicAgentForPlayer, unifiedModelOverrides } from "./unified-civilization-mind.js";
+import type { PoliticalMemoryStore } from "../political-memory/political-memory-store.js";
 
 /**
  * Manages a single player's strategist execution within a game session.
@@ -52,7 +53,8 @@ export class VoxPlayer {
     initialTurn: number,
     humanDecisionBus: HumanDecisionBus,
     syncSeed?: number,
-    session?: VoxSession
+    session?: VoxSession,
+    politicalMemoryStore?: PoliticalMemoryStore
   ) {
     this.logger = createLogger(`VoxPlayer-${playerID}`);
     // Throws on an unknown interruption name so misconfiguration fails fast.
@@ -82,7 +84,8 @@ export class VoxPlayer {
       syncSeed,
       // Populated for every seat; only the human strategist reads it (to block
       // on and receive the in-game panel's submission).
-      _humanDecisionBus: humanDecisionBus
+      _humanDecisionBus: humanDecisionBus,
+      politicalMemoryStore
     };
 
     // The persistent event cursor starts where the strategist begins fetching.

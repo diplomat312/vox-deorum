@@ -33,3 +33,7 @@ The benchmark SocialRuntime is not automatically attached to an ordinary Strateg
 ## Diagnostics
 
 The logs and telemetry views identify the civilization player, game, unified mode, wake type, resolved model, outcome, and token totals where the provider reports them. Unified wake labels are `strategic`, `diplomacy`, and `deal`. Private transcript bodies are not added solely for diagnostics.
+
+## Political memory
+
+Unified seats also share one game-scoped SQLite political-memory store across strategic, diplomacy, and deal wakes. The model can sparsely record goals, commitments, subjective relationship assessments, uncertain beliefs, important episodes, and political projects through support tools. Records are scoped to the owning civilization, retain evidence references, and use retry-safe mutation IDs. The Civilization Minds inspector reads this state from the same `/api/session/minds` read model. Raw game facts and recent diplomacy remain separate authoritative evidence.

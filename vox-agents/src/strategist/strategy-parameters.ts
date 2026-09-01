@@ -11,6 +11,7 @@ import type { VictoryProgressReport } from "../../../mcp-server/dist/tools/knowl
 import type { GameMetadata } from "../../../mcp-server/dist/tools/knowledge/get-game-settings.js"
 import { StrategyDecisionType } from "../types/config.js";
 import type { HumanDecisionBus } from "./human-decision-bus.js";
+import type { PoliticalMemoryStore } from "../political-memory/political-memory-store.js";
 
 /**
  * Parameters for the strategist agent
@@ -36,6 +37,8 @@ export interface StrategistParameters extends AgentParameters {
    * for every seat by VoxPlayer, but only the human strategist reads it to block on
    * and receive the panel's submission. */
   _humanDecisionBus?: HumanDecisionBus;
+  /** Shared civilization-owned political memory for all unified wake adapters. */
+  politicalMemoryStore?: PoliticalMemoryStore;
 }
 
 /**

@@ -14,6 +14,8 @@ import { VoxContext } from "../../infra/vox-context.js";
 import type { Model } from "../../types/config.js";
 import type { StrategistParameters } from "../strategy-parameters.js";
 import { buildRecentDiplomacyMessage, buildUnifiedMindCanonicalIdentity, buildUnifiedMindIdentity, getUnifiedMindModel } from "../unified-civilization-mind.js";
+import { getPoliticalMemoryContext, memoryToolNames } from "../../political-memory/political-memory-context.js";
+import { createPoliticalMemoryTools } from "../../political-memory/political-memory-tools.js";
 
 /** Strategic adapter that invokes the shared civilization-level policy. */
 export class UnifiedStrategist extends SimpleStrategist {
@@ -79,8 +81,20 @@ ${SimpleBriefer.eventsPrompt}`.trim();
     context: VoxContext<StrategistParameters>,
   ): Promise<ModelMessage[]> {
     const messages = await super.getInitialMessages(parameters, input, context);
+    const memory = getPoliticalMemoryContext(parameters, 'strategic');
+    if (memory) messages.push(memory);
     const diplomacy = await buildRecentDiplomacyMessage(parameters);
     if (diplomacy) messages.push(diplomacy);
     return messages;
+  }
+
+  /** Expose semantic-memory support tools alongside ordinary strategic actions. */
+  override getExtraTools(context: VoxContext<StrategistParameters>) {
+    return createPoliticalMemoryTools(context);
+  }
+
+  /** Make memory support actions available without changing the strategic terminal contract. */
+  override getActiveTools(parameters: StrategistParameters): string[] | undefined {
+    return [...(super.getActiveTools(parameters) ?? []), ...memoryToolNames()];
   }
 }
