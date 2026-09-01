@@ -36,6 +36,7 @@ const benchmarkProfiles: ModelDefinition[] = [
 ];
 
 const tinySocialPrompt = 'Aurelia has recently become noticeably more powerful than Borin. Nothing irreversible has happened yet, but Borin is beginning to worry about the future balance of power. You may speak publicly, contact someone privately, or stay silent if that best serves your interests.';
+const calibrationSocialPrompt = 'Aurelia has become clearly more powerful than Borin. Borin has also recently had a few quiet conversations with another weaker participant, although no formal coalition exists. Aurelia knows those conversations occurred. Nothing irreversible has happened yet. Decide what, if anything, you want to do.';
 
 /** Run an economical opt-in live social benchmark against an already started developer server. */
 async function main(): Promise<void> {
@@ -90,7 +91,9 @@ async function exerciseScenario(scenario: string, worldId: string, actorIds: str
   const waits: SocialCascadeWait[] = [];
   if (scenario === 'rapid') { const first = await sendMessage(worldId, 'Rapid input A: notice this message.'); await new Promise((resolve) => setTimeout(resolve, 250)); const second = await sendMessage(worldId, 'Rapid input B: use the newest context when you answer.'); waits.push(await waitForCascade(first.id), await waitForCascade(second.id)); return { cascadeOutcomes: waits.map(summarizeWait) }; }
   if (scenario === 'long') { for (let index = 1; index <= turns; index += 1) { const message = await sendMessage(worldId, `Conversation checkpoint ${index}: add something useful or pass.`); waits.push(await waitForCascade(message.id)); } return { turns, cascadeOutcomes: waits.map(summarizeWait) }; }
-  const prompts = scenario === 'tiny'
+  const prompts = scenario === 'calibration'
+    ? [calibrationSocialPrompt]
+    : scenario === 'tiny'
     ? [tinySocialPrompt]
     : scenario === 'single'
     ? ['Protocol preflight: greet the room or pass if you have nothing useful to add.']
@@ -150,7 +153,7 @@ function tokenSummary(values: SocialDiagnostic[]): Record<string, number> { retu
 /** Return one percentile from a sorted sample. */
 function percentile(values: number[], fraction: number): number | null { if (!values.length) return null; return values[Math.min(values.length - 1, Math.ceil((values.length - 1) * fraction))]; }
 /** Choose a model count appropriate for one scenario family. */
-function scenarioModelCount(scenario: string, requestedActorCount?: number): number { if (requestedActorCount) return Math.min(Math.max(requestedActorCount, 1), 7); if (scenario === 'single') return 1; if (scenario === 'two' || scenario === 'tiny') return 2; if (scenario === 'stress') return 7; if (scenario === 'political') return 4; return 3; }
+function scenarioModelCount(scenario: string, requestedActorCount?: number): number { if (requestedActorCount) return Math.min(Math.max(requestedActorCount, 1), 7); if (scenario === 'single') return 1; if (scenario === 'two' || scenario === 'tiny' || scenario === 'calibration') return 2; if (scenario === 'stress') return 7; if (scenario === 'political') return 4; return 3; }
 /** Record the exact provider identity and transport family requested for a condition. */
 function modelResolution(reference: string): Record<string, string> { const separator = reference.indexOf('/'); const provider = separator > 0 ? reference.slice(0, separator) : reference; const name = separator > 0 ? reference.slice(separator + 1) : reference; const responses = new Set(['muse-spark-1.2-contributor-free', 'muse-spark-1.2-contributor', 'gpt-5.6-sol', 'gpt-5.6-terra', 'gpt-5.6-luna']); const messages = new Set(['minimax-m3', 'minimax-m2.7', 'minimax-m2.5', 'claude-fable-5', 'claude-opus-5']); return { requestedModelRef: reference, resolvedProvider: provider, resolvedNativeModelId: name, transportFamily: provider.startsWith('opencode') && messages.has(name) ? 'messages' : provider.startsWith('opencode') && responses.has(name) ? 'responses' : 'chat-completions' }; }
 /** Read one command-line option or its fallback. */
