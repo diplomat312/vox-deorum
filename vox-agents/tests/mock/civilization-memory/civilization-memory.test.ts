@@ -4,6 +4,8 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { CivilizationMemoryStore } from '../../../src/civilization-memory/civilization-memory-store.js';
 import { buildCivilizationMemoryContext } from '../../../src/civilization-memory/civilization-memory-context.js';
+import { createCivilizationMemoryTools } from '../../../src/civilization-memory/civilization-memory-tools.js';
+import { createFakeVoxContext } from '../../helpers/fake-vox-context.js';
 import type { StrategistParameters } from '../../../src/strategist/strategy-parameters.js';
 
 const temporaryDirectories: string[] = [];
@@ -116,4 +118,18 @@ describe('CivilizationMemoryStore', () => {
     expect(snapshot.recentChronicle[0]?.text).toContain('Border history fact 10');
     store.close();
   });
+
+  it('updates Outlook through one constrained model support tool without accepting an owner', async () => {
+    const store = openStore();
+    const context = createFakeVoxContext('civilization-memory-tool');
+    const params = parameters(store);
+    const tool = createCivilizationMemoryTools(context.asContext())['update-civilization-outlook']!;
+    await context.withRun({ parameters: params }, async () => {
+      await tool.execute!({ Outlook: 'We should avoid an immediate war with Greece.' }, { toolCallId: 'outlook-call-1', messages: [] });
+      await tool.execute!({ Outlook: 'This retry must not overwrite the first outlook.' }, { toolCallId: 'outlook-call-1', messages: [] });
+    });
+    expect(store.getOutlook({ gameId: 'game-memory-test', ownerPlayerId: 1, turn: 35 })?.text).toContain('avoid an immediate war');
+    store.close();
+  });
+
 });

@@ -20,6 +20,7 @@
 
 import { agentRegistry } from '../../infra/agent-registry.js';
 import { contextRegistry } from '../../infra/context-registry.js';
+import { appendDealFact, appendDiplomacyFact } from '../../civilization-memory/civilization-memory-ingestion.js';
 import type { StrategistParameters } from '../../strategist/strategy-parameters.js';
 import { ensureGameState } from '../../strategist/strategy-parameters.js';
 import type {
@@ -228,6 +229,18 @@ export async function runChatTurn(
     turn = await beginChatTurn(thread, commit, currentTurn);
   } catch (error) {
     return mapBeginTurnError(error);
+  }
+
+  // Archive the human's durable input for every entitled unified civilization before the model
+  // wakes. The same source row is used for the live cache and the factual chronicle, so retries are
+  // harmless and private history never passes through an interpretive classifier.
+  const memoryParameters = voxContext.getBaseParameters();
+  if (memoryParameters?.civilizationMemoryEnabled && memoryParameters.civilizationMemoryStore && turn.callerRow) {
+    if (commit.kind === 'deal') {
+      appendDealFact(memoryParameters.civilizationMemoryStore, memoryParameters, thread, turn.callerRow.ID, turn.callerRow.Turn, `Human submitted a deal: ${JSON.stringify(commit.deal)}`);
+    } else if (thread.diplomacy) {
+      appendDiplomacyFact(memoryParameters.civilizationMemoryStore, memoryParameters, thread, turn.callerRow);
+    }
   }
 
   const replyStart = thread.messages.length;

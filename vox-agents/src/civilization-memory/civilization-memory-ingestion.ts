@@ -32,6 +32,7 @@ export function appendDiplomacyFact(
   const recipient = participantName(parameters, row.SpeakerID === thread.player1ID ? thread.player2ID : thread.player1ID);
   const text = `Turn ${row.Turn} · ${speaker} to ${recipient}: ${row.Content}`;
   for (const ownerPlayerId of [thread.player1ID, thread.player2ID]) {
+    if (!store.isRegisteredOwner(ownerPlayerId)) continue;
     store.appendChronicle({ gameId: parameters.gameID, ownerPlayerId, turn: row.Turn }, {
       turn: row.Turn,
       kind: 'private-message',
@@ -55,6 +56,7 @@ export function appendDealFact(
 ): void {
   const participants = [thread.player1ID, thread.player2ID];
   for (const ownerPlayerId of participants) {
+    if (!store.isRegisteredOwner(ownerPlayerId)) continue;
     store.appendChronicle({ gameId: parameters.gameID, ownerPlayerId, turn }, {
       turn,
       kind: 'deal',

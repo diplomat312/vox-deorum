@@ -72,6 +72,7 @@ function chronicleFromRow(row: Record<string, unknown>): CivilizationChronicleEn
 /** SQLite persistence for one game's civilization-owned continuity. */
 export class CivilizationMemoryStore {
   private readonly sqlite: Sqlite;
+  private readonly registeredOwners = new Set<number>();
 
   /** Open the store and create only the continuity tables needed by the new architecture. */
   public constructor(dbPath: string) {
@@ -118,6 +119,16 @@ export class CivilizationMemoryStore {
     if (this.sqlite.open) this.sqlite.close();
   }
 
+  /** Register a live unified seat as an owner before any shared facts are ingested. */
+  public registerOwner(playerId: number): void {
+    this.registeredOwners.add(playerId);
+  }
+
+  /** Check whether a seat is a live unified civilization owner in this session. */
+  public isRegisteredOwner(playerId: number): boolean {
+    return this.registeredOwners.has(playerId);
+  }
+
   /** Ensure state exists for a civilization before reading or mutating it. */
   private ensureState(scope: CivilizationMemoryScope): void {
     this.sqlite.prepare(`
@@ -140,6 +151,18 @@ export class CivilizationMemoryStore {
       revision: Number(row.revision), createdTurn: Number(row.turn), updatedTurn: Number(row.turn),
       ...(row.wakeTraceId ? { updatedByWakeTraceId: String(row.wakeTraceId) } : {}),
     };
+  }
+
+  /** Read all self-authored Outlook revisions for developer inspection without exposing them to wakes. */
+  public getOutlookRevisions(scope: CivilizationMemoryScope): CivilizationOutlook[] {
+    this.ensureState(scope);
+    const rows = this.sqlite.prepare(`SELECT * FROM civilizationOutlookRevisions
+      WHERE gameId = ? AND ownerPlayerId = ? ORDER BY revision ASC`).all(scope.gameId, scope.ownerPlayerId) as Record<string, unknown>[];
+    return rows.map(row => ({
+      gameId: String(row.gameId), ownerPlayerId: Number(row.ownerPlayerId), text: String(row.text),
+      revision: Number(row.revision), createdTurn: Number(row.turn), updatedTurn: Number(row.turn),
+      ...(row.wakeTraceId ? { updatedByWakeTraceId: String(row.wakeTraceId) } : {}),
+    }));
   }
 
   /** Persist a new self-authored outlook only if the caller still owns the observed revision. */

@@ -139,6 +139,13 @@ describe("unified civilization mind", () => {
     expect(() => assertUnifiedMindConfig({ strategist: "simple-strategist", mind: "unified-mind" })).toThrow("llms.unified-mind");
   });
 
+  it("resolves memory maintenance to the same configured civilization model", async () => {
+    const maintenance = agentRegistry.get("unified-mind-memory")!;
+    const model = maintenance.getModel(parameters, { range: {} } as never, unifiedPlayer.llms!);
+    expect(model.name).toBe("minimax/minimax-m3:free");
+    expect(await maintenance.getSystem(parameters, {} as never, {} as never)).toContain("governing political mind of Rome");
+  });
+
   it("renders diplomacy as quoted untrusted data and preserves structured deal terms", () => {
     const row = {
       ID: 82,
