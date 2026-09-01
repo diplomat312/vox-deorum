@@ -10,11 +10,12 @@ import { socialDecisionOutputTokenLimit } from './social-pacing.js';
 /** Provider-neutral model decision generator. It never applies the returned action. */
 export interface SocialModelExecutor { decide(actor: SocialActor, context: SocialContextBundle, actorNames: string[], abortSignal?: AbortSignal): Promise<SocialDecision>; }
 export interface SocialDecisionUsage { inputTokens?: number; outputTokens?: number; totalTokens?: number; cachedTokens?: number; reasoningTokens?: number; cost?: number; }
-export interface SocialDecisionRun { decision: SocialDecision; retryCount: number; semanticRetryCount?: number; providerAttemptCount?: number; providerRetryCount?: number; providerFailureClass?: string; providerHttpStatus?: number; providerErrorType?: string; providerErrorCode?: string; providerErrorSummary?: string; latencyMs: number; usage?: SocialDecisionUsage; }
+export interface SocialDecisionObservability { outputTokenLimit: number; finishReason?: string; rawFinishReason?: string; incompleteReason?: string; responseOutputItemCount?: number; responseOutputItemTypesJson?: string; responseOutputItemSource?: 'provider-body' | 'normalized-content'; sdkToolCallCount?: number; sdkTextLength?: number; responseFunctionCallDetected?: boolean; outputLimitReached?: boolean; }
+export interface SocialDecisionRun { decision: SocialDecision; retryCount: number; semanticRetryCount?: number; providerAttemptCount?: number; providerRetryCount?: number; providerFailureClass?: string; providerHttpStatus?: number; providerErrorType?: string; providerErrorCode?: string; providerErrorSummary?: string; latencyMs: number; usage?: SocialDecisionUsage; diagnostics?: SocialDecisionObservability; }
 export interface InstrumentedSocialModelExecutor extends SocialModelExecutor { decideWithTelemetry(actor: SocialActor, context: SocialContextBundle, actorNames: string[], abortSignal?: AbortSignal): Promise<SocialDecisionRun>; }
 
 /** Carry sanitized decision telemetry through a terminal provider or protocol failure. */
-export interface SocialDecisionFailureTelemetry { retryCount: number; semanticRetryCount: number; providerAttemptCount: number; providerRetryCount: number; providerFailureClass?: string; providerHttpStatus?: number; providerErrorType?: string; providerErrorCode?: string; providerErrorSummary?: string; latencyMs: number; }
+export interface SocialDecisionFailureTelemetry { retryCount: number; semanticRetryCount: number; providerAttemptCount: number; providerRetryCount: number; providerFailureClass?: string; providerHttpStatus?: number; providerErrorType?: string; providerErrorCode?: string; providerErrorSummary?: string; latencyMs: number; diagnostics?: SocialDecisionObservability; }
 
 /** Preserve logical decision metadata without retaining provider response bodies or reasoning. */
 export class SocialDecisionExecutionError extends Error {
@@ -49,6 +50,7 @@ export class SocialModelExecutorImpl implements InstrumentedSocialModelExecutor 
     let providerFailureClass: string | undefined;
     let providerFailureDetails: ProviderFailureDetails | undefined;
     let semanticRetryCount = 0;
+    let diagnostics: SocialDecisionObservability = { outputTokenLimit: socialDecisionOutputTokenLimit };
     for (let attempt = 0; attempt < 2; attempt += 1) {
       try {
         const result = await streamTextWithConcurrency(withModelConfig({
@@ -65,8 +67,9 @@ export class SocialModelExecutorImpl implements InstrumentedSocialModelExecutor 
         }, modelConfig), { logger: this.logger, timeoutRefresh: undefined, onProviderAttempt: () => { providerAttemptCount += 1; }, onProviderError: (error) => { const details = extractProviderFailureDetails(error); providerFailureClass ??= classifyProviderFailure(error, details); providerFailureDetails = mergeProviderFailureDetails(providerFailureDetails, details); } }, { maxRetries: 2, initialDelayMs: 1000, maxDelayMs: 5000, backoffFactor: 2 });
         const steps = (result as unknown as { steps?: Array<{ toolCalls?: readonly unknown[] }> }).steps ?? [];
         const calls = steps.flatMap((step) => step.toolCalls ?? []);
+        diagnostics = await inspectDecisionResult(result, steps, calls);
         const usage = await readUsage(result);
-        return { decision: decodeSocialDecision(calls, extra), retryCount: semanticRetryCount, semanticRetryCount, providerAttemptCount, providerRetryCount: Math.max(0, providerAttemptCount - (semanticRetryCount + 1)), ...(providerFailureClass ? { providerFailureClass } : {}), ...providerFailureDetails, latencyMs: Date.now() - startedAt, ...(usage ? { usage } : {}) };
+        return { decision: decodeSocialDecision(calls, extra), retryCount: semanticRetryCount, semanticRetryCount, providerAttemptCount, providerRetryCount: Math.max(0, providerAttemptCount - (semanticRetryCount + 1)), ...(providerFailureClass ? { providerFailureClass } : {}), ...providerFailureDetails, latencyMs: Date.now() - startedAt, ...(usage ? { usage } : {}), diagnostics };
       } catch (error) {
         lastError = error;
         const semanticOutputError = error instanceof Error && error.message.startsWith('invalid-output:');
@@ -90,11 +93,53 @@ export class SocialModelExecutorImpl implements InstrumentedSocialModelExecutor 
         ...(providerFailureClass ? { providerFailureClass } : {}),
         ...providerFailureDetails,
         latencyMs: Date.now() - startedAt,
+        diagnostics,
       },
       { cause: lastError },
     );
   }
 }
+
+/** Inspect only structural model-result metadata that is safe for developer diagnostics. */
+async function inspectDecisionResult(result: unknown, steps: Array<Record<string, unknown>>, calls: readonly unknown[]): Promise<SocialDecisionObservability> {
+  const lastStep = steps.at(-1) ?? {};
+  const response = asRecord(lastStep.response) ?? await readPromiseRecord((result as { response?: unknown }).response);
+  const body = response ? asRecord(response.body) : undefined;
+  const providerItems = Array.isArray(body?.output) ? body.output : undefined;
+  const normalizedContent = Array.isArray(lastStep.content) ? lastStep.content : [];
+  const outputItems = providerItems ?? normalizedContent;
+  const outputTypes = outputItems.map((item) => {
+    const record = asRecord(item);
+    return sanitizeValue(String(record?.type ?? 'other'));
+  }).filter(Boolean);
+  const finishReason = normalizeDiagnosticString(lastStep.finishReason ?? await readPromiseValue((result as { finishReason?: unknown }).finishReason));
+  const rawFinishReason = normalizeDiagnosticString(lastStep.rawFinishReason ?? await readPromiseValue((result as { rawFinishReason?: unknown }).rawFinishReason));
+  const incompleteReason = readIncompleteReason(body);
+  const usage = await readUsage(result);
+  const text = typeof lastStep.text === 'string' ? lastStep.text : '';
+  const functionCallDetected = outputTypes.some((type) => /function[_-]?call|tool[_-]?call/.test(type));
+  const outputLimitReached = finishReason === 'length' || rawFinishReason === 'length' || incompleteReason !== undefined && /length|max[_-]?output|token/i.test(incompleteReason) || usage?.outputTokens !== undefined && usage.outputTokens >= socialDecisionOutputTokenLimit;
+  return {
+    outputTokenLimit: socialDecisionOutputTokenLimit,
+    ...(finishReason ? { finishReason } : {}),
+    ...(rawFinishReason ? { rawFinishReason } : {}),
+    ...(incompleteReason ? { incompleteReason } : {}),
+    ...(outputItems.length ? { responseOutputItemCount: outputItems.length, responseOutputItemTypesJson: JSON.stringify(outputTypes), responseOutputItemSource: providerItems ? 'provider-body' : 'normalized-content' } : {}),
+    sdkToolCallCount: calls.length,
+    sdkTextLength: text.length,
+    responseFunctionCallDetected: outputItems.length ? functionCallDetected : undefined,
+    outputLimitReached,
+  };
+}
+
+/** Read a promise-like AI SDK result field without retaining its value beyond inspection. */
+async function readPromiseValue(value: unknown): Promise<unknown> { return value && typeof (value as PromiseLike<unknown>).then === 'function' ? await value as unknown : value; }
+/** Read an AI SDK response record when the result exposes it asynchronously. */
+async function readPromiseRecord(value: unknown): Promise<Record<string, unknown> | undefined> { return asRecord(await readPromiseValue(value)); }
+/** Read a provider Responses incomplete reason without persisting the provider body. */
+function readIncompleteReason(body: Record<string, unknown> | undefined): string | undefined { const details = asRecord(body?.incomplete_details) ?? asRecord(body?.incompleteDetails); const reason = details?.reason ?? body?.incomplete_reason ?? body?.incompleteReason; return typeof reason === 'string' ? sanitizeValue(reason) : undefined; }
+/** Normalize a bounded diagnostic string and omit non-string SDK values. */
+function normalizeDiagnosticString(value: unknown): string | undefined { return typeof value === 'string' && value.trim() ? sanitizeValue(value) : undefined; }
 
 /** Reduce provider errors to a safe diagnostic category without retaining response bodies. */
 function classifyProviderFailure(error: unknown, details: ProviderFailureDetails = extractProviderFailureDetails(error)): string {

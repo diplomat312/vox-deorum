@@ -1,6 +1,6 @@
 import Database from 'better-sqlite3';
 
-export const currentSocialSchemaVersion = 14;
+export const currentSocialSchemaVersion = 15;
 type Sqlite = InstanceType<typeof Database>;
 
 /** Apply ordered social schema migrations without rewriting current databases. */
@@ -26,6 +26,7 @@ function applyMigration(sqlite: Sqlite, version: number): void {
   if (version === 12) addColumn(sqlite, 'socialIntentions', 'modelStartedAt', 'TEXT');
   if (version === 13) { addColumn(sqlite, 'socialDecisionDiagnostics', 'semanticRetryCount', 'INTEGER NOT NULL DEFAULT 0'); addColumn(sqlite, 'socialDecisionDiagnostics', 'providerAttemptCount', 'INTEGER NOT NULL DEFAULT 0'); addColumn(sqlite, 'socialDecisionDiagnostics', 'providerRetryCount', 'INTEGER NOT NULL DEFAULT 0'); addColumn(sqlite, 'socialDecisionDiagnostics', 'providerFailureClass', 'TEXT'); }
   if (version === 14) { addColumn(sqlite, 'socialDecisionDiagnostics', 'providerHttpStatus', 'INTEGER'); addColumn(sqlite, 'socialDecisionDiagnostics', 'providerErrorType', 'TEXT'); addColumn(sqlite, 'socialDecisionDiagnostics', 'providerErrorCode', 'TEXT'); addColumn(sqlite, 'socialDecisionDiagnostics', 'providerErrorSummary', 'TEXT'); }
+  if (version === 15) { addColumn(sqlite, 'socialDecisionDiagnostics', 'outputTokenLimit', 'INTEGER'); addColumn(sqlite, 'socialDecisionDiagnostics', 'finishReason', 'TEXT'); addColumn(sqlite, 'socialDecisionDiagnostics', 'rawFinishReason', 'TEXT'); addColumn(sqlite, 'socialDecisionDiagnostics', 'incompleteReason', 'TEXT'); addColumn(sqlite, 'socialDecisionDiagnostics', 'responseOutputItemCount', 'INTEGER'); addColumn(sqlite, 'socialDecisionDiagnostics', 'responseOutputItemTypesJson', 'TEXT'); addColumn(sqlite, 'socialDecisionDiagnostics', 'responseOutputItemSource', 'TEXT'); addColumn(sqlite, 'socialDecisionDiagnostics', 'sdkToolCallCount', 'INTEGER'); addColumn(sqlite, 'socialDecisionDiagnostics', 'sdkTextLength', 'INTEGER'); addColumn(sqlite, 'socialDecisionDiagnostics', 'responseFunctionCallDetected', 'INTEGER'); addColumn(sqlite, 'socialDecisionDiagnostics', 'outputLimitReached', 'INTEGER'); }
 }
 
 /** Add a column only when upgrading a legacy table that lacks it. */

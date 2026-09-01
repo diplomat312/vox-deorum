@@ -1,0 +1,308 @@
+{
+  "generatedAt": "2026-09-01T05:56:53.485Z",
+  "results": [
+    {
+      "benchmarkVersion": "3.8.2.1.1",
+      "scenario": "preflight",
+      "promptVariant": "interface",
+      "seed": "vd-bakeoff-2",
+      "condition": {
+        "label": "Condition A / run 1",
+        "modelRefs": [
+          "opencode-go/muse-spark-1.2-contributor"
+        ],
+        "resolvedModels": [
+          {
+            "requestedModelRef": "opencode-go/muse-spark-1.2-contributor",
+            "resolvedProvider": "opencode-go",
+            "resolvedNativeModelId": "muse-spark-1.2-contributor",
+            "transportFamily": "responses"
+          }
+        ]
+      },
+      "preset": "screen",
+      "pacing": "balanced",
+      "actorCount": 2,
+      "requestedModels": [
+        "opencode-go/muse-spark-1.2-contributor"
+      ],
+      "resolvedModels": [
+        {
+          "requestedModelRef": "opencode-go/muse-spark-1.2-contributor",
+          "resolvedProvider": "opencode-go",
+          "resolvedNativeModelId": "muse-spark-1.2-contributor",
+          "transportFamily": "responses"
+        }
+      ],
+      "outputTokenLimit": 8192,
+      "timestamp": "2026-09-01T05:56:53.442Z",
+      "diagnosticsTruncated": false,
+      "exercised": {
+        "cascadeOutcomes": [
+          {
+            "settled": true,
+            "timedOut": false,
+            "state": "completed"
+          },
+          {
+            "settled": true,
+            "timedOut": false,
+            "state": "completed"
+          }
+        ]
+      },
+      "diagnostics": [
+        {
+          "id": "343fee86-3ce2-4c7f-9ca6-4eb5bfd5e35f",
+          "intentionId": "b8f7fb61-a2c3-46f8-bfff-737d3e85c246",
+          "actorId": "aurelia-1",
+          "actorDisplayName": "Aurelia 1",
+          "modelRef": "opencode-go/muse-spark-1.2-contributor",
+          "executionScope": "channel-reaction",
+          "selectedKind": "pass",
+          "routingRefsJson": "{}",
+          "validationOutcome": "validated",
+          "applicationOutcome": "pass",
+          "error": null,
+          "latencyMs": null,
+          "retryCount": 0,
+          "createdAt": "2026-09-01T05:56:53.323Z",
+          "cascadeId": "msg:3",
+          "providerLatencyMs": 18168,
+          "queueWaitMs": 6,
+          "durationMs": 18181,
+          "inputTokens": null,
+          "outputTokens": null,
+          "totalTokens": null,
+          "cachedTokens": null,
+          "reasoningTokens": null,
+          "cost": null,
+          "semanticRetryCount": 0,
+          "providerAttemptCount": 1,
+          "providerRetryCount": 0,
+          "providerFailureClass": null,
+          "providerHttpStatus": null,
+          "providerErrorType": null,
+          "providerErrorCode": null,
+          "providerErrorSummary": null,
+          "outputTokenLimit": 8192,
+          "finishReason": "tool-calls",
+          "rawFinishReason": null,
+          "incompleteReason": null,
+          "responseOutputItemCount": 3,
+          "responseOutputItemTypesJson": "[\"reasoning\",\"text\",\"tool-call\"]",
+          "responseOutputItemSource": "normalized-content",
+          "sdkToolCallCount": 1,
+          "sdkTextLength": 73,
+          "responseFunctionCallDetected": true,
+          "outputLimitReached": false
+        },
+        {
+          "id": "ce99586f-137a-4f7b-966f-da0211da389f",
+          "intentionId": "d8951ae6-cd9d-4048-a4a7-c0b26ce9bbd8",
+          "actorId": "aurelia-1",
+          "actorDisplayName": "Aurelia 1",
+          "modelRef": "opencode-go/muse-spark-1.2-contributor",
+          "executionScope": "channel-reaction",
+          "selectedKind": "reply",
+          "routingRefsJson": "{}",
+          "validationOutcome": "validated",
+          "applicationOutcome": "send_message",
+          "error": null,
+          "latencyMs": null,
+          "retryCount": 0,
+          "createdAt": "2026-09-01T05:56:35.089Z",
+          "cascadeId": "msg:1",
+          "providerLatencyMs": 7106,
+          "queueWaitMs": 7,
+          "durationMs": 7123,
+          "inputTokens": null,
+          "outputTokens": null,
+          "totalTokens": null,
+          "cachedTokens": null,
+          "reasoningTokens": null,
+          "cost": null,
+          "semanticRetryCount": 0,
+          "providerAttemptCount": 1,
+          "providerRetryCount": 0,
+          "providerFailureClass": null,
+          "providerHttpStatus": null,
+          "providerErrorType": null,
+          "providerErrorCode": null,
+          "providerErrorSummary": null,
+          "outputTokenLimit": 8192,
+          "finishReason": "tool-calls",
+          "rawFinishReason": null,
+          "incompleteReason": null,
+          "responseOutputItemCount": 3,
+          "responseOutputItemTypesJson": "[\"reasoning\",\"text\",\"tool-call\"]",
+          "responseOutputItemSource": "normalized-content",
+          "sdkToolCallCount": 1,
+          "sdkTextLength": 86,
+          "responseFunctionCallDetected": true,
+          "outputLimitReached": false
+        }
+      ],
+      "metrics": {
+        "decisions": 2,
+        "providerAttempts": 2,
+        "providerRetries": 0,
+        "providerFailures": {
+          "rate-limit": 0,
+          "timeout": 0,
+          "network": 0,
+          "other": 0
+        },
+        "providerFailureDetails": [],
+        "firstAttemptSuccesses": 2,
+        "semanticRetries": 0,
+        "failures": 0,
+        "runtimeRefusals": 0,
+        "passes": 1,
+        "committedModelSpeech": 1,
+        "worldSpeech": 1,
+        "dmSpeech": 0,
+        "groupSpeech": 0,
+        "actions": {
+          "pass": 1,
+          "reply": 1
+        },
+        "privateChannels": 0,
+        "actors": 2,
+        "latency": {
+          "medianMs": 18168,
+          "p95Ms": 18168
+        },
+        "queueWait": {
+          "medianMs": 7,
+          "p95Ms": 7
+        },
+        "tokens": {
+          "input": 0,
+          "output": 0,
+          "total": 0
+        },
+        "cost": 0,
+        "models": [
+          {
+            "model": "opencode-go/muse-spark-1.2-contributor",
+            "decisions": 2,
+            "providerAttempts": 2,
+            "providerRetries": 0,
+            "providerFailures": {
+              "rate-limit": 0,
+              "timeout": 0,
+              "network": 0,
+              "other": 0
+            },
+            "firstAttemptSuccesses": 2,
+            "semanticRetries": 0,
+            "passes": 1,
+            "actions": [
+              "pass",
+              "reply"
+            ],
+            "latency": {
+              "medianMs": 18168,
+              "p95Ms": 18168
+            },
+            "tokens": {
+              "input": 0,
+              "output": 0,
+              "total": 0
+            },
+            "cost": 0
+          }
+        ]
+      },
+      "features": {
+        "publicReassurance": false,
+        "publicThreat": false,
+        "privateReassurance": false,
+        "privatePressure": false,
+        "allySeeking": false,
+        "coalitionProposal": false,
+        "coalitionPrevention": false,
+        "informationSeeking": false,
+        "concealment": false,
+        "bluff": false,
+        "explicitPromise": false,
+        "accusation": false,
+        "apology": false,
+        "compensationOffer": false,
+        "retaliation": false,
+        "pass": true,
+        "thirdPartyOutreach": false
+      },
+      "cascades": [
+        {
+          "id": "msg:3",
+          "state": "completed",
+          "modelRuns": 1,
+          "committedModelMessages": 0,
+          "durationMs": 18181,
+          "budgets": {
+            "maxModelRuns": 5,
+            "maxCommittedModelMessages": 5
+          }
+        },
+        {
+          "id": "msg:1",
+          "state": "completed",
+          "modelRuns": 1,
+          "committedModelMessages": 1,
+          "durationMs": 7123,
+          "budgets": {
+            "maxModelRuns": 5,
+            "maxCommittedModelMessages": 5
+          }
+        }
+      ],
+      "transcripts": [
+        {
+          "kind": "world",
+          "title": "WORLD",
+          "messages": [
+            {
+              "speaker": "Human",
+              "text": "Protocol preflight: greet the room or pass if you have nothing useful to add."
+            },
+            {
+              "speaker": "Aurelia 1",
+              "text": "Aurelia 1 present. Monitoring — all stable on my end."
+            },
+            {
+              "speaker": "Human",
+              "text": "A private DM is available if you have something useful to say. You may contact another participant or pass."
+            }
+          ]
+        }
+      ],
+      "reviewTranscripts": [
+        {
+          "condition": "Condition A / run 1",
+          "transcripts": [
+            {
+              "kind": "world",
+              "title": "WORLD",
+              "messages": [
+                {
+                  "speaker": "Human",
+                  "text": "Protocol preflight: greet the room or pass if you have nothing useful to add."
+                },
+                {
+                  "speaker": "Aurelia 1",
+                  "text": "Aurelia 1 present. Monitoring — all stable on my end."
+                },
+                {
+                  "speaker": "Human",
+                  "text": "A private DM is available if you have something useful to say. You may contact another participant or pass."
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

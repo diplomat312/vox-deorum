@@ -29,7 +29,7 @@ beforeEach(() => mocks.stream.mockReset());
 
 describe('SocialModelExecutorImpl provider telemetry', () => {
   it('records one provider attempt for a first-attempt success', async () => {
-    providerSuccess(result());
+    mocks.stream.mockImplementationOnce(async (params: { maxOutputTokens?: number }, callContext: { onProviderAttempt?: (attempt: number) => void }) => { expect(params.maxOutputTokens).toBe(8192); callContext.onProviderAttempt?.(0); return result(); });
     const run = await new SocialModelExecutorImpl().decideWithTelemetry(actor, context, []);
     expect(run.providerAttemptCount).toBe(1);
     expect(run.providerRetryCount).toBe(0);
@@ -100,6 +100,65 @@ describe('SocialModelExecutorImpl provider telemetry', () => {
         providerErrorType: 'invalid_request_error',
         providerErrorCode: 'unsupported_parameter',
         providerErrorSummary: 'tool_choice must be auto; Bearer [redacted]',
+      },
+    });
+  });
+
+  it('captures safe Responses-style output metadata without retaining content', async () => {
+    providerSuccess({
+      steps: [{
+        toolCalls: [{ toolName: 'social_pass', input: { reason: 'quiet' } }],
+        content: [{ type: 'reasoning', text: 'private reasoning' }, { type: 'tool-call', toolName: 'social_pass' }],
+        text: '',
+        finishReason: 'tool-calls',
+        rawFinishReason: 'function_call',
+        response: { body: { output: [{ type: 'reasoning', summary: 'private reasoning' }, { type: 'function_call', name: 'social_pass' }] } },
+      }],
+    });
+    const run = await new SocialModelExecutorImpl().decideWithTelemetry(actor, context, []);
+    expect(run.diagnostics).toEqual({
+      outputTokenLimit: 8192,
+      finishReason: 'tool-calls',
+      rawFinishReason: 'function_call',
+      responseOutputItemCount: 2,
+      responseOutputItemTypesJson: '["reasoning","function_call"]',
+      responseOutputItemSource: 'provider-body',
+      sdkToolCallCount: 1,
+      sdkTextLength: 0,
+      responseFunctionCallDetected: true,
+      outputLimitReached: false,
+    });
+  });
+
+  it('preserves zero-tool structural diagnostics after semantic retries are exhausted', async () => {
+    const noDecision = {
+      steps: [{
+        toolCalls: [],
+        content: [{ type: 'reasoning', text: 'private reasoning' }, { type: 'text', text: 'ordinary prose' }],
+        text: 'ordinary prose',
+        finishReason: 'length',
+        rawFinishReason: 'max_output_tokens',
+        response: { body: { incomplete_details: { reason: 'max_output_tokens' }, output: [{ type: 'reasoning' }, { type: 'message' }] } },
+      }],
+    };
+    providerSuccess(noDecision);
+    providerSuccess(noDecision);
+    await expect(new SocialModelExecutorImpl().decideWithTelemetry(actor, context, [])).rejects.toMatchObject({
+      telemetry: {
+        semanticRetryCount: 1,
+        diagnostics: {
+          outputTokenLimit: 8192,
+          finishReason: 'length',
+          rawFinishReason: 'max_output_tokens',
+          incompleteReason: 'max_output_tokens',
+          responseOutputItemCount: 2,
+          responseOutputItemTypesJson: '["reasoning","message"]',
+          responseOutputItemSource: 'provider-body',
+          sdkToolCallCount: 0,
+          sdkTextLength: 14,
+          responseFunctionCallDetected: false,
+          outputLimitReached: true,
+        },
       },
     });
   });

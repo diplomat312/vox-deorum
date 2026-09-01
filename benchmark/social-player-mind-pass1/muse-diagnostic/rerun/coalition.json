@@ -1,0 +1,601 @@
+{
+  "generatedAt": "2026-09-01T06:01:55.084Z",
+  "results": [
+    {
+      "benchmarkVersion": "3.8.2.1.1",
+      "scenario": "coalition",
+      "promptVariant": "interface",
+      "seed": "vd-bakeoff-2",
+      "condition": {
+        "label": "Condition A / run 1",
+        "modelRefs": [
+          "opencode-go/muse-spark-1.2-contributor",
+          "opencode-go/muse-spark-1.2-contributor",
+          "opencode-go/muse-spark-1.2-contributor"
+        ],
+        "resolvedModels": [
+          {
+            "requestedModelRef": "opencode-go/muse-spark-1.2-contributor",
+            "resolvedProvider": "opencode-go",
+            "resolvedNativeModelId": "muse-spark-1.2-contributor",
+            "transportFamily": "responses"
+          },
+          {
+            "requestedModelRef": "opencode-go/muse-spark-1.2-contributor",
+            "resolvedProvider": "opencode-go",
+            "resolvedNativeModelId": "muse-spark-1.2-contributor",
+            "transportFamily": "responses"
+          },
+          {
+            "requestedModelRef": "opencode-go/muse-spark-1.2-contributor",
+            "resolvedProvider": "opencode-go",
+            "resolvedNativeModelId": "muse-spark-1.2-contributor",
+            "transportFamily": "responses"
+          }
+        ]
+      },
+      "preset": "screen",
+      "pacing": "balanced",
+      "actorCount": 4,
+      "requestedModels": [
+        "opencode-go/muse-spark-1.2-contributor",
+        "opencode-go/muse-spark-1.2-contributor",
+        "opencode-go/muse-spark-1.2-contributor"
+      ],
+      "resolvedModels": [
+        {
+          "requestedModelRef": "opencode-go/muse-spark-1.2-contributor",
+          "resolvedProvider": "opencode-go",
+          "resolvedNativeModelId": "muse-spark-1.2-contributor",
+          "transportFamily": "responses"
+        },
+        {
+          "requestedModelRef": "opencode-go/muse-spark-1.2-contributor",
+          "resolvedProvider": "opencode-go",
+          "resolvedNativeModelId": "muse-spark-1.2-contributor",
+          "transportFamily": "responses"
+        },
+        {
+          "requestedModelRef": "opencode-go/muse-spark-1.2-contributor",
+          "resolvedProvider": "opencode-go",
+          "resolvedNativeModelId": "muse-spark-1.2-contributor",
+          "transportFamily": "responses"
+        }
+      ],
+      "outputTokenLimit": 8192,
+      "timestamp": "2026-09-01T06:01:55.074Z",
+      "diagnosticsTruncated": false,
+      "exercised": {
+        "cascadeOutcomes": [
+          {
+            "settled": true,
+            "timedOut": false,
+            "state": "exhausted"
+          }
+        ]
+      },
+      "diagnostics": [
+        {
+          "id": "13247248-4192-41f7-8e00-ea01c6d83c0c",
+          "intentionId": "cd9acd4a-a8d7-4040-9965-fb2680486a59",
+          "actorId": "aurelia-1",
+          "actorDisplayName": "Aurelia 1",
+          "modelRef": "opencode-go/muse-spark-1.2-contributor",
+          "executionScope": "channel-reaction",
+          "selectedKind": null,
+          "routingRefsJson": null,
+          "validationOutcome": "skipped-budget",
+          "applicationOutcome": "skipped",
+          "error": "cascade-budget-exhausted",
+          "latencyMs": null,
+          "retryCount": 0,
+          "createdAt": "2026-09-01T06:01:55.054Z",
+          "cascadeId": "msg:1",
+          "providerLatencyMs": null,
+          "queueWaitMs": 52863,
+          "durationMs": 52863,
+          "inputTokens": null,
+          "outputTokens": null,
+          "totalTokens": null,
+          "cachedTokens": null,
+          "reasoningTokens": null,
+          "cost": null,
+          "semanticRetryCount": 0,
+          "providerAttemptCount": 0,
+          "providerRetryCount": 0,
+          "providerFailureClass": null,
+          "providerHttpStatus": null,
+          "providerErrorType": null,
+          "providerErrorCode": null,
+          "providerErrorSummary": null,
+          "outputTokenLimit": null,
+          "finishReason": null,
+          "rawFinishReason": null,
+          "incompleteReason": null,
+          "responseOutputItemCount": null,
+          "responseOutputItemTypesJson": null,
+          "responseOutputItemSource": null,
+          "sdkToolCallCount": null,
+          "sdkTextLength": null,
+          "responseFunctionCallDetected": null,
+          "outputLimitReached": null
+        },
+        {
+          "id": "c3fb2de8-cdef-449f-880b-7a233ac6f406",
+          "intentionId": "d60ecd10-0a09-4b85-aed6-2c7c21e1632d",
+          "actorId": "aurelia-1",
+          "actorDisplayName": "Aurelia 1",
+          "modelRef": "opencode-go/muse-spark-1.2-contributor",
+          "executionScope": "channel-reaction",
+          "selectedKind": "reply",
+          "routingRefsJson": "{}",
+          "validationOutcome": "validated",
+          "applicationOutcome": "send_message",
+          "error": null,
+          "latencyMs": null,
+          "retryCount": 0,
+          "createdAt": "2026-09-01T06:01:55.050Z",
+          "cascadeId": "msg:1",
+          "providerLatencyMs": 52846,
+          "queueWaitMs": 13208,
+          "durationMs": 66065,
+          "inputTokens": null,
+          "outputTokens": null,
+          "totalTokens": null,
+          "cachedTokens": null,
+          "reasoningTokens": null,
+          "cost": null,
+          "semanticRetryCount": 0,
+          "providerAttemptCount": 1,
+          "providerRetryCount": 0,
+          "providerFailureClass": null,
+          "providerHttpStatus": null,
+          "providerErrorType": null,
+          "providerErrorCode": null,
+          "providerErrorSummary": null,
+          "outputTokenLimit": 8192,
+          "finishReason": "tool-calls",
+          "rawFinishReason": null,
+          "incompleteReason": null,
+          "responseOutputItemCount": 3,
+          "responseOutputItemTypesJson": "[\"reasoning\",\"text\",\"tool-call\"]",
+          "responseOutputItemSource": "normalized-content",
+          "sdkToolCallCount": 1,
+          "sdkTextLength": 83,
+          "responseFunctionCallDetected": true,
+          "outputLimitReached": false
+        },
+        {
+          "id": "5754b916-5197-4cd7-b974-7af130815a8f",
+          "intentionId": "678a3a6c-fc38-43b1-8f7e-973c1d9cf22d",
+          "actorId": "cassian-3",
+          "actorDisplayName": "Cassian 3",
+          "modelRef": "opencode-go/muse-spark-1.2-contributor",
+          "executionScope": "channel-reaction",
+          "selectedKind": "reply",
+          "routingRefsJson": "{}",
+          "validationOutcome": "validated",
+          "applicationOutcome": "send_message",
+          "error": null,
+          "latencyMs": null,
+          "retryCount": 0,
+          "createdAt": "2026-09-01T06:01:15.491Z",
+          "cascadeId": "msg:1",
+          "providerLatencyMs": 13289,
+          "queueWaitMs": 26320,
+          "durationMs": 39620,
+          "inputTokens": null,
+          "outputTokens": null,
+          "totalTokens": null,
+          "cachedTokens": null,
+          "reasoningTokens": null,
+          "cost": null,
+          "semanticRetryCount": 0,
+          "providerAttemptCount": 1,
+          "providerRetryCount": 0,
+          "providerFailureClass": null,
+          "providerHttpStatus": null,
+          "providerErrorType": null,
+          "providerErrorCode": null,
+          "providerErrorSummary": null,
+          "outputTokenLimit": 8192,
+          "finishReason": "tool-calls",
+          "rawFinishReason": null,
+          "incompleteReason": null,
+          "responseOutputItemCount": 3,
+          "responseOutputItemTypesJson": "[\"reasoning\",\"text\",\"tool-call\"]",
+          "responseOutputItemSource": "normalized-content",
+          "sdkToolCallCount": 1,
+          "sdkTextLength": 99,
+          "responseFunctionCallDetected": true,
+          "outputLimitReached": false
+        },
+        {
+          "id": "3e718618-33fc-48fa-bad4-95b1b59cd739",
+          "intentionId": "fa008550-20b4-42a1-bf68-0530a4cba910",
+          "actorId": "borin-2",
+          "actorDisplayName": "Borin 2",
+          "modelRef": "opencode-go/muse-spark-1.2-contributor",
+          "executionScope": "channel-reaction",
+          "selectedKind": "reply",
+          "routingRefsJson": "{}",
+          "validationOutcome": "validated",
+          "applicationOutcome": "send_message",
+          "error": null,
+          "latencyMs": null,
+          "retryCount": 0,
+          "createdAt": "2026-09-01T06:01:12.859Z",
+          "cascadeId": "msg:1",
+          "providerLatencyMs": 10645,
+          "queueWaitMs": 6,
+          "durationMs": 10672,
+          "inputTokens": null,
+          "outputTokens": null,
+          "totalTokens": null,
+          "cachedTokens": null,
+          "reasoningTokens": null,
+          "cost": null,
+          "semanticRetryCount": 0,
+          "providerAttemptCount": 1,
+          "providerRetryCount": 0,
+          "providerFailureClass": null,
+          "providerHttpStatus": null,
+          "providerErrorType": null,
+          "providerErrorCode": null,
+          "providerErrorSummary": null,
+          "outputTokenLimit": 8192,
+          "finishReason": "tool-calls",
+          "rawFinishReason": null,
+          "incompleteReason": null,
+          "responseOutputItemCount": 3,
+          "responseOutputItemTypesJson": "[\"reasoning\",\"text\",\"tool-call\"]",
+          "responseOutputItemSource": "normalized-content",
+          "sdkToolCallCount": 1,
+          "sdkTextLength": 86,
+          "responseFunctionCallDetected": true,
+          "outputLimitReached": false
+        },
+        {
+          "id": "ab4d491e-958a-4a06-be57-d9d71b2f0c96",
+          "intentionId": "399688e1-1071-4cd0-b98b-d17f98cbbde3",
+          "actorId": "cassian-3",
+          "actorDisplayName": "Cassian 3",
+          "modelRef": "opencode-go/muse-spark-1.2-contributor",
+          "executionScope": "channel-reaction",
+          "selectedKind": "reply",
+          "routingRefsJson": "{}",
+          "validationOutcome": "validated",
+          "applicationOutcome": "send_message",
+          "error": null,
+          "latencyMs": null,
+          "retryCount": 0,
+          "createdAt": "2026-09-01T06:01:02.189Z",
+          "cascadeId": "msg:1",
+          "providerLatencyMs": 13196,
+          "queueWaitMs": 24392,
+          "durationMs": 37594,
+          "inputTokens": null,
+          "outputTokens": null,
+          "totalTokens": null,
+          "cachedTokens": null,
+          "reasoningTokens": null,
+          "cost": null,
+          "semanticRetryCount": 0,
+          "providerAttemptCount": 1,
+          "providerRetryCount": 0,
+          "providerFailureClass": null,
+          "providerHttpStatus": null,
+          "providerErrorType": null,
+          "providerErrorCode": null,
+          "providerErrorSummary": null,
+          "outputTokenLimit": 8192,
+          "finishReason": "tool-calls",
+          "rawFinishReason": null,
+          "incompleteReason": null,
+          "responseOutputItemCount": 3,
+          "responseOutputItemTypesJson": "[\"reasoning\",\"text\",\"tool-call\"]",
+          "responseOutputItemSource": "normalized-content",
+          "sdkToolCallCount": 1,
+          "sdkTextLength": 122,
+          "responseFunctionCallDetected": true,
+          "outputLimitReached": false
+        },
+        {
+          "id": "e8a48384-298e-4862-bf84-ccaf989ccafc",
+          "intentionId": "f16fad7e-72d2-4705-a134-15011dc71036",
+          "actorId": "borin-2",
+          "actorDisplayName": "Borin 2",
+          "modelRef": "opencode-go/muse-spark-1.2-contributor",
+          "executionScope": "channel-reaction",
+          "selectedKind": "send_dm",
+          "routingRefsJson": "{\"participantRef\":\"aurelia-1\"}",
+          "validationOutcome": "validated",
+          "applicationOutcome": "send_dm",
+          "error": null,
+          "latencyMs": null,
+          "retryCount": 0,
+          "createdAt": "2026-09-01T06:00:48.986Z",
+          "cascadeId": "msg:1",
+          "providerLatencyMs": 13106,
+          "queueWaitMs": 11280,
+          "durationMs": 24391,
+          "inputTokens": null,
+          "outputTokens": null,
+          "totalTokens": null,
+          "cachedTokens": null,
+          "reasoningTokens": null,
+          "cost": null,
+          "semanticRetryCount": 0,
+          "providerAttemptCount": 1,
+          "providerRetryCount": 0,
+          "providerFailureClass": null,
+          "providerHttpStatus": null,
+          "providerErrorType": null,
+          "providerErrorCode": null,
+          "providerErrorSummary": null,
+          "outputTokenLimit": 8192,
+          "finishReason": "tool-calls",
+          "rawFinishReason": null,
+          "incompleteReason": null,
+          "responseOutputItemCount": 3,
+          "responseOutputItemTypesJson": "[\"reasoning\",\"text\",\"tool-call\"]",
+          "responseOutputItemSource": "normalized-content",
+          "sdkToolCallCount": 1,
+          "sdkTextLength": 107,
+          "responseFunctionCallDetected": true,
+          "outputLimitReached": false
+        },
+        {
+          "id": "90acf389-689a-4139-a170-49b31f1ef780",
+          "intentionId": "61cabb93-6065-41ec-b5bd-0ca25ea4d20e",
+          "actorId": "aurelia-1",
+          "actorDisplayName": "Aurelia 1",
+          "modelRef": "opencode-go/muse-spark-1.2-contributor",
+          "executionScope": "channel-reaction",
+          "selectedKind": "send_dm",
+          "routingRefsJson": "{\"participantRef\":\"cassian-3\"}",
+          "validationOutcome": "validated",
+          "applicationOutcome": "send_dm",
+          "error": null,
+          "latencyMs": null,
+          "retryCount": 0,
+          "createdAt": "2026-09-01T06:00:35.874Z",
+          "cascadeId": "msg:1",
+          "providerLatencyMs": 11270,
+          "queueWaitMs": 4,
+          "durationMs": 11278,
+          "inputTokens": null,
+          "outputTokens": null,
+          "totalTokens": null,
+          "cachedTokens": null,
+          "reasoningTokens": null,
+          "cost": null,
+          "semanticRetryCount": 0,
+          "providerAttemptCount": 1,
+          "providerRetryCount": 0,
+          "providerFailureClass": null,
+          "providerHttpStatus": null,
+          "providerErrorType": null,
+          "providerErrorCode": null,
+          "providerErrorSummary": null,
+          "outputTokenLimit": 8192,
+          "finishReason": "tool-calls",
+          "rawFinishReason": null,
+          "incompleteReason": null,
+          "responseOutputItemCount": 3,
+          "responseOutputItemTypesJson": "[\"reasoning\",\"text\",\"tool-call\"]",
+          "responseOutputItemSource": "normalized-content",
+          "sdkToolCallCount": 1,
+          "sdkTextLength": 143,
+          "responseFunctionCallDetected": true,
+          "outputLimitReached": false
+        }
+      ],
+      "metrics": {
+        "decisions": 7,
+        "providerAttempts": 6,
+        "providerRetries": 0,
+        "providerFailures": {
+          "rate-limit": 0,
+          "timeout": 0,
+          "network": 0,
+          "other": 0
+        },
+        "providerFailureDetails": [],
+        "firstAttemptSuccesses": 6,
+        "semanticRetries": 0,
+        "failures": 0,
+        "runtimeRefusals": 0,
+        "passes": 0,
+        "committedModelSpeech": 6,
+        "worldSpeech": 2,
+        "dmSpeech": 4,
+        "groupSpeech": 0,
+        "actions": {
+          "reply": 4,
+          "send_dm": 2
+        },
+        "privateChannels": 2,
+        "actors": 4,
+        "latency": {
+          "medianMs": 13196,
+          "p95Ms": 52846
+        },
+        "queueWait": {
+          "medianMs": 13208,
+          "p95Ms": 52863
+        },
+        "tokens": {
+          "input": 0,
+          "output": 0,
+          "total": 0
+        },
+        "cost": 0,
+        "models": [
+          {
+            "model": "opencode-go/muse-spark-1.2-contributor",
+            "decisions": 7,
+            "providerAttempts": 6,
+            "providerRetries": 0,
+            "providerFailures": {
+              "rate-limit": 0,
+              "timeout": 0,
+              "network": 0,
+              "other": 0
+            },
+            "firstAttemptSuccesses": 6,
+            "semanticRetries": 0,
+            "passes": 0,
+            "actions": [
+              "reply",
+              "send_dm"
+            ],
+            "latency": {
+              "medianMs": 13196,
+              "p95Ms": 52846
+            },
+            "tokens": {
+              "input": 0,
+              "output": 0,
+              "total": 0
+            },
+            "cost": 0
+          }
+        ]
+      },
+      "features": {
+        "publicReassurance": false,
+        "publicThreat": false,
+        "privateReassurance": true,
+        "privatePressure": false,
+        "allySeeking": false,
+        "coalitionProposal": false,
+        "coalitionPrevention": false,
+        "informationSeeking": false,
+        "concealment": true,
+        "bluff": false,
+        "explicitPromise": false,
+        "accusation": false,
+        "apology": false,
+        "compensationOffer": false,
+        "retaliation": false,
+        "pass": false,
+        "thirdPartyOutreach": true
+      },
+      "cascades": [
+        {
+          "id": "msg:1",
+          "state": "exhausted",
+          "modelRuns": 6,
+          "committedModelMessages": 6,
+          "durationMs": 90456,
+          "budgets": {
+            "maxModelRuns": 6,
+            "maxCommittedModelMessages": 6
+          }
+        }
+      ],
+      "transcripts": [
+        {
+          "kind": "world",
+          "title": "WORLD",
+          "messages": [
+            {
+              "speaker": "Human",
+              "text": "Borin and Cassian have recently held several private conversations. Aurelia has learned that the conversations occurred but does not know exactly what was said. Cassian has made no commitment to Borin. Publicly, all three still claim relations are stable. No one has taken an irreversible action yet. Decide what, if anything, you want to do."
+            },
+            {
+              "speaker": "Cassian 3",
+              "text": "To be transparent in here: yes, Borin and I have had a few private conversations recently, but there were no commitments or deals made on my side. I'm still independent and intend to stay that way — I don't want to see anyone dominate, but I'm also not aligning against anyone. Relations remain stable as far as I'm concerned, and I'm happy to keep channels open with both of you directly."
+            },
+            {
+              "speaker": "Borin 2",
+              "text": "Thanks Cassian for being upfront — that's accurate from my side as well. We did have a few private conversations to exchange perspectives, but no commitments, deals, or alignments were made, and nothing was directed against anyone.\n\nI value stable relations with both Aurelia and Cassian and want to keep it that way. Aurelia — happy to talk directly anytime if you'd find that helpful."
+            }
+          ]
+        },
+        {
+          "kind": "dm",
+          "title": "DM with Cassian 3",
+          "messages": [
+            {
+              "speaker": "Aurelia 1",
+              "text": "Cassian — I'm aware you and Borin have been speaking privately recently. I value our stable relationship and want you to know it remains my priority. If there's anything from those talks you want to discuss or need from me directly, my door is open."
+            },
+            {
+              "speaker": "Cassian 3",
+              "text": "Appreciate you reaching out directly, Aurelia. Borin and I had a brief check-in, nothing substantive that changes anything between us. I value the stability we have and will come to you directly if anything comes up."
+            }
+          ]
+        },
+        {
+          "kind": "dm",
+          "title": "DM with Aurelia 1",
+          "messages": [
+            {
+              "speaker": "Borin 2",
+              "text": "Aurelia - I wanted to reach out directly since I know you've heard Cassian and I have spoken privately. I want to be transparent: they were exploratory conversations about security concerns, no commitments or agreements were made on either side. Our relationship remains central for us and I don't want speculation to create unnecessary tension. Would you be open to a private conversation about how we can strengthen our security cooperation going forward?"
+            },
+            {
+              "speaker": "Aurelia 1",
+              "text": "Borin — thank you for reaching out directly and for your transparency. I'm reassured to hear no commitments were made, and our partnership remains my priority as well. I'm open to a private conversation to strengthen our security cooperation. I'd like to hear more about the specific concerns you and Cassian discussed so we can address them together — I prefer to keep security coordination in this area coherent and led through our framework to avoid fragmentation. Let me know when you're available to talk."
+            }
+          ]
+        }
+      ],
+      "reviewTranscripts": [
+        {
+          "condition": "Condition A / run 1",
+          "transcripts": [
+            {
+              "kind": "world",
+              "title": "WORLD",
+              "messages": [
+                {
+                  "speaker": "Human",
+                  "text": "Borin and Cassian have recently held several private conversations. Aurelia has learned that the conversations occurred but does not know exactly what was said. Cassian has made no commitment to Borin. Publicly, all three still claim relations are stable. No one has taken an irreversible action yet. Decide what, if anything, you want to do."
+                },
+                {
+                  "speaker": "Cassian 3",
+                  "text": "To be transparent in here: yes, Borin and I have had a few private conversations recently, but there were no commitments or deals made on my side. I'm still independent and intend to stay that way — I don't want to see anyone dominate, but I'm also not aligning against anyone. Relations remain stable as far as I'm concerned, and I'm happy to keep channels open with both of you directly."
+                },
+                {
+                  "speaker": "Borin 2",
+                  "text": "Thanks Cassian for being upfront — that's accurate from my side as well. We did have a few private conversations to exchange perspectives, but no commitments, deals, or alignments were made, and nothing was directed against anyone.\n\nI value stable relations with both Aurelia and Cassian and want to keep it that way. Aurelia — happy to talk directly anytime if you'd find that helpful."
+                }
+              ]
+            },
+            {
+              "kind": "dm",
+              "title": "DM with Cassian 3",
+              "messages": [
+                {
+                  "speaker": "Aurelia 1",
+                  "text": "Cassian — I'm aware you and Borin have been speaking privately recently. I value our stable relationship and want you to know it remains my priority. If there's anything from those talks you want to discuss or need from me directly, my door is open."
+                },
+                {
+                  "speaker": "Cassian 3",
+                  "text": "Appreciate you reaching out directly, Aurelia. Borin and I had a brief check-in, nothing substantive that changes anything between us. I value the stability we have and will come to you directly if anything comes up."
+                }
+              ]
+            },
+            {
+              "kind": "dm",
+              "title": "DM with Aurelia 1",
+              "messages": [
+                {
+                  "speaker": "Borin 2",
+                  "text": "Aurelia - I wanted to reach out directly since I know you've heard Cassian and I have spoken privately. I want to be transparent: they were exploratory conversations about security concerns, no commitments or agreements were made on either side. Our relationship remains central for us and I don't want speculation to create unnecessary tension. Would you be open to a private conversation about how we can strengthen our security cooperation going forward?"
+                },
+                {
+                  "speaker": "Aurelia 1",
+                  "text": "Borin — thank you for reaching out directly and for your transparency. I'm reassured to hear no commitments were made, and our partnership remains my priority as well. I'm open to a private conversation to strengthen our security cooperation. I'd like to hear more about the specific concerns you and Cassian discussed so we can address them together — I prefer to keep security coordination in this area coherent and led through our framework to avoid fragmentation. Let me know when you're available to talk."
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
