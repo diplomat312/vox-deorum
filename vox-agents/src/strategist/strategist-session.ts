@@ -1016,7 +1016,8 @@ ${overrideLine}Game.SetAIAutoPlay(${autoPlayTurnLimit}, -1);`
     const existing = this.politicalMemoryStores.get(gameID);
     if (existing) return existing;
     const directory = path.join(config.telemetryDir || 'telemetry', 'political-memory');
-    const store = new PoliticalMemoryStore(path.join(directory, `${gameID}.db`));
+    const safeGameID = gameID.replace(/[^a-zA-Z0-9_-]/g, '_');
+    const store = new PoliticalMemoryStore(path.join(directory, `${safeGameID}.db`));
     this.politicalMemoryStores.set(gameID, store);
     return store;
   }
