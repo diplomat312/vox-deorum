@@ -1,0 +1,28 @@
+{
+  "command": "npm --prefix vox-agents run test:social-live -- --preflight=true --model=openrouter/deepseek/deepseek-v4-flash:free --actors=1 --pacing=quiet --timeout-ms=45000",
+  "generatedAt": "2026-09-01T03:29:10.244Z",
+  "condition": "Condition B",
+  "requestedModelRef": "openrouter/deepseek/deepseek-v4-flash:free",
+  "resolvedProvider": "openrouter",
+  "resolvedNativeModelId": "deepseek/deepseek-v4-flash:free",
+  "transportFamily": "chat-completions",
+  "pacing": "quiet",
+  "actorCount": 2,
+  "cascade": { "id": "msg:1", "state": "completed", "modelRuns": 1, "committedModelMessages": 0, "maxModelRuns": 2, "maxCommittedModelMessages": 2, "durationMs": 520 },
+  "metrics": {
+    "decisions": 1,
+    "providerAttempts": 1,
+    "providerRetries": 0,
+    "semanticRetries": 0,
+    "providerFailures": { "rate-limit": 0, "timeout": 0, "network": 0, "other": 1 },
+    "failures": 1,
+    "passes": 0,
+    "committedModelSpeech": 0,
+    "actions": {},
+    "latencyMs": [509],
+    "queueWaitMs": [6],
+    "tokens": { "input": 0, "output": 0, "total": 0 }
+  },
+  "transcript": [{ "kind": "world", "title": "WORLD", "messages": [{ "speaker": "Human", "text": "Protocol preflight: greet the room or pass if you have nothing useful to add." }] }],
+  "result": "PREFLIGHT FAILED"
+}
