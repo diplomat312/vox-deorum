@@ -38,6 +38,7 @@ import {
   getActiveAssignments,
   resolveHumanSeat,
 } from './enrichment.js';
+import { unifiedDiplomatAgentName } from '../../strategist/unified-civilization-mind.js';
 import { chatThreadStore } from './store.js';
 
 const logger = createLogger('webui:chat-factory');
@@ -132,7 +133,16 @@ export function createChatThreadFactory(
       throw new ChatOpenError(400, `Target seat context not active: ${targetContextId}`);
     }
 
-    const voice = agentOverride ?? assignments?.[targetPlayerID]?.diplomat ?? 'diplomat';
+    const assignment = assignments?.[targetPlayerID];
+    if (assignment?.mind === 'unified-mind' && agentOverride && agentOverride !== unifiedDiplomatAgentName) {
+      throw new ChatOpenError(
+        400,
+        'Unified-mind diplomacy must use the assigned civilization voice; arbitrary agent overrides are not allowed.',
+      );
+    }
+    const voice = assignment?.mind === 'unified-mind'
+      ? unifiedDiplomatAgentName
+      : agentOverride ?? assignment?.diplomat ?? 'diplomat';
     const voiceAgent = dependencies.getAgent(voice);
     if (!voiceAgent) {
       throw new ChatOpenError(404, `Agent ${voice} not found`);

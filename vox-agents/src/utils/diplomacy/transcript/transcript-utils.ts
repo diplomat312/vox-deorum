@@ -427,7 +427,7 @@ export function boundaryIndex(messages: MessageWithMetadata[], mark: number | un
  * diplomat's non-spoken terminal tools: `Diplomat.completionTools` is built from this set plus
  * `send-message` (speaking is captured by {@link collectSpokenReply}), so the two cannot drift.
  */
-export const terminalActionTools = new Set(["call-negotiator", "close-conversation"]);
+export const terminalActionTools = new Set(["call-negotiator", "close-conversation", "pass-diplomacy"]);
 
 /**
  * Tools whose call/result must NOT enter a captured {@link collectTrace} trajectory, because each is

@@ -60,6 +60,30 @@ import type {
 } from "./vox-run.js";
 import winston from "winston";
 
+/** Resolve the unified civilization wake label without importing the agent adapters. */
+function unifiedWakeForAgent(agentName: string): string | undefined {
+  if (agentName === "unified-mind-strategist") return "strategic";
+  if (agentName === "unified-mind-diplomat") return "diplomacy";
+  if (agentName === "unified-mind-negotiator") return "deal";
+  return undefined;
+}
+
+/** Build sanitized telemetry labels for model-backed unified civilization executions. */
+function unifiedTelemetryAttributes<TParameters extends AgentParameters>(
+  agentName: string,
+  parameters: TParameters,
+): Record<string, string> {
+  const wake = unifiedWakeForAgent(agentName);
+  if (!wake) return {};
+  return {
+    "mind.mode": "unified-mind",
+    "mind.wake": wake,
+    "mind.player_id": String(parameters.playerID),
+    "game.id": parameters.gameID,
+    "game.turn": String(parameters.turn),
+  };
+}
+
 /**
  * Runtime context for executing Vox Agents.
  * Manages agent registration, tool availability, and execution flow.
@@ -577,6 +601,9 @@ export class VoxContext<TParameters extends AgentParameters> {
           'vox.context.id': this.id,
           'game.turn': String(params.turn),
           'agent.name': agentName,
+          'player.id': String(params.playerID),
+          'game.id': params.gameID,
+          ...unifiedTelemetryAttributes(agentName, params),
           'agent.input': input ? JSON.stringify(input) : undefined
         }
       });
@@ -586,6 +613,13 @@ export class VoxContext<TParameters extends AgentParameters> {
           // Execute the agent using generateText
           // Get model config - agent's model or default, with overrides applied
           const modelConfig = agent.getModel(params, input, this.modelOverrides);
+          const mindAttributes = unifiedTelemetryAttributes(agentName, params);
+          if (Object.keys(mindAttributes).length > 0) {
+            span.setAttributes({
+              ...mindAttributes,
+              'mind.model': formatModelReference(modelConfig),
+            });
+          }
           const system = await agent.getSystem(params, input, this);
 
           // Auto-send model name via set-metadata when the strategist's model changes
@@ -673,13 +707,19 @@ export class VoxContext<TParameters extends AgentParameters> {
 
             // Convert into the output (now async)
             const output = await agent.getOutput(params, input, finalText, this);
-            if (!output) return;
+            if (!output) {
+              if (Object.keys(mindAttributes).length > 0) span.setAttribute('mind.outcome', 'no-output');
+              return;
+            }
+            if (Object.keys(mindAttributes).length > 0) span.setAttribute('mind.outcome', 'completed');
             return agent.postprocessOutput(params, input, output);
           } else {
+            if (Object.keys(mindAttributes).length > 0) span.setAttribute('mind.outcome', 'no-op');
             span.setStatus({ code: SpanStatusCode.OK, message: 'No system prompt' });
             return undefined;
           }
         } catch (error) {
+          if (unifiedWakeForAgent(agentName)) span.setAttribute('mind.outcome', 'error');
           this.logger.error(`Error executing agent ${agentName}!`, error);
           span.recordException(error as Error);
           span.setStatus({
@@ -730,7 +770,10 @@ export class VoxContext<TParameters extends AgentParameters> {
         'vox.context.id': this.id,
         'game.turn': String(parameters.turn),
         'agent.name': agent.name,
-        'step.number': stepCount + 1
+        'step.number': stepCount + 1,
+        'player.id': String(parameters.playerID),
+        'game.id': parameters.gameID,
+        ...unifiedTelemetryAttributes(agent.name, parameters),
       }
     });
 

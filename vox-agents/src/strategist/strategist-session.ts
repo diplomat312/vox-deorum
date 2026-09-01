@@ -15,7 +15,7 @@ import { voxCivilization } from "../infra/vox-civilization.js";
 import { setTimeout } from 'node:timers/promises';
 import { VoxSession } from "../infra/vox-session.js";
 import { sessionRegistry } from "../infra/session-registry.js";
-import { StrategistSessionConfig, type PlayerConfig, isVisualMode, isObsMode, isHumanControl } from "../types/config.js";
+import { StrategistSessionConfig, type Model, type PlayerConfig, isVisualMode, isObsMode, isHumanControl } from "../types/config.js";
 import { obsManager } from "../infra/obs-manager.js";
 import { ProductionController } from "../infra/production-controller.js";
 import { config } from "../utils/config.js";
@@ -27,9 +27,12 @@ import { agentRegistry } from '../infra/agent-registry.js';
 import { ensureModelsResolved, selectModelReference } from '../utils/models/resolution.js';
 import { DEFAULT_NEGOTIATOR } from '../envoy/agents/resolve-negotiator.js';
 import {
+  assertUnifiedMindConfig,
+  dealAgentForPlayer,
   diplomacyAgentForPlayer,
   isUnifiedMindPlayer,
   strategicAgentForPlayer,
+  unifiedModelOverrides,
   unifiedModelReference,
 } from './unified-civilization-mind.js';
 import {
@@ -124,9 +127,15 @@ export class StrategistSession extends VoxSession<StrategistSessionConfig> {
       this.onStateChange('starting');
       sessionRegistry.register(this);
 
+      if (this.config.nativeHumanPlayer !== undefined
+        && (!Number.isInteger(this.config.nativeHumanPlayer) || this.config.nativeHumanPlayer < 0)) {
+        throw new Error('nativeHumanPlayer must be a non-negative integer when configured.');
+      }
+
       // Verify every model reference reachable through each configured seat before launching Civ V.
       for (const playerConfig of Object.values(this.config.llmPlayers)) {
-        await ensureModelsResolved(this.modelReferencesForPlayer(playerConfig), playerConfig.llms);
+        assertUnifiedMindConfig(playerConfig);
+        await ensureModelsResolved(this.modelReferencesForPlayer(playerConfig), this.modelOverridesForPlayer(playerConfig));
       }
 
       const luaScript = this.config.gameMode === 'start' ? 'StartGame.lua' :
@@ -669,6 +678,7 @@ ${overrideLine}Game.SetAIAutoPlay(${autoPlayTurnLimit}, -1);`
    * Arbitrary override-map entries are deliberately excluded because they cannot run in this session.
    */
   private modelReferencesForPlayer(playerConfig: PlayerConfig): string[] {
+    const overrides = this.modelOverridesForPlayer(playerConfig);
     const agentNames = new Set<string>();
     /** Add one agent and recursively include its fixed model dependencies. */
     const visit = (name: string): void => {
@@ -682,18 +692,25 @@ ${overrideLine}Game.SetAIAutoPlay(${autoPlayTurnLimit}, -1);`
     const diplomatName = diplomacyAgentForPlayer(playerConfig);
     visit(diplomatName);
     if (agentRegistry.get(diplomatName)?.usesSeatNegotiator) {
-      const configuredNegotiator = playerConfig.negotiator;
-      visit(configuredNegotiator && agentRegistry.has(configuredNegotiator) ? configuredNegotiator : DEFAULT_NEGOTIATOR);
+      const dealAgent = dealAgentForPlayer(playerConfig);
+      visit(agentRegistry.has(dealAgent) ? dealAgent : DEFAULT_NEGOTIATOR);
     }
 
     const references = [...new Set([...agentNames].map((name) => {
       const agent = agentRegistry.get(name);
-      return selectModelReference(name, agent?.modelSize, playerConfig.llms);
+      return selectModelReference(name, agent?.modelSize, overrides);
     }))];
     if (isUnifiedMindPlayer(playerConfig)) {
       references.push(unifiedModelReference(playerConfig.llms));
     }
     return [...new Set(references)];
+  }
+
+  /** Resolve the per-seat model map used by the seat context and startup preflight. */
+  private modelOverridesForPlayer(playerConfig: PlayerConfig): Record<string, Model | string> {
+    return isUnifiedMindPlayer(playerConfig)
+      ? unifiedModelOverrides(playerConfig.llms)
+      : (playerConfig.llms ?? {});
   }
 
   /**
@@ -946,6 +963,7 @@ ${overrideLine}Game.SetAIAutoPlay(${autoPlayTurnLimit}, -1);`
       const unified = isUnifiedMindPlayer(playerConfig);
       const diplomat = diplomacyAgentForPlayer(playerConfig);
       const strategist = strategicAgentForPlayer(playerConfig);
+      const dealAgent = dealAgentForPlayer(playerConfig);
       const modelKey = unified ? "unified-mind" : strategist;
       result[actualPlayerID] = {
         strategist: unified ? "unified-mind" : playerConfig.strategist,
@@ -954,8 +972,8 @@ ${overrideLine}Game.SetAIAutoPlay(${autoPlayTurnLimit}, -1);`
         ...(unified ? { mindModel: modelOf(playerConfig, modelKey) } : {}),
         diplomat,
         diplomatModel: modelOf(playerConfig, unified ? modelKey : diplomat),
-        negotiator: playerConfig.negotiator,
-        negotiatorModel: modelOf(playerConfig, playerConfig.negotiator),
+        negotiator: dealAgent,
+        negotiatorModel: modelOf(playerConfig, unified ? modelKey : playerConfig.negotiator),
         configSlot
       };
     }
@@ -1027,6 +1045,7 @@ ${overrideLine}Game.SetAIAutoPlay(${autoPlayTurnLimit}, -1);`
   private computePlayerCount(luaScript: string): number | undefined {
     if (this.config.gameMode !== 'start' || luaScript !== 'StartGame.lua') return undefined;
     const playerIds = Object.keys(this.config.llmPlayers).map(Number);
+    if (this.config.nativeHumanPlayer !== undefined) playerIds.push(this.config.nativeHumanPlayer);
     if (playerIds.length === 0) return undefined;
     return Math.max(...playerIds) + 1;
   }

@@ -18,7 +18,7 @@ import { VoxSpanExporter } from "../utils/telemetry/vox-exporter.js";
 import { PlayerConfig } from "../types/config.js";
 import { HumanDecisionBus } from "./human-decision-bus.js";
 import { isScheduledDecision, normalizePacing, shouldInterruptDecision, type NormalizedPacingConfig } from "./pacing.js";
-import { strategicAgentForPlayer } from "./unified-civilization-mind.js";
+import { isUnifiedMindPlayer, strategicAgentForPlayer, unifiedModelOverrides } from "./unified-civilization-mind.js";
 
 /**
  * Manages a single player's strategist execution within a game session.
@@ -63,7 +63,10 @@ export class VoxPlayer {
 
     // Pass model overrides to VoxContext
     // Agents are now registered globally in agent-registry.ts
-    this.context = new VoxContext(playerConfig.llms || {}, id);
+    const modelOverrides = isUnifiedMindPlayer(playerConfig)
+      ? unifiedModelOverrides(playerConfig.llms)
+      : (playerConfig.llms ?? {});
+    this.context = new VoxContext(modelOverrides, id);
     // Let the context reach its owning session for authoritative state (e.g. the live turn).
     this.context.session = session;
 

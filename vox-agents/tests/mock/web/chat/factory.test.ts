@@ -213,6 +213,34 @@ describe('chat thread factory', () => {
       });
     });
 
+    it('should not allow an ordinary API override to bypass a unified seat voice', async () => {
+      const assignments: Record<number, PlayerAssignment> = {
+        2: {
+          strategist: 'unified-mind',
+          mind: 'unified-mind',
+          diplomat: 'unified-mind-diplomat',
+          configSlot: 2,
+        },
+        1: { strategist: 'human-strategist', configSlot: 1 },
+      };
+      const { dependencies } = createDependencies({
+        getContext: () => fakeContext(),
+        getAssignments: () => assignments,
+      });
+      const factory = createChatThreadFactory(dependencies);
+
+      await expect(factory.openDiplomacyChat({
+        mode: 'diplomacy',
+        contextId: 'game-7-player-2',
+        callerPlayerID: 1,
+        targetPlayerID: 2,
+        agentName: 'diplomat',
+      })).rejects.toMatchObject({
+        status: 400,
+        message: 'Unified-mind diplomacy must use the assigned civilization voice; arbitrary agent overrides are not allowed.',
+      });
+    });
+
     it('should mutate direction, context, roles, and voice when reopening a reversed pair', async () => {
       const assignments: Record<number, PlayerAssignment> = {
         1: { strategist: 'human-strategist', diplomat: 'diplomat', configSlot: 0 },

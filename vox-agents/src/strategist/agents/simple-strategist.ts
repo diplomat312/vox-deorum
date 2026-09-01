@@ -34,6 +34,16 @@ export class SimpleStrategist extends SimpleStrategistBase {
    * Human-readable description of what this agent does
    */
   readonly description: string = "Analyzes game state and makes strategic decisions for Civ V gameplay including diplomacy, technology, policy, and grand strategy";
+
+  /** Return the legacy strategist's opening identity sentence. */
+  protected getInitialIdentity(parameters: StrategistParameters): string {
+    return `You are ${parameters.metadata?.YouAre!.Leader}, leader of ${parameters.metadata?.YouAre!.Name} (Player ${parameters.playerID ?? 0}).`;
+  }
+
+  /** Describe who owns the strategy block in the legacy prompt. */
+  protected getInitialStrategyLabel(): string {
+    return "Strategies: existing strategic decisions from you.";
+  }
   
   /**
    * Gets the system prompt for the strategist
@@ -69,7 +79,7 @@ ${SimpleBriefer.eventsPrompt}`.trim()
     return [{
       role: "system",
       content: `
-You are ${parameters.metadata?.YouAre!.Leader}, leader of ${parameters.metadata?.YouAre!.Name} (Player ${parameters.playerID ?? 0}).
+${this.getInitialIdentity(parameters)}
 
 # Situation
 ${jsonToMarkdown(SituationData)}
@@ -91,7 +101,7 @@ ${jsonToMarkdown(Options, {
       role: "user",
       content: `
 # Strategies
-Strategies: existing strategic decisions from you.
+${this.getInitialStrategyLabel()}
 
 ${jsonToMarkdown(Strategy)}
 

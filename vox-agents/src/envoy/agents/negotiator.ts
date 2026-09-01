@@ -53,15 +53,15 @@ const logger = createLogger("negotiator");
  * `buildGameContextMessages` for grounding and `createBriefingTool` for on-demand briefings.
  */
 export class Negotiator extends VoxAgent<StrategistParameters, NegotiatorInput, string | undefined> {
-  readonly name = "negotiator";
+  readonly name: string = "negotiator";
 
-  readonly description =
+  readonly description: string =
     "A deal specialist who inspects, values, and decides deal terms behind the diplomat — accepting, countering/proposing, or rejecting a deal.";
 
   public tags = ["diplomatic"];
 
   public override toolDescription =
-    "Hand the conversation to your negotiator by giving it a `briefing`: a short recap of what the counterpart said and where the talks stand. The negotiator inspects the game and decides ON ITS OWN whether to accept, counter, propose, or reject; it records the move and returns a summary for you to voice.";
+    "Hand the current deal decision wake a `briefing`: a short recap of what the counterpart said and where the talks stand. The deal wake inspects the game and records exactly one accepted, rejected, or proposed deal action, then returns a summary for the conversation.";
 
   /**
    * Caller-facing schema for the diplomat's `call-negotiator` handoff. The diplomat authors
@@ -178,14 +178,24 @@ You can access additional information by calling the following tools.
    * range when proposing. The derived `activeProposal` is stashed on `input` for the terminal
    * tools (which re-validate it against the live transcript before writing).
    */
+  /** Build the shared game context used by this deal wake. */
+  protected getGameContextMessages(parameters: StrategistParameters): ModelMessage[] {
+    return buildGameContextMessages(parameters);
+  }
+
+  /** Build the final instruction appended after the deal ledger. */
+  protected getFinalInstruction(parameters: StrategistParameters, input: NegotiatorInput): string {
+    const leader = parameters.metadata?.YouAre?.Leader ?? "your leader";
+    const civName = parameters.metadata?.YouAre?.Name ?? "your civilization";
+    return `You are the negotiator for ${civName}, serving ${leader}. Once you are confident in your decision, use exactly one tool in the provided format to ${(input.activeProposal ? "negotiate" : "propose")} ${civName}'s diplomatic deals and terms.`;
+  }
+
   public async getInitialMessages(
     parameters: StrategistParameters,
     input: NegotiatorInput,
     context: VoxContext<StrategistParameters>
   ): Promise<ModelMessage[]> {
     const { thread } = input;
-    const leader = parameters.metadata?.YouAre?.Leader ?? "your leader";
-    const civName = parameters.metadata?.YouAre?.Name ?? "your civilization";
 
     // (3) what is on the table — reduce the transcript and forward the open offer from either side.
     const reduction = await readActiveProposal(thread.player1ID, thread.player2ID);
@@ -240,10 +250,10 @@ You can access additional information by calling the following tools.
     );
 
     return [
-      ...buildGameContextMessages(parameters),
+      ...this.getGameContextMessages(parameters),
       ...(background.text ? [{ role: "user" as const, content: background.text }] : []),
       { role: "user", content: sections.join("\n\n") },
-      { role: "system", content: `You are the negotiator for ${civName}, serving ${leader}. Once you are confidence in your decision, use exactly *one* tool in the provided format to ${(input.activeProposal ? "negotiate" : "propose")} ${civName}'s diplomatic deals and terms.` },
+      { role: "system", content: this.getFinalInstruction(parameters, input) },
     ];
   }
 

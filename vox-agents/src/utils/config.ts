@@ -194,9 +194,16 @@ export function refreshConfig(): VoxAgentsConfig {
  * ```
  */
 export function getConfigsDir(): string {
-  return path.isAbsolute(config.configsDir)
-    ? config.configsDir
-    : path.join(process.cwd(), config.configsDir);
+  if (path.isAbsolute(config.configsDir)) return config.configsDir;
+
+  const workingDirectoryPath = path.resolve(process.cwd(), config.configsDir);
+  if (fs.existsSync(workingDirectoryPath)) return workingDirectoryPath;
+
+  // Workspace launchers execute the strategist with vox-agents as cwd while the shared
+  // configuration directory lives at the repository root. Keep cwd-relative custom paths
+  // working, then use the adjacent repository directory for the standard clean checkout.
+  const repositoryPath = path.resolve(process.cwd(), "..", config.configsDir);
+  return fs.existsSync(repositoryPath) ? repositoryPath : workingDirectoryPath;
 }
 
 export default config;

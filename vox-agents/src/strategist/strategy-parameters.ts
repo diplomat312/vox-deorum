@@ -312,7 +312,17 @@ export function getGameState(
  * @param parameters - The strategy parameters containing metadata and game states
  * @returns A single system message with the assembled game context
  */
-export function buildGameContextMessages(parameters: StrategistParameters): ModelMessage[] {
+/** Options for adapting shared game context to a unified civilization wake. */
+export interface GameContextOptions {
+  /** Replace legacy leader-directed wording with civilization-owned state wording. */
+  unifiedMind?: boolean;
+}
+
+/** Build the shared game context for a legacy agent or a unified civilization wake. */
+export function buildGameContextMessages(
+  parameters: StrategistParameters,
+  options: GameContextOptions = {},
+): ModelMessage[] {
   const state = getGameState(parameters, parameters.turn);
   if (!state) {
     throw new Error(`No game state available near turn ${parameters.turn}`);
@@ -345,7 +355,9 @@ Players: summary reports about visible players in the world.
 ${jsonToMarkdown(state.players)}
 
 # Strategies
-Strategies: existing strategic decisions from your leader.
+${options.unifiedMind
+    ? "Strategies: existing strategic decisions owned by our civilization's governing mind."
+    : "Strategies: existing strategic decisions from your leader."}
 
 ${jsonToMarkdown(Strategy)}`.trim()
   }];

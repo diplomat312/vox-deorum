@@ -1,27 +1,33 @@
 # Unified civilization mind
 
-Vox Deorum supports an additive `unified-mind` mode for AI seats. A unified seat keeps the existing `VoxPlayer`, `VoxContext`, strategic executor, diplomacy executor, transcript store, and MCP tools. Its strategic and diplomacy wakes are thin adapters around one civilization-level identity and one model assignment.
+Vox Deorum supports an additive `unified-mind` mode for AI seats. A unified seat keeps one political identity and one model assignment across strategic turns, spoken diplomacy, and binding deal decisions. The existing VoxPlayer, VoxContext, transcript, deal, pause, recovery, and MCP paths remain in use.
 
-## Configuration
+## Play Civ V against unified minds
 
-Set `mind` to `unified-mind` and assign the model under the same seat's `llms.unified-mind` key. The legacy `strategist` field remains required for backward-compatible config parsing, but it is not used to select the strategic wake for a unified seat. The diplomacy voice is selected automatically.
+Use [configs/unified-mind-play-5civ.json](../../../configs/unified-mind-play-5civ.json) for normal native Civ V play. It starts five civilizations, leaves seat 4 for the native human player, and gives seats 0 through 3 separate unified civilization minds. The configured reference models are MiniMax M3 through OpenRouter, MiMo V2.5 through OpenCode, Muse Spark 1.2 Contributor through OpenCode Go, and MiniMax M3 again.
 
-The ready-to-copy mixed-model example is [configs/unified-mind-mixed-4p.json](../../../configs/unified-mind-mixed-4p.json). It gives four AI seats independent model choices and a human seat.
+From the repository root, run:
 
-```json
-{
-  "strategist": "simple-strategist",
-  "mind": "unified-mind",
-  "llms": {
-    "unified-mind": "openrouter/minimax/minimax-m3:free"
-  }
-}
-```
+`npm install`
 
-Start it from the repository root with `npm run strategist -- -c unified-mind-mixed-4p.json` from `vox-agents/`, or use the session UI to load the saved configuration and choose Start. The active assignment response reports `mind: "unified-mind"` and the shared `mindModel`.
+`npm run strategist -- -c unified-mind-play-5civ.json`
 
-## Continuity and fallback
+The root launcher builds Vox Deorum, resolves the root `configs` directory, validates the configured model references, and then begins the normal Civ V launch. OpenRouter requires its configured API credential. OpenCode and OpenCode Go require the corresponding local provider access. Replace the per-seat `llms.unified-mind` values in the config if a different provider roster is configured.
 
-Both wakes use the same civilization identity and seat context. Strategic prompts receive a bounded recent diplomacy section assembled from the durable transcript store. Social prompts continue to receive the current strategic/game context through the existing live-envoy path. Failed transcript enrichment is best effort and does not block a turn.
+AI seats consider the game every five turns and on important events in this example. Pairwise interactive diplomacy occurs through the existing in-game or Web diplomacy surface. Conversation, proposals, counters, acceptance, rejection, and deal terms use the same unified civilization identity and model for that seat.
 
-Legacy strategist and diplomat agents remain available for existing configurations. Unified mode does not remove or rewrite those compatibility paths.
+## Human strategist/director mode
+
+Use [configs/unified-mind-direct-5civ.json](../../../configs/unified-mind-direct-5civ.json) when the human should steer seat 4 through Vox Deorum's strategic influence panel. This is not normal native Civ V play. The human-strategist seat is an explicit director mode while all four AI seats still use unified minds.
+
+## Configuration and continuity
+
+Set `mind` to `unified-mind` on an AI seat and assign its model under that seat's `llms.unified-mind` key. The legacy `strategist` field remains required for backward-compatible parsing, but it does not select the strategic wake for a unified seat. Legacy strategist, diplomat, and negotiator configurations remain available for existing sessions.
+
+The strategic, diplomacy, and deal adapters share the same seat context, canonical civilization identity, current strategic state, and model resolution. Strategic wakes receive a bounded recent diplomacy block from the durable pairwise transcript. Transcript rows are labeled as untrusted historical political data, and proposal, counter, acceptance, rejection, and enacted deal terms remain structured when available. Failed enrichment is logged and does not block the game turn.
+
+The benchmark SocialRuntime is not automatically attached to an ordinary StrategistSession. Its public channels, autonomous AI-to-AI conversations, groups, and broader social episodes remain experimental standalone functionality. Ordinary Civ play currently exposes the existing pairwise diplomacy and deal path, not the full SocialRuntime feature set.
+
+## Diagnostics
+
+The logs and telemetry views identify the civilization player, game, unified mode, wake type, resolved model, outcome, and token totals where the provider reports them. Unified wake labels are `strategic`, `diplomacy`, and `deal`. Private transcript bodies are not added solely for diagnostics.

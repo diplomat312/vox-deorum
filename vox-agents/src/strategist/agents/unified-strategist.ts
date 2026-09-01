@@ -13,7 +13,7 @@ import { SimpleBriefer } from "../../briefer/simple-briefer.js";
 import { VoxContext } from "../../infra/vox-context.js";
 import type { Model } from "../../types/config.js";
 import type { StrategistParameters } from "../strategy-parameters.js";
-import { getUnifiedMindModel, buildRecentDiplomacyMessage, buildUnifiedMindIdentity } from "../unified-civilization-mind.js";
+import { buildRecentDiplomacyMessage, buildUnifiedMindCanonicalIdentity, buildUnifiedMindIdentity, getUnifiedMindModel } from "../unified-civilization-mind.js";
 
 /** Strategic adapter that invokes the shared civilization-level policy. */
 export class UnifiedStrategist extends SimpleStrategist {
@@ -22,6 +22,16 @@ export class UnifiedStrategist extends SimpleStrategist {
 
   /** Player-facing description of the common civilization policy. */
   override readonly description = "Unified civilization mind strategic wake";
+
+  /** Keep the legacy strategic context aligned with the canonical unified identity. */
+  protected override getInitialIdentity(parameters: StrategistParameters): string {
+    return buildUnifiedMindCanonicalIdentity(parameters);
+  }
+
+  /** State that strategic settings belong to the civilization, not a separate leader agent. */
+  protected override getInitialStrategyLabel(): string {
+    return "Strategies: existing strategic decisions owned by our civilization's governing mind.";
+  }
 
   /** Keep the unified model selection independent of the legacy strategist key. */
   override getModel(

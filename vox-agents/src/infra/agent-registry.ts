@@ -19,6 +19,7 @@ import { Spokesperson } from "../envoy/agents/spokesperson.js";
 import { Diplomat } from "../envoy/agents/diplomat.js";
 import { UnifiedDiplomat } from "../envoy/agents/unified-diplomat.js";
 import { Negotiator } from "../envoy/agents/negotiator.js";
+import { UnifiedNegotiator } from "../envoy/agents/unified-negotiator.js";
 import { DiplomaticAnalyst } from "../analyst/diplomatic-analyst.js";
 import { SimpleStrategistStaffed } from "../strategist/agents/simple-strategist-staffed.js";
 import { SimpleStrategistLearned } from "../strategist/agents/simple-strategist-learned.js";
@@ -143,6 +144,7 @@ class AgentRegistry {
     this.register(new Diplomat());
     this.register(new UnifiedDiplomat());
     this.register(new Negotiator());
+    this.register(new UnifiedNegotiator());
     this.register(new DiplomaticAnalyst());
 
     // Register telepathist agents

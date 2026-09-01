@@ -12,6 +12,7 @@ import type { EnvoyThread } from "../../types/index.js";
 import { agentRegistry } from "../../infra/agent-registry.js";
 import { sessionRegistry } from "../../infra/session-registry.js";
 import { createLogger } from "../../utils/logger.js";
+import { unifiedNegotiatorAgentName } from "../../strategist/unified-civilization-mind.js";
 
 const logger = createLogger("resolve-negotiator");
 
@@ -24,7 +25,10 @@ export const DEFAULT_NEGOTIATOR = "negotiator";
  * to the default when the configured negotiator is not a registered agent.
  */
 export function resolveNegotiator(thread: EnvoyThread): string {
-  const configured = sessionRegistry.getActive()?.getPlayerAssignments()?.[thread.agent]?.negotiator;
+  const assignment = sessionRegistry.getActive()?.getPlayerAssignments()?.[thread.agent];
+  if (assignment?.mind === "unified-mind") return unifiedNegotiatorAgentName;
+
+  const configured = assignment?.negotiator;
   const name = configured ?? DEFAULT_NEGOTIATOR;
   if (!agentRegistry.has(name)) {
     logger.warn(`Configured negotiator "${name}" is not registered; falling back to "${DEFAULT_NEGOTIATOR}"`);
