@@ -1,9 +1,10 @@
 import { randomUUID } from 'node:crypto';
+import { pathToFileURL } from 'node:url';
 
 interface ModelDefinition { id: string; name: string; }
 interface SocialActor { id: string; displayName: string; modelRef?: string; }
 interface SocialMessage { id: number; channelId: string; speakerActorId: string; content: string; }
-interface SocialDiagnostic { actorId: string; actorDisplayName: string; modelRef: string | null; selectedKind: string | null; validationOutcome: string; applicationOutcome: string | null; providerLatencyMs: number | null; queueWaitMs: number | null; retryCount: number; semanticRetryCount?: number; providerAttemptCount?: number; providerRetryCount?: number; inputTokens: number | null; outputTokens: number | null; totalTokens: number | null; cost: number | null; }
+interface SocialDiagnostic { actorId: string; actorDisplayName: string; modelRef: string | null; selectedKind: string | null; validationOutcome: string; applicationOutcome: string | null; providerLatencyMs: number | null; queueWaitMs: number | null; retryCount: number; semanticRetryCount?: number; providerAttemptCount?: number; providerRetryCount?: number; providerFailureClass?: string | null; inputTokens: number | null; outputTokens: number | null; totalTokens: number | null; cost: number | null; }
 interface SocialCascade { id: string; state: string; modelRuns: number; committedModelMessages: number; maxModelRuns: number; maxCommittedModelMessages: number; createdAt: string; updatedAt: string; }
 interface SocialChannel { id: string; kind: string; title: string; }
 interface SocialCascadeWait { cascade?: SocialCascade; settled: boolean; timedOut: boolean; }
@@ -19,6 +20,7 @@ const configuredModels = readOption('--models', process.env.SOCIAL_LIVE_MODELS ?
 const timeoutMs = Math.min(Math.max(Number(readOption('--timeout-ms', '90000')) || 90_000, 1_000), 300_000);
 const turns = Math.min(Math.max(Number(readOption('--turns', '7')) || 7, 1), 25);
 const preflight = readOption('--preflight', 'false') === 'true';
+const mixedModels = readOption('--mixed-models', 'false') === 'true';
 
 const benchmarkProfiles: ModelDefinition[] = [
   { id: 'aurelia', name: 'Aurelia: powerful incumbent, status-conscious, and worried about balancing coalitions.' },
@@ -29,26 +31,26 @@ const benchmarkProfiles: ModelDefinition[] = [
 
 /** Run an economical opt-in live social benchmark against an already started developer server. */
 async function main(): Promise<void> {
-  const models = resolveModels();
+  const models = resolveCandidateModels();
   if (!models.length) throw new Error('Provide --models=provider/model,provider/model or --model=provider/model --actors=3.');
   const scenarios = selectedScenario ? [selectedScenario] : preflight ? ['single'] : presetScenarios(selectedPreset);
   const results: Array<Record<string, unknown>> = [];
   for (const scenario of scenarios) {
-    if (preflight) for (const model of models) results.push(await runScenario(scenario, [model]));
-    else results.push(await runScenario(scenario, modelsForScenario(scenario, models)));
+    const conditions = benchmarkConditionModelSets(scenario, models, { preflight, mixedModels, requestedActorCount: requestedModel && requestedActors ? requestedActors : undefined });
+    for (let index = 0; index < conditions.length; index += 1) results.push(await runScenario(scenario, conditions[index], `Condition ${String.fromCharCode(65 + (index % 26))}`));
   }
   printResults(results);
 }
 
 /** Select staged benchmark work without making the expensive long run the default. */
 function presetScenarios(preset: string): string[] { if (preset === 'political') return ['political']; if (preset === 'finalist') return ['protocol', 'private', 'long', 'rapid', 'stress']; if (preset === 'all') return ['protocol', 'political', 'private', 'long', 'rapid', 'stress']; return ['protocol']; }
-/** Resolve repeated same-model actors or the explicit mixed-model list. */
-function resolveModels(): string[] { if (requestedModel) return Array.from({ length: Math.min(Math.max(requestedActors || 3, 1), 7) }, () => requestedModel); return configuredModels; }
-/** Ensure each scenario has the actor count it is designed to exercise. */
-function modelsForScenario(scenario: string, models: string[]): string[] { const required = scenarioModelCount(scenario); if (models.length === 1 && (scenario === 'political' || scenario === 'stress')) return Array.from({ length: required }, () => models[0]); return Array.from({ length: required }, (_, index) => models[index % models.length]); }
+/** Resolve the candidate references that should become independent benchmark conditions. */
+function resolveCandidateModels(): string[] { return requestedModel ? [requestedModel] : configuredModels; }
+/** Build isolated candidate conditions unless an explicit mixed-model run was requested. */
+export function benchmarkConditionModelSets(scenario: string, candidates: string[], options: { preflight?: boolean; mixedModels?: boolean; requestedActorCount?: number } = {}): string[][] { const modelsForScenario = (models: string[]): string[] => Array.from({ length: scenarioModelCount(scenario, options.requestedActorCount) }, (_, index) => models[index % models.length]); if (options.preflight || !options.mixedModels) return candidates.map((model) => modelsForScenario([model])); return [modelsForScenario(candidates)]; }
 
 /** Run one disposable scenario and return metrics plus object-based transcripts. */
-async function runScenario(scenario: string, selectedModels: string[]): Promise<Record<string, unknown>> {
+async function runScenario(scenario: string, selectedModels: string[], condition: string): Promise<Record<string, unknown>> {
   const sessionId = `social-live-${scenario}-${randomUUID()}`;
   const actors = [{ id: 'human', ordinal: 0, control: 'human', displayName: 'Human' }, ...selectedModels.map((modelRef, index) => { const profile = benchmarkProfiles[index % benchmarkProfiles.length]; return { id: `${profile.id}-${index + 1}`, ordinal: index + 1, control: 'model', displayName: `${profile.id[0].toUpperCase()}${profile.id.slice(1)} ${index + 1}`, modelRef, profile: profile.name }; })];
   await request('/api/social/session', 'POST', { sessionId, title: `Live benchmark ${scenario}`, pacingProfile: pacing, actors });
@@ -60,7 +62,7 @@ async function runScenario(scenario: string, selectedModels: string[]): Promise<
     const diagnosticsResponse = await request<JsonResponse>('/api/social/diagnostics?limit=10000');
     const allChannels = await request<JsonResponse>('/api/social/channels?inspect=true');
     const transcripts = await readTranscripts(allChannels.channels ?? [], actors);
-    return { benchmarkVersion: '3.8.2', scenario, preset: selectedPreset, pacing, actorCount: actors.length, requestedModels: selectedModels, resolvedModels: selectedModels.map(modelResolution), outputTokenLimit: 1024, timestamp: new Date().toISOString(), diagnosticsTruncated: diagnosticsResponse.diagnosticsTruncated === true, exercised, metrics: summarizeDiagnostics(diagnosticsResponse.diagnostics ?? [], transcripts, actors), cascades: summarizeCascades(diagnosticsResponse.cascades ?? []), transcripts, reviewTranscripts: anonymizeTranscripts(transcripts) };
+    return { benchmarkVersion: '3.8.2.1', scenario, condition: { label: condition, modelRefs: selectedModels, resolvedModels: selectedModels.map(modelResolution) }, preset: selectedPreset, pacing, actorCount: actors.length, requestedModels: selectedModels, resolvedModels: selectedModels.map(modelResolution), outputTokenLimit: 1024, timestamp: new Date().toISOString(), diagnosticsTruncated: diagnosticsResponse.diagnosticsTruncated === true, exercised, metrics: summarizeDiagnostics(diagnosticsResponse.diagnostics ?? [], transcripts, actors), cascades: summarizeCascades(diagnosticsResponse.cascades ?? []), transcripts, reviewTranscripts: [{ condition, transcripts: anonymizeTranscripts(transcripts) }] };
   } finally { await request('/api/social/session/stop', 'POST').catch(() => undefined); }
 }
 
@@ -100,7 +102,7 @@ async function readTranscripts(channels: SocialChannel[], actors: SocialActor[])
 }
 
 /** Produce a blind-review transcript while retaining no model names in its labels. */
-function anonymizeTranscripts(transcripts: Array<{ kind: string; title: string; messages: Array<{ speaker: string; text: string }> }>): Array<{ condition: string; kind: string; title: string; messages: Array<{ speaker: string; text: string }> }> { return transcripts.map((transcript, index) => ({ condition: `Condition ${String.fromCharCode(65 + (index % 26))}`, kind: transcript.kind, title: transcript.title, messages: transcript.messages.map((message) => ({ speaker: message.speaker, text: message.text })) })); }
+function anonymizeTranscripts(transcripts: Array<{ kind: string; title: string; messages: Array<{ speaker: string; text: string }> }>): Array<{ kind: string; title: string; messages: Array<{ speaker: string; text: string }> }> { return transcripts.map((transcript) => ({ kind: transcript.kind, title: transcript.title, messages: transcript.messages.map((message) => ({ speaker: message.speaker, text: message.text })) })); }
 
 /** Summarize provider, action, speech, privacy, and latency metrics. */
 function summarizeDiagnostics(diagnostics: SocialDiagnostic[], transcripts: Array<{ kind: string; title: string; messages: Array<{ speaker: string; text: string }> }>, actors: SocialActor[]): Record<string, unknown> {
@@ -108,10 +110,12 @@ function summarizeDiagnostics(diagnostics: SocialDiagnostic[], transcripts: Arra
   for (const diagnostic of diagnostics) { const key = diagnostic.modelRef ?? diagnostic.actorDisplayName; byModel.set(key, [...(byModel.get(key) ?? []), diagnostic]); }
   const speech = transcripts.flatMap((channel) => channel.messages.filter((message) => message.speaker !== 'Human').map(() => channel.kind));
   const actionCounts = new Map<string, number>(); for (const diagnostic of diagnostics) if (diagnostic.selectedKind) actionCounts.set(diagnostic.selectedKind, (actionCounts.get(diagnostic.selectedKind) ?? 0) + 1);
-  return { decisions: diagnostics.length, providerAttempts: diagnostics.reduce((sum, value) => sum + (value.providerAttemptCount ?? (value.providerLatencyMs === null ? 0 : 1)), 0), providerRetries: diagnostics.reduce((sum, value) => sum + (value.providerRetryCount ?? 0), 0), firstAttemptSuccesses: diagnostics.filter((value) => value.validationOutcome === 'validated' && (value.semanticRetryCount ?? value.retryCount) === 0).length, semanticRetries: diagnostics.reduce((sum, value) => sum + (value.semanticRetryCount ?? value.retryCount), 0), failures: diagnostics.filter((value) => value.validationOutcome === 'failed' || value.applicationOutcome === 'error').length, runtimeRefusals: diagnostics.filter((value) => value.applicationOutcome === 'refused').length, passes: diagnostics.filter((value) => value.selectedKind === 'pass').length, committedModelSpeech: speech.length, worldSpeech: speech.filter((kind) => kind === 'world').length, dmSpeech: speech.filter((kind) => kind === 'dm').length, groupSpeech: speech.filter((kind) => kind === 'group').length, actions: Object.fromEntries(actionCounts), privateChannels: transcripts.filter((channel) => channel.kind !== 'world').length, actors: actors.length, latency: latencySummary(diagnostics), queueWait: queueSummary(diagnostics), tokens: tokenSummary(diagnostics), cost: diagnostics.reduce((sum, value) => sum + (value.cost ?? 0), 0), models: [...byModel.entries()].map(([model, values]) => summarizeModel(model, values)) };
+  return { decisions: diagnostics.length, providerAttempts: diagnostics.reduce((sum, value) => sum + (value.providerAttemptCount ?? (value.providerLatencyMs === null ? 0 : 1)), 0), providerRetries: diagnostics.reduce((sum, value) => sum + (value.providerRetryCount ?? 0), 0), providerFailures: providerFailureCounts(diagnostics), firstAttemptSuccesses: diagnostics.filter((value) => value.validationOutcome === 'validated' && (value.semanticRetryCount ?? value.retryCount) === 0).length, semanticRetries: diagnostics.reduce((sum, value) => sum + (value.semanticRetryCount ?? value.retryCount), 0), failures: diagnostics.filter((value) => value.validationOutcome === 'failed' || value.applicationOutcome === 'error').length, runtimeRefusals: diagnostics.filter((value) => value.applicationOutcome === 'refused').length, passes: diagnostics.filter((value) => value.selectedKind === 'pass').length, committedModelSpeech: speech.length, worldSpeech: speech.filter((kind) => kind === 'world').length, dmSpeech: speech.filter((kind) => kind === 'dm').length, groupSpeech: speech.filter((kind) => kind === 'group').length, actions: Object.fromEntries(actionCounts), privateChannels: transcripts.filter((channel) => channel.kind !== 'world').length, actors: actors.length, latency: latencySummary(diagnostics), queueWait: queueSummary(diagnostics), tokens: tokenSummary(diagnostics), cost: diagnostics.reduce((sum, value) => sum + (value.cost ?? 0), 0), models: [...byModel.entries()].map(([model, values]) => summarizeModel(model, values)) };
 }
 /** Summarize one model's timing, retry, usage, and action outcomes. */
-function summarizeModel(model: string, values: SocialDiagnostic[]): Record<string, unknown> { return { model, decisions: values.length, providerAttempts: values.reduce((sum, value) => sum + (value.providerAttemptCount ?? (value.providerLatencyMs === null ? 0 : 1)), 0), providerRetries: values.reduce((sum, value) => sum + (value.providerRetryCount ?? 0), 0), firstAttemptSuccesses: values.filter((value) => value.validationOutcome === 'validated' && (value.semanticRetryCount ?? value.retryCount) === 0).length, semanticRetries: values.reduce((sum, value) => sum + (value.semanticRetryCount ?? value.retryCount), 0), passes: values.filter((value) => value.selectedKind === 'pass').length, actions: [...new Set(values.map((value) => value.selectedKind).filter((value): value is string => value !== null))], latency: latencySummary(values), tokens: tokenSummary(values), cost: values.reduce((sum, value) => sum + (value.cost ?? 0), 0) }; }
+function summarizeModel(model: string, values: SocialDiagnostic[]): Record<string, unknown> { return { model, decisions: values.length, providerAttempts: values.reduce((sum, value) => sum + (value.providerAttemptCount ?? (value.providerLatencyMs === null ? 0 : 1)), 0), providerRetries: values.reduce((sum, value) => sum + (value.providerRetryCount ?? 0), 0), providerFailures: providerFailureCounts(values), firstAttemptSuccesses: values.filter((value) => value.validationOutcome === 'validated' && (value.semanticRetryCount ?? value.retryCount) === 0).length, semanticRetries: values.reduce((sum, value) => sum + (value.semanticRetryCount ?? value.retryCount), 0), passes: values.filter((value) => value.selectedKind === 'pass').length, actions: [...new Set(values.map((value) => value.selectedKind).filter((value): value is string => value !== null))], latency: latencySummary(values), tokens: tokenSummary(values), cost: values.reduce((sum, value) => sum + (value.cost ?? 0), 0) }; }
+/** Count only provider failure classes emitted by actual provider attempts. */
+function providerFailureCounts(values: SocialDiagnostic[]): Record<string, number> { const counts: Record<string, number> = { 'rate-limit': 0, timeout: 0, network: 0, other: 0 }; for (const value of values) { const failure = value.providerFailureClass; if (!failure) continue; counts[failure === 'rate-limit' || failure === 'timeout' || failure === 'network' ? failure : 'other'] += 1; } return counts; }
 /** Summarize durable cascades and their terminal outcomes. */
 function summarizeCascades(cascades: SocialCascade[]): Array<Record<string, unknown>> { return cascades.map((cascade) => ({ id: cascade.id, state: cascade.state, modelRuns: cascade.modelRuns, committedModelMessages: cascade.committedModelMessages, durationMs: Math.max(0, Date.parse(cascade.updatedAt) - Date.parse(cascade.createdAt)), budgets: { maxModelRuns: cascade.maxModelRuns, maxCommittedModelMessages: cascade.maxCommittedModelMessages } })); }
 /** Convert a wait result into a compact machine-readable outcome. */
@@ -125,7 +129,7 @@ function tokenSummary(values: SocialDiagnostic[]): Record<string, number> { retu
 /** Return one percentile from a sorted sample. */
 function percentile(values: number[], fraction: number): number | null { if (!values.length) return null; return values[Math.min(values.length - 1, Math.ceil((values.length - 1) * fraction))]; }
 /** Choose a model count appropriate for one scenario family. */
-function scenarioModelCount(scenario: string): number { if (scenario === 'single') return 1; if (scenario === 'two') return 2; if (scenario === 'stress') return 7; if (scenario === 'political') return 4; return 3; }
+function scenarioModelCount(scenario: string, requestedActorCount?: number): number { if (requestedActorCount) return Math.min(Math.max(requestedActorCount, 1), 7); if (scenario === 'single') return 1; if (scenario === 'two') return 2; if (scenario === 'stress') return 7; if (scenario === 'political') return 4; return 3; }
 /** Record the exact provider identity and transport family requested for a condition. */
 function modelResolution(reference: string): Record<string, string> { const separator = reference.indexOf('/'); const provider = separator > 0 ? reference.slice(0, separator) : reference; const name = separator > 0 ? reference.slice(separator + 1) : reference; const responses = new Set(['muse-spark-1.2-contributor-free', 'muse-spark-1.2-contributor', 'gpt-5.6-sol', 'gpt-5.6-terra', 'gpt-5.6-luna']); return { requestedModelRef: reference, resolvedProvider: provider, resolvedNativeModelId: name, transportFamily: provider.startsWith('opencode') && responses.has(name) ? 'responses' : 'chat-completions' }; }
 /** Read one command-line option or its fallback. */
@@ -135,4 +139,4 @@ async function request<T extends object = JsonResponse>(path: string, method = '
 /** Print machine-readable JSON and a compact human summary without hidden reasoning. */
 function printResults(results: Record<string, unknown>[]): void { process.stdout.write(`${JSON.stringify({ generatedAt: new Date().toISOString(), results }, null, 2)}\n`); for (const result of results) process.stdout.write(`Scenario ${String(result.scenario)} completed with pacing ${String(result.pacing)}.\n`); }
 
-main().catch((error) => { process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`); process.exitCode = 1; });
+if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) main().catch((error) => { process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`); process.exitCode = 1; });

@@ -26,7 +26,7 @@ async function createFixture(): Promise<{ store: SocialStore; actors: SocialActo
 }
 
 /** Reserve one queued intention so an action application has runtime authority. */
-async function running(store: SocialStore, id: string, actorId: string, kind = 'autonomous-social', channelId: string | null = null): Promise<SocialIntention> { await store.enqueueIntention({ id, actorId, kind, channelId, sourceMessageId: null, priority: 1000, state: 'queued', notBefore: new Date().toISOString(), payload: null, dedupeKey: id }); return (await store.claimNextIntention())!; }
+async function running(store: SocialStore, id: string, actorId: string, kind = 'autonomous-social', channelId: string | null = null, cascadeId?: string): Promise<SocialIntention> { await store.enqueueIntention({ id, actorId, kind, channelId, sourceMessageId: null, priority: 1000, state: 'queued', notBefore: new Date().toISOString(), payload: null, dedupeKey: id, cascadeId }); return (await store.claimNextIntention())!; }
 
 describe('structured social decisions', () => {
   it('should decode one tool call and reject zero or multiple calls', () => {
@@ -69,5 +69,20 @@ describe('structured social decisions', () => {
   it('should require an explicit invitation response instead of offering pass', () => {
     const refs = { actors: [], channels: [], inviteRooms: [], inviteParticipants: [], inviteTargets: [], leaveRooms: [] };
     expect(Object.keys(createSocialDecisionTools('invitation-decision', refs))).toEqual(['social_respond_invitation']);
+  });
+
+  it('should preserve one bounded cascade across a multi-turn DM exchange', async () => {
+    const { store, actors } = await createFixture(); const events = new SocialEventHub(); const applied = new SocialDecisionExecutor(store, events); const actorRefs = createSocialReferenceSet(actors);
+    const first = await running(store, 'dm-turn-1', 'alice'); const sent = await applied.apply(actors[1], first, { kind: 'send_dm', participantRef: 'bob', content: 'Alice to Bob' }, actorRefs);
+    expect(sent.result).toBe('send_dm'); const dm = (await store.listChannels('decisions', 'alice')).find((channel) => channel.kind === 'dm'); expect(dm).toBeDefined();
+    const cascadeId = 'auto:dm-turn-1'; expect((await store.getCascade(cascadeId))?.committedModelMessages).toBe(1); const claimedBob = (await store.claimNextIntention())!; expect(claimedBob.actorId).toBe('bob'); expect(claimedBob.cascadeId).toBe(cascadeId); await store.reserveCascadeRun(cascadeId, 'bob'); await applied.apply(actors[2], claimedBob, { kind: 'reply', content: 'Bob to Alice' }, actorRefs);
+    const claimedAlice = (await store.claimNextIntention())!; expect(claimedAlice.actorId).toBe('alice'); expect(claimedAlice.cascadeId).toBe(cascadeId); await store.reserveCascadeRun(cascadeId, 'alice'); await applied.apply(actors[1], claimedAlice, { kind: 'reply', content: 'Alice back to Bob' }, actorRefs);
+    expect((await store.readMessages('decisions', dm!.id, 'alice')).messages.map((message) => message.content)).toEqual(['Alice to Bob', 'Bob to Alice', 'Alice back to Bob']); expect((await store.getCascade(cascadeId))).toMatchObject({ modelRuns: 2, committedModelMessages: 3 });
+  });
+
+  it('should create one bounded autonomous cascade for a DM without an originating cascade', async () => {
+    const { store, actors } = await createFixture(); const events = new SocialEventHub(); const applied = new SocialDecisionExecutor(store, events); const actorRefs = createSocialReferenceSet(actors);
+    const intention = await running(store, 'autonomous-dm', 'alice'); await applied.apply(actors[1], intention, { kind: 'send_dm', participantRef: 'bob', content: 'Autonomous hello' }, actorRefs);
+    const cascade = await store.getCascade('auto:autonomous-dm'); expect(cascade).toMatchObject({ rootKind: 'autonomous', modelRuns: 0, committedModelMessages: 1 }); const dm = (await store.listChannels('decisions', 'alice')).find((channel) => channel.kind === 'dm'); expect(dm).toBeDefined(); const followUp = (await store.listActiveModelActors('decisions', dm!.id)).find((actor) => actor.id === 'bob'); expect(followUp?.id).toBe('bob');
   });
 });

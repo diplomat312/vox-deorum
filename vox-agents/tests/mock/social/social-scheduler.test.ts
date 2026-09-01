@@ -6,7 +6,7 @@ import { SocialStore } from '../../../src/social/store/social-store.js';
 import { ActorLane } from '../../../src/social/runtime/actor-lane.js';
 import { SocialScheduler } from '../../../src/social/runtime/social-scheduler.js';
 import { SocialEventHub } from '../../../src/social/events/social-event-hub.js';
-import type { SocialDecisionExecutor } from '../../../src/social/runtime/social-model-executor.js';
+import { SocialDecisionExecutionError, type SocialDecisionExecutor } from '../../../src/social/runtime/social-model-executor.js';
 import { SocialContextBuilder, type SocialContextBundle } from '../../../src/social/context/social-context-builder.js';
 import type { SocialActor as SocialActorType } from '../../../src/social/types.js';
 
@@ -62,7 +62,7 @@ describe('SocialScheduler', () => {
     ];
     await store.createSession({ id: 'player-mind', humanActorId: 'human' }, actors);
     const events = new SocialEventHub(); const lanes = new Map(actors.map((actor) => [actor.id, new ActorLane()])); const executor = { decide: vi.fn(async (_actor: SocialActorType, context: SocialContextBundle) => { expect(context.executionScope).toBe('player-mind'); return { kind: 'pass' as const, reasonCode: 'no-action' }; }) };
-    const scheduler = new SocialScheduler(store, async () => actors, lanes, events, executor);
+    const scheduler = new SocialScheduler(store, async () => actors, lanes, events, executor, undefined, 1);
     await store.enqueueIntention({ id: 'mind-1', actorId: 'alice', kind: 'strategic-review', channelId: null, sourceMessageId: null, priority: 1, state: 'queued', notBefore: new Date().toISOString(), payload: null, dedupeKey: 'mind-1' });
     scheduler.kick(); await scheduler.waitForIdle(); scheduler.stop(); expect(executor.decide).toHaveBeenCalledTimes(1);
   });
@@ -93,6 +93,46 @@ describe('SocialScheduler', () => {
     scheduler.kick(); await scheduler.waitForIdle(); scheduler.stop();
     expect(executor.decide).not.toHaveBeenCalled();
     expect((await store.listDecisionDiagnostics('budget'))[0]?.validationOutcome).toBe('skipped-budget');
+  });
+
+  it('should persist provider telemetry when a decision fails after retries', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'vox-deorum-social-provider-failure-'));
+    const store = new SocialStore(join(directory, 'scheduler.sqlite'));
+    cleanups.push(async () => { await store.close(); rmSync(directory, { recursive: true, force: true }); });
+    const actors: SocialActorType[] = [
+      { id: 'human', ordinal: 0, control: 'human', displayName: 'Human', sessionId: 'provider-failure', createdAt: new Date().toISOString(), status: 'active' },
+      { id: 'alice', ordinal: 1, control: 'model', displayName: 'Alice', modelRef: 'openrouter/test/alice', sessionId: 'provider-failure', createdAt: new Date().toISOString(), status: 'active' },
+    ];
+    await store.createSession({ id: 'provider-failure', humanActorId: 'human' }, actors);
+    const events = new SocialEventHub(); const lanes = new Map(actors.map((actor) => [actor.id, new ActorLane()]));
+    const executor = { decideWithTelemetry: vi.fn(async () => { throw new SocialDecisionExecutionError('429 rate limit', { retryCount: 0, semanticRetryCount: 0, providerAttemptCount: 3, providerRetryCount: 2, providerFailureClass: 'rate-limit', latencyMs: 123 }); }) };
+    const scheduler = new SocialScheduler(store, async () => actors, lanes, events, executor);
+    await store.commitHumanMessage({ sessionId: 'provider-failure', actorId: 'human', channelId: 'world', content: 'Try once', budget: { maxModelRuns: 1, maxCommittedModelMessages: 1, maxRepliesPerActor: 1, maxWallClockMs: 60_000 } });
+    scheduler.kick(); await scheduler.waitForDrain(); scheduler.stop();
+    const diagnostic = (await store.listDecisionDiagnostics('provider-failure'))[0];
+    expect(diagnostic).toMatchObject({ validationOutcome: 'failed', providerAttemptCount: 3, providerRetryCount: 2, semanticRetryCount: 0, providerFailureClass: 'rate-limit', providerLatencyMs: 123 });
+  });
+
+  it('resolves an invitation after the speech cap and prevents follow-up speech', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'vox-deorum-social-invitation-cap-'));
+    const store = new SocialStore(join(directory, 'scheduler.sqlite'));
+    cleanups.push(async () => { await store.close(); rmSync(directory, { recursive: true, force: true }); });
+    const actors: SocialActorType[] = [
+      { id: 'human', ordinal: 0, control: 'human', displayName: 'Human', sessionId: 'invitation-cap', createdAt: new Date().toISOString(), status: 'active' },
+      { id: 'alice', ordinal: 1, control: 'model', displayName: 'Alice', modelRef: 'openrouter/test/alice', sessionId: 'invitation-cap', createdAt: new Date().toISOString(), status: 'active' },
+      { id: 'bob', ordinal: 2, control: 'model', displayName: 'Bob', modelRef: 'openrouter/test/bob', sessionId: 'invitation-cap', createdAt: new Date().toISOString(), status: 'active' },
+    ];
+    await store.createSession({ id: 'invitation-cap', humanActorId: 'human' }, actors);
+    const events = new SocialEventHub(); const lanes = new Map(actors.map((actor) => [actor.id, new ActorLane()])); const calls: string[] = [];
+    const executor = { decide: vi.fn(async (actor: SocialActorType, context: SocialContextBundle) => { calls.push(actor.id); return actor.id === 'alice' ? { kind: 'start_group' as const, title: 'Cap Council', participantRefs: ['bob'], initialMessage: 'You are invited.' } : context.executionScope === 'player-mind' ? { kind: 'respond_invitation' as const, accepted: true } : { kind: 'pass' as const }; }) };
+    const scheduler = new SocialScheduler(store, async () => actors, lanes, events, executor, undefined, 1);
+    await store.commitHumanMessage({ sessionId: 'invitation-cap', actorId: 'human', channelId: 'world', content: 'Start a group', budget: { maxModelRuns: 4, maxCommittedModelMessages: 1, maxRepliesPerActor: 2, maxWallClockMs: 60_000 } });
+    scheduler.kick(); await scheduler.waitForIdle(); scheduler.stop();
+    const group = (await store.listChannels('invitation-cap', 'alice')).find((channel) => channel.title === 'Cap Council');
+    expect(group).toBeDefined();
+    expect((await store.listChannels('invitation-cap', 'bob')).some((channel) => channel.id === group?.id)).toBe(true);
+    expect(calls).toEqual(['alice', 'bob']);
+    expect((await store.readMessages('invitation-cap', group!.id, 'bob')).messages.map((message) => message.content)).toEqual(['You are invited.']);
   });
 
   it('should coalesce queued reply opportunities onto the newest committed message', async () => {

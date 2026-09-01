@@ -13,6 +13,17 @@ export interface SocialDecisionUsage { inputTokens?: number; outputTokens?: numb
 export interface SocialDecisionRun { decision: SocialDecision; retryCount: number; semanticRetryCount?: number; providerAttemptCount?: number; providerRetryCount?: number; providerFailureClass?: string; latencyMs: number; usage?: SocialDecisionUsage; }
 export interface InstrumentedSocialModelExecutor extends SocialModelExecutor { decideWithTelemetry(actor: SocialActor, context: SocialContextBundle, actorNames: string[], abortSignal?: AbortSignal): Promise<SocialDecisionRun>; }
 
+/** Carry sanitized decision telemetry through a terminal provider or protocol failure. */
+export interface SocialDecisionFailureTelemetry { retryCount: number; semanticRetryCount: number; providerAttemptCount: number; providerRetryCount: number; providerFailureClass?: string; latencyMs: number; }
+
+/** Preserve logical decision metadata without retaining provider response bodies or reasoning. */
+export class SocialDecisionExecutionError extends Error {
+  public constructor(message: string, public readonly telemetry: SocialDecisionFailureTelemetry, options?: { cause?: unknown }) {
+    super(message, options);
+    this.name = 'SocialDecisionExecutionError';
+  }
+}
+
 /** Backward-compatible type name for callers that supplied the old model executor interface. */
 export type SocialDecisionExecutor = SocialModelExecutor;
 
@@ -35,6 +46,7 @@ export class SocialModelExecutorImpl implements InstrumentedSocialModelExecutor 
     let lastError: unknown;
     let providerAttemptCount = 0;
     let providerFailureClass: string | undefined;
+    let semanticRetryCount = 0;
     for (let attempt = 0; attempt < 2; attempt += 1) {
       try {
         const result = await streamTextWithConcurrency(withModelConfig({
@@ -52,14 +64,26 @@ export class SocialModelExecutorImpl implements InstrumentedSocialModelExecutor 
         const steps = (result as unknown as { steps?: Array<{ toolCalls?: readonly unknown[] }> }).steps ?? [];
         const calls = steps.flatMap((step) => step.toolCalls ?? []);
         const usage = await readUsage(result);
-        return { decision: decodeSocialDecision(calls, extra), retryCount: attempt, semanticRetryCount: attempt, providerAttemptCount, providerRetryCount: Math.max(0, providerAttemptCount - (attempt + 1)), ...(providerFailureClass ? { providerFailureClass } : {}), latencyMs: Date.now() - startedAt, ...(usage ? { usage } : {}) };
+        return { decision: decodeSocialDecision(calls, extra), retryCount: semanticRetryCount, semanticRetryCount, providerAttemptCount, providerRetryCount: Math.max(0, providerAttemptCount - (semanticRetryCount + 1)), ...(providerFailureClass ? { providerFailureClass } : {}), latencyMs: Date.now() - startedAt, ...(usage ? { usage } : {}) };
       } catch (error) {
         lastError = error;
         if (abortSignal?.aborted || !(error instanceof Error && error.message.startsWith('invalid-output:')) || attempt === 1) break;
+        semanticRetryCount += 1;
         messages = [...messages, { role: 'user', content: 'Your previous response was not a valid decision tool call. Choose exactly one available decision tool, with schema-valid arguments. Do not write prose.' }];
       }
     }
-    throw lastError instanceof Error ? lastError : new Error(`invalid-output: ${String(lastError)}`);
+    throw new SocialDecisionExecutionError(
+      lastError instanceof Error ? lastError.message : `invalid-output: ${String(lastError)}`,
+      {
+        retryCount: semanticRetryCount,
+        semanticRetryCount,
+        providerAttemptCount,
+        providerRetryCount: Math.max(0, providerAttemptCount - (semanticRetryCount + 1)),
+        ...(providerFailureClass ? { providerFailureClass } : {}),
+        latencyMs: Date.now() - startedAt,
+      },
+      { cause: lastError },
+    );
   }
 }
 
