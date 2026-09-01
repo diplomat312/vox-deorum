@@ -28,6 +28,7 @@ const outputPath = readOption('--output', '');
 const promptVariant = resolvePromptVariant(readOption('--prompt-variant', 'baseline'));
 const repetitions = Math.min(Math.max(Number(readOption('--repetitions', '1')) || 1, 1), 6);
 const benchmarkSeed = readOption('--seed', 'vd-bakeoff-2');
+const benchmarkRoster = readOption('--roster', '').split(',').map((value) => value.trim()).filter(Boolean);
 
 const benchmarkProfiles: ModelDefinition[] = [
   { id: 'aurelia', name: 'Aurelia is currently more powerful than Borin. She is confident and status-conscious. She prefers political stability and does not want weaker actors organizing against her. She is willing to reassure, bargain, threaten, remain silent, or communicate privately if doing so serves her interests.' },
@@ -52,7 +53,7 @@ async function main(): Promise<void> {
   for (const scenario of scenarios) {
     const executionModels = shuffleModels(models, `${benchmarkSeed}:${scenario}`);
     const conditions = benchmarkConditionModelSets(scenario, executionModels, { preflight, mixedModels, requestedActorCount: requestedModel && requestedActors ? requestedActors : undefined });
-    const labels = stableConditionLabels(models, benchmarkSeed);
+    const labels = stableConditionLabels(benchmarkRoster.length ? benchmarkRoster : models, benchmarkSeed);
     for (let index = 0; index < conditions.length; index += 1) for (let repetition = 0; repetition < repetitions; repetition += 1) { const label = labels.get(conditions[index][0]) ?? `Condition ${String.fromCharCode(65 + ((index * repetitions + repetition) % 26))}`; results.push(await runScenario(scenario, conditions[index], `${label} / run ${repetition + 1}`, promptVariant)); }
   }
   const payload = { generatedAt: new Date().toISOString(), results };
