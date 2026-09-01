@@ -60,6 +60,9 @@ jobs:
       - name: Install UI dependencies
         run: npm ci --prefix vox-agents/ui
 
+      - name: Build MCP server dependencies
+        run: npm --prefix mcp-server run build
+
       - name: Run deterministic tests
         run: npm run test:all
 
@@ -80,6 +83,9 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Build MCP server dependencies
+        run: npm --prefix mcp-server run build
 
       - name: Typecheck Vox Agents
         run: npm --prefix vox-agents run type-check
