@@ -8,7 +8,8 @@ export type SocialDecisionToolScope = 'channel-reaction' | 'player-mind' | 'invi
 
 /** Build only the semantic actions legal for the current intention. */
 export function createSocialDecisionTools(scope: SocialDecisionToolScope, references: SocialReferenceSet, extra: DecisionToolDefinition[] = []): ToolSet {
-  const tools: Record<string, Tool> = { social_pass: tool({ description: 'Pass without taking a social action.', inputSchema: z.object({ reason: z.string().max(200).optional() }), strict: true }) };
+  const tools: Record<string, Tool> = {};
+  if (scope !== 'invitation-decision') tools.social_pass = tool({ description: 'Pass without taking a social action.', inputSchema: z.object({ reason: z.string().max(200).optional() }), strict: true });
   const dmActors = references.dmActors ?? references.actors;
   const groupParticipants = references.groupParticipants ?? references.actors;
   const messageRooms = references.messageRooms ?? references.channels;
@@ -21,7 +22,7 @@ export function createSocialDecisionTools(scope: SocialDecisionToolScope, refere
   }
   if ((scope === 'channel-reaction' || scope === 'player-mind') && dmActors.length > 0) {
     tools.social_send_dm = tool({ description: 'Send a private message to one listed participant.', inputSchema: z.object({ participantRef: referenceSchema(dmActors), text: z.string().min(1).max(12000) }), strict: true });
-    tools.social_start_group = tool({ description: 'Start a private titled group with listed participants.', inputSchema: z.object({ title: z.string().min(1).max(200), participantRefs: z.array(referenceSchema(groupParticipants)).max(8), text: z.string().min(1).max(12000).optional() }), strict: true });
+    tools.social_start_group = tool({ description: 'Start a private titled group with at least one listed participant.', inputSchema: z.object({ title: z.string().min(1).max(200), participantRefs: z.array(referenceSchema(groupParticipants)).min(1).max(8), text: z.string().min(1).max(12000).optional() }), strict: true });
   }
   if (scope === 'player-mind') {
     if (messageRooms.length > 0) tools.social_send_room_message = tool({ description: 'Send a message to one listed visible room.', inputSchema: z.object({ roomRef: referenceSchema(messageRooms), text: z.string().min(1).max(12000) }), strict: true });
@@ -85,4 +86,4 @@ function boundedText(value: unknown, field: string, maximum: number): string { i
 /** Validate an optional positive message ID. */
 function positiveNumber(value: unknown): number | undefined { if (value === undefined) return undefined; if (typeof value !== 'number' || !Number.isInteger(value) || value <= 0) throw new Error('invalid-output: replyToMessageId is invalid'); return value; }
 /** Validate a nonempty list of model references. */
-function requiredRefs(value: unknown): string[] { if (!Array.isArray(value) || value.some((item) => typeof item !== 'string' || item.trim() === '') || value.length > 8) throw new Error('invalid-output: participantRefs is invalid'); return value as string[]; }
+function requiredRefs(value: unknown): string[] { if (!Array.isArray(value) || value.length < 1 || value.some((item) => typeof item !== 'string' || item.trim() === '') || value.length > 8) throw new Error('invalid-output: participantRefs is invalid'); return [...new Set(value as string[])]; }

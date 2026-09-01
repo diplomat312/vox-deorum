@@ -4,6 +4,10 @@ import type winston from 'winston';
 export interface ModelCallContext {
   logger: winston.Logger;
   timeoutRefresh: (() => void) | undefined;
+  /** Observe each actual provider attempt, including transport retries. */
+  onProviderAttempt?: (attempt: number) => void;
+  /** Observe a provider failure before the retry policy decides what to do. */
+  onProviderError?: (error: unknown) => void;
 }
 
 /** Retry policy used by existing Vox callers when they do not provide an override. */

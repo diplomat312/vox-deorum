@@ -2,6 +2,9 @@ import type { SocialCascadeBudget, SocialPacingProfile } from '../types.js';
 
 export type { SocialPacingProfile } from '../types.js';
 
+/** Centralized ceiling for ordinary social decision output. */
+export const socialDecisionOutputTokenLimit = 1024;
+
 /** Return a bounded cascade budget scaled to the number of model actors. */
 export function getSocialPacingBudget(profile: SocialPacingProfile = 'balanced', actorCount = 3): SocialCascadeBudget {
   const modelCount = Math.max(1, actorCount);

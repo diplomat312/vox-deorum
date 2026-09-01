@@ -39,14 +39,31 @@ export class SocialContextBuilder {
     const participants = references.actors.map((reference) => `[${reference.ref}] ${reference.label}`).join(', ');
     const payload = this.safePayload(intention.payload);
     const system = this.systemFor(actor, memory, options.environment, options.mode);
-    const prompt = `Participants: ${participants}\nVisible rooms:\n${rooms || '(no visible rooms)'}\nTrigger: ${intention.kind}${payload ? `\nRelevant event data: ${JSON.stringify(payload)}` : ''}\n\nChoose one available action. Do not invent rooms or participants.`;
+    const trigger = this.semanticTrigger(intention, this.rawPayload(intention.payload), actors);
+    const prompt = `Participants: ${participants}\nVisible rooms:\n${rooms || '(no visible rooms)'}\nSituation: ${trigger}${payload && intention.kind !== 'invitation-decision' ? `\nRelevant event data: ${JSON.stringify(payload)}` : ''}\n\nChoose one available action. Do not invent rooms or participants.`;
     return { system, messages: [{ role: 'user', content: prompt }], messageCount: activity.reduce((count, item) => count + item.messages.length, 0), executionScope: 'player-mind', references };
   }
 
   /** Keep model identity natural while retaining only the authority rules it needs. */
   private systemFor(actor: SocialActor, memory: string | undefined, environment: string | undefined, mode: string | undefined): string {
-    return `You are ${actor.displayName}, a distinct participant in this conversation. Profile: ${actor.profile ?? 'No additional profile is set.'}${memory ? `\nPrivate memory: ${memory}` : ''}${environment ? `\nBound environment facts: ${environment}` : ''}${mode ? `\nCurrent situation: ${mode}` : ''}\nChoose exactly one available action or pass. Speak only as ${actor.displayName}. Never reveal private memory or hidden reasoning. The runtime supplies identity, room membership, and game authority.`;
+    return `You are ${actor.displayName}, a distinct participant in this conversation. Profile: ${actor.profile ?? 'No additional profile is set.'}${memory ? `\nPrivate memory: ${memory}` : ''}${environment ? `\nBound environment facts: ${environment}` : ''}${mode && mode !== 'consider-reply' ? `\nCurrent situation: ${this.semanticMode(mode)}` : ''}\nKeep ordinary social messages concise, usually a few sentences. Say more only when the situation requires it. Choose exactly one available action or pass. Speak only as ${actor.displayName}. Never reveal private memory or hidden reasoning. The runtime supplies identity, room membership, and game authority.`;
   }
+
+  /** Convert durable intention data into plain language without exposing scheduler taxonomy. */
+  private semanticTrigger(intention: SocialIntention, payload: Record<string, unknown> | undefined, actors: SocialActor[]): string {
+    if (intention.kind === 'invitation-decision') {
+      const inviter = typeof payload?.inviterActorId === 'string' ? actors.find((actor) => actor.id === payload.inviterActorId)?.displayName : undefined;
+      const title = typeof payload?.channelTitle === 'string' ? payload.channelTitle : 'a private group';
+      return `${inviter ?? 'Another participant'} invited you to "${title}".`;
+    }
+    if (intention.kind === 'environment-event') return 'A new event in the bound environment needs your attention.';
+    if (intention.kind === 'strategic-review') return 'Review the current situation and decide whether to take a social action.';
+    if (intention.kind === 'autonomous-social') return 'Consider whether you want to initiate a social action.';
+    return 'A new message was posted in this conversation.';
+  }
+
+  /** Map internal context modes to short model-facing descriptions. */
+  private semanticMode(mode: string): string { if (mode === 'invitation-decision') return 'You have been invited to a private group.'; if (mode === 'environment-event') return 'A new environment event needs your attention.'; if (mode === 'strategic-review') return 'Review the current situation.'; if (mode === 'autonomous-social') return 'Consider whether to initiate a social action.'; return mode === 'new-message' ? 'A new message was posted.' : mode; }
 
   /** Remove opaque IDs from trigger data before it reaches the model. */
   private safePayload(payload: string | null): Record<string, unknown> | undefined {
@@ -57,6 +74,9 @@ export class SocialContextBuilder {
       return Object.keys(safe).length ? safe : undefined;
     } catch { return undefined; }
   }
+
+  /** Parse trigger fields for runtime-side semantic mapping without exposing them to the model. */
+  private rawPayload(payload: string | null): Record<string, unknown> | undefined { if (!payload) return undefined; try { const parsed = JSON.parse(payload) as unknown; return parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed as Record<string, unknown> : undefined; } catch { return undefined; } }
 }
 
 /** Create deterministic readable aliases and suffix collisions without leaking IDs. */

@@ -30,6 +30,7 @@ import { createLogger } from '../logger.js';
 import { synthesizeModelConfig } from './rules.js';
 import { parseModelReference } from './model-reference.js';
 import { getRuntimeModel } from './resolution.js';
+import { buildOpenCodeModel, getOpenCodeTransport, openCodeModelNames } from './providers/opencode.js';
 
 export type { ModelRuntimeIdentity } from './providers/host-tools.js';
 export type { ModelSize } from '../../types/config.js';
@@ -115,6 +116,23 @@ export function getModelConfig(
   } else return applyReasoning(model, reasoning);
 }
 
+/** Resolve an explicit social or benchmark model without falling back to another model. */
+export function getStrictModelConfig(name: string = 'default', reasoning?: ReasoningEffort | 'default', overrides?: Record<string, Model | string>): Model {
+  const definition = overrides?.[name] ?? config.llms[name];
+  if (typeof definition === 'string') return getStrictModelConfig(definition, reasoning, overrides);
+  if (definition) return applyReasoning(definition, reasoning);
+  const parsed = parseModelReference(name);
+  if (parsed.fullKey !== name) return applyReasoning(getStrictModelConfig(parsed.fullKey, parsed.reasoningEffort, overrides), reasoning);
+  const runtime = getRuntimeModel(parsed.fullKey);
+  if (runtime) return applyReasoning(runtime, reasoning);
+  const synthesized = synthesizeModelConfig(parsed.fullKey);
+  if (synthesized) {
+    if ((parsed.provider === 'opencode' || parsed.provider === 'opencode-go') && !openCodeModelNames[parsed.provider].includes(parsed.name)) throw new Error(`Cannot resolve explicit model '${name}': it is not a supported OpenCode model.`);
+    return applyReasoning(synthesized, reasoning);
+  }
+  throw new Error(`Cannot resolve explicit model '${name}'. Register it in config.json or verify the provider/model reference before starting the run.`);
+}
+
 
 /**
  * Resolves the tool-call terminology preset for a model. claude-code always uses 'action'
@@ -164,6 +182,10 @@ export function getModel(config: Model, options?: {
   switch (config.provider) {
     case "openrouter":
       result = createOpenRouter()(config.name);
+      break;
+    case "opencode":
+    case "opencode-go":
+      result = buildOpenCodeModel(config);
       break;
     case "chutes":
       result = createOpenAICompatible({
@@ -333,7 +355,7 @@ export function buildProviderOptions(model: Model, runtimeIdentity?: ModelRuntim
   let result: ProviderMetadata;
 
   const isVertexAnthropic = model.provider === 'google' && model.name.startsWith('claude-');
-  const providerOptionsKey = isVertexAnthropic ? 'anthropic' : model.provider;
+  const providerOptionsKey = isVertexAnthropic ? 'anthropic' : model.provider === 'opencode' || model.provider === 'opencode-go' ? (getOpenCodeTransport(model.provider, model.name) === 'responses' ? 'openai' : 'openaiCompatible') : model.provider;
 
   // Claude Code applies every configuration setting at construction time.
   if (model.provider === 'claude-code') {

@@ -90,7 +90,7 @@ export class SocialRuntime {
   /** Return the currently attached generic environment to scheduler and executor callers. */
   private async environmentForActor(_actor: SocialActor): Promise<SocialEnvironmentPort | undefined> { return this.environmentPort; }
   /** Open a human DM with an actor. */
-  public async openHumanDm(actorId: string, title?: string): Promise<SocialChannel> { const channel = await this.requireStore().openDm(this.getSessionId(), this.getHumanActorId(), actorId, title ?? `DM with ${actorId}`); this.events.publish({ type: 'channel-created', channel }); return channel; }
+  public async openHumanDm(actorId: string, title?: string): Promise<SocialChannel> { const target = (await this.listActors()).find((actor) => actor.id === actorId); const channel = await this.requireStore().openDm(this.getSessionId(), this.getHumanActorId(), actorId, title ?? `DM with ${target?.displayName ?? 'participant'}`); this.events.publish({ type: 'channel-created', channel }); return channel; }
   /** Create a group owned by the human. */
   public async createHumanGroup(title: string, invitedActorIds?: string[]): Promise<SocialChannel> { const channel = await this.requireStore().createGroup(this.getSessionId(), this.getHumanActorId(), title, invitedActorIds); this.events.publish({ type: 'channel-created', channel }); this.scheduler?.kick(); return channel; }
   /** Invite an actor to a human-owned group. */

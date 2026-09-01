@@ -7,6 +7,7 @@
 import type { DiscoveredModel, DiscoveryErrorKind } from '../../types/api.js';
 import { applyModelRules } from './rules.js';
 import { ensureCodexProxy, getActiveCodexProxyPort, getCodexProxyApiBase } from './providers/codex-proxy.js';
+import { openCodeModelNames } from './providers/opencode.js';
 
 /** The credentials supplied by the configuration UI, keyed by environment variable name. */
 export type DiscoveryCredentials = Record<string, string | undefined>;
@@ -187,6 +188,17 @@ export async function discoverModels(provider: string, credentials: DiscoveryCre
       await fetchJson('https://openrouter.ai/api/v1/key', { headers: { Authorization: `Bearer ${key}` } }, 'OpenRouter');
       const payload = await fetchJson('https://openrouter.ai/api/v1/models', {}, 'OpenRouter');
       return openAiEntries(payload, 'OpenRouter').map((name) => model(provider, name));
+    }
+    case 'opencode':
+    case 'opencode-go': {
+      const key = requireCredential(credentials, 'OPENCODE_API_KEY', provider === 'opencode' ? 'OpenCode Zen' : 'OpenCode Go');
+      const endpoint = provider === 'opencode' ? 'https://opencode.ai/zen/v1' : 'https://opencode.ai/zen/go/v1';
+      try {
+        return await openAiCompatibleModels(provider, endpoint, { headers: { Authorization: `Bearer ${key}` } }, provider === 'opencode' ? 'OpenCode Zen' : 'OpenCode Go');
+      } catch (error) {
+        if (error instanceof DiscoveryError && error.kind === 'network') return openCodeModelNames[provider].map((name) => model(provider, name));
+        throw error;
+      }
     }
     case 'chutes': {
       const key = requireCredential(credentials, 'CHUTES_API_KEY', 'Chutes.ai');

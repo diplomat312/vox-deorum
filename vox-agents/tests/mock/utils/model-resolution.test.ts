@@ -22,7 +22,7 @@ vi.mock('../../../src/utils/models/discovery.js', () => ({
 }));
 
 import { ensureModelsResolved, getRuntimeModel, resetRuntimeModels, selectModelReference } from '../../../src/utils/models/resolution.js';
-import { getModelConfig } from '../../../src/utils/models/models.js';
+import { getModelConfig, getStrictModelConfig } from '../../../src/utils/models/models.js';
 
 describe('ensureModelsResolved', () => {
   beforeEach(() => {
@@ -283,5 +283,11 @@ describe('ensureModelsResolved', () => {
     };
 
     expect(getModelConfig('openai/native@high')).toEqual({ provider: 'openai', name: 'literal-native-name' });
+  });
+
+  it('should resolve supported OpenCode social references without falling back', () => {
+    expect(getStrictModelConfig('opencode/mimo-v2.5-free')).toMatchObject({ provider: 'opencode', name: 'mimo-v2.5-free' });
+    expect(getStrictModelConfig('opencode/muse-spark-1.2-contributor-free')).toMatchObject({ provider: 'opencode', name: 'muse-spark-1.2-contributor-free' });
+    expect(() => getStrictModelConfig('opencode/not-a-real-model')).toThrow(/not a supported OpenCode model/);
   });
 });

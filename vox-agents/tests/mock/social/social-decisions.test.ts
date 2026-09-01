@@ -39,7 +39,7 @@ describe('structured social decisions', () => {
     const { store, actors } = await createFixture(); const events = new SocialEventHub(); const applied = new SocialDecisionExecutor(store, events); const actorRefs = createSocialReferenceSet(actors);
     const dmIntention = await running(store, 'dm-1', 'alice'); await applied.apply(actors[1], dmIntention, { kind: 'send_dm', participantRef: 'bob', content: 'Private plan' }, actorRefs); const dm = (await store.listChannels('decisions', 'alice')).find((channel) => channel.kind === 'dm'); expect(dm).toBeDefined(); expect((await store.readMessages('decisions', dm!.id, 'bob')).messages.map((message) => message.content)).toEqual(['Private plan']);
     const groupIntention = await running(store, 'group-1', 'alice'); const groupApplied = await applied.apply(actors[1], groupIntention, { kind: 'start_group', title: 'Secret council', participantRefs: ['bob'], initialMessage: 'Before you join' }, actorRefs); expect(groupApplied.result).toBe('start_group'); const invitation = (await store.listPendingInvitations('decisions', 'bob'))[0]; expect(invitation.channelTitle).toBe('Secret council');
-    const acceptIntention = await running(store, 'accept-1', 'bob', 'invitation-decision', invitation.channelId); await applied.apply(actors[2], acceptIntention, { kind: 'respond_invitation', accepted: true }, actorRefs); await store.appendMessage({ sessionId: 'decisions', actorId: 'alice', channelId: invitation.channelId, content: 'After you joined' }); expect((await store.readMessages('decisions', invitation.channelId, 'bob')).messages.map((message) => message.content)).toEqual(['After you joined']);
+    const acceptIntention = await running(store, 'accept-1', 'bob', 'invitation-decision', invitation.channelId); await applied.apply(actors[2], acceptIntention, { kind: 'respond_invitation', accepted: true }, actorRefs); await store.appendMessage({ sessionId: 'decisions', actorId: 'alice', channelId: invitation.channelId, content: 'After you joined' }); expect((await store.readMessages('decisions', invitation.channelId, 'bob')).messages.map((message) => message.content)).toEqual(['Before you join', 'After you joined']);
     const group = (await store.listChannels('decisions', 'bob')).find((channel) => channel.title === 'Secret council'); const roomRefs = createSocialReferenceSet(actors, group ? [group] : []);
     const leaveIntention = await running(store, 'leave-1', 'bob', 'autonomous-social', invitation.channelId); await applied.apply(actors[2], leaveIntention, { kind: 'leave_group', roomRef: 'secret-council' }, roomRefs); await expect(store.readMessages('decisions', dm!.id, 'bob')).resolves.toBeDefined();
     const hidden = await store.createGroup('decisions', 'human', 'Hidden room', []); const unauthorizedIntention = await running(store, 'unauthorized-1', 'alice'); const hiddenRefs = createSocialReferenceSet(actors, [hidden]); expect((await applied.apply(actors[1], unauthorizedIntention, { kind: 'send_message', roomRef: 'hidden-room', content: 'This must be refused' }, hiddenRefs)).result).toBe('refused');
@@ -64,5 +64,10 @@ describe('structured social decisions', () => {
   it('should omit actions with no legal targets', () => {
     const refs = { actors: [{ ref: 'alice', id: 'alice', label: 'Alice' }], channels: [], dmActors: [], groupParticipants: [], messageRooms: [], inviteRooms: [], inviteParticipants: [], inviteTargets: [], leaveRooms: [] };
     expect(Object.keys(createSocialDecisionTools('player-mind', refs))).toEqual(['social_pass']);
+  });
+
+  it('should require an explicit invitation response instead of offering pass', () => {
+    const refs = { actors: [], channels: [], inviteRooms: [], inviteParticipants: [], inviteTargets: [], leaveRooms: [] };
+    expect(Object.keys(createSocialDecisionTools('invitation-decision', refs))).toEqual(['social_respond_invitation']);
   });
 });

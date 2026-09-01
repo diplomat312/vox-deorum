@@ -92,4 +92,22 @@ describe('SocialStore', () => {
     expect((await store.getMemory('alice'))?.content).toBe('first');
     await store.close();
   });
+
+  it('should read a frozen channel transcript through an explicit high-water message', async () => {
+    const store = createStore();
+    await store.createSession({ id: 'session-high-water', humanActorId: 'human' }, [{ id: 'human', ordinal: 0, control: 'human', displayName: 'Human' }, { id: 'alice', ordinal: 1, control: 'model', displayName: 'Alice' }]);
+    const first = await store.appendMessage({ sessionId: 'session-high-water', actorId: 'human', channelId: 'world', content: 'A' });
+    await store.appendMessage({ sessionId: 'session-high-water', actorId: 'human', channelId: 'world', content: 'B' });
+    expect((await store.readMessages('session-high-water', 'world', 'alice', 80, undefined, false, first.id)).messages.map((message) => message.content)).toEqual(['A']);
+    await store.close();
+  });
+
+  it('should reject an empty model-created group participant list', async () => {
+    const store = createStore();
+    await store.createSession({ id: 'session-group', humanActorId: 'human' }, [{ id: 'human', ordinal: 0, control: 'human', displayName: 'Human' }, { id: 'alice', ordinal: 1, control: 'model', displayName: 'Alice' }]);
+    await store.enqueueIntention({ id: 'group-intention', actorId: 'alice', kind: 'autonomous-social', channelId: null, sourceMessageId: null, priority: 1, state: 'queued', notBefore: new Date().toISOString(), payload: null, dedupeKey: 'group-intention' });
+    await store.claimNextIntention();
+    await expect(store.commitModelGroup({ intentionId: 'group-intention', sessionId: 'session-group', actorId: 'alice', title: 'Empty', invitedActorIds: [] })).rejects.toThrow(/at least one/);
+    await store.close();
+  });
 });

@@ -21,7 +21,7 @@ export interface ModelRule {
  * tool calls go through prompt middleware. First-party hosted providers (openai,
  * anthropic, google, codex, claude-code) call tools natively and are excluded.
  */
-const openWeightProviders = ['openai-compatible', 'chutes', 'synthetic'];
+const openWeightProviders = ['openai-compatible', 'chutes', 'synthetic', 'opencode', 'opencode-go'];
 
 /**
  * Applies the established configuration defaults to discovered model names.

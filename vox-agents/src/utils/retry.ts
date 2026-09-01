@@ -24,6 +24,10 @@ export interface ExponentialRetryOptions {
   backoffFactor?: number;
   executionTimeout?: number;
   abortSignal?: AbortSignal;
+  /** Observe each invocation of the retried operation. */
+  onProviderAttempt?: (attempt: number) => void;
+  /** Observe each failure before backoff. */
+  onProviderError?: (error: unknown) => void;
 }
 
 /** Check whether an error indicates the input exceeded the model's context window. */
@@ -63,6 +67,7 @@ export async function exponentialRetry<T>(
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     abortSignal?.throwIfAborted();
+    options.onProviderAttempt?.(attempt);
     try {
       // Timeout support
       let timeoutHandle: NodeJS.Timeout | null = null;
@@ -118,6 +123,7 @@ export async function exponentialRetry<T>(
       if (timeoutHandle) clearTimeout(timeoutHandle);
       return result;
     } catch (error) {
+      options.onProviderError?.(error);
       abortSignal?.throwIfAborted();
       lastError = error as Error;
 

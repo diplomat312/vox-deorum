@@ -24,6 +24,8 @@ export interface ApiKeyField {
  */
 export const llmProviders = [
   { label: 'OpenRouter', value: 'openrouter' },
+  { label: 'OpenCode Zen', value: 'opencode' },
+  { label: 'OpenCode Go', value: 'opencode-go' },
   { label: 'Anthropic', value: 'anthropic' },
   { label: 'Claude Code', value: 'claude-code' },
   { label: 'Codex (ChatGPT)', value: 'codex' },
@@ -130,6 +132,13 @@ export const apiKeyFields: ApiKeyField[] = [
     helpTooltip: 'Get your OpenRouter API key from the OpenRouter dashboard'
   },
   {
+    key: 'OPENCODE_API_KEY',
+    label: 'OpenCode API Key',
+    type: 'password',
+    helpLink: 'https://opencode.ai/zen',
+    helpTooltip: 'Get an API key from OpenCode Zen or OpenCode Go'
+  },
+  {
     key: 'OPENAI_COMPATIBLE_URL',
     label: 'OpenAI Compatible URL (e.g. llama.cpp, ollama)',
     type: 'text',
@@ -161,6 +170,8 @@ export const providerCredentials: Record<string, { required: readonly string[]; 
   anthropic: { required: ['ANTHROPIC_API_KEY'] },
   google: { required: ['GOOGLE_GENERATIVE_AI_API_KEY'] },
   openrouter: { required: ['OPENROUTER_API_KEY'] },
+  opencode: { required: ['OPENCODE_API_KEY'] },
+  'opencode-go': { required: ['OPENCODE_API_KEY'] },
   chutes: { required: ['CHUTES_API_KEY'] },
   synthetic: { required: ['SYNTHETIC_API_KEY'] },
   'openai-compatible': { required: ['OPENAI_COMPATIBLE_URL'], optional: ['OPENAI_COMPATIBLE_API_KEY'] },

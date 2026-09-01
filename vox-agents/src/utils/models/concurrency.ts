@@ -34,7 +34,7 @@ export function getExecutionTimeout(modelConfig: Model | undefined): number {
     return getCodexExecutionTimeout();
   }
 
-  if (modelConfig?.provider === 'openai-compatible') {
+  if (modelConfig?.provider === 'openai-compatible' || modelConfig?.provider === 'opencode' || modelConfig?.provider === 'opencode-go') {
     return 900_000
   }
 
@@ -246,6 +246,8 @@ export async function streamTextWithConcurrency<T extends Parameters<typeof stre
       backoffFactor: retryPolicy.backoffFactor ?? DEFAULT_VOX_RETRY_POLICY.backoffFactor,
       executionTimeout: retryPolicy.executionTimeout ?? getExecutionTimeout(modelConfig),
       abortSignal: params.abortSignal,
+      onProviderAttempt: context.onProviderAttempt,
+      onProviderError: context.onProviderError,
     })
   });
 }
