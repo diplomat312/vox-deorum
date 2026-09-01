@@ -2,11 +2,10 @@ import { SocialStore } from '../store/social-store.js';
 import { SocialEventHub } from '../events/social-event-hub.js';
 import type { SocialActor, SocialDecision, SocialIntention } from '../types.js';
 import type { SocialReferenceSet } from '../context/social-context-builder.js';
-import type { CivActionGateway } from '../environments/civ/civ-action-gateway.js';
-import type { CivEnvironmentAdapter } from '../environments/civ/civ-environment-adapter.js';
+import type { SocialEnvironmentPort } from './social-environment-port.js';
 
 /** Optional environment hooks used by the generic executor without importing Civ into social logic. */
-export interface SocialEnvironmentActionPort { gateway: CivActionGateway; adapter: CivEnvironmentAdapter; }
+export type SocialEnvironmentActionPort = SocialEnvironmentPort;
 export interface SocialDecisionApplication { result: string; }
 
 /** Apply one semantic model proposal after generation has completed and validation has succeeded. */
@@ -26,7 +25,7 @@ export class SocialDecisionExecutor {
     if (decision.kind === 'invite_actor') { const channelId = this.resolveChannel(references, decision.roomRef); const targetActorId = this.resolveActor(references, decision.participantRef); const mutation = await this.store.commitModelInvite({ intentionId: intention.id, sessionId: actor.sessionId, channelId, actorId: actor.id, targetActorId }); this.events.publish({ type: 'membership-changed', membership: mutation.membership }); this.publishIntentions(mutation.createdIntentions); return { result: 'invite_actor' }; }
     if (decision.kind === 'respond_invitation') { if (intention.kind !== 'invitation-decision' || !intention.channelId) throw new Error('decision-refused: no invitation is bound to this decision'); const mutation = await this.store.commitInvitationDecision({ intentionId: intention.id, channelId: intention.channelId, actorId: actor.id, accepted: decision.accepted }); this.events.publish({ type: 'membership-changed', membership: mutation.membership }); this.publishIntentions(mutation.createdIntentions); return { result: decision.accepted ? 'invitation_accepted' : 'invitation_declined' }; }
     if (decision.kind === 'leave_group') { const channelId = this.resolveChannel(references, decision.roomRef); const membership = await this.store.commitModelLeave({ intentionId: intention.id, channelId, actorId: actor.id }); this.events.publish({ type: 'membership-changed', membership }); return { result: 'leave_group' }; }
-    const port = await this.environmentForActor(actor); if (!port) throw new Error('decision-refused: no environment action gateway is attached'); const attempt = await port.gateway.invoke(port.adapter.binding(actor.id), this.eventTurn(intention), decision.actionName, decision.arguments, `social-intention:${intention.id}`); await this.store.completeIntention(intention.id, `environment_action:${attempt.state}`); return { result: `environment_action:${attempt.state}` };
+    const port = await this.environmentForActor(actor); if (!port) throw new Error('decision-refused: no environment action gateway is attached'); const attempt = await port.execute(actor, this.eventTurn(intention), decision.actionName, decision.arguments, `social-intention:${intention.id}`); await this.store.completeIntention(intention.id, `environment_action:${attempt.state}`); return { result: `environment_action:${attempt.state}` };
   }
 
   /** Commit speech to the channel selected by runtime authority. */

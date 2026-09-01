@@ -8,7 +8,8 @@ import type { SocialContextBundle } from '../context/social-context-builder.js';
 
 /** Provider-neutral model decision generator. It never applies the returned action. */
 export interface SocialModelExecutor { decide(actor: SocialActor, context: SocialContextBundle, actorNames: string[], abortSignal?: AbortSignal): Promise<SocialDecision>; }
-export interface SocialDecisionRun { decision: SocialDecision; retryCount: number; latencyMs: number; }
+export interface SocialDecisionUsage { inputTokens?: number; outputTokens?: number; totalTokens?: number; cachedTokens?: number; reasoningTokens?: number; cost?: number; }
+export interface SocialDecisionRun { decision: SocialDecision; retryCount: number; latencyMs: number; usage?: SocialDecisionUsage; }
 export interface InstrumentedSocialModelExecutor extends SocialModelExecutor { decideWithTelemetry(actor: SocialActor, context: SocialContextBundle, actorNames: string[], abortSignal?: AbortSignal): Promise<SocialDecisionRun>; }
 
 /** Backward-compatible type name for callers that supplied the old model executor interface. */
@@ -46,7 +47,8 @@ export class SocialModelExecutorImpl implements InstrumentedSocialModelExecutor 
         }, modelConfig), { logger: this.logger, timeoutRefresh: undefined }, { maxRetries: 2, initialDelayMs: 1000, maxDelayMs: 5000, backoffFactor: 2 });
         const steps = (result as unknown as { steps?: Array<{ toolCalls?: readonly unknown[] }> }).steps ?? [];
         const calls = steps.flatMap((step) => step.toolCalls ?? []);
-        return { decision: decodeSocialDecision(calls, extra), retryCount: attempt, latencyMs: Date.now() - startedAt };
+        const usage = await readUsage(result);
+        return { decision: decodeSocialDecision(calls, extra), retryCount: attempt, latencyMs: Date.now() - startedAt, ...(usage ? { usage } : {}) };
       } catch (error) {
         lastError = error;
         if (abortSignal?.aborted || !(error instanceof Error && error.message.startsWith('invalid-output:')) || attempt === 1) break;
@@ -59,3 +61,16 @@ export class SocialModelExecutorImpl implements InstrumentedSocialModelExecutor 
 
 /** Default model executor instance used by the social scheduler. */
 export const defaultSocialModelExecutor = new SocialModelExecutorImpl();
+
+/** Read provider usage without requiring every provider to expose every field. */
+async function readUsage(result: unknown): Promise<SocialDecisionUsage | undefined> {
+  const candidate = result as { usage?: Promise<Record<string, unknown>> | Record<string, unknown> };
+  const raw = candidate.usage ? await candidate.usage : undefined;
+  if (!raw) return undefined;
+  const usage: SocialDecisionUsage = {};
+  for (const [source, target] of [['inputTokens', 'inputTokens'], ['outputTokens', 'outputTokens'], ['totalTokens', 'totalTokens'], ['cachedInputTokens', 'cachedTokens'], ['reasoningTokens', 'reasoningTokens'], ['cost', 'cost']] as const) {
+    const value = raw[source];
+    if (typeof value === 'number' && Number.isFinite(value) && value >= 0) usage[target] = value;
+  }
+  return Object.keys(usage).length ? usage : undefined;
+}

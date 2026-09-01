@@ -55,7 +55,7 @@ import type {
   DealRejectRequest,
   DealAcceptRequest,
   DealMessagesResponse,
-  SocialSessionResponse, SocialChannelsResponse, SocialStartRequest, SocialActor, SocialChannel, SocialMessage, VisibleMessagePage, SocialStoredSessionsResponse
+  SocialSessionResponse, SocialChannelsResponse, SocialStartRequest, SocialActor, SocialChannel, SocialMessage, VisibleMessagePage, SocialStoredSessionsResponse, SocialDiagnosticsResponse
 } from '../utils/types';
 import type { TextStreamPart, ToolSet } from 'ai';
 
@@ -193,6 +193,8 @@ class ApiClient {
   async deleteStoredSocialSession(sessionId: string): Promise<void> { await this.fetchJson(`${this.baseUrl}/api/social/sessions/${encodeURIComponent(sessionId)}`, { method: 'DELETE' }); }
   /** Resume a persisted social session. */
   async resumeSocialSession(sessionId: string): Promise<SocialSessionResponse> { return this.fetchJson<SocialSessionResponse>(`${this.baseUrl}/api/social/session/resume`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId }) }); }
+  /** Return sanitized decision diagnostics when developer inspection is enabled. */
+  async getSocialDiagnostics(limit = 50): Promise<SocialDiagnosticsResponse> { return this.fetchJson<SocialDiagnosticsResponse>(`${this.baseUrl}/api/social/diagnostics?limit=${limit}`); }
   /** List channels visible to the human. */
   async getSocialChannels(inspect = false): Promise<SocialChannelsResponse> { return this.fetchJson<SocialChannelsResponse>(`${this.baseUrl}/api/social/channels${inspect ? '?inspect=true' : ''}`); }
   /** Read one social channel. */

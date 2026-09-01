@@ -9,7 +9,7 @@ import Dropdown from 'primevue/dropdown'
 import Textarea from 'primevue/textarea'
 import Tag from 'primevue/tag'
 import { api } from '../api/client'
-import type { SocialActor, SocialChannel, SocialMessage, SocialSessionResponse, SocialStartRequest, SocialStoredSession } from '../utils/types'
+import type { SocialActor, SocialCascade, SocialChannel, SocialDecisionDiagnostic, SocialMessage, SocialPacingProfile, SocialSessionResponse, SocialStartRequest, SocialStoredSession } from '../utils/types'
 
 const actors = ref<SocialActor[]>([])
 const channels = ref<SocialChannel[]>([])
@@ -25,11 +25,19 @@ const draftActors = ref<SocialStartRequest['actors']>([
 ])
 const groupTitle = ref('')
 const selectedInvitees = ref<string[]>([])
-const modelOptions = ref<Array<{ label: string; value: string }>>([
+const modelCatalog = ref<Array<{ label: string; value: string }>>([
   { label: 'Ling 3.0 Flash Fin (free)', value: 'openrouter/inclusionai/ling-3.0-flash-fin:free' },
   { label: 'Dots 3 Note Preview (free)', value: 'openrouter/dots-studio/dots-3-note-preview:free' },
   { label: 'Nemotron 3.5 Lightning (free)', value: 'openrouter/nvidia/nemotron-3.5-lightning:free' },
 ])
+const freeOnly = ref(true)
+const modelSearch = ref('')
+const pacingProfile = ref<SocialPacingProfile>('balanced')
+const pacingOptions = [
+  { label: 'Quiet', value: 'quiet', description: 'One likely turn per actor' },
+  { label: 'Balanced', value: 'balanced', description: 'A bounded natural exchange' },
+  { label: 'Lively', value: 'lively', description: 'More room for multiple exchanges' },
+]
 const excludedModelIds = new Set(['openrouter/liquid/lfm-2.5-2.6b:free'])
 const cleoFallbackModel = 'openrouter/nvidia/nemotron-3.5-lightning:free'
 const composer = ref('')
@@ -52,6 +60,10 @@ const activeStoredSessions = computed(() => storedSessions.value.filter((saved) 
 const archivedStoredSessions = computed(() => storedSessions.value.filter((saved) => saved.session.archived))
 const inspectionEnabled = ref(false)
 const inspectionAvailable = ref(false)
+const diagnostics = ref<SocialDecisionDiagnostic[]>([])
+const cascades = ref<SocialCascade[]>([])
+const modelOptions = computed(() => modelCatalog.value.filter((model) => { const search = modelSearch.value.trim().toLowerCase(); return (!freeOnly.value || model.value.endsWith(':free')) && (!search || model.label.toLowerCase().includes(search) || model.value.toLowerCase().includes(search)) }))
+const diagnosticSummary = computed(() => ({ calls: diagnostics.value.filter((diagnostic) => diagnostic.validationOutcome === 'validated').length, passes: diagnostics.value.filter((diagnostic) => diagnostic.selectedKind === 'pass').length, failures: diagnostics.value.filter((diagnostic) => diagnostic.validationOutcome === 'failed').length }))
 
 /** Keep persisted OpenRouter references compatible with the UI model catalog. */
 function normalizeModelRef(modelRef: string | undefined): string {
@@ -61,6 +73,7 @@ function normalizeModelRef(modelRef: string | undefined): string {
 /** Copy resumed actor assignments into the setup controls used by the next session. */
 function syncModelSelections(resumedActors: SocialActor[]): void {
   draftActors.value = resumedActors.map((actor) => ({ id: actor.id, ordinal: actor.ordinal, control: actor.control, displayName: actor.displayName, ...(actor.modelRef ? { modelRef: normalizeModelRef(actor.modelRef) } : {}), ...(actor.profile ? { profile: actor.profile } : {}) }))
+  if (resumedActors.some((actor) => actor.control === 'model' && actor.modelRef && !actor.modelRef.endsWith(':free'))) freeOnly.value = false
 }
 
 /** Replace the removed LFM assignment while keeping a running session alive. */
@@ -115,8 +128,8 @@ async function load(): Promise<void> {
   try {
     try {
       const discovered = await api.getConfigModels()
-      const freeModels = discovered.models.filter((model) => model.id.endsWith(':free')).map((model) => ({ label: model.name, value: model.id })).filter((model) => !excludedModelIds.has(model.value))
-      if (freeModels.length) modelOptions.value = freeModels
+      const availableModels = discovered.models.map((model) => ({ label: model.name, value: model.id })).filter((model) => !excludedModelIds.has(model.value))
+      if (availableModels.length) modelCatalog.value = availableModels
     } catch { /* The curated free defaults keep setup usable without discovery credentials. */ }
     storedSessions.value = (await api.getStoredSocialSessions()).sessions
     if (isHome.value) return
@@ -125,6 +138,7 @@ async function load(): Promise<void> {
     sessionActive.value = true
     inspectionAvailable.value = session.inspectionAvailable === true
     actors.value = await migrateRemovedCleoModel(session.actors)
+    pacingProfile.value = session.pacingProfile ?? 'balanced'
     syncModelSelections(actors.value)
     await loadChannels()
     connectEvents()
@@ -171,12 +185,18 @@ async function loadMessages(): Promise<void> {
   await scrollToLatest()
 }
 
+/** Load compact sanitized diagnostics for explicit developer inspection. */
+async function loadDiagnostics(): Promise<void> {
+  if (!inspectionEnabled.value) { diagnostics.value = []; cascades.value = []; return }
+  try { const response = await api.getSocialDiagnostics(60); diagnostics.value = response.diagnostics; cascades.value = response.cascades } catch { diagnostics.value = []; cascades.value = [] }
+}
+
 /** Start a small local social sandbox with three model actors. */
 async function start(): Promise<void> {
   loading.value = true
   error.value = ''
   try {
-    const response = await api.startSocialSession({ title: sandboxTitle.value.trim() || 'Untitled sandbox', actors: draftActors.value.map((actor, ordinal) => ({ ...actor, ordinal, ...(actor.id === 'human' ? { displayName: displayName.value || actor.displayName || 'Human' } : {}) })) })
+    const response = await api.startSocialSession({ title: sandboxTitle.value.trim() || 'Untitled sandbox', pacingProfile: pacingProfile.value, actors: draftActors.value.map((actor, ordinal) => ({ ...actor, ordinal, ...(actor.id === 'human' ? { displayName: displayName.value || actor.displayName || 'Human' } : {}) })) })
     actors.value = response.actors
     sessionActive.value = true
     await loadChannels()
@@ -200,6 +220,7 @@ async function resume(sessionId: string): Promise<void> {
     let resumedActors: SocialActor[] = response.actors.map((actor): SocialActor => actor.modelRef ? { ...actor, modelRef: normalizeModelRef(actor.modelRef) } : actor)
     resumedActors = await migrateRemovedCleoModel(resumedActors)
     actors.value = resumedActors
+    pacingProfile.value = response.pacingProfile ?? 'balanced'
     syncModelSelections(resumedActors)
     sessionActive.value = true
     selectedChannelId.value = 'world'
@@ -241,10 +262,10 @@ async function selectChannel(channelId: string): Promise<void> { selectedChannel
 async function scrollToLatest(): Promise<void> { await nextTick(); if (messagesPane.value) messagesPane.value.scrollTop = messagesPane.value.scrollHeight }
 
 /** Connect the live event stream only after a social session exists. */
-function connectEvents(): void { stopEvents?.(); stopEvents = api.streamSocialEvents(async () => { await loadChannels() }, inspectionEnabled.value) }
+function connectEvents(): void { stopEvents?.(); stopEvents = api.streamSocialEvents(async () => { await loadChannels(); await loadDiagnostics() }, inspectionEnabled.value) }
 
 /** Toggle explicit developer inspection and reload the authorized view. */
-async function toggleInspection(): Promise<void> { await loadChannels(); connectEvents() }
+async function toggleInspection(): Promise<void> { await loadChannels(); await loadDiagnostics(); connectEvents() }
 
 onMounted(async () => { await load() })
 watch(() => route.params.sessionId, async (sessionId, previousSessionId) => { if (sessionId !== previousSessionId) await load() })
@@ -259,7 +280,7 @@ onUnmounted(() => stopEvents?.())
     </div>
     <div v-if="error" class="social-error">{{ error }}</div>
     <div v-if="isHome" class="social-home">
-      <Card class="social-start-card create-card"><template #title>New sandbox</template><template #content><p class="text-muted">Create a 2–8 participant conversation space.</p><div class="flex gap-2"><InputText v-model="sandboxTitle" placeholder="Sandbox title" /><InputText v-model="displayName" placeholder="Your display name" /><Button label="Create sandbox" icon="pi pi-plus" :loading="loading" @click="start" /></div><div class="draft-roster"><div v-for="actor in draftActors" :key="actor.id" class="draft-actor"><InputText v-model="actor.displayName" :disabled="actor.control === 'human'" placeholder="Actor name" /><Dropdown v-if="actor.control === 'model'" v-model="actor.modelRef" :options="modelOptions" option-label="label" option-value="value" /><Textarea v-if="actor.control === 'model'" v-model="actor.profile" auto-resize rows="1" placeholder="Optional profile" /><Button v-if="actor.control === 'model'" icon="pi pi-trash" text rounded severity="danger" aria-label="Remove actor" @click="removeDraftActor(actor.id)" /></div><Button label="Add model" icon="pi pi-user-plus" text size="small" :disabled="draftActors.length >= 8" @click="addDraftActor" /></div></template></Card>
+      <Card class="social-start-card create-card"><template #title>New sandbox</template><template #content><p class="text-muted">Create a 2–8 participant conversation space.</p><div class="flex gap-2"><InputText v-model="sandboxTitle" placeholder="Sandbox title" /><InputText v-model="displayName" placeholder="Your display name" /><Dropdown v-model="pacingProfile" :options="pacingOptions" option-label="label" option-value="value" placeholder="Pacing" /><Button label="Create sandbox" icon="pi pi-plus" :loading="loading" @click="start" /></div><div class="model-filter flex align-items-center gap-2 mt-3"><InputText v-model="modelSearch" placeholder="Search models" /><Checkbox v-model="freeOnly" binary input-id="free-only" /><label for="free-only">Free only</label><small class="text-muted">{{ modelOptions.length }} available</small></div><div class="draft-roster"><div v-for="actor in draftActors" :key="actor.id" class="draft-actor"><InputText v-model="actor.displayName" :disabled="actor.control === 'human'" placeholder="Actor name" /><Dropdown v-if="actor.control === 'model'" v-model="actor.modelRef" :options="modelOptions" option-label="label" option-value="value" /><Textarea v-if="actor.control === 'model'" v-model="actor.profile" auto-resize rows="1" placeholder="Optional profile" /><Button v-if="actor.control === 'model'" icon="pi pi-trash" text rounded severity="danger" aria-label="Remove actor" @click="removeDraftActor(actor.id)" /></div><Button label="Add model" icon="pi pi-user-plus" text size="small" :disabled="draftActors.length >= 8" @click="addDraftActor" /></div></template></Card>
       <section class="sandbox-list"><div class="list-heading"><h2>Saved chats</h2><span class="text-muted">{{ activeStoredSessions.length }}</span></div><div v-if="!activeStoredSessions.length" class="empty-home">No saved chats yet.</div><article v-for="saved in activeStoredSessions" :key="saved.session.id" class="sandbox-card"><button class="sandbox-open" @click="openStoredSession(saved.session.id)"><strong>{{ saved.session.title || 'Untitled sandbox' }}</strong><small>{{ saved.actors.filter((actor) => actor.control === 'model').map((actor) => `${actor.displayName} · ${actor.modelRef || 'unconfigured'}`).join('  |  ') }}</small><small>{{ saved.session.updatedAt || saved.session.createdAt || 'No timestamp' }}</small></button><div class="sandbox-actions"><Button icon="pi pi-pencil" text rounded aria-label="Rename chat" @click="renameStoredSession(saved)" /><Button icon="pi pi-box" text rounded aria-label="Archive chat" @click="setArchived(saved, true)" /><Button icon="pi pi-trash" text rounded severity="danger" aria-label="Delete chat" @click="deleteStoredSession(saved)" /></div></article></section>
       <section class="sandbox-list archived-list"><div class="list-heading"><h2>Archived chats</h2><span class="text-muted">{{ archivedStoredSessions.length }}</span></div><article v-for="saved in archivedStoredSessions" :key="saved.session.id" class="sandbox-card"><button class="sandbox-open" @click="openStoredSession(saved.session.id)"><strong>{{ saved.session.title || 'Untitled sandbox' }}</strong><small>{{ saved.actors.filter((actor) => actor.control === 'model').map((actor) => actor.displayName).join('  |  ') }}</small></button><div class="sandbox-actions"><Button icon="pi pi-replay" text rounded aria-label="Restore chat" @click="setArchived(saved, false)" /><Button icon="pi pi-trash" text rounded severity="danger" aria-label="Delete chat" @click="deleteStoredSession(saved)" /></div></article></section>
     </div>
@@ -278,7 +299,7 @@ onUnmounted(() => stopEvents?.())
         <div ref="messagesPane" class="social-messages"><div v-if="!messages.length" class="empty-state"><i class="pi pi-inbox" /><p>No messages yet. Start the conversation.</p></div><article v-for="message in messages" :key="message.id" class="social-message" :class="{ human: message.speakerActorId === 'human' }"><div class="message-author">{{ actorName(message.speakerActorId) }}<span>{{ new Date(message.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }}</span></div><div>{{ message.content }}</div></article></div>
         <div class="social-composer"><Textarea v-model="composer" auto-resize rows="2" placeholder="Say something to the group..." @keydown.enter.exact.prevent="send" /><Button icon="pi pi-send" aria-label="Send" :loading="sending" :disabled="!composer.trim()" @click="send" /></div>
       </main>
-      <aside class="social-details"><h3>Actors</h3><div v-for="actor in actors" :key="actor.id" class="actor-row"><span class="actor-dot" :class="actor.control" /> <span>{{ actor.displayName }}</span><small v-if="actor.control === 'human'">You</small><Dropdown v-else v-model="actor.modelRef" :options="modelOptions" option-label="label" option-value="value" class="actor-model" @update:model-value="changeActorModel(actor, $event)" /></div><p class="text-muted text-small mt-4">Model changes apply to future replies and do not interrupt the current session.</p></aside>
+      <aside class="social-details"><h3>Actors</h3><div v-for="actor in actors" :key="actor.id" class="actor-row"><span class="actor-dot" :class="actor.control" /> <span>{{ actor.displayName }}</span><small v-if="actor.control === 'human'">You</small><Dropdown v-else v-model="actor.modelRef" :options="modelOptions" option-label="label" option-value="value" class="actor-model" @update:model-value="changeActorModel(actor, $event)" /></div><p class="text-muted text-small mt-4">Model changes apply to future replies and do not interrupt the current session.</p><section v-if="inspectionEnabled" class="diagnostics-panel"><h3>Diagnostics</h3><div class="diagnostic-summary"><span>Calls {{ diagnosticSummary.calls }}</span><span>Passes {{ diagnosticSummary.passes }}</span><span>Failures {{ diagnosticSummary.failures }}</span></div><div v-if="cascades[0]" class="cascade-summary"><strong>Latest cascade</strong><small>{{ cascades[0].state }} · {{ cascades[0].modelRuns }}/{{ cascades[0].maxModelRuns }} calls · {{ cascades[0].committedModelMessages }}/{{ cascades[0].maxCommittedModelMessages }} messages</small></div><div v-for="diagnostic in diagnostics.slice(0, 8)" :key="diagnostic.id" class="diagnostic-row"><strong>{{ diagnostic.actorDisplayName }} · {{ diagnostic.selectedKind || 'skipped' }}</strong><small>{{ diagnostic.providerLatencyMs ?? 'n/a' }} ms · {{ diagnostic.retryCount }} retries</small><small>{{ diagnostic.applicationOutcome || diagnostic.validationOutcome }}</small></div></section></aside>
     </div>
   </div>
 </template>
@@ -306,5 +327,7 @@ onUnmounted(() => stopEvents?.())
 .message-author { font-weight: 700; margin-bottom: .25rem; color: var(--p-primary-700); }.message-author span { font-weight: 400; color: var(--p-text-muted-color); font-size: .72rem; margin-left: .5rem; }
 .social-composer { display: flex; gap: .75rem; padding: 1rem; border-top: 1px solid var(--p-content-border-color); }.social-composer .p-textarea { flex: 1; }
 .actor-row { display: grid; grid-template-columns: 10px 1fr; gap: .5rem; align-items: center; margin-bottom: .7rem; }.actor-row small { grid-column: 2; color: var(--p-text-muted-color); font-size: .7rem; }.actor-model { grid-column: 2; width: 100%; font-size: .72rem; }.actor-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--p-green-500); }.actor-dot.human { background: var(--p-primary-500); }
+.model-filter { flex-wrap: wrap; }.model-filter .p-inputtext { min-width: 220px; flex: 1; }.diagnostics-panel { border-top: 1px solid var(--p-content-border-color); margin-top: 1rem; padding-top: 1rem; }.diagnostic-summary { display: flex; flex-wrap: wrap; gap: .4rem; color: var(--p-text-muted-color); font-size: .72rem; }.diagnostic-row { display: grid; gap: .15rem; padding: .45rem 0; border-bottom: 1px solid var(--p-content-border-color); font-size: .72rem; }.diagnostic-row small { color: var(--p-text-muted-color); }
+.cascade-summary { display: grid; gap: .15rem; margin: .6rem 0; padding: .45rem; border-radius: 5px; background: var(--p-content-background); font-size: .72rem; }.cascade-summary small { color: var(--p-text-muted-color); }
 @media (max-width: 900px) { .social-shell { grid-template-columns: 180px minmax(0, 1fr); }.social-details { display: none; } }
 </style>

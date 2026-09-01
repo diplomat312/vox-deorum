@@ -78,4 +78,35 @@ describe('SocialScheduler', () => {
     await store.createSession({ id: 'unknown', humanActorId: 'human' }, actors); const events = new SocialEventHub(); const lanes = new Map(actors.map((actor) => [actor.id, new ActorLane()])); const executor = { decide: vi.fn() }; const scheduler = new SocialScheduler(store, async () => actors, lanes, events, executor);
     await store.enqueueIntention({ id: 'unknown-1', actorId: 'alice', kind: 'future-kind', channelId: null, sourceMessageId: null, priority: 1, state: 'queued', notBefore: new Date().toISOString(), payload: null, dedupeKey: 'unknown-1' }); scheduler.kick(); await scheduler.waitForIdle(); scheduler.stop(); expect(executor.decide).not.toHaveBeenCalled();
   });
+
+  it('should reserve cascade budget before calling the provider', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'vox-deorum-social-budget-'));
+    const store = new SocialStore(join(directory, 'scheduler.sqlite'));
+    cleanups.push(async () => { await store.close(); rmSync(directory, { recursive: true, force: true }); });
+    const actors: SocialActorType[] = [
+      { id: 'human', ordinal: 0, control: 'human', displayName: 'Human', sessionId: 'budget', createdAt: new Date().toISOString(), status: 'active' },
+      { id: 'alice', ordinal: 1, control: 'model', displayName: 'Alice', modelRef: 'openrouter/test/alice', sessionId: 'budget', createdAt: new Date().toISOString(), status: 'active' },
+    ];
+    await store.createSession({ id: 'budget', humanActorId: 'human' }, actors);
+    const events = new SocialEventHub(); const lanes = new Map(actors.map((actor) => [actor.id, new ActorLane()])); const executor = { decide: vi.fn(async () => ({ kind: 'reply' as const, content: 'must not run' })) }; const scheduler = new SocialScheduler(store, async () => actors, lanes, events, executor);
+    await store.commitHumanMessage({ sessionId: 'budget', actorId: 'human', channelId: 'world', content: 'Budget check', budget: { maxModelRuns: 0, maxCommittedModelMessages: 1, maxRepliesPerActor: 1, maxWallClockMs: 60_000 } });
+    scheduler.kick(); await scheduler.waitForIdle(); scheduler.stop();
+    expect(executor.decide).not.toHaveBeenCalled();
+    expect((await store.listDecisionDiagnostics('budget'))[0]?.validationOutcome).toBe('skipped-budget');
+  });
+
+  it('should coalesce queued reply opportunities onto the newest committed message', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'vox-deorum-social-coalesce-'));
+    const store = new SocialStore(join(directory, 'scheduler.sqlite'));
+    cleanups.push(async () => { await store.close(); rmSync(directory, { recursive: true, force: true }); });
+    const actors: SocialActorType[] = [
+      { id: 'human', ordinal: 0, control: 'human', displayName: 'Human', sessionId: 'coalesce', createdAt: new Date().toISOString(), status: 'active' },
+      { id: 'alice', ordinal: 1, control: 'model', displayName: 'Alice', modelRef: 'openrouter/test/alice', sessionId: 'coalesce', createdAt: new Date().toISOString(), status: 'active' },
+    ];
+    await store.createSession({ id: 'coalesce', humanActorId: 'human' }, actors);
+    const first = await store.commitHumanMessage({ sessionId: 'coalesce', actorId: 'human', channelId: 'world', content: 'First', budget: { maxModelRuns: 6, maxCommittedModelMessages: 2, maxRepliesPerActor: 1, maxWallClockMs: 60_000 } });
+    const second = await store.commitHumanMessage({ sessionId: 'coalesce', actorId: 'human', channelId: 'world', content: 'Second', budget: { maxModelRuns: 6, maxCommittedModelMessages: 2, maxRepliesPerActor: 1, maxWallClockMs: 60_000 } });
+    expect(second.createdIntentions[0]?.id).toBe(first.createdIntentions[0]?.id);
+    expect(second.createdIntentions[0]?.sourceMessageId).toBe(second.message.id);
+  });
 });

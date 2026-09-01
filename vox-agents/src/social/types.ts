@@ -19,7 +19,8 @@ export type SocialDecision =
   | { kind: 'environment_action'; actionName: string; arguments: Record<string, unknown>; rationale?: string };
 
 export interface SocialActorDefinition { id: string; ordinal: number; control: SocialActorControl; displayName: string; modelRef?: string; profile?: string; }
-export interface SocialSessionDefinition { id: string; humanActorId: string; title?: string; archived?: boolean; createdAt?: string; updatedAt?: string; }
+export type SocialPacingProfile = 'quiet' | 'balanced' | 'lively';
+export interface SocialSessionDefinition { id: string; humanActorId: string; title?: string; archived?: boolean; pacingProfile?: SocialPacingProfile; createdAt?: string; updatedAt?: string; }
 export interface SocialActor extends SocialActorDefinition { sessionId: string; createdAt: string; status: 'active' | 'inactive'; }
 export interface SocialChannel { id: string; sessionId: string; kind: SocialChannelKind; title: string; createdByActorId: string; canonicalKey: string | null; createdAt: string; archived: boolean; }
 export interface SocialMembership { id: string; channelId: string; actorId: string; status: SocialMembershipStatus; invitedByActorId: string | null; visibleAfterMessageId: number; leftAfterMessageId: number | null; createdAt: string; updatedAt: string; }
@@ -30,4 +31,4 @@ export interface SocialCascade { id: string; sessionId: string; rootKind: 'messa
 export interface SocialCascadeBudget { maxModelRuns: number; maxCommittedModelMessages: number; maxRepliesPerActor: number; maxWallClockMs: number; }
 export interface SocialInvitation { membershipId: string; channelId: string; channelTitle: string; invitedByActorId: string; invitedByDisplayName: string; createdAt: string; }
 export interface VisibleMessagePage { messages: SocialMessage[]; hasMore: boolean; }
-export interface SocialDecisionDiagnostic { id: string; intentionId: string; actorId: string; actorDisplayName: string; modelRef: string | null; executionScope: SocialExecutionScope; selectedKind: string | null; routingRefsJson: string | null; validationOutcome: string; applicationOutcome: string | null; error: string | null; latencyMs: number | null; retryCount: number; createdAt: string; }
+export interface SocialDecisionDiagnostic { id: string; intentionId: string; actorId: string; actorDisplayName: string; modelRef: string | null; executionScope: SocialExecutionScope; cascadeId: string | null; selectedKind: string | null; routingRefsJson: string | null; validationOutcome: string; applicationOutcome: string | null; error: string | null; providerLatencyMs: number | null; queueWaitMs: number | null; durationMs: number | null; inputTokens: number | null; outputTokens: number | null; totalTokens: number | null; cachedTokens: number | null; reasoningTokens: number | null; cost: number | null; retryCount: number; createdAt: string; }

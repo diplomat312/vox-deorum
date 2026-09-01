@@ -1,6 +1,6 @@
 import Database from 'better-sqlite3';
 
-export const currentSocialSchemaVersion = 10;
+export const currentSocialSchemaVersion = 11;
 type Sqlite = InstanceType<typeof Database>;
 
 /** Apply ordered social schema migrations without rewriting current databases. */
@@ -22,6 +22,7 @@ function applyMigration(sqlite: Sqlite, version: number): void {
   if (version === 8) sqlite.exec(`CREATE TABLE IF NOT EXISTS socialCivActionAttempts (operationId TEXT PRIMARY KEY, sessionId TEXT NOT NULL, actorId TEXT NOT NULL, gameId TEXT NOT NULL, playerId INTEGER NOT NULL, sourceTurn INTEGER NOT NULL, actionType TEXT NOT NULL, category TEXT NOT NULL, normalizedArgumentsJson TEXT NOT NULL, state TEXT NOT NULL, requestedAt TEXT NOT NULL, executingAt TEXT, completedAt TEXT, resultSummary TEXT, failureClass TEXT, readbackSummary TEXT); CREATE INDEX IF NOT EXISTS socialCivActionAttemptsActorIndex ON socialCivActionAttempts(sessionId, actorId, requestedAt);`);
   if (version === 9) sqlite.exec('CREATE INDEX IF NOT EXISTS socialEnvironmentEventsSourceIndex ON socialEnvironmentEvents(sessionId, sourceKey);');
   if (version === 10) sqlite.exec('CREATE TABLE IF NOT EXISTS socialDecisionDiagnostics (id TEXT PRIMARY KEY, intentionId TEXT NOT NULL, actorId TEXT NOT NULL, actorDisplayName TEXT NOT NULL, modelRef TEXT, executionScope TEXT NOT NULL, selectedKind TEXT, routingRefsJson TEXT, validationOutcome TEXT NOT NULL, applicationOutcome TEXT, error TEXT, latencyMs INTEGER, retryCount INTEGER NOT NULL DEFAULT 0, createdAt TEXT NOT NULL); CREATE INDEX IF NOT EXISTS socialDecisionDiagnosticsIntentionIndex ON socialDecisionDiagnostics(intentionId, createdAt); CREATE INDEX IF NOT EXISTS socialDecisionDiagnosticsActorIndex ON socialDecisionDiagnostics(actorId, createdAt);');
+  if (version === 11) { addColumn(sqlite, 'socialSessions', 'pacingProfile', "TEXT NOT NULL DEFAULT 'balanced'"); addColumn(sqlite, 'socialDecisionDiagnostics', 'cascadeId', 'TEXT'); addColumn(sqlite, 'socialDecisionDiagnostics', 'providerLatencyMs', 'INTEGER'); addColumn(sqlite, 'socialDecisionDiagnostics', 'queueWaitMs', 'INTEGER'); addColumn(sqlite, 'socialDecisionDiagnostics', 'durationMs', 'INTEGER'); addColumn(sqlite, 'socialDecisionDiagnostics', 'inputTokens', 'INTEGER'); addColumn(sqlite, 'socialDecisionDiagnostics', 'outputTokens', 'INTEGER'); addColumn(sqlite, 'socialDecisionDiagnostics', 'totalTokens', 'INTEGER'); addColumn(sqlite, 'socialDecisionDiagnostics', 'cachedTokens', 'INTEGER'); addColumn(sqlite, 'socialDecisionDiagnostics', 'reasoningTokens', 'INTEGER'); addColumn(sqlite, 'socialDecisionDiagnostics', 'cost', 'REAL'); }
 }
 
 /** Add a column only when upgrading a legacy table that lacks it. */

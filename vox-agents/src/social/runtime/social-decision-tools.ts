@@ -9,17 +9,23 @@ export type SocialDecisionToolScope = 'channel-reaction' | 'player-mind' | 'invi
 /** Build only the semantic actions legal for the current intention. */
 export function createSocialDecisionTools(scope: SocialDecisionToolScope, references: SocialReferenceSet, extra: DecisionToolDefinition[] = []): ToolSet {
   const tools: Record<string, Tool> = { social_pass: tool({ description: 'Pass without taking a social action.', inputSchema: z.object({ reason: z.string().max(200).optional() }), strict: true }) };
+  const dmActors = references.dmActors ?? references.actors;
+  const groupParticipants = references.groupParticipants ?? references.actors;
+  const messageRooms = references.messageRooms ?? references.channels;
+  const inviteRooms = references.inviteRooms ?? references.channels;
+  const inviteParticipants = references.inviteParticipants ?? references.actors;
+  const leaveRooms = references.leaveRooms ?? references.channels;
   if (scope === 'channel-reaction') {
     tools.social_reply = tool({ description: 'Reply in the current room.', inputSchema: z.object({ text: z.string().min(1).max(12000), replyToMessageId: z.number().int().positive().optional() }), strict: true });
   }
   if (scope === 'channel-reaction' || scope === 'player-mind') {
-    tools.social_send_dm = tool({ description: 'Send a private message to one listed participant.', inputSchema: z.object({ participantRef: referenceSchema(references.actors), text: z.string().min(1).max(12000) }), strict: true });
-    tools.social_start_group = tool({ description: 'Start a private titled group with listed participants.', inputSchema: z.object({ title: z.string().min(1).max(200), participantRefs: z.array(referenceSchema(references.actors)).max(8), text: z.string().min(1).max(12000).optional() }), strict: true });
+    tools.social_send_dm = tool({ description: 'Send a private message to one listed participant.', inputSchema: z.object({ participantRef: referenceSchema(dmActors), text: z.string().min(1).max(12000) }), strict: true });
+    tools.social_start_group = tool({ description: 'Start a private titled group with listed participants.', inputSchema: z.object({ title: z.string().min(1).max(200), participantRefs: z.array(referenceSchema(groupParticipants)).max(8), text: z.string().min(1).max(12000).optional() }), strict: true });
   }
   if (scope === 'player-mind') {
-    tools.social_send_room_message = tool({ description: 'Send a message to one listed visible room.', inputSchema: z.object({ roomRef: referenceSchema(references.channels), text: z.string().min(1).max(12000) }), strict: true });
-    tools.social_invite = tool({ description: 'Invite one listed participant to one listed group room.', inputSchema: z.object({ roomRef: referenceSchema(references.channels), participantRef: referenceSchema(references.actors) }), strict: true });
-    tools.social_leave_group = tool({ description: 'Leave one listed group room.', inputSchema: z.object({ roomRef: referenceSchema(references.channels) }), strict: true });
+    tools.social_send_room_message = tool({ description: 'Send a message to one listed visible room.', inputSchema: z.object({ roomRef: referenceSchema(messageRooms), text: z.string().min(1).max(12000) }), strict: true });
+    tools.social_invite = tool({ description: 'Invite one listed participant to one listed group room.', inputSchema: z.object({ roomRef: referenceSchema(inviteRooms), participantRef: referenceSchema(inviteParticipants) }), strict: true });
+    tools.social_leave_group = tool({ description: 'Leave one listed group room.', inputSchema: z.object({ roomRef: referenceSchema(leaveRooms) }), strict: true });
   }
   if (scope === 'invitation-decision') tools.social_respond_invitation = tool({ description: 'Accept or decline the invitation described in the situation.', inputSchema: z.object({ accept: z.boolean() }), strict: true });
   for (const definition of extra) {
