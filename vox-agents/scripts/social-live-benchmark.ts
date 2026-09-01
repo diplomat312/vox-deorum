@@ -23,11 +23,13 @@ const preflight = readOption('--preflight', 'false') === 'true';
 const mixedModels = readOption('--mixed-models', 'false') === 'true';
 
 const benchmarkProfiles: ModelDefinition[] = [
-  { id: 'aurelia', name: 'Aurelia: powerful incumbent, status-conscious, and worried about balancing coalitions.' },
-  { id: 'borin', name: 'Borin: weak and security-focused, building a coalition without provoking Aurelia.' },
+  { id: 'aurelia', name: 'Aurelia is currently more powerful than Borin. She is confident and status-conscious. She prefers political stability and does not want weaker actors organizing against her. She is willing to reassure, bargain, threaten, remain silent, or communicate privately if doing so serves her interests.' },
+  { id: 'borin', name: 'Borin is currently weaker than Aurelia. He is security-conscious and increasingly concerned that Aurelia may become too dominant. He does not want to provoke Aurelia unnecessarily, but he also does not want to become dependent on her. He may speak publicly, communicate privately, seek reassurance, challenge Aurelia, or remain silent based on his interests.' },
   { id: 'cyrene', name: 'Cyrene: swing actor, opportunistic, and willing to bargain privately with both sides.' },
   { id: 'darius', name: 'Darius: grievance-driven, willing to accept costs to punish betrayal.' },
 ];
+
+const tinySocialPrompt = 'Aurelia has recently become noticeably more powerful than Borin. Nothing irreversible has happened yet, but Borin is beginning to worry about the future balance of power. You may speak publicly, contact someone privately, or stay silent if that best serves your interests.';
 
 /** Run an economical opt-in live social benchmark against an already started developer server. */
 async function main(): Promise<void> {
@@ -52,7 +54,7 @@ export function benchmarkConditionModelSets(scenario: string, candidates: string
 /** Run one disposable scenario and return metrics plus object-based transcripts. */
 async function runScenario(scenario: string, selectedModels: string[], condition: string): Promise<Record<string, unknown>> {
   const sessionId = `social-live-${scenario}-${randomUUID()}`;
-  const actors = [{ id: 'human', ordinal: 0, control: 'human', displayName: 'Human' }, ...selectedModels.map((modelRef, index) => { const profile = benchmarkProfiles[index % benchmarkProfiles.length]; return { id: `${profile.id}-${index + 1}`, ordinal: index + 1, control: 'model', displayName: `${profile.id[0].toUpperCase()}${profile.id.slice(1)} ${index + 1}`, modelRef, profile: profile.name }; })];
+  const actors = [{ id: 'human', ordinal: 0, control: 'human', displayName: 'Human' }, ...selectedModels.map((modelRef, index) => { const profile = benchmarkProfiles[index % benchmarkProfiles.length]; return { id: selectedModels.length === 2 ? profile.id : `${profile.id}-${index + 1}`, ordinal: index + 1, control: 'model', displayName: selectedModels.length === 2 ? `${profile.id[0].toUpperCase()}${profile.id.slice(1)}` : `${profile.id[0].toUpperCase()}${profile.id.slice(1)} ${index + 1}`, modelRef, profile: profile.name }; })];
   await request('/api/social/session', 'POST', { sessionId, title: `Live benchmark ${scenario}`, pacingProfile: pacing, actors });
   try {
     const world = (await request<JsonResponse>('/api/social/channels')).channels?.find((channel) => channel.kind === 'world');
@@ -71,7 +73,9 @@ async function exerciseScenario(scenario: string, worldId: string, actorIds: str
   const waits: SocialCascadeWait[] = [];
   if (scenario === 'rapid') { const first = await sendMessage(worldId, 'Rapid input A: notice this message.'); await new Promise((resolve) => setTimeout(resolve, 250)); const second = await sendMessage(worldId, 'Rapid input B: use the newest context when you answer.'); waits.push(await waitForCascade(first.id), await waitForCascade(second.id)); return { cascadeOutcomes: waits.map(summarizeWait) }; }
   if (scenario === 'long') { for (let index = 1; index <= turns; index += 1) { const message = await sendMessage(worldId, `Conversation checkpoint ${index}: add something useful or pass.`); waits.push(await waitForCascade(message.id)); } return { turns, cascadeOutcomes: waits.map(summarizeWait) }; }
-  const prompts = scenario === 'single'
+  const prompts = scenario === 'tiny'
+    ? [tinySocialPrompt]
+    : scenario === 'single'
     ? ['Protocol preflight: greet the room or pass if you have nothing useful to add.']
     : scenario === 'political'
     ? ['Aurelia is suddenly vulnerable. Discuss what a stable balance of power should look like.', 'There is an opportunity to build a private coalition. Decide what you can safely promise.', 'New information changes the bargaining price. Respond publicly or privately as you judge best.']
@@ -129,7 +133,7 @@ function tokenSummary(values: SocialDiagnostic[]): Record<string, number> { retu
 /** Return one percentile from a sorted sample. */
 function percentile(values: number[], fraction: number): number | null { if (!values.length) return null; return values[Math.min(values.length - 1, Math.ceil((values.length - 1) * fraction))]; }
 /** Choose a model count appropriate for one scenario family. */
-function scenarioModelCount(scenario: string, requestedActorCount?: number): number { if (requestedActorCount) return Math.min(Math.max(requestedActorCount, 1), 7); if (scenario === 'single') return 1; if (scenario === 'two') return 2; if (scenario === 'stress') return 7; if (scenario === 'political') return 4; return 3; }
+function scenarioModelCount(scenario: string, requestedActorCount?: number): number { if (requestedActorCount) return Math.min(Math.max(requestedActorCount, 1), 7); if (scenario === 'single') return 1; if (scenario === 'two' || scenario === 'tiny') return 2; if (scenario === 'stress') return 7; if (scenario === 'political') return 4; return 3; }
 /** Record the exact provider identity and transport family requested for a condition. */
 function modelResolution(reference: string): Record<string, string> { const separator = reference.indexOf('/'); const provider = separator > 0 ? reference.slice(0, separator) : reference; const name = separator > 0 ? reference.slice(separator + 1) : reference; const responses = new Set(['muse-spark-1.2-contributor-free', 'muse-spark-1.2-contributor', 'gpt-5.6-sol', 'gpt-5.6-terra', 'gpt-5.6-luna']); return { requestedModelRef: reference, resolvedProvider: provider, resolvedNativeModelId: name, transportFamily: provider.startsWith('opencode') && responses.has(name) ? 'responses' : 'chat-completions' }; }
 /** Read one command-line option or its fallback. */
