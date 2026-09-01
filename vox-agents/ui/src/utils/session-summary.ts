@@ -98,11 +98,13 @@ function resolveModel(reference: string, seatLlms: Record<string, LLMConfig | st
 }
 
 /** Chooses a strategist model using the backend's agent then size precedence. */
-function strategistModel(player: { strategist: string; llms?: Record<string, LLMConfig | string> }, agents: readonly SetupAgent[], globalLlms: Record<string, LLMConfig | string>): string {
+function strategistModel(player: { strategist: string; mind?: 'unified-mind'; llms?: Record<string, LLMConfig | string> }, agents: readonly SetupAgent[], globalLlms: Record<string, LLMConfig | string>): string {
   const seatLlms = player.llms ?? {};
+  const modelKey = player.mind === 'unified-mind' ? 'unified-mind' : player.strategist;
   const size = agents.find(agent => agent.name === player.strategist)?.modelSize ?? 'default';
-  const reference = seatLlms[player.strategist] !== undefined ? player.strategist
-    : globalLlms[player.strategist] !== undefined ? player.strategist
+  const reference = seatLlms[modelKey] !== undefined ? modelKey
+    : globalLlms[modelKey] !== undefined ? modelKey
+      : globalLlms[player.strategist] !== undefined ? player.strategist
       : seatLlms[size] !== undefined ? size
         : globalLlms[size] !== undefined ? size : 'default';
   return resolveModel(reference, seatLlms, globalLlms);
@@ -164,7 +166,10 @@ export function describeConfig(config: StrategistSessionConfig, agents: readonly
     const strategist = config.llmPlayers[seat]?.strategist;
     return strategist !== 'none-strategist' && strategist !== 'human-strategist';
   });
-  const styles = [...new Set(agenticSeats.map(seat => agentLabel(config.llmPlayers[seat]!.strategist, agents)))];
+  const styles = [...new Set(agenticSeats.map(seat => {
+    const player = config.llmPlayers[seat]!;
+    return player.mind === 'unified-mind' ? 'Unified civilization mind' : agentLabel(player.strategist, agents);
+  }))];
   const agenticCount = agenticSeats.length;
   const pacings = agenticSeats.map(seat => config.llmPlayers[seat]?.pacing ?? { everyTurns: 1, interruption: 'none' });
   const firstPacing = pacings[0] ?? { everyTurns: 1, interruption: 'none' };
@@ -175,7 +180,12 @@ export function describeConfig(config: StrategistSessionConfig, agents: readonly
     if (!player) return { seat, role: 'Vox Populi AI', style: 'None', model: 'None' };
     if (player.strategist === 'none-strategist') return { seat, role: 'Vox Populi AI', style: 'None', model: 'None' };
     if (player.strategist === 'human-strategist') return { seat, role: 'You', style: 'Direct', model: 'None' };
-    return { seat, role: 'Agentic AI', style: agentLabel(player.strategist, agents), model: strategistModel(player, agents, globalLlms) };
+    return {
+      seat,
+      role: 'Agentic AI',
+      style: player.mind === 'unified-mind' ? 'Unified civilization mind' : agentLabel(player.strategist, agents),
+      model: strategistModel(player, agents, globalLlms),
+    };
   });
   const seatRows: SeatRow[] = [];
   for (const row of rawRows) {

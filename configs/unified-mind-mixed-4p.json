@@ -1,0 +1,35 @@
+{
+  "name": "unified-mind-mixed-4p",
+  "description": "Four unified-mind AI civilizations and a human seat, each AI seat may use a different model.",
+  "type": "strategist",
+  "autoPlay": false,
+  "production": "test",
+  "randomizeSeating": false,
+  "llmPlayers": {
+    "0": {
+      "strategist": "simple-strategist",
+      "mind": "unified-mind",
+      "llms": { "unified-mind": "openrouter/minimax/minimax-m3:free" },
+      "pacing": { "everyTurns": 5, "interruption": "importantEvents" }
+    },
+    "1": {
+      "strategist": "simple-strategist",
+      "mind": "unified-mind",
+      "llms": { "unified-mind": "opencode/mimo-v2.5-free" },
+      "pacing": { "everyTurns": 5, "interruption": "importantEvents" }
+    },
+    "2": {
+      "strategist": "simple-strategist",
+      "mind": "unified-mind",
+      "llms": { "unified-mind": "opencode-go/muse-spark-1.2-contributor" },
+      "pacing": { "everyTurns": 5, "interruption": "importantEvents" }
+    },
+    "3": {
+      "strategist": "simple-strategist",
+      "mind": "unified-mind",
+      "llms": { "unified-mind": "openrouter/minimax/minimax-m3:free" },
+      "pacing": { "everyTurns": 5, "interruption": "importantEvents" }
+    },
+    "4": { "strategist": "human-strategist", "mode": "Flavor" }
+  }
+}

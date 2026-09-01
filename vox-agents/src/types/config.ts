@@ -206,6 +206,12 @@ export interface PlayerConfig {
   /** Strategist type to use for this player */
   strategist: string;
   /**
+   * Optional civilization-level policy mode. Unified seats use one model and
+   * one policy identity for strategic and diplomacy wakes. Legacy seats keep
+   * the strategist/diplomat assignments below.
+   */
+  mind?: 'unified-mind';
+  /**
    * Diplomat agent voicing this seat's side of interactive-diplomacy conversations.
    * Selected the same way `strategist` is; may carry its own model override via `llms`.
    * Defaults to the built-in `diplomat` agent when omitted.
@@ -220,7 +226,7 @@ export interface PlayerConfig {
   mode?: StrategyDecisionType;
   /** Strategist pacing and interruption behavior */
   pacing?: PacingConfig;
-  /** Optional LLM model overrides per voxcontext (e.g., per agent name) */
+  /** Optional LLM model overrides per VoxContext, including `unified-mind`. */
   llms?: Record<string, Model | string>;
 }
 

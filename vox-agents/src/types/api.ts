@@ -639,8 +639,12 @@ export interface PlayersSummaryResponse {
 export interface PlayerAssignment {
   /** Strategist agent name. */
   strategist: string;
+  /** Active seat-level policy mode, when the seat uses the unified mind path. */
+  mind?: 'unified-mind';
   /** Strategist model short name, if overridden. */
   model?: string;
+  /** Shared unified-mind model short name, if the seat uses unified mode. */
+  mindModel?: string;
   /** Resolved diplomat agent name (configured `diplomat`, or the built-in default). */
   diplomat?: string;
   /** Diplomat model short name, if overridden. */

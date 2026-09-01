@@ -27,6 +27,12 @@ import { agentRegistry } from '../infra/agent-registry.js';
 import { ensureModelsResolved, selectModelReference } from '../utils/models/resolution.js';
 import { DEFAULT_NEGOTIATOR } from '../envoy/agents/resolve-negotiator.js';
 import {
+  diplomacyAgentForPlayer,
+  isUnifiedMindPlayer,
+  strategicAgentForPlayer,
+  unifiedModelReference,
+} from './unified-civilization-mind.js';
+import {
   autoPlayTurnLimit,
   buildNonFreshTransitionLua,
   buildObserverOverrideLua,
@@ -672,18 +678,22 @@ ${overrideLine}Game.SetAIAutoPlay(${autoPlayTurnLimit}, -1);`
       for (const dependency of agent?.modelDependencies ?? []) visit(dependency);
     };
 
-    visit(playerConfig.strategist);
-    const diplomatName = playerConfig.diplomat ?? "diplomat";
+    visit(strategicAgentForPlayer(playerConfig));
+    const diplomatName = diplomacyAgentForPlayer(playerConfig);
     visit(diplomatName);
     if (agentRegistry.get(diplomatName)?.usesSeatNegotiator) {
       const configuredNegotiator = playerConfig.negotiator;
       visit(configuredNegotiator && agentRegistry.has(configuredNegotiator) ? configuredNegotiator : DEFAULT_NEGOTIATOR);
     }
 
-    return [...new Set([...agentNames].map((name) => {
+    const references = [...new Set([...agentNames].map((name) => {
       const agent = agentRegistry.get(name);
       return selectModelReference(name, agent?.modelSize, playerConfig.llms);
     }))];
+    if (isUnifiedMindPlayer(playerConfig)) {
+      references.push(unifiedModelReference(playerConfig.llms));
+    }
+    return [...new Set(references)];
   }
 
   /**
@@ -933,12 +943,17 @@ ${overrideLine}Game.SetAIAutoPlay(${autoPlayTurnLimit}, -1);`
       // The diplomat defaults to the built-in `diplomat` agent when a seat doesn't name one,
       // so the conversation route always has a voice to resolve. The negotiator stays optional
       // (unused until stage 5).
-      const diplomat = playerConfig.diplomat ?? "diplomat";
+      const unified = isUnifiedMindPlayer(playerConfig);
+      const diplomat = diplomacyAgentForPlayer(playerConfig);
+      const strategist = strategicAgentForPlayer(playerConfig);
+      const modelKey = unified ? "unified-mind" : strategist;
       result[actualPlayerID] = {
-        strategist: playerConfig.strategist,
-        model: modelOf(playerConfig, playerConfig.strategist),
+        strategist: unified ? "unified-mind" : playerConfig.strategist,
+        ...(unified ? { mind: "unified-mind" as const } : {}),
+        model: modelOf(playerConfig, modelKey),
+        ...(unified ? { mindModel: modelOf(playerConfig, modelKey) } : {}),
         diplomat,
-        diplomatModel: modelOf(playerConfig, diplomat),
+        diplomatModel: modelOf(playerConfig, unified ? modelKey : diplomat),
         negotiator: playerConfig.negotiator,
         negotiatorModel: modelOf(playerConfig, playerConfig.negotiator),
         configSlot

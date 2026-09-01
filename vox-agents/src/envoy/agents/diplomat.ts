@@ -36,12 +36,12 @@ export class Diplomat extends LiveEnvoy {
   /**
    * The name identifier for this agent
    */
-  readonly name = "diplomat";
+  readonly name: string = "diplomat";
 
   /**
    * Human-readable description of what this agent does
    */
-  readonly description = "A diplomat who engages in diplomatic dialogue, gathers intelligence, and relays important information to the analyst";
+  readonly description: string = "A diplomat who engages in diplomatic dialogue, gathers intelligence, and relays important information to the analyst";
 
   /**
    * Tags for categorizing this agent

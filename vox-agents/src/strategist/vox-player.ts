@@ -18,6 +18,7 @@ import { VoxSpanExporter } from "../utils/telemetry/vox-exporter.js";
 import { PlayerConfig } from "../types/config.js";
 import { HumanDecisionBus } from "./human-decision-bus.js";
 import { isScheduledDecision, normalizePacing, shouldInterruptDecision, type NormalizedPacingConfig } from "./pacing.js";
+import { strategicAgentForPlayer } from "./unified-civilization-mind.js";
 
 /**
  * Manages a single player's strategist execution within a game session.
@@ -58,7 +59,7 @@ export class VoxPlayer {
     this.pacing = normalizePacing(playerConfig.pacing);
 
     const id = `${gameID}-player-${playerID}`
-    VoxSpanExporter.getInstance().createContext(id, this.playerConfig.strategist);
+    VoxSpanExporter.getInstance().createContext(id, strategicAgentForPlayer(this.playerConfig));
 
     // Pass model overrides to VoxContext
     // Agents are now registered globally in agent-registry.ts
@@ -101,7 +102,7 @@ export class VoxPlayer {
    */
   notifyTurn(turn: number): boolean {
     if (this.running) {
-      this.logger.warn(`The ${this.playerConfig.strategist} is still working on turn ${this.parameters.turn}. Skipping turn ${turn}...`);
+      this.logger.warn(`The ${strategicAgentForPlayer(this.playerConfig)} is still working on turn ${this.parameters.turn}. Skipping turn ${turn}...`);
       this.context.callTool("pause-game", { PlayerID: this.playerID }, this.parameters).then(() => {
         if (!this.running) this.context.callTool("resume-game", { PlayerID: this.playerID }, this.parameters);
       });
@@ -125,7 +126,7 @@ export class VoxPlayer {
         'vox.context.id': this.context.id,
         'player.id': this.playerID,
         'game.id': this.parameters.gameID,
-        'strategist.type': this.playerConfig.strategist,
+        'strategist.type': strategicAgentForPlayer(this.playerConfig),
         'config.version': config.versionInfo?.version || "unknown"
       }
     });
@@ -133,7 +134,7 @@ export class VoxPlayer {
     return await context.with(trace.setSpan(context.active(), span), async () => {
       try {
         // Set the player's AI type
-        await this.context.callTool("set-metadata", { Key: `strategist-${this.playerID}`, Value: this.playerConfig.strategist }, this.parameters);
+        await this.context.callTool("set-metadata", { Key: `strategist-${this.playerID}`, Value: strategicAgentForPlayer(this.playerConfig) }, this.parameters);
 
         // Resume the game in case the vox agent was aborted
         await this.context.callTool("resume-game", { PlayerID: this.playerID }, this.parameters);
@@ -175,7 +176,7 @@ export class VoxPlayer {
               'game.turn': String(turn),
               'event.before': String(before),
               'event.after': String(after),
-              'strategist.type': this.playerConfig.strategist,
+              'strategist.type': strategicAgentForPlayer(this.playerConfig),
               'pacing.every_turns': String(this.pacing.everyTurns),
               'pacing.interruption': this.pacing.interruption,
               'pacing.last_decision_turn': this.lastDecisionTurn === undefined ? "" : String(this.lastDecisionTurn)
@@ -206,7 +207,7 @@ export class VoxPlayer {
 
                 if (!shouldDecide) {
                   this.logger.info(
-                    `Skipping ${this.playerConfig.strategist} on Turn ${turn} ` +
+                  `Skipping ${strategicAgentForPlayer(this.playerConfig)} on Turn ${turn} ` +
                     `(lastDecisionTurn=${this.lastDecisionTurn}, everyTurns=${this.pacing.everyTurns})`,
                     { GameID: params.gameID, PlayerID: params.playerID }
                   );
@@ -240,7 +241,7 @@ export class VoxPlayer {
                 const eventFromTurn = this.lastDecisionTurn === undefined
                   ? turn
                   : this.lastDecisionTurn + 1;
-                this.logger.warn(`Running ${this.playerConfig.strategist} on Turn ${turn}`, {
+                this.logger.warn(`Running ${strategicAgentForPlayer(this.playerConfig)} on Turn ${turn}`, {
                   GameID: params.gameID,
                   PlayerID: params.playerID,
                   scheduled,
@@ -383,7 +384,7 @@ export class VoxPlayer {
       // Nested execution inside the established turn root: execute() uses the root's composed
       // parameters, inherits its cancellation, and accrues its tokens to the run handle.
       let contextLengthExceeded = false;
-      await this.context.execute(this.playerConfig.strategist, undefined, undefined, undefined, () => {
+      await this.context.execute(strategicAgentForPlayer(this.playerConfig), undefined, undefined, undefined, () => {
         contextLengthExceeded = true;
       }, { throwOnError: true });
 
