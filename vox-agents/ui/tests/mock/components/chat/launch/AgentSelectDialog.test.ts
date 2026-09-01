@@ -166,6 +166,26 @@ describe('AgentSelectDialog', () => {
     )
   })
 
+  it('presents a unified target as a civilization mind and omits voice overrides', async () => {
+    vi.mocked(api.getPlayersSummary).mockResolvedValue({
+      players: PLAYERS.players as never,
+      assignments: {
+        1: { strategist: 'unified-mind-strategist', mind: 'unified-mind', mindModel: 'openrouter/minimax-m3', configSlot: 1 },
+        2: PLAYERS.assignments[2],
+      },
+    })
+    const wrapper = mount(AgentSelectDialog, {
+      props: { visible: false, contextId: CONTEXT_ID, initialConversationMode: 'diplomacy' },
+      global: { stubs },
+    })
+    await wrapper.setProps({ visible: true })
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('Unified Civilization Mind')
+    expect(wrapper.text()).toContain('openrouter/minimax-m3')
+    expect(wrapper.text()).not.toContain('Voice (defaults to the target seat\'s diplomat)')
+  })
+
   it('uses the span attributes turn for both context and chat creation', async () => {
     const wrapper = mount(AgentSelectDialog, {
       props: {

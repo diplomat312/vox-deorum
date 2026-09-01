@@ -26,6 +26,7 @@ interface Props {
   contextId?: string;
   databasePath?: string;
   span?: Span;  // Optional span for more precise context
+  initialConversationMode?: 'observer' | 'diplomacy';
 }
 
 // Emits interface
@@ -97,6 +98,18 @@ const targetCivName = computed(() => {
   const id = derivedTargetPlayerID.value;
   return id === null ? '' : (playerCivs.value[id] ?? '');
 });
+
+/** Resolve the configured assignment for the target seat shown by this context. */
+const targetAssignment = computed(() => {
+  const target = derivedTargetPlayerID.value;
+  return target === null ? undefined : assignments.value[target];
+});
+
+/** Unified targets must use the civilization mind and cannot select a legacy voice override. */
+const targetIsUnified = computed(() => targetAssignment.value?.mind === 'unified-mind');
+
+/** Friendly model label used in the civilization-centric launch summary. */
+const targetModelLabel = computed(() => targetAssignment.value?.mindModel ?? targetAssignment.value?.model ?? 'configured model');
 
 /** Whether the diplomacy form is complete enough to open a conversation. */
 const canStartDiplomacy = computed(() =>
@@ -254,7 +267,10 @@ function resetPlayerContext(): void {
 /** Default the voice to the derived target seat's configured diplomat. */
 function applyTargetVoiceDefault() {
   const target = derivedTargetPlayerID.value;
-  if (target === null) return;
+  if (target === null || targetIsUnified.value) {
+    voiceOverride.value = null;
+    return;
+  }
   const diplomatName = assignments.value[target]?.diplomat;
   voiceOverride.value = diplomatName
     ? (agents.value.find(a => a.name === diplomatName) ?? null)
@@ -275,7 +291,7 @@ async function confirmDiplomacy() {
     callerIdentity: playerIdentities.value[initiatorID],
     callerRole: initiatorRole.value.trim() || undefined,
   };
-  if (voiceOverride.value) request.agentName = voiceOverride.value.name;
+  if (!targetIsUnified.value && voiceOverride.value) request.agentName = voiceOverride.value.name;
   if (resolvedTurn.value !== undefined) request.turn = resolvedTurn.value;
   await launchChat(request, 'Failed to open conversation');
 }
@@ -381,6 +397,7 @@ watch(
       return;
     }
     if (contextChanged) resetPlayerContext();
+    if (visible && props.initialConversationMode) conversationMode.value = props.initialConversationMode;
     void loadAgents();
     if (contextId && Object.keys(playerCivs.value).length === 0) void loadPlayerOptions();
   },
@@ -444,6 +461,9 @@ watch(
         :suggestions="filteredRoles"
         :voiceOptions="chattableAgents"
         :playersLoading="playersLoading"
+        :unifiedTarget="targetIsUnified"
+        :targetLabel="targetCivName"
+        :targetModel="targetModelLabel"
         @search-roles="searchRoles"
       />
 

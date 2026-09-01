@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, watch } from 'vue';
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import Message from 'primevue/message';
 import { useConfirm } from 'primevue/useconfirm';
@@ -8,7 +8,7 @@ import ActiveSessionPanel from '../components/session/ActiveSessionPanel.vue';
 import ConfigDialog from '../components/session/ConfigDialog.vue';
 import GameSetupWizard from '../components/session/GameSetupWizard.vue';
 import GameModeDialog from '../components/session/GameModeDialog.vue';
-import PlayersSummaryDialog from '../components/session/PlayersSummaryDialog.vue';
+import CivilizationMindsDialog from '../components/session/CivilizationMindsDialog.vue';
 import SessionConfigList from '../components/session/SessionConfigList.vue';
 import type { GameMode } from '../components/session/GameModeDialog.vue';
 import { api } from '../api/client';
@@ -27,7 +27,8 @@ import type {
   ConfigDialogMode,
   SessionConfigEntry,
   StrategistSessionConfig,
-  VoxAgentsConfig
+  VoxAgentsConfig,
+  SessionStatus
 } from '../utils/types';
 
 /**
@@ -59,6 +60,13 @@ const pendingConfig = ref<StrategistSessionConfig | null>(null);
 
 // Players summary dialog state
 const showPlayersDialog = ref(false);
+
+/** Count configured unified seats for the compact active-session summary. */
+const unifiedMindCount = computed(() => {
+  const config = sessionStatus.value?.session?.config as SessionStatus['config'] & Partial<StrategistSessionConfig> | undefined;
+  const players = config?.llmPlayers ?? {};
+  return Object.values(players).filter(player => player.mind === 'unified-mind').length;
+});
 
 // Starting session state
 const startingSession = ref(false);
@@ -355,6 +363,7 @@ onUnmounted(() => {
       v-if="sessionStatus?.active && sessionStatus.session"
       :session="sessionStatus.session"
       :loading="sessionLoading"
+      :unified-mind-count="unifiedMindCount"
       @view-players="showPlayersDialog = true"
       @toggle-pause="togglePause"
       @stop="confirmStopSession"
@@ -414,8 +423,8 @@ onUnmounted(() => {
       @select="startSessionWithGameMode"
     />
 
-    <!-- Players Summary Dialog -->
-    <PlayersSummaryDialog
+    <!-- Civilization Minds Dialog -->
+    <CivilizationMindsDialog
       v-model:visible="showPlayersDialog"
     />
   </div>

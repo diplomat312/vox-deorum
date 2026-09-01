@@ -34,7 +34,7 @@ The API splits into four groups:
 
 The Vue app uses PrimeVue components, Pinia stores, and virtual scrolling for the high-volume views. It organizes those APIs into a handful of views:
 
-- **Session** is the control room: pick or edit a session config, start and stop the game, and watch session state (starting, running, recovering, stopping) and the player roster.
+- **Session** is the control room: pick or edit a session config, start and stop the game, and watch session state (starting, running, recovering, stopping) and the player roster. During an active game, **Civilization Minds** shows one card per seat, the configured architecture and model, current unified wake activity, and a single chronological inspector for sanitized strategy, diplomacy, and deal telemetry. Unified targets launch through the existing diplomacy flow without a legacy voice override.
 - **Chat** is the hub for agent conversations: start a chat against a running game or a telemetry database, resume an existing thread, and open the conversation view, which renders streamed text, model reasoning, and tool calls and results as they arrive. Opening a chat sends the agent's greeting special message; database-backed chats stream the telepathist's preparation progress before the first reply.
 - **Telemetry** browses live contexts and stored databases, drilling from a database to its traces to the span hierarchy of a single trace, including the recorded LLM messages of each step. This is the primary debugging surface for agent behavior.
 - **Logs** shows the process's Winston log stream, live over SSE, filterable by source and level.

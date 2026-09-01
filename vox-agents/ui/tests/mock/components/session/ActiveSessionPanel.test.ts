@@ -41,4 +41,14 @@ describe('ActiveSessionPanel', () => {
     expect(wrapper.text()).toContain('1m 5s');
     expect(wrapper.get('button[data-icon="pi pi-play"]').text()).toBe('Resume');
   });
+
+  it('labels the player view as Civilization Minds and shows the unified count', () => {
+    const wrapper = mount(ActiveSessionPanel, {
+      props: { session: makeSession(), loading: false, unifiedMindCount: 4 },
+      global: { stubs: { Toolbar: ToolbarStub, Tag: TagStub, Button: ButtonStub } },
+    });
+
+    expect(wrapper.text()).toContain('Civilization Minds');
+    expect(wrapper.text()).toContain('4 UNIFIED MINDS');
+  });
 });

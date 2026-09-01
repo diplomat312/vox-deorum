@@ -11,7 +11,10 @@ const stubs = {
   },
   ProgressSpinner: {
     template: '<span />'
-  }
+  },
+  AgentSelectDialog: {
+    template: '<span />'
+  },
 };
 
 beforeEach(() => {
@@ -35,7 +38,7 @@ describe('PlayersSummaryDialog', () => {
     await wrapper.setProps({ visible: true });
     await flushPromises();
     expect(telemetryRequest).toHaveBeenCalledTimes(1);
-    expect(wrapper.find('.telemetry-link').exists()).toBe(true);
+    expect(wrapper.text()).toContain('Civilization Minds');
 
     await wrapper.setProps({ visible: false });
     await vi.advanceTimersByTimeAsync(10_000);

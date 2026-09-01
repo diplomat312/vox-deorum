@@ -31,6 +31,11 @@ function fetchSessions(): Promise<void> {
   return sessionsRequest;
 }
 
+/** Refresh active telemetry sessions immediately for a focused live-session consumer. */
+export function refreshActiveSessions(): Promise<void> {
+  return fetchSessions();
+}
+
 /** Fetch telemetry databases, reusing a request already in progress. */
 function fetchDatabases(): Promise<void> {
   if (databasesRequest) return databasesRequest;

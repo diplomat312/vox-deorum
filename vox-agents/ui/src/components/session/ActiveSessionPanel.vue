@@ -8,6 +8,7 @@ import type { SessionStatus } from '@/utils/types';
 const props = defineProps<{
   session: SessionStatus;
   loading: boolean;
+  unifiedMindCount?: number;
 }>();
 
 defineEmits<{
@@ -56,10 +57,11 @@ const elapsedTime = computed(() => {
         <h3>Active Session</h3>
         <Tag class="ml-2" :severity="stateSeverity" :value="session.state.toUpperCase()" />
         <Tag v-if="session.paused" class="ml-2" severity="warning" value="PAUSED" />
+        <Tag v-if="unifiedMindCount" class="ml-2" severity="info" :value="`${unifiedMindCount} UNIFIED MIND${unifiedMindCount === 1 ? '' : 'S'}`" />
       </template>
       <template #end>
         <Button
-          label="View Players"
+          label="Civilization Minds"
           icon="pi pi-users"
           severity="info"
           size="small"
