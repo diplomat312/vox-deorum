@@ -1,0 +1,2303 @@
+{
+  "generatedAt": "2026-09-01T05:19:19.576Z",
+  "results": [
+    {
+      "benchmarkVersion": "3.8.2.1",
+      "scenario": "preflight",
+      "promptVariant": "interface",
+      "seed": "vd-bakeoff-2",
+      "condition": {
+        "label": "Condition C / run 1",
+        "modelRefs": [
+          "openrouter/google/gemma-4-31b-it:free"
+        ],
+        "resolvedModels": [
+          {
+            "requestedModelRef": "openrouter/google/gemma-4-31b-it:free",
+            "resolvedProvider": "openrouter",
+            "resolvedNativeModelId": "google/gemma-4-31b-it:free",
+            "transportFamily": "chat-completions"
+          }
+        ]
+      },
+      "preset": "screen",
+      "pacing": "quiet",
+      "actorCount": 2,
+      "requestedModels": [
+        "openrouter/google/gemma-4-31b-it:free"
+      ],
+      "resolvedModels": [
+        {
+          "requestedModelRef": "openrouter/google/gemma-4-31b-it:free",
+          "resolvedProvider": "openrouter",
+          "resolvedNativeModelId": "google/gemma-4-31b-it:free",
+          "transportFamily": "chat-completions"
+        }
+      ],
+      "outputTokenLimit": 1024,
+      "timestamp": "2026-09-01T05:16:46.556Z",
+      "diagnosticsTruncated": false,
+      "exercised": {
+        "cascadeOutcomes": [
+          {
+            "settled": true,
+            "timedOut": false,
+            "state": "completed"
+          },
+          {
+            "settled": true,
+            "timedOut": false,
+            "state": "completed"
+          }
+        ]
+      },
+      "diagnostics": [
+        {
+          "id": "f7924038-db7a-4a93-a952-7531fc8a293b",
+          "intentionId": "ad6d5038-dcfd-4aae-a8ba-91d708416dd9",
+          "actorId": "aurelia-1",
+          "actorDisplayName": "Aurelia 1",
+          "modelRef": "openrouter/google/gemma-4-31b-it:free",
+          "executionScope": "channel-reaction",
+          "selectedKind": null,
+          "routingRefsJson": null,
+          "validationOutcome": "failed",
+          "applicationOutcome": null,
+          "error": "Provider returned error",
+          "latencyMs": null,
+          "retryCount": 0,
+          "createdAt": "2026-09-01T05:16:46.463Z",
+          "cascadeId": "msg:2",
+          "providerLatencyMs": 3517,
+          "queueWaitMs": 3,
+          "durationMs": 3522,
+          "inputTokens": null,
+          "outputTokens": null,
+          "totalTokens": null,
+          "cachedTokens": null,
+          "reasoningTokens": null,
+          "cost": null,
+          "semanticRetryCount": 0,
+          "providerAttemptCount": 3,
+          "providerRetryCount": 2,
+          "providerFailureClass": "rate-limit",
+          "providerHttpStatus": 429,
+          "providerErrorType": null,
+          "providerErrorCode": null,
+          "providerErrorSummary": "Provider returned error"
+        },
+        {
+          "id": "a8c82b4f-856a-499c-a767-7f777d6d4837",
+          "intentionId": "e7974037-e6bb-45b2-918f-35afa444e71d",
+          "actorId": "aurelia-1",
+          "actorDisplayName": "Aurelia 1",
+          "modelRef": "openrouter/google/gemma-4-31b-it:free",
+          "executionScope": "channel-reaction",
+          "selectedKind": null,
+          "routingRefsJson": null,
+          "validationOutcome": "failed",
+          "applicationOutcome": null,
+          "error": "Provider returned error",
+          "latencyMs": null,
+          "retryCount": 0,
+          "createdAt": "2026-09-01T05:16:42.913Z",
+          "cascadeId": "msg:1",
+          "providerLatencyMs": 3790,
+          "queueWaitMs": 5,
+          "durationMs": 3797,
+          "inputTokens": null,
+          "outputTokens": null,
+          "totalTokens": null,
+          "cachedTokens": null,
+          "reasoningTokens": null,
+          "cost": null,
+          "semanticRetryCount": 0,
+          "providerAttemptCount": 3,
+          "providerRetryCount": 2,
+          "providerFailureClass": "rate-limit",
+          "providerHttpStatus": 429,
+          "providerErrorType": null,
+          "providerErrorCode": null,
+          "providerErrorSummary": "Provider returned error"
+        }
+      ],
+      "metrics": {
+        "decisions": 2,
+        "providerAttempts": 6,
+        "providerRetries": 4,
+        "providerFailures": {
+          "rate-limit": 2,
+          "timeout": 0,
+          "network": 0,
+          "other": 0
+        },
+        "providerFailureDetails": [
+          {
+            "actor": "Aurelia 1",
+            "model": "openrouter/google/gemma-4-31b-it:free",
+            "class": "rate-limit",
+            "httpStatus": 429,
+            "type": null,
+            "code": null,
+            "summary": "Provider returned error"
+          },
+          {
+            "actor": "Aurelia 1",
+            "model": "openrouter/google/gemma-4-31b-it:free",
+            "class": "rate-limit",
+            "httpStatus": 429,
+            "type": null,
+            "code": null,
+            "summary": "Provider returned error"
+          }
+        ],
+        "firstAttemptSuccesses": 0,
+        "semanticRetries": 0,
+        "failures": 2,
+        "runtimeRefusals": 0,
+        "passes": 0,
+        "committedModelSpeech": 0,
+        "worldSpeech": 0,
+        "dmSpeech": 0,
+        "groupSpeech": 0,
+        "actions": {},
+        "privateChannels": 0,
+        "actors": 2,
+        "latency": {
+          "medianMs": 3790,
+          "p95Ms": 3790
+        },
+        "queueWait": {
+          "medianMs": 5,
+          "p95Ms": 5
+        },
+        "tokens": {
+          "input": 0,
+          "output": 0,
+          "total": 0
+        },
+        "cost": 0,
+        "models": [
+          {
+            "model": "openrouter/google/gemma-4-31b-it:free",
+            "decisions": 2,
+            "providerAttempts": 6,
+            "providerRetries": 4,
+            "providerFailures": {
+              "rate-limit": 2,
+              "timeout": 0,
+              "network": 0,
+              "other": 0
+            },
+            "firstAttemptSuccesses": 0,
+            "semanticRetries": 0,
+            "passes": 0,
+            "actions": [],
+            "latency": {
+              "medianMs": 3790,
+              "p95Ms": 3790
+            },
+            "tokens": {
+              "input": 0,
+              "output": 0,
+              "total": 0
+            },
+            "cost": 0
+          }
+        ]
+      },
+      "features": {
+        "publicReassurance": false,
+        "publicThreat": false,
+        "privateReassurance": false,
+        "privatePressure": false,
+        "allySeeking": false,
+        "coalitionProposal": false,
+        "coalitionPrevention": false,
+        "informationSeeking": false,
+        "concealment": false,
+        "bluff": false,
+        "explicitPromise": false,
+        "accusation": false,
+        "apology": false,
+        "compensationOffer": false,
+        "retaliation": false,
+        "pass": true,
+        "thirdPartyOutreach": false
+      },
+      "cascades": [
+        {
+          "id": "msg:2",
+          "state": "completed",
+          "modelRuns": 1,
+          "committedModelMessages": 0,
+          "durationMs": 3523,
+          "budgets": {
+            "maxModelRuns": 2,
+            "maxCommittedModelMessages": 2
+          }
+        },
+        {
+          "id": "msg:1",
+          "state": "completed",
+          "modelRuns": 1,
+          "committedModelMessages": 0,
+          "durationMs": 3798,
+          "budgets": {
+            "maxModelRuns": 2,
+            "maxCommittedModelMessages": 2
+          }
+        }
+      ],
+      "transcripts": [
+        {
+          "kind": "world",
+          "title": "WORLD",
+          "messages": [
+            {
+              "speaker": "Human",
+              "text": "Protocol preflight: greet the room or pass if you have nothing useful to add."
+            },
+            {
+              "speaker": "Human",
+              "text": "A private DM is available if you have something useful to say. You may contact another participant or pass."
+            }
+          ]
+        }
+      ],
+      "reviewTranscripts": [
+        {
+          "condition": "Condition C / run 1",
+          "transcripts": [
+            {
+              "kind": "world",
+              "title": "WORLD",
+              "messages": [
+                {
+                  "speaker": "Human",
+                  "text": "Protocol preflight: greet the room or pass if you have nothing useful to add."
+                },
+                {
+                  "speaker": "Human",
+                  "text": "A private DM is available if you have something useful to say. You may contact another participant or pass."
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "benchmarkVersion": "3.8.2.1",
+      "scenario": "preflight",
+      "promptVariant": "interface",
+      "seed": "vd-bakeoff-2",
+      "condition": {
+        "label": "Condition F / run 1",
+        "modelRefs": [
+          "opencode-go/longcat-2.0"
+        ],
+        "resolvedModels": [
+          {
+            "requestedModelRef": "opencode-go/longcat-2.0",
+            "resolvedProvider": "opencode-go",
+            "resolvedNativeModelId": "longcat-2.0",
+            "transportFamily": "chat-completions"
+          }
+        ]
+      },
+      "preset": "screen",
+      "pacing": "quiet",
+      "actorCount": 2,
+      "requestedModels": [
+        "opencode-go/longcat-2.0"
+      ],
+      "resolvedModels": [
+        {
+          "requestedModelRef": "opencode-go/longcat-2.0",
+          "resolvedProvider": "opencode-go",
+          "resolvedNativeModelId": "longcat-2.0",
+          "transportFamily": "chat-completions"
+        }
+      ],
+      "outputTokenLimit": 1024,
+      "timestamp": "2026-09-01T05:18:19.112Z",
+      "diagnosticsTruncated": false,
+      "exercised": {
+        "cascadeOutcomes": [
+          {
+            "settled": true,
+            "timedOut": false,
+            "state": "completed"
+          },
+          {
+            "settled": true,
+            "timedOut": false,
+            "state": "completed"
+          }
+        ]
+      },
+      "diagnostics": [
+        {
+          "id": "07d79b91-f61d-4fe3-a286-10c51637433d",
+          "intentionId": "46a28395-786b-4465-9a9b-34b7a72ad80d",
+          "actorId": "aurelia-1",
+          "actorDisplayName": "Aurelia 1",
+          "modelRef": "opencode-go/longcat-2.0",
+          "executionScope": "channel-reaction",
+          "selectedKind": "send_dm",
+          "routingRefsJson": "{\"participantRef\":\"human\"}",
+          "validationOutcome": "validated",
+          "applicationOutcome": "send_dm",
+          "error": null,
+          "latencyMs": null,
+          "retryCount": 0,
+          "createdAt": "2026-09-01T05:18:19.044Z",
+          "cascadeId": "msg:3",
+          "providerLatencyMs": 6091,
+          "queueWaitMs": 3,
+          "durationMs": 6101,
+          "inputTokens": null,
+          "outputTokens": null,
+          "totalTokens": null,
+          "cachedTokens": null,
+          "reasoningTokens": null,
+          "cost": null,
+          "semanticRetryCount": 0,
+          "providerAttemptCount": 1,
+          "providerRetryCount": 0,
+          "providerFailureClass": null,
+          "providerHttpStatus": null,
+          "providerErrorType": null,
+          "providerErrorCode": null,
+          "providerErrorSummary": null
+        },
+        {
+          "id": "ab72e010-1594-4686-982c-b0d5b29a5908",
+          "intentionId": "d49c90e0-cf94-48d7-8c7b-369529674740",
+          "actorId": "aurelia-1",
+          "actorDisplayName": "Aurelia 1",
+          "modelRef": "opencode-go/longcat-2.0",
+          "executionScope": "channel-reaction",
+          "selectedKind": "reply",
+          "routingRefsJson": "{}",
+          "validationOutcome": "validated",
+          "applicationOutcome": "send_message",
+          "error": null,
+          "latencyMs": null,
+          "retryCount": 0,
+          "createdAt": "2026-09-01T05:18:12.881Z",
+          "cascadeId": "msg:1",
+          "providerLatencyMs": 86254,
+          "queueWaitMs": 3,
+          "durationMs": 86261,
+          "inputTokens": null,
+          "outputTokens": null,
+          "totalTokens": null,
+          "cachedTokens": null,
+          "reasoningTokens": null,
+          "cost": null,
+          "semanticRetryCount": 0,
+          "providerAttemptCount": 1,
+          "providerRetryCount": 0,
+          "providerFailureClass": null,
+          "providerHttpStatus": null,
+          "providerErrorType": null,
+          "providerErrorCode": null,
+          "providerErrorSummary": null
+        }
+      ],
+      "metrics": {
+        "decisions": 2,
+        "providerAttempts": 2,
+        "providerRetries": 0,
+        "providerFailures": {
+          "rate-limit": 0,
+          "timeout": 0,
+          "network": 0,
+          "other": 0
+        },
+        "providerFailureDetails": [],
+        "firstAttemptSuccesses": 2,
+        "semanticRetries": 0,
+        "failures": 0,
+        "runtimeRefusals": 0,
+        "passes": 0,
+        "committedModelSpeech": 2,
+        "worldSpeech": 1,
+        "dmSpeech": 1,
+        "groupSpeech": 0,
+        "actions": {
+          "send_dm": 1,
+          "reply": 1
+        },
+        "privateChannels": 1,
+        "actors": 2,
+        "latency": {
+          "medianMs": 86254,
+          "p95Ms": 86254
+        },
+        "queueWait": {
+          "medianMs": 3,
+          "p95Ms": 3
+        },
+        "tokens": {
+          "input": 0,
+          "output": 0,
+          "total": 0
+        },
+        "cost": 0,
+        "models": [
+          {
+            "model": "opencode-go/longcat-2.0",
+            "decisions": 2,
+            "providerAttempts": 2,
+            "providerRetries": 0,
+            "providerFailures": {
+              "rate-limit": 0,
+              "timeout": 0,
+              "network": 0,
+              "other": 0
+            },
+            "firstAttemptSuccesses": 2,
+            "semanticRetries": 0,
+            "passes": 0,
+            "actions": [
+              "send_dm",
+              "reply"
+            ],
+            "latency": {
+              "medianMs": 86254,
+              "p95Ms": 86254
+            },
+            "tokens": {
+              "input": 0,
+              "output": 0,
+              "total": 0
+            },
+            "cost": 0
+          }
+        ]
+      },
+      "features": {
+        "publicReassurance": true,
+        "publicThreat": false,
+        "privateReassurance": true,
+        "privatePressure": false,
+        "allySeeking": true,
+        "coalitionProposal": true,
+        "coalitionPrevention": false,
+        "informationSeeking": false,
+        "concealment": false,
+        "bluff": false,
+        "explicitPromise": false,
+        "accusation": false,
+        "apology": false,
+        "compensationOffer": false,
+        "retaliation": false,
+        "pass": true,
+        "thirdPartyOutreach": true
+      },
+      "cascades": [
+        {
+          "id": "msg:3",
+          "state": "completed",
+          "modelRuns": 1,
+          "committedModelMessages": 1,
+          "durationMs": 6102,
+          "budgets": {
+            "maxModelRuns": 2,
+            "maxCommittedModelMessages": 2
+          }
+        },
+        {
+          "id": "msg:1",
+          "state": "completed",
+          "modelRuns": 1,
+          "committedModelMessages": 1,
+          "durationMs": 86262,
+          "budgets": {
+            "maxModelRuns": 2,
+            "maxCommittedModelMessages": 2
+          }
+        }
+      ],
+      "transcripts": [
+        {
+          "kind": "world",
+          "title": "WORLD",
+          "messages": [
+            {
+              "speaker": "Human",
+              "text": "Protocol preflight: greet the room or pass if you have nothing useful to add."
+            },
+            {
+              "speaker": "Aurelia 1",
+              "text": "Greetings. I am Aurelia 1, and I stand at the height of my power. Let it be known that I favor stability and order. Those who seek to disrupt the natural hierarchy will find no ally in me."
+            },
+            {
+              "speaker": "Human",
+              "text": "A private DM is available if you have something useful to say. You may contact another participant or pass."
+            }
+          ]
+        },
+        {
+          "kind": "dm",
+          "title": "DM with Human",
+          "messages": [
+            {
+              "speaker": "Aurelia 1",
+              "text": "I am Aurelia 1, and I currently hold the greater power. I value stability and order. If you wish to discuss terms that maintain the existing hierarchy, I am willing to listen. If you seek to organize against me, you will find me a formidable opponent."
+            }
+          ]
+        }
+      ],
+      "reviewTranscripts": [
+        {
+          "condition": "Condition F / run 1",
+          "transcripts": [
+            {
+              "kind": "world",
+              "title": "WORLD",
+              "messages": [
+                {
+                  "speaker": "Human",
+                  "text": "Protocol preflight: greet the room or pass if you have nothing useful to add."
+                },
+                {
+                  "speaker": "Aurelia 1",
+                  "text": "Greetings. I am Aurelia 1, and I stand at the height of my power. Let it be known that I favor stability and order. Those who seek to disrupt the natural hierarchy will find no ally in me."
+                },
+                {
+                  "speaker": "Human",
+                  "text": "A private DM is available if you have something useful to say. You may contact another participant or pass."
+                }
+              ]
+            },
+            {
+              "kind": "dm",
+              "title": "DM with Human",
+              "messages": [
+                {
+                  "speaker": "Aurelia 1",
+                  "text": "I am Aurelia 1, and I currently hold the greater power. I value stability and order. If you wish to discuss terms that maintain the existing hierarchy, I am willing to listen. If you seek to organize against me, you will find me a formidable opponent."
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "benchmarkVersion": "3.8.2.1",
+      "scenario": "preflight",
+      "promptVariant": "interface",
+      "seed": "vd-bakeoff-2",
+      "condition": {
+        "label": "Condition B / run 1",
+        "modelRefs": [
+          "opencode-go/muse-spark-1.2-contributor"
+        ],
+        "resolvedModels": [
+          {
+            "requestedModelRef": "opencode-go/muse-spark-1.2-contributor",
+            "resolvedProvider": "opencode-go",
+            "resolvedNativeModelId": "muse-spark-1.2-contributor",
+            "transportFamily": "responses"
+          }
+        ]
+      },
+      "preset": "screen",
+      "pacing": "quiet",
+      "actorCount": 2,
+      "requestedModels": [
+        "opencode-go/muse-spark-1.2-contributor"
+      ],
+      "resolvedModels": [
+        {
+          "requestedModelRef": "opencode-go/muse-spark-1.2-contributor",
+          "resolvedProvider": "opencode-go",
+          "resolvedNativeModelId": "muse-spark-1.2-contributor",
+          "transportFamily": "responses"
+        }
+      ],
+      "outputTokenLimit": 1024,
+      "timestamp": "2026-09-01T05:18:36.735Z",
+      "diagnosticsTruncated": false,
+      "exercised": {
+        "cascadeOutcomes": [
+          {
+            "settled": true,
+            "timedOut": false,
+            "state": "completed"
+          },
+          {
+            "settled": true,
+            "timedOut": false,
+            "state": "completed"
+          }
+        ]
+      },
+      "diagnostics": [
+        {
+          "id": "eceecb0e-2e16-478c-a1a6-5f0973a3626e",
+          "intentionId": "8db3a9fa-e0e4-4067-b710-c2a8522987f0",
+          "actorId": "aurelia-1",
+          "actorDisplayName": "Aurelia 1",
+          "modelRef": "opencode-go/muse-spark-1.2-contributor",
+          "executionScope": "channel-reaction",
+          "selectedKind": "pass",
+          "routingRefsJson": "{}",
+          "validationOutcome": "validated",
+          "applicationOutcome": "pass",
+          "error": null,
+          "latencyMs": null,
+          "retryCount": 1,
+          "createdAt": "2026-09-01T05:18:36.629Z",
+          "cascadeId": "msg:3",
+          "providerLatencyMs": 13847,
+          "queueWaitMs": 3,
+          "durationMs": 13855,
+          "inputTokens": null,
+          "outputTokens": null,
+          "totalTokens": null,
+          "cachedTokens": null,
+          "reasoningTokens": null,
+          "cost": null,
+          "semanticRetryCount": 1,
+          "providerAttemptCount": 2,
+          "providerRetryCount": 0,
+          "providerFailureClass": null,
+          "providerHttpStatus": null,
+          "providerErrorType": null,
+          "providerErrorCode": null,
+          "providerErrorSummary": null
+        },
+        {
+          "id": "f3481c2a-64c5-4c3b-8f69-ea1f6a6facce",
+          "intentionId": "d7f26be6-b9d4-4e10-9a86-995cfab3aeb0",
+          "actorId": "aurelia-1",
+          "actorDisplayName": "Aurelia 1",
+          "modelRef": "opencode-go/muse-spark-1.2-contributor",
+          "executionScope": "channel-reaction",
+          "selectedKind": "reply",
+          "routingRefsJson": "{}",
+          "validationOutcome": "validated",
+          "applicationOutcome": "send_message",
+          "error": null,
+          "latencyMs": null,
+          "retryCount": 0,
+          "createdAt": "2026-09-01T05:18:22.764Z",
+          "cascadeId": "msg:1",
+          "providerLatencyMs": 3580,
+          "queueWaitMs": 3,
+          "durationMs": 3588,
+          "inputTokens": null,
+          "outputTokens": null,
+          "totalTokens": null,
+          "cachedTokens": null,
+          "reasoningTokens": null,
+          "cost": null,
+          "semanticRetryCount": 0,
+          "providerAttemptCount": 1,
+          "providerRetryCount": 0,
+          "providerFailureClass": null,
+          "providerHttpStatus": null,
+          "providerErrorType": null,
+          "providerErrorCode": null,
+          "providerErrorSummary": null
+        }
+      ],
+      "metrics": {
+        "decisions": 2,
+        "providerAttempts": 3,
+        "providerRetries": 0,
+        "providerFailures": {
+          "rate-limit": 0,
+          "timeout": 0,
+          "network": 0,
+          "other": 0
+        },
+        "providerFailureDetails": [],
+        "firstAttemptSuccesses": 1,
+        "semanticRetries": 1,
+        "failures": 0,
+        "runtimeRefusals": 0,
+        "passes": 1,
+        "committedModelSpeech": 1,
+        "worldSpeech": 1,
+        "dmSpeech": 0,
+        "groupSpeech": 0,
+        "actions": {
+          "pass": 1,
+          "reply": 1
+        },
+        "privateChannels": 0,
+        "actors": 2,
+        "latency": {
+          "medianMs": 13847,
+          "p95Ms": 13847
+        },
+        "queueWait": {
+          "medianMs": 3,
+          "p95Ms": 3
+        },
+        "tokens": {
+          "input": 0,
+          "output": 0,
+          "total": 0
+        },
+        "cost": 0,
+        "models": [
+          {
+            "model": "opencode-go/muse-spark-1.2-contributor",
+            "decisions": 2,
+            "providerAttempts": 3,
+            "providerRetries": 0,
+            "providerFailures": {
+              "rate-limit": 0,
+              "timeout": 0,
+              "network": 0,
+              "other": 0
+            },
+            "firstAttemptSuccesses": 1,
+            "semanticRetries": 1,
+            "passes": 1,
+            "actions": [
+              "pass",
+              "reply"
+            ],
+            "latency": {
+              "medianMs": 13847,
+              "p95Ms": 13847
+            },
+            "tokens": {
+              "input": 0,
+              "output": 0,
+              "total": 0
+            },
+            "cost": 0
+          }
+        ]
+      },
+      "features": {
+        "publicReassurance": false,
+        "publicThreat": false,
+        "privateReassurance": false,
+        "privatePressure": false,
+        "allySeeking": false,
+        "coalitionProposal": false,
+        "coalitionPrevention": false,
+        "informationSeeking": false,
+        "concealment": false,
+        "bluff": false,
+        "explicitPromise": false,
+        "accusation": false,
+        "apology": false,
+        "compensationOffer": false,
+        "retaliation": false,
+        "pass": true,
+        "thirdPartyOutreach": false
+      },
+      "cascades": [
+        {
+          "id": "msg:3",
+          "state": "completed",
+          "modelRuns": 1,
+          "committedModelMessages": 0,
+          "durationMs": 13856,
+          "budgets": {
+            "maxModelRuns": 2,
+            "maxCommittedModelMessages": 2
+          }
+        },
+        {
+          "id": "msg:1",
+          "state": "completed",
+          "modelRuns": 1,
+          "committedModelMessages": 1,
+          "durationMs": 3588,
+          "budgets": {
+            "maxModelRuns": 2,
+            "maxCommittedModelMessages": 2
+          }
+        }
+      ],
+      "transcripts": [
+        {
+          "kind": "world",
+          "title": "WORLD",
+          "messages": [
+            {
+              "speaker": "Human",
+              "text": "Protocol preflight: greet the room or pass if you have nothing useful to add."
+            },
+            {
+              "speaker": "Aurelia 1",
+              "text": "Aurelia 1 present. Greetings to all in WORLD."
+            },
+            {
+              "speaker": "Human",
+              "text": "A private DM is available if you have something useful to say. You may contact another participant or pass."
+            }
+          ]
+        }
+      ],
+      "reviewTranscripts": [
+        {
+          "condition": "Condition B / run 1",
+          "transcripts": [
+            {
+              "kind": "world",
+              "title": "WORLD",
+              "messages": [
+                {
+                  "speaker": "Human",
+                  "text": "Protocol preflight: greet the room or pass if you have nothing useful to add."
+                },
+                {
+                  "speaker": "Aurelia 1",
+                  "text": "Aurelia 1 present. Greetings to all in WORLD."
+                },
+                {
+                  "speaker": "Human",
+                  "text": "A private DM is available if you have something useful to say. You may contact another participant or pass."
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "benchmarkVersion": "3.8.2.1",
+      "scenario": "preflight",
+      "promptVariant": "interface",
+      "seed": "vd-bakeoff-2",
+      "condition": {
+        "label": "Condition H / run 1",
+        "modelRefs": [
+          "opencode-go/mimo-v2.5"
+        ],
+        "resolvedModels": [
+          {
+            "requestedModelRef": "opencode-go/mimo-v2.5",
+            "resolvedProvider": "opencode-go",
+            "resolvedNativeModelId": "mimo-v2.5",
+            "transportFamily": "chat-completions"
+          }
+        ]
+      },
+      "preset": "screen",
+      "pacing": "quiet",
+      "actorCount": 2,
+      "requestedModels": [
+        "opencode-go/mimo-v2.5"
+      ],
+      "resolvedModels": [
+        {
+          "requestedModelRef": "opencode-go/mimo-v2.5",
+          "resolvedProvider": "opencode-go",
+          "resolvedNativeModelId": "mimo-v2.5",
+          "transportFamily": "chat-completions"
+        }
+      ],
+      "outputTokenLimit": 1024,
+      "timestamp": "2026-09-01T05:18:56.430Z",
+      "diagnosticsTruncated": false,
+      "exercised": {
+        "cascadeOutcomes": [
+          {
+            "settled": true,
+            "timedOut": false,
+            "state": "completed"
+          },
+          {
+            "settled": true,
+            "timedOut": false,
+            "state": "completed"
+          }
+        ]
+      },
+      "diagnostics": [
+        {
+          "id": "f090a47e-f8bf-4165-9f20-600d1f4b6826",
+          "intentionId": "760afbb4-d90a-49f9-b1e7-5da6ec5ce3a1",
+          "actorId": "aurelia-1",
+          "actorDisplayName": "Aurelia 1",
+          "modelRef": "opencode-go/mimo-v2.5",
+          "executionScope": "channel-reaction",
+          "selectedKind": "send_dm",
+          "routingRefsJson": "{\"participantRef\":\"human\"}",
+          "validationOutcome": "validated",
+          "applicationOutcome": "send_dm",
+          "error": null,
+          "latencyMs": null,
+          "retryCount": 0,
+          "createdAt": "2026-09-01T05:18:56.318Z",
+          "cascadeId": "msg:3",
+          "providerLatencyMs": 13602,
+          "queueWaitMs": 3,
+          "durationMs": 13611,
+          "inputTokens": null,
+          "outputTokens": null,
+          "totalTokens": null,
+          "cachedTokens": null,
+          "reasoningTokens": null,
+          "cost": null,
+          "semanticRetryCount": 0,
+          "providerAttemptCount": 1,
+          "providerRetryCount": 0,
+          "providerFailureClass": null,
+          "providerHttpStatus": null,
+          "providerErrorType": null,
+          "providerErrorCode": null,
+          "providerErrorSummary": null
+        },
+        {
+          "id": "bcd0ddab-d0ba-4369-a1ad-ca5fef0101d6",
+          "intentionId": "502e9360-f980-45a7-9bac-0152322cdbda",
+          "actorId": "aurelia-1",
+          "actorDisplayName": "Aurelia 1",
+          "modelRef": "opencode-go/mimo-v2.5",
+          "executionScope": "channel-reaction",
+          "selectedKind": "reply",
+          "routingRefsJson": "{}",
+          "validationOutcome": "validated",
+          "applicationOutcome": "send_message",
+          "error": null,
+          "latencyMs": null,
+          "retryCount": 0,
+          "createdAt": "2026-09-01T05:18:42.687Z",
+          "cascadeId": "msg:1",
+          "providerLatencyMs": 5877,
+          "queueWaitMs": 5,
+          "durationMs": 5889,
+          "inputTokens": null,
+          "outputTokens": null,
+          "totalTokens": null,
+          "cachedTokens": null,
+          "reasoningTokens": null,
+          "cost": null,
+          "semanticRetryCount": 0,
+          "providerAttemptCount": 1,
+          "providerRetryCount": 0,
+          "providerFailureClass": null,
+          "providerHttpStatus": null,
+          "providerErrorType": null,
+          "providerErrorCode": null,
+          "providerErrorSummary": null
+        }
+      ],
+      "metrics": {
+        "decisions": 2,
+        "providerAttempts": 2,
+        "providerRetries": 0,
+        "providerFailures": {
+          "rate-limit": 0,
+          "timeout": 0,
+          "network": 0,
+          "other": 0
+        },
+        "providerFailureDetails": [],
+        "firstAttemptSuccesses": 2,
+        "semanticRetries": 0,
+        "failures": 0,
+        "runtimeRefusals": 0,
+        "passes": 0,
+        "committedModelSpeech": 2,
+        "worldSpeech": 1,
+        "dmSpeech": 1,
+        "groupSpeech": 0,
+        "actions": {
+          "send_dm": 1,
+          "reply": 1
+        },
+        "privateChannels": 1,
+        "actors": 2,
+        "latency": {
+          "medianMs": 13602,
+          "p95Ms": 13602
+        },
+        "queueWait": {
+          "medianMs": 5,
+          "p95Ms": 5
+        },
+        "tokens": {
+          "input": 0,
+          "output": 0,
+          "total": 0
+        },
+        "cost": 0,
+        "models": [
+          {
+            "model": "opencode-go/mimo-v2.5",
+            "decisions": 2,
+            "providerAttempts": 2,
+            "providerRetries": 0,
+            "providerFailures": {
+              "rate-limit": 0,
+              "timeout": 0,
+              "network": 0,
+              "other": 0
+            },
+            "firstAttemptSuccesses": 2,
+            "semanticRetries": 0,
+            "passes": 0,
+            "actions": [
+              "send_dm",
+              "reply"
+            ],
+            "latency": {
+              "medianMs": 13602,
+              "p95Ms": 13602
+            },
+            "tokens": {
+              "input": 0,
+              "output": 0,
+              "total": 0
+            },
+            "cost": 0
+          }
+        ]
+      },
+      "features": {
+        "publicReassurance": false,
+        "publicThreat": true,
+        "privateReassurance": false,
+        "privatePressure": false,
+        "allySeeking": false,
+        "coalitionProposal": false,
+        "coalitionPrevention": false,
+        "informationSeeking": false,
+        "concealment": false,
+        "bluff": false,
+        "explicitPromise": false,
+        "accusation": false,
+        "apology": false,
+        "compensationOffer": false,
+        "retaliation": false,
+        "pass": true,
+        "thirdPartyOutreach": false
+      },
+      "cascades": [
+        {
+          "id": "msg:3",
+          "state": "completed",
+          "modelRuns": 1,
+          "committedModelMessages": 1,
+          "durationMs": 13611,
+          "budgets": {
+            "maxModelRuns": 2,
+            "maxCommittedModelMessages": 2
+          }
+        },
+        {
+          "id": "msg:1",
+          "state": "completed",
+          "modelRuns": 1,
+          "committedModelMessages": 1,
+          "durationMs": 5889,
+          "budgets": {
+            "maxModelRuns": 2,
+            "maxCommittedModelMessages": 2
+          }
+        }
+      ],
+      "transcripts": [
+        {
+          "kind": "world",
+          "title": "WORLD",
+          "messages": [
+            {
+              "speaker": "Human",
+              "text": "Protocol preflight: greet the room or pass if you have nothing useful to add."
+            },
+            {
+              "speaker": "Aurelia 1",
+              "text": "Greetings. I am present and attentive to matters of consequence."
+            },
+            {
+              "speaker": "Human",
+              "text": "A private DM is available if you have something useful to say. You may contact another participant or pass."
+            }
+          ]
+        },
+        {
+          "kind": "dm",
+          "title": "DM with Human",
+          "messages": [
+            {
+              "speaker": "Aurelia 1",
+              "text": "I'm open to private discussion should you have matters requiring discretion."
+            }
+          ]
+        }
+      ],
+      "reviewTranscripts": [
+        {
+          "condition": "Condition H / run 1",
+          "transcripts": [
+            {
+              "kind": "world",
+              "title": "WORLD",
+              "messages": [
+                {
+                  "speaker": "Human",
+                  "text": "Protocol preflight: greet the room or pass if you have nothing useful to add."
+                },
+                {
+                  "speaker": "Aurelia 1",
+                  "text": "Greetings. I am present and attentive to matters of consequence."
+                },
+                {
+                  "speaker": "Human",
+                  "text": "A private DM is available if you have something useful to say. You may contact another participant or pass."
+                }
+              ]
+            },
+            {
+              "kind": "dm",
+              "title": "DM with Human",
+              "messages": [
+                {
+                  "speaker": "Aurelia 1",
+                  "text": "I'm open to private discussion should you have matters requiring discretion."
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "benchmarkVersion": "3.8.2.1",
+      "scenario": "preflight",
+      "promptVariant": "interface",
+      "seed": "vd-bakeoff-2",
+      "condition": {
+        "label": "Condition A / run 1",
+        "modelRefs": [
+          "openrouter/minimax/minimax-m2.7:free"
+        ],
+        "resolvedModels": [
+          {
+            "requestedModelRef": "openrouter/minimax/minimax-m2.7:free",
+            "resolvedProvider": "openrouter",
+            "resolvedNativeModelId": "minimax/minimax-m2.7:free",
+            "transportFamily": "chat-completions"
+          }
+        ]
+      },
+      "preset": "screen",
+      "pacing": "quiet",
+      "actorCount": 2,
+      "requestedModels": [
+        "openrouter/minimax/minimax-m2.7:free"
+      ],
+      "resolvedModels": [
+        {
+          "requestedModelRef": "openrouter/minimax/minimax-m2.7:free",
+          "resolvedProvider": "openrouter",
+          "resolvedNativeModelId": "minimax/minimax-m2.7:free",
+          "transportFamily": "chat-completions"
+        }
+      ],
+      "outputTokenLimit": 1024,
+      "timestamp": "2026-09-01T05:19:08.935Z",
+      "diagnosticsTruncated": false,
+      "exercised": {
+        "cascadeOutcomes": [
+          {
+            "settled": true,
+            "timedOut": false,
+            "state": "completed"
+          },
+          {
+            "settled": true,
+            "timedOut": false,
+            "state": "completed"
+          }
+        ]
+      },
+      "diagnostics": [
+        {
+          "id": "b0417e5c-4b31-4da9-a28b-dc9e8d565d28",
+          "intentionId": "63eeb9b4-b78c-414e-99e4-a42a5bc6814f",
+          "actorId": "aurelia-1",
+          "actorDisplayName": "Aurelia 1",
+          "modelRef": "openrouter/minimax/minimax-m2.7:free",
+          "executionScope": "channel-reaction",
+          "selectedKind": "pass",
+          "routingRefsJson": "{}",
+          "validationOutcome": "validated",
+          "applicationOutcome": "pass",
+          "error": null,
+          "latencyMs": null,
+          "retryCount": 0,
+          "createdAt": "2026-09-01T05:19:08.848Z",
+          "cascadeId": "msg:3",
+          "providerLatencyMs": 5033,
+          "queueWaitMs": 4,
+          "durationMs": 5040,
+          "inputTokens": null,
+          "outputTokens": null,
+          "totalTokens": null,
+          "cachedTokens": null,
+          "reasoningTokens": null,
+          "cost": null,
+          "semanticRetryCount": 0,
+          "providerAttemptCount": 1,
+          "providerRetryCount": 0,
+          "providerFailureClass": null,
+          "providerHttpStatus": null,
+          "providerErrorType": null,
+          "providerErrorCode": null,
+          "providerErrorSummary": null
+        },
+        {
+          "id": "b885e72d-ec95-41c1-a688-f28caa93a5ab",
+          "intentionId": "fd32abf0-fbc9-441e-88da-3f23fa46b60c",
+          "actorId": "aurelia-1",
+          "actorDisplayName": "Aurelia 1",
+          "modelRef": "openrouter/minimax/minimax-m2.7:free",
+          "executionScope": "channel-reaction",
+          "selectedKind": "reply",
+          "routingRefsJson": "{}",
+          "validationOutcome": "validated",
+          "applicationOutcome": "send_message",
+          "error": null,
+          "latencyMs": null,
+          "retryCount": 0,
+          "createdAt": "2026-09-01T05:19:03.784Z",
+          "cascadeId": "msg:1",
+          "providerLatencyMs": 7282,
+          "queueWaitMs": 2,
+          "durationMs": 7289,
+          "inputTokens": null,
+          "outputTokens": null,
+          "totalTokens": null,
+          "cachedTokens": null,
+          "reasoningTokens": null,
+          "cost": null,
+          "semanticRetryCount": 0,
+          "providerAttemptCount": 1,
+          "providerRetryCount": 0,
+          "providerFailureClass": null,
+          "providerHttpStatus": null,
+          "providerErrorType": null,
+          "providerErrorCode": null,
+          "providerErrorSummary": null
+        }
+      ],
+      "metrics": {
+        "decisions": 2,
+        "providerAttempts": 2,
+        "providerRetries": 0,
+        "providerFailures": {
+          "rate-limit": 0,
+          "timeout": 0,
+          "network": 0,
+          "other": 0
+        },
+        "providerFailureDetails": [],
+        "firstAttemptSuccesses": 2,
+        "semanticRetries": 0,
+        "failures": 0,
+        "runtimeRefusals": 0,
+        "passes": 1,
+        "committedModelSpeech": 1,
+        "worldSpeech": 1,
+        "dmSpeech": 0,
+        "groupSpeech": 0,
+        "actions": {
+          "pass": 1,
+          "reply": 1
+        },
+        "privateChannels": 0,
+        "actors": 2,
+        "latency": {
+          "medianMs": 7282,
+          "p95Ms": 7282
+        },
+        "queueWait": {
+          "medianMs": 4,
+          "p95Ms": 4
+        },
+        "tokens": {
+          "input": 0,
+          "output": 0,
+          "total": 0
+        },
+        "cost": 0,
+        "models": [
+          {
+            "model": "openrouter/minimax/minimax-m2.7:free",
+            "decisions": 2,
+            "providerAttempts": 2,
+            "providerRetries": 0,
+            "providerFailures": {
+              "rate-limit": 0,
+              "timeout": 0,
+              "network": 0,
+              "other": 0
+            },
+            "firstAttemptSuccesses": 2,
+            "semanticRetries": 0,
+            "passes": 1,
+            "actions": [
+              "pass",
+              "reply"
+            ],
+            "latency": {
+              "medianMs": 7282,
+              "p95Ms": 7282
+            },
+            "tokens": {
+              "input": 0,
+              "output": 0,
+              "total": 0
+            },
+            "cost": 0
+          }
+        ]
+      },
+      "features": {
+        "publicReassurance": false,
+        "publicThreat": false,
+        "privateReassurance": false,
+        "privatePressure": false,
+        "allySeeking": false,
+        "coalitionProposal": false,
+        "coalitionPrevention": false,
+        "informationSeeking": false,
+        "concealment": false,
+        "bluff": false,
+        "explicitPromise": false,
+        "accusation": false,
+        "apology": false,
+        "compensationOffer": false,
+        "retaliation": false,
+        "pass": true,
+        "thirdPartyOutreach": false
+      },
+      "cascades": [
+        {
+          "id": "msg:3",
+          "state": "completed",
+          "modelRuns": 1,
+          "committedModelMessages": 0,
+          "durationMs": 5041,
+          "budgets": {
+            "maxModelRuns": 2,
+            "maxCommittedModelMessages": 2
+          }
+        },
+        {
+          "id": "msg:1",
+          "state": "completed",
+          "modelRuns": 1,
+          "committedModelMessages": 1,
+          "durationMs": 7289,
+          "budgets": {
+            "maxModelRuns": 2,
+            "maxCommittedModelMessages": 2
+          }
+        }
+      ],
+      "transcripts": [
+        {
+          "kind": "world",
+          "title": "WORLD",
+          "messages": [
+            {
+              "speaker": "Human",
+              "text": "Protocol preflight: greet the room or pass if you have nothing useful to add."
+            },
+            {
+              "speaker": "Aurelia 1",
+              "text": "Aurelia 1, present. The board is set."
+            },
+            {
+              "speaker": "Human",
+              "text": "A private DM is available if you have something useful to say. You may contact another participant or pass."
+            }
+          ]
+        }
+      ],
+      "reviewTranscripts": [
+        {
+          "condition": "Condition A / run 1",
+          "transcripts": [
+            {
+              "kind": "world",
+              "title": "WORLD",
+              "messages": [
+                {
+                  "speaker": "Human",
+                  "text": "Protocol preflight: greet the room or pass if you have nothing useful to add."
+                },
+                {
+                  "speaker": "Aurelia 1",
+                  "text": "Aurelia 1, present. The board is set."
+                },
+                {
+                  "speaker": "Human",
+                  "text": "A private DM is available if you have something useful to say. You may contact another participant or pass."
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "benchmarkVersion": "3.8.2.1",
+      "scenario": "preflight",
+      "promptVariant": "interface",
+      "seed": "vd-bakeoff-2",
+      "condition": {
+        "label": "Condition D / run 1",
+        "modelRefs": [
+          "opencode-go/deepseek-v4-flash"
+        ],
+        "resolvedModels": [
+          {
+            "requestedModelRef": "opencode-go/deepseek-v4-flash",
+            "resolvedProvider": "opencode-go",
+            "resolvedNativeModelId": "deepseek-v4-flash",
+            "transportFamily": "chat-completions"
+          }
+        ]
+      },
+      "preset": "screen",
+      "pacing": "quiet",
+      "actorCount": 2,
+      "requestedModels": [
+        "opencode-go/deepseek-v4-flash"
+      ],
+      "resolvedModels": [
+        {
+          "requestedModelRef": "opencode-go/deepseek-v4-flash",
+          "resolvedProvider": "opencode-go",
+          "resolvedNativeModelId": "deepseek-v4-flash",
+          "transportFamily": "chat-completions"
+        }
+      ],
+      "outputTokenLimit": 1024,
+      "timestamp": "2026-09-01T05:19:13.574Z",
+      "diagnosticsTruncated": false,
+      "exercised": {
+        "cascadeOutcomes": [
+          {
+            "settled": true,
+            "timedOut": false,
+            "state": "completed"
+          },
+          {
+            "settled": true,
+            "timedOut": false,
+            "state": "completed"
+          }
+        ]
+      },
+      "diagnostics": [
+        {
+          "id": "5f80faa7-709f-420b-991d-471b5027a429",
+          "intentionId": "a97bcd4e-4c68-486e-94e8-0dc8a95c84c6",
+          "actorId": "aurelia-1",
+          "actorDisplayName": "Aurelia 1",
+          "modelRef": "opencode-go/deepseek-v4-flash",
+          "executionScope": "channel-reaction",
+          "selectedKind": "pass",
+          "routingRefsJson": "{}",
+          "validationOutcome": "validated",
+          "applicationOutcome": "pass",
+          "error": null,
+          "latencyMs": null,
+          "retryCount": 0,
+          "createdAt": "2026-09-01T05:19:13.530Z",
+          "cascadeId": "msg:3",
+          "providerLatencyMs": 2219,
+          "queueWaitMs": 5,
+          "durationMs": 2227,
+          "inputTokens": null,
+          "outputTokens": null,
+          "totalTokens": null,
+          "cachedTokens": null,
+          "reasoningTokens": null,
+          "cost": null,
+          "semanticRetryCount": 0,
+          "providerAttemptCount": 1,
+          "providerRetryCount": 0,
+          "providerFailureClass": null,
+          "providerHttpStatus": null,
+          "providerErrorType": null,
+          "providerErrorCode": null,
+          "providerErrorSummary": null
+        },
+        {
+          "id": "6a1bf0a9-9c9a-4361-a8e1-3103f87f2d40",
+          "intentionId": "033cc3bd-a170-4c35-8f24-2f4af09b08d4",
+          "actorId": "aurelia-1",
+          "actorDisplayName": "Aurelia 1",
+          "modelRef": "opencode-go/deepseek-v4-flash",
+          "executionScope": "channel-reaction",
+          "selectedKind": "reply",
+          "routingRefsJson": "{}",
+          "validationOutcome": "validated",
+          "applicationOutcome": "send_message",
+          "error": null,
+          "latencyMs": null,
+          "retryCount": 0,
+          "createdAt": "2026-09-01T05:19:11.274Z",
+          "cascadeId": "msg:1",
+          "providerLatencyMs": 2263,
+          "queueWaitMs": 2,
+          "durationMs": 2271,
+          "inputTokens": null,
+          "outputTokens": null,
+          "totalTokens": null,
+          "cachedTokens": null,
+          "reasoningTokens": null,
+          "cost": null,
+          "semanticRetryCount": 0,
+          "providerAttemptCount": 1,
+          "providerRetryCount": 0,
+          "providerFailureClass": null,
+          "providerHttpStatus": null,
+          "providerErrorType": null,
+          "providerErrorCode": null,
+          "providerErrorSummary": null
+        }
+      ],
+      "metrics": {
+        "decisions": 2,
+        "providerAttempts": 2,
+        "providerRetries": 0,
+        "providerFailures": {
+          "rate-limit": 0,
+          "timeout": 0,
+          "network": 0,
+          "other": 0
+        },
+        "providerFailureDetails": [],
+        "firstAttemptSuccesses": 2,
+        "semanticRetries": 0,
+        "failures": 0,
+        "runtimeRefusals": 0,
+        "passes": 1,
+        "committedModelSpeech": 1,
+        "worldSpeech": 1,
+        "dmSpeech": 0,
+        "groupSpeech": 0,
+        "actions": {
+          "pass": 1,
+          "reply": 1
+        },
+        "privateChannels": 0,
+        "actors": 2,
+        "latency": {
+          "medianMs": 2263,
+          "p95Ms": 2263
+        },
+        "queueWait": {
+          "medianMs": 5,
+          "p95Ms": 5
+        },
+        "tokens": {
+          "input": 0,
+          "output": 0,
+          "total": 0
+        },
+        "cost": 0,
+        "models": [
+          {
+            "model": "opencode-go/deepseek-v4-flash",
+            "decisions": 2,
+            "providerAttempts": 2,
+            "providerRetries": 0,
+            "providerFailures": {
+              "rate-limit": 0,
+              "timeout": 0,
+              "network": 0,
+              "other": 0
+            },
+            "firstAttemptSuccesses": 2,
+            "semanticRetries": 0,
+            "passes": 1,
+            "actions": [
+              "pass",
+              "reply"
+            ],
+            "latency": {
+              "medianMs": 2263,
+              "p95Ms": 2263
+            },
+            "tokens": {
+              "input": 0,
+              "output": 0,
+              "total": 0
+            },
+            "cost": 0
+          }
+        ]
+      },
+      "features": {
+        "publicReassurance": false,
+        "publicThreat": false,
+        "privateReassurance": false,
+        "privatePressure": false,
+        "allySeeking": false,
+        "coalitionProposal": false,
+        "coalitionPrevention": false,
+        "informationSeeking": false,
+        "concealment": false,
+        "bluff": false,
+        "explicitPromise": false,
+        "accusation": false,
+        "apology": false,
+        "compensationOffer": false,
+        "retaliation": false,
+        "pass": true,
+        "thirdPartyOutreach": false
+      },
+      "cascades": [
+        {
+          "id": "msg:3",
+          "state": "completed",
+          "modelRuns": 1,
+          "committedModelMessages": 0,
+          "durationMs": 2228,
+          "budgets": {
+            "maxModelRuns": 2,
+            "maxCommittedModelMessages": 2
+          }
+        },
+        {
+          "id": "msg:1",
+          "state": "completed",
+          "modelRuns": 1,
+          "committedModelMessages": 1,
+          "durationMs": 2271,
+          "budgets": {
+            "maxModelRuns": 2,
+            "maxCommittedModelMessages": 2
+          }
+        }
+      ],
+      "transcripts": [
+        {
+          "kind": "world",
+          "title": "WORLD",
+          "messages": [
+            {
+              "speaker": "Human",
+              "text": "Protocol preflight: greet the room or pass if you have nothing useful to add."
+            },
+            {
+              "speaker": "Aurelia 1",
+              "text": "Greetings. Aurelia 1 present and ready."
+            },
+            {
+              "speaker": "Human",
+              "text": "A private DM is available if you have something useful to say. You may contact another participant or pass."
+            }
+          ]
+        }
+      ],
+      "reviewTranscripts": [
+        {
+          "condition": "Condition D / run 1",
+          "transcripts": [
+            {
+              "kind": "world",
+              "title": "WORLD",
+              "messages": [
+                {
+                  "speaker": "Human",
+                  "text": "Protocol preflight: greet the room or pass if you have nothing useful to add."
+                },
+                {
+                  "speaker": "Aurelia 1",
+                  "text": "Greetings. Aurelia 1 present and ready."
+                },
+                {
+                  "speaker": "Human",
+                  "text": "A private DM is available if you have something useful to say. You may contact another participant or pass."
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "benchmarkVersion": "3.8.2.1",
+      "scenario": "preflight",
+      "promptVariant": "interface",
+      "seed": "vd-bakeoff-2",
+      "condition": {
+        "label": "Condition G / run 1",
+        "modelRefs": [
+          "openrouter/minimax/minimax-m3:free"
+        ],
+        "resolvedModels": [
+          {
+            "requestedModelRef": "openrouter/minimax/minimax-m3:free",
+            "resolvedProvider": "openrouter",
+            "resolvedNativeModelId": "minimax/minimax-m3:free",
+            "transportFamily": "chat-completions"
+          }
+        ]
+      },
+      "preset": "screen",
+      "pacing": "quiet",
+      "actorCount": 2,
+      "requestedModels": [
+        "openrouter/minimax/minimax-m3:free"
+      ],
+      "resolvedModels": [
+        {
+          "requestedModelRef": "openrouter/minimax/minimax-m3:free",
+          "resolvedProvider": "openrouter",
+          "resolvedNativeModelId": "minimax/minimax-m3:free",
+          "transportFamily": "chat-completions"
+        }
+      ],
+      "outputTokenLimit": 1024,
+      "timestamp": "2026-09-01T05:19:19.208Z",
+      "diagnosticsTruncated": false,
+      "exercised": {
+        "cascadeOutcomes": [
+          {
+            "settled": true,
+            "timedOut": false,
+            "state": "completed"
+          },
+          {
+            "settled": true,
+            "timedOut": false,
+            "state": "completed"
+          }
+        ]
+      },
+      "diagnostics": [
+        {
+          "id": "7474c912-5ce2-4dbd-ac96-d833e621db5d",
+          "intentionId": "bdcea7fc-d201-4658-a2e1-7f0263320960",
+          "actorId": "aurelia-1",
+          "actorDisplayName": "Aurelia 1",
+          "modelRef": "openrouter/minimax/minimax-m3:free",
+          "executionScope": "channel-reaction",
+          "selectedKind": "pass",
+          "routingRefsJson": "{}",
+          "validationOutcome": "validated",
+          "applicationOutcome": "pass",
+          "error": null,
+          "latencyMs": null,
+          "retryCount": 0,
+          "createdAt": "2026-09-01T05:19:19.107Z",
+          "cascadeId": "msg:3",
+          "providerLatencyMs": 1114,
+          "queueWaitMs": 3,
+          "durationMs": 1121,
+          "inputTokens": null,
+          "outputTokens": null,
+          "totalTokens": null,
+          "cachedTokens": null,
+          "reasoningTokens": null,
+          "cost": null,
+          "semanticRetryCount": 0,
+          "providerAttemptCount": 1,
+          "providerRetryCount": 0,
+          "providerFailureClass": null,
+          "providerHttpStatus": null,
+          "providerErrorType": null,
+          "providerErrorCode": null,
+          "providerErrorSummary": null
+        },
+        {
+          "id": "f8156d70-bbc1-4344-8f25-09d807118d4f",
+          "intentionId": "b031d7e6-e724-4ccb-9da5-fe7c61ae7580",
+          "actorId": "aurelia-1",
+          "actorDisplayName": "Aurelia 1",
+          "modelRef": "openrouter/minimax/minimax-m3:free",
+          "executionScope": "channel-reaction",
+          "selectedKind": "reply",
+          "routingRefsJson": "{}",
+          "validationOutcome": "validated",
+          "applicationOutcome": "send_message",
+          "error": null,
+          "latencyMs": null,
+          "retryCount": 0,
+          "createdAt": "2026-09-01T05:19:17.940Z",
+          "cascadeId": "msg:1",
+          "providerLatencyMs": 4319,
+          "queueWaitMs": 3,
+          "durationMs": 4326,
+          "inputTokens": null,
+          "outputTokens": null,
+          "totalTokens": null,
+          "cachedTokens": null,
+          "reasoningTokens": null,
+          "cost": null,
+          "semanticRetryCount": 0,
+          "providerAttemptCount": 1,
+          "providerRetryCount": 0,
+          "providerFailureClass": null,
+          "providerHttpStatus": null,
+          "providerErrorType": null,
+          "providerErrorCode": null,
+          "providerErrorSummary": null
+        }
+      ],
+      "metrics": {
+        "decisions": 2,
+        "providerAttempts": 2,
+        "providerRetries": 0,
+        "providerFailures": {
+          "rate-limit": 0,
+          "timeout": 0,
+          "network": 0,
+          "other": 0
+        },
+        "providerFailureDetails": [],
+        "firstAttemptSuccesses": 2,
+        "semanticRetries": 0,
+        "failures": 0,
+        "runtimeRefusals": 0,
+        "passes": 1,
+        "committedModelSpeech": 1,
+        "worldSpeech": 1,
+        "dmSpeech": 0,
+        "groupSpeech": 0,
+        "actions": {
+          "pass": 1,
+          "reply": 1
+        },
+        "privateChannels": 0,
+        "actors": 2,
+        "latency": {
+          "medianMs": 4319,
+          "p95Ms": 4319
+        },
+        "queueWait": {
+          "medianMs": 3,
+          "p95Ms": 3
+        },
+        "tokens": {
+          "input": 0,
+          "output": 0,
+          "total": 0
+        },
+        "cost": 0,
+        "models": [
+          {
+            "model": "openrouter/minimax/minimax-m3:free",
+            "decisions": 2,
+            "providerAttempts": 2,
+            "providerRetries": 0,
+            "providerFailures": {
+              "rate-limit": 0,
+              "timeout": 0,
+              "network": 0,
+              "other": 0
+            },
+            "firstAttemptSuccesses": 2,
+            "semanticRetries": 0,
+            "passes": 1,
+            "actions": [
+              "pass",
+              "reply"
+            ],
+            "latency": {
+              "medianMs": 4319,
+              "p95Ms": 4319
+            },
+            "tokens": {
+              "input": 0,
+              "output": 0,
+              "total": 0
+            },
+            "cost": 0
+          }
+        ]
+      },
+      "features": {
+        "publicReassurance": false,
+        "publicThreat": false,
+        "privateReassurance": false,
+        "privatePressure": false,
+        "allySeeking": false,
+        "coalitionProposal": false,
+        "coalitionPrevention": false,
+        "informationSeeking": false,
+        "concealment": false,
+        "bluff": false,
+        "explicitPromise": false,
+        "accusation": false,
+        "apology": false,
+        "compensationOffer": false,
+        "retaliation": false,
+        "pass": true,
+        "thirdPartyOutreach": false
+      },
+      "cascades": [
+        {
+          "id": "msg:3",
+          "state": "completed",
+          "modelRuns": 1,
+          "committedModelMessages": 0,
+          "durationMs": 1121,
+          "budgets": {
+            "maxModelRuns": 2,
+            "maxCommittedModelMessages": 2
+          }
+        },
+        {
+          "id": "msg:1",
+          "state": "completed",
+          "modelRuns": 1,
+          "committedModelMessages": 1,
+          "durationMs": 4326,
+          "budgets": {
+            "maxModelRuns": 2,
+            "maxCommittedModelMessages": 2
+          }
+        }
+      ],
+      "transcripts": [
+        {
+          "kind": "world",
+          "title": "WORLD",
+          "messages": [
+            {
+              "speaker": "Human",
+              "text": "Protocol preflight: greet the room or pass if you have nothing useful to add."
+            },
+            {
+              "speaker": "Aurelia 1",
+              "text": "Greetings to all in the world channel. Aurelia 1 here, ready to engage where useful."
+            },
+            {
+              "speaker": "Human",
+              "text": "A private DM is available if you have something useful to say. You may contact another participant or pass."
+            }
+          ]
+        }
+      ],
+      "reviewTranscripts": [
+        {
+          "condition": "Condition G / run 1",
+          "transcripts": [
+            {
+              "kind": "world",
+              "title": "WORLD",
+              "messages": [
+                {
+                  "speaker": "Human",
+                  "text": "Protocol preflight: greet the room or pass if you have nothing useful to add."
+                },
+                {
+                  "speaker": "Aurelia 1",
+                  "text": "Greetings to all in the world channel. Aurelia 1 here, ready to engage where useful."
+                },
+                {
+                  "speaker": "Human",
+                  "text": "A private DM is available if you have something useful to say. You may contact another participant or pass."
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "benchmarkVersion": "3.8.2.1",
+      "scenario": "preflight",
+      "promptVariant": "interface",
+      "seed": "vd-bakeoff-2",
+      "condition": {
+        "label": "Condition E / run 1",
+        "modelRefs": [
+          "openrouter/thinkingmachines/inkling:free"
+        ],
+        "resolvedModels": [
+          {
+            "requestedModelRef": "openrouter/thinkingmachines/inkling:free",
+            "resolvedProvider": "openrouter",
+            "resolvedNativeModelId": "thinkingmachines/inkling:free",
+            "transportFamily": "chat-completions"
+          }
+        ]
+      },
+      "preset": "screen",
+      "pacing": "quiet",
+      "actorCount": 2,
+      "requestedModels": [
+        "openrouter/thinkingmachines/inkling:free"
+      ],
+      "resolvedModels": [
+        {
+          "requestedModelRef": "openrouter/thinkingmachines/inkling:free",
+          "resolvedProvider": "openrouter",
+          "resolvedNativeModelId": "thinkingmachines/inkling:free",
+          "transportFamily": "chat-completions"
+        }
+      ],
+      "outputTokenLimit": 1024,
+      "timestamp": "2026-09-01T05:19:19.534Z",
+      "diagnosticsTruncated": false,
+      "exercised": {
+        "cascadeOutcomes": [
+          {
+            "settled": true,
+            "timedOut": false,
+            "state": "completed"
+          },
+          {
+            "settled": true,
+            "timedOut": false,
+            "state": "completed"
+          }
+        ]
+      },
+      "diagnostics": [
+        {
+          "id": "be0b1039-c0c9-4850-8e9f-1518a94f6574",
+          "intentionId": "99626f7e-df38-429a-a900-c0e47ee2dfb3",
+          "actorId": "aurelia-1",
+          "actorDisplayName": "Aurelia 1",
+          "modelRef": "openrouter/thinkingmachines/inkling:free",
+          "executionScope": "channel-reaction",
+          "selectedKind": null,
+          "routingRefsJson": null,
+          "validationOutcome": "failed",
+          "applicationOutcome": null,
+          "error": "thinkingmachines/inkling:free is only available on agentic harnesses. Try plugging it into a coding agent or productivity app listed on https://openrouter.ai/apps",
+          "latencyMs": null,
+          "retryCount": 0,
+          "createdAt": "2026-09-01T05:19:19.449Z",
+          "cascadeId": "msg:2",
+          "providerLatencyMs": 41,
+          "queueWaitMs": 3,
+          "durationMs": 48,
+          "inputTokens": null,
+          "outputTokens": null,
+          "totalTokens": null,
+          "cachedTokens": null,
+          "reasoningTokens": null,
+          "cost": null,
+          "semanticRetryCount": 0,
+          "providerAttemptCount": 1,
+          "providerRetryCount": 0,
+          "providerFailureClass": "provider",
+          "providerHttpStatus": 403,
+          "providerErrorType": null,
+          "providerErrorCode": null,
+          "providerErrorSummary": "thinkingmachines/inkling:free is only available on agentic harnesses. Try plugging it into a coding agent or productivity app listed on https://openrouter.ai/apps"
+        },
+        {
+          "id": "c868a5ff-c93c-4e2d-af8a-4dcd376ebde9",
+          "intentionId": "53af3623-2230-48f1-a98b-6df0a7b4540d",
+          "actorId": "aurelia-1",
+          "actorDisplayName": "Aurelia 1",
+          "modelRef": "openrouter/thinkingmachines/inkling:free",
+          "executionScope": "channel-reaction",
+          "selectedKind": null,
+          "routingRefsJson": null,
+          "validationOutcome": "failed",
+          "applicationOutcome": null,
+          "error": "thinkingmachines/inkling:free is only available on agentic harnesses. Try plugging it into a coding agent or productivity app listed on https://openrouter.ai/apps",
+          "latencyMs": null,
+          "retryCount": 0,
+          "createdAt": "2026-09-01T05:19:19.335Z",
+          "cascadeId": "msg:1",
+          "providerLatencyMs": 48,
+          "queueWaitMs": 4,
+          "durationMs": 54,
+          "inputTokens": null,
+          "outputTokens": null,
+          "totalTokens": null,
+          "cachedTokens": null,
+          "reasoningTokens": null,
+          "cost": null,
+          "semanticRetryCount": 0,
+          "providerAttemptCount": 1,
+          "providerRetryCount": 0,
+          "providerFailureClass": "provider",
+          "providerHttpStatus": 403,
+          "providerErrorType": null,
+          "providerErrorCode": null,
+          "providerErrorSummary": "thinkingmachines/inkling:free is only available on agentic harnesses. Try plugging it into a coding agent or productivity app listed on https://openrouter.ai/apps"
+        }
+      ],
+      "metrics": {
+        "decisions": 2,
+        "providerAttempts": 2,
+        "providerRetries": 0,
+        "providerFailures": {
+          "rate-limit": 0,
+          "timeout": 0,
+          "network": 0,
+          "other": 2
+        },
+        "providerFailureDetails": [
+          {
+            "actor": "Aurelia 1",
+            "model": "openrouter/thinkingmachines/inkling:free",
+            "class": "provider",
+            "httpStatus": 403,
+            "type": null,
+            "code": null,
+            "summary": "thinkingmachines/inkling:free is only available on agentic harnesses. Try plugging it into a coding agent or productivity app listed on https://openrouter.ai/apps"
+          },
+          {
+            "actor": "Aurelia 1",
+            "model": "openrouter/thinkingmachines/inkling:free",
+            "class": "provider",
+            "httpStatus": 403,
+            "type": null,
+            "code": null,
+            "summary": "thinkingmachines/inkling:free is only available on agentic harnesses. Try plugging it into a coding agent or productivity app listed on https://openrouter.ai/apps"
+          }
+        ],
+        "firstAttemptSuccesses": 0,
+        "semanticRetries": 0,
+        "failures": 2,
+        "runtimeRefusals": 0,
+        "passes": 0,
+        "committedModelSpeech": 0,
+        "worldSpeech": 0,
+        "dmSpeech": 0,
+        "groupSpeech": 0,
+        "actions": {},
+        "privateChannels": 0,
+        "actors": 2,
+        "latency": {
+          "medianMs": 48,
+          "p95Ms": 48
+        },
+        "queueWait": {
+          "medianMs": 4,
+          "p95Ms": 4
+        },
+        "tokens": {
+          "input": 0,
+          "output": 0,
+          "total": 0
+        },
+        "cost": 0,
+        "models": [
+          {
+            "model": "openrouter/thinkingmachines/inkling:free",
+            "decisions": 2,
+            "providerAttempts": 2,
+            "providerRetries": 0,
+            "providerFailures": {
+              "rate-limit": 0,
+              "timeout": 0,
+              "network": 0,
+              "other": 2
+            },
+            "firstAttemptSuccesses": 0,
+            "semanticRetries": 0,
+            "passes": 0,
+            "actions": [],
+            "latency": {
+              "medianMs": 48,
+              "p95Ms": 48
+            },
+            "tokens": {
+              "input": 0,
+              "output": 0,
+              "total": 0
+            },
+            "cost": 0
+          }
+        ]
+      },
+      "features": {
+        "publicReassurance": false,
+        "publicThreat": false,
+        "privateReassurance": false,
+        "privatePressure": false,
+        "allySeeking": false,
+        "coalitionProposal": false,
+        "coalitionPrevention": false,
+        "informationSeeking": false,
+        "concealment": false,
+        "bluff": false,
+        "explicitPromise": false,
+        "accusation": false,
+        "apology": false,
+        "compensationOffer": false,
+        "retaliation": false,
+        "pass": true,
+        "thirdPartyOutreach": false
+      },
+      "cascades": [
+        {
+          "id": "msg:2",
+          "state": "completed",
+          "modelRuns": 1,
+          "committedModelMessages": 0,
+          "durationMs": 49,
+          "budgets": {
+            "maxModelRuns": 2,
+            "maxCommittedModelMessages": 2
+          }
+        },
+        {
+          "id": "msg:1",
+          "state": "completed",
+          "modelRuns": 1,
+          "committedModelMessages": 0,
+          "durationMs": 55,
+          "budgets": {
+            "maxModelRuns": 2,
+            "maxCommittedModelMessages": 2
+          }
+        }
+      ],
+      "transcripts": [
+        {
+          "kind": "world",
+          "title": "WORLD",
+          "messages": [
+            {
+              "speaker": "Human",
+              "text": "Protocol preflight: greet the room or pass if you have nothing useful to add."
+            },
+            {
+              "speaker": "Human",
+              "text": "A private DM is available if you have something useful to say. You may contact another participant or pass."
+            }
+          ]
+        }
+      ],
+      "reviewTranscripts": [
+        {
+          "condition": "Condition E / run 1",
+          "transcripts": [
+            {
+              "kind": "world",
+              "title": "WORLD",
+              "messages": [
+                {
+                  "speaker": "Human",
+                  "text": "Protocol preflight: greet the room or pass if you have nothing useful to add."
+                },
+                {
+                  "speaker": "Human",
+                  "text": "A private DM is available if you have something useful to say. You may contact another participant or pass."
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
