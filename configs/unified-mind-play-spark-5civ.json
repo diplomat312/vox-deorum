@@ -1,0 +1,54 @@
+{
+  "name": "unified-mind-play-spark-5civ",
+  "description": "First live unified-mind evaluation: native human versus four Muse Spark 1.2 Contributor civilization minds.",
+  "type": "strategist",
+  "autoPlay": false,
+  "production": "test",
+  "randomizeSeating": false,
+  "llmPlayers": {
+    "1": {
+      "strategist": "simple-strategist",
+      "mind": "unified-mind",
+      "llms": {
+        "unified-mind": "opencode-go/muse-spark-1.2-contributor"
+      },
+      "pacing": {
+        "everyTurns": 2,
+        "interruption": "importantEvents"
+      }
+    },
+    "2": {
+      "strategist": "simple-strategist",
+      "mind": "unified-mind",
+      "llms": {
+        "unified-mind": "opencode-go/muse-spark-1.2-contributor"
+      },
+      "pacing": {
+        "everyTurns": 2,
+        "interruption": "importantEvents"
+      }
+    },
+    "3": {
+      "strategist": "simple-strategist",
+      "mind": "unified-mind",
+      "llms": {
+        "unified-mind": "opencode-go/muse-spark-1.2-contributor"
+      },
+      "pacing": {
+        "everyTurns": 2,
+        "interruption": "importantEvents"
+      }
+    },
+    "4": {
+      "strategist": "simple-strategist",
+      "mind": "unified-mind",
+      "llms": {
+        "unified-mind": "opencode-go/muse-spark-1.2-contributor"
+      },
+      "pacing": {
+        "everyTurns": 2,
+        "interruption": "importantEvents"
+      }
+    }
+  }
+}
