@@ -1,0 +1,6 @@
+{
+  "Condition A": "opencode/muse-spark-1.2-contributor-free",
+  "Condition B": "openrouter/minimax/minimax-m2.7:free",
+  "Condition C": "opencode/mimo-v2.5-free",
+  "Condition D": "openrouter/minimax/minimax-m3:free"
+}

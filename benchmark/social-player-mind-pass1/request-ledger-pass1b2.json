@@ -1,0 +1,11 @@
+{
+  "benchmarkAttempts": 13,
+  "smokeAttempts": 2,
+  "totalAttempts": 15,
+  "entries": [
+    { "model": "opencode/muse-spark-1.2-contributor-free", "smokeAttempts": 2, "benchmarkAttempts": 3, "providerRetries": 0, "semanticRetries": 1, "result": "valid reply after semantic retry" },
+    { "model": "openrouter/minimax/minimax-m2.7:free", "smokeAttempts": 0, "benchmarkAttempts": 2, "providerRetries": 0, "semanticRetries": 0, "result": "two DM actions" },
+    { "model": "opencode/mimo-v2.5-free", "smokeAttempts": 0, "benchmarkAttempts": 6, "providerRetries": 4, "semanticRetries": 0, "rateLimitFailures": 2, "result": "rate limited, no committed model message" },
+    { "model": "openrouter/minimax/minimax-m3:free", "smokeAttempts": 0, "benchmarkAttempts": 2, "providerRetries": 0, "semanticRetries": 0, "result": "two DM actions" }
+  ]
+}
