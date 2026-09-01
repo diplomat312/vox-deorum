@@ -57,11 +57,13 @@ import type {
   VoxRunHandle,
   RootRun,
   ExecutionFrame,
+  UnifiedWakeState,
+  UnifiedWakeType,
 } from "./vox-run.js";
 import winston from "winston";
 
 /** Resolve the unified civilization wake label without importing the agent adapters. */
-function unifiedWakeForAgent(agentName: string): string | undefined {
+function unifiedWakeForAgent(agentName: string): UnifiedWakeType | undefined {
   if (agentName === "unified-mind-strategist") return "strategic";
   if (agentName === "unified-mind-diplomat") return "diplomacy";
   if (agentName === "unified-mind-negotiator") return "deal";
@@ -72,11 +74,13 @@ function unifiedWakeForAgent(agentName: string): string | undefined {
 function unifiedTelemetryAttributes<TParameters extends AgentParameters>(
   agentName: string,
   parameters: TParameters,
+  spanRole: 'wake' | 'step' = 'wake',
 ): Record<string, string> {
   const wake = unifiedWakeForAgent(agentName);
   if (!wake) return {};
   return {
     "mind.mode": "unified-mind",
+    "mind.span_role": spanRole,
     "mind.wake": wake,
     "mind.player_id": String(parameters.playerID),
     "game.id": parameters.gameID,
@@ -218,8 +222,22 @@ export class VoxContext<TParameters extends AgentParameters> {
 
   /** Record a sanitized semantic outcome on the active unified-mind agent span. */
   public setMindOutcome(outcome: string): void {
+    const frame = this.als.getStore();
+    const wake = frame?.wakeId ? frame.root.activeWakes.get(frame.wakeId) : undefined;
+    if (wake) wake.outcome = outcome;
     const span = trace.getActiveSpan();
     if (span) span.setAttribute('mind.outcome', outcome);
+  }
+
+  /** Return sanitized active unified wakes for the live session read model. */
+  public getActiveUnifiedWakes(): Array<{ runId: string; wake: UnifiedWakeType; startedAt: number }> {
+    const active: Array<{ runId: string; wake: UnifiedWakeType; startedAt: number }> = [];
+    for (const run of this.activeRuns.values()) {
+      for (const wake of run.activeWakes.values()) {
+        active.push({ runId: run.id, wake: wake.wake, startedAt: wake.startedAt });
+      }
+    }
+    return active.sort((left, right) => left.startedAt - right.startedAt);
   }
 
   /**
@@ -599,7 +617,13 @@ export class VoxContext<TParameters extends AgentParameters> {
     // running on this same VoxContext) sees its own input. The parent input is restored
     // automatically when this als.run scope exits, so tools that read currentInput later in the
     // parent's tool loop (e.g. close-conversation) still see the parent's EnvoyThread.
-    const childFrame = createExecutionFrame(root, input);
+    const wake = unifiedWakeForAgent(agentName);
+    const wakeId = wake ? uuidv4() : undefined;
+    const wakeState: UnifiedWakeState | undefined = wake
+      ? { wake, startedAt: Date.now() }
+      : undefined;
+    if (wakeId && wakeState) root.activeWakes.set(wakeId, wakeState);
+    const childFrame = createExecutionFrame(root, input, wakeId);
 
     return this.als.run(childFrame, async () => {
       const span = this.tracer.startSpan(`agent.${agentName}`, {
@@ -609,7 +633,7 @@ export class VoxContext<TParameters extends AgentParameters> {
           'agent.name': agentName,
           'player.id': String(params.playerID),
           'game.id': params.gameID,
-          ...unifiedTelemetryAttributes(agentName, params),
+          ...unifiedTelemetryAttributes(agentName, params, 'wake'),
           'agent.input': input ? JSON.stringify(input) : undefined
         }
       });
@@ -619,7 +643,7 @@ export class VoxContext<TParameters extends AgentParameters> {
           // Execute the agent using generateText
           // Get model config - agent's model or default, with overrides applied
           const modelConfig = agent.getModel(params, input, this.modelOverrides);
-          const mindAttributes = unifiedTelemetryAttributes(agentName, params);
+          const mindAttributes = unifiedTelemetryAttributes(agentName, params, 'wake');
           if (Object.keys(mindAttributes).length > 0) {
             span.setAttributes({
               ...mindAttributes,
@@ -685,6 +709,21 @@ export class VoxContext<TParameters extends AgentParameters> {
               inputTokens += stepResult.inputTokens;
               reasoningTokens += stepResult.reasoningTokens;
               outputTokens += stepResult.outputTokens;
+              if (wake && stepResult.toolNames.length > 0) {
+                const toolNames = new Set(stepResult.toolNames);
+                const outcome = wake === 'strategic'
+                  ? toolNames.has('keep-status-quo') ? 'keep-status-quo'
+                    : toolNames.has('set-strategy') || toolNames.has('set-flavors') ? 'updated' : undefined
+                  : wake === 'diplomacy'
+                    ? toolNames.has('pass-diplomacy') ? 'pass'
+                      : toolNames.has('close-conversation') ? 'close'
+                        : toolNames.has('call-negotiator') ? 'deal'
+                          : toolNames.has('send-message') ? 'spoke' : undefined
+                    : toolNames.has('accept-deal') ? 'accepted'
+                      : toolNames.has('reject-deal') ? 'rejected'
+                        : toolNames.has('propose-deal') ? 'proposed' : undefined;
+                if (outcome) wakeState!.outcome = outcome;
+              }
             }
 
             this.logger.info(`Agent execution completed: ${agentName} with ${allSteps.length} steps`);
@@ -714,18 +753,18 @@ export class VoxContext<TParameters extends AgentParameters> {
             // Convert into the output (now async)
             const output = await agent.getOutput(params, input, finalText, this);
             if (!output) {
-              if (Object.keys(mindAttributes).length > 0) span.setAttribute('mind.outcome', 'no-output');
+              if (wakeState && !wakeState.outcome) wakeState.outcome = 'no-output';
               return;
             }
-            if (Object.keys(mindAttributes).length > 0) span.setAttribute('mind.outcome', 'completed');
+            if (wakeState && !wakeState.outcome) wakeState.outcome = 'no-output';
             return agent.postprocessOutput(params, input, output);
           } else {
-            if (Object.keys(mindAttributes).length > 0) span.setAttribute('mind.outcome', 'no-op');
+            if (wakeState) wakeState.outcome = 'no-output';
             span.setStatus({ code: SpanStatusCode.OK, message: 'No system prompt' });
             return undefined;
           }
         } catch (error) {
-          if (unifiedWakeForAgent(agentName)) span.setAttribute('mind.outcome', 'error');
+          if (wakeState) wakeState.outcome = 'error';
           this.logger.error(`Error executing agent ${agentName}!`, error);
           span.recordException(error as Error);
           span.setStatus({
@@ -741,6 +780,10 @@ export class VoxContext<TParameters extends AgentParameters> {
           }
           return undefined;
         } finally {
+          if (wakeState) {
+            if (wakeState.outcome) span.setAttribute('mind.outcome', wakeState.outcome);
+            root.activeWakes.delete(wakeId!);
+          }
           span.end();
         }
       });
@@ -770,7 +813,7 @@ export class VoxContext<TParameters extends AgentParameters> {
     messages: ModelMessage[],
     model: Model,
     callback?: StreamingEventCallback
-  ): Promise<{ messages: ModelMessage[], shouldStop: boolean, finalText?: string, inputTokens: number, reasoningTokens: number, outputTokens: number }> {
+  ): Promise<{ messages: ModelMessage[], shouldStop: boolean, finalText?: string, inputTokens: number, reasoningTokens: number, outputTokens: number, toolNames: string[] }> {
     const stepSpan = this.tracer.startSpan(`agent.${agent.name}.step.${stepCount + 1}`, {
       attributes: {
         'vox.context.id': this.id,
@@ -779,7 +822,7 @@ export class VoxContext<TParameters extends AgentParameters> {
         'step.number': stepCount + 1,
         'player.id': String(parameters.playerID),
         'game.id': parameters.gameID,
-        ...unifiedTelemetryAttributes(agent.name, parameters),
+        ...unifiedTelemetryAttributes(agent.name, parameters, 'step'),
       }
     });
 
@@ -969,7 +1012,10 @@ export class VoxContext<TParameters extends AgentParameters> {
         stepSpan.setAttribute('step.should_stop', shouldStop);
         stepSpan.setStatus({ code: SpanStatusCode.OK });
 
-        return { messages, shouldStop, finalText, inputTokens, reasoningTokens, outputTokens };
+        const toolNames = (stepResponse.toolCalls as Array<{ toolName: string }>)
+          .filter((toolCall) => typeof toolCall.toolName === 'string')
+          .map((toolCall) => toolCall.toolName);
+        return { messages, shouldStop, finalText, inputTokens, reasoningTokens, outputTokens, toolNames };
       } catch (error) {
         stepSpan.recordException(error as Error);
         stepSpan.setStatus({

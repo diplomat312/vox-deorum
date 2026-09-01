@@ -165,6 +165,7 @@ const thread = ref<EnvoyThread | null>(null);
 const currentTurn = ref<number | undefined>(undefined);
 const voicedCiv = ref<string | undefined>(undefined);
 const audienceCiv = ref<string | undefined>(undefined);
+const voicedMind = ref<'unified-mind' | undefined>(undefined);
 const inputMessage = ref('');
 const isStreaming = ref(false);
 const isClosing = ref(false);
@@ -196,6 +197,7 @@ const userLabel = computed(() => {
 });
 /** Label for the voiced (agent) seat: "{agent} of {civ}". */
 const agentLabel = computed(() => {
+  if (voicedMind.value === 'unified-mind') return voicedCiv.value || 'Civilization';
   const name = capitalize(agentName.value) || 'Agent';
   return voicedCiv.value ? `${name} of ${voicedCiv.value}` : name;
 });
@@ -279,6 +281,7 @@ const applyThread = (updated: GetChatResponse) => {
   currentTurn.value = updated.currentTurn;
   voicedCiv.value = updated.voicedCiv;
   audienceCiv.value = updated.audienceCiv;
+  voicedMind.value = updated.voicedMind;
 };
 
 /** Refresh the in-memory conversation from the store (full re-hydrate — entry/mount/propose). */

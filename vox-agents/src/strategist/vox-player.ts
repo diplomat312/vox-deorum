@@ -365,6 +365,11 @@ export class VoxPlayer {
     return this.context?.id;
   }
 
+  /** Return active unified wakes without exposing prompts, model input, or private messages. */
+  getActiveUnifiedWakes(): Array<{ runId: string; wake: 'strategic' | 'diplomacy' | 'deal'; startedAt: number }> {
+    return this.context.getActiveUnifiedWakes();
+  }
+
   /**
    * Execute a strategist decision, narrowing the event window one turn at a
    * time when the model context is exceeded. Returns true once a decision is

@@ -19,7 +19,7 @@ import { StrategistSessionConfig, type Model, type PlayerConfig, isVisualMode, i
 import { obsManager } from "../infra/obs-manager.js";
 import { ProductionController } from "../infra/production-controller.js";
 import { config } from "../utils/config.js";
-import { SessionStatus, PlayerAssignment } from "../types/api.js";
+import { SessionStatus, PlayerAssignment, PlayerRuntimeContext } from "../types/api.js";
 import { SeatingStateManager } from "../utils/game/seating/state.js";
 import type { ObservedSeating, SeatingClaim } from "../utils/game/seating/types.js";
 import { getMetadata, setMetadata } from "../utils/game/metadata.js";
@@ -970,6 +970,20 @@ ${overrideLine}Game.SetAIAutoPlay(${autoPlayTurnLimit}, -1);`
         negotiator: dealAgent,
         negotiatorModel: modelOf(playerConfig, unified ? modelKey : playerConfig.negotiator),
         configSlot
+      };
+    }
+    return result;
+  }
+
+  /** Return active AI seat contexts and in-memory unified wake activity for monitoring. */
+  override getPlayerRuntimeContexts(): Record<number, PlayerRuntimeContext> {
+    const result: Record<number, PlayerRuntimeContext> = {};
+    for (const [playerID, player] of this.activePlayers.entries()) {
+      const contextId = player.getContextId();
+      if (!contextId) continue;
+      result[playerID] = {
+        contextId,
+        activeWakes: player.getActiveUnifiedWakes(),
       };
     }
     return result;

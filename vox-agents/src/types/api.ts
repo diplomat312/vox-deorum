@@ -338,6 +338,8 @@ export interface ChatResponseEnrichment {
   voicedID?: number;
   /** Display name of the voiced civ, e.g. "Bismarck of Germany". */
   voicedCiv?: string;
+  /** Explicit assignment metadata used to preserve unified public identity in the UI. */
+  voicedMind?: 'unified-mind';
   /** Display name of the audience civ (the other endpoint), if any. */
   audienceCiv?: string;
 }
@@ -630,6 +632,60 @@ export interface PlayersSummaryResponse {
   /** Map of actual player ID to their AI assignment (strategist/diplomat/negotiator agents,
    *  their models, and the original config slot). */
   assignments?: Record<number, PlayerAssignment>;
+}
+
+/** One active unified wake exposed by the live runtime, before span export. */
+export interface CivilizationMindActivityWake {
+  runId: string;
+  wake: 'strategic' | 'diplomacy' | 'deal';
+  startedAt: number;
+}
+
+/** Runtime context and sanitized in-memory activity for one AI seat. */
+export interface PlayerRuntimeContext {
+  contextId: string;
+  activeWakes: CivilizationMindActivityWake[];
+}
+
+/** Architecture label used by the civilization mind read model. */
+export type CivilizationMindArchitecture = 'unified-mind' | 'legacy' | 'human' | 'native';
+
+/** Canonical token fields used by the civilization mind read model. */
+export interface CivilizationMindTokens {
+  input?: number;
+  reasoning?: number;
+  output?: number;
+}
+
+/** Completed canonical unified wake metadata shown in the monitoring UI. */
+export interface CivilizationMindWakeRecord {
+  wake: 'strategic' | 'diplomacy' | 'deal';
+  turn?: number;
+  outcome: string;
+  model?: string;
+  durationMs: number;
+  tokens: CivilizationMindTokens;
+  timestamp: number;
+  traceId: string;
+  spanId: string;
+}
+
+/** Civ facts and completed wake history for one civilization mind card. */
+export interface CivilizationMindReadModel {
+  playerId: number;
+  civilization: string;
+  leader: string;
+  architecture: CivilizationMindArchitecture;
+  model?: string;
+  runtimeContextId?: string;
+  activity: { activeWakes: CivilizationMindActivityWake[] };
+  game: { score?: number; currentResearch?: string; activeAgreementCount: number };
+  recentWakes: CivilizationMindWakeRecord[];
+}
+
+/** GET /api/session/minds response. */
+export interface CivilizationMindsResponse {
+  minds: CivilizationMindReadModel[];
 }
 
 /**

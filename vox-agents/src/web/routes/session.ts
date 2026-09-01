@@ -27,16 +27,113 @@ import type {
   PauseSessionResponse,
   ResumeSessionResponse,
   PlayersSummaryResponse,
+  CivilizationMindsResponse,
+  CivilizationMindReadModel,
+  CivilizationMindWakeRecord,
   ErrorResponse,
   PlayersReport
 } from '../../types/api.js';
 import { mcpClient } from '../../utils/models/mcp-client.js';
 import { unwrapMcpResponse } from '../../utils/models/mcp-response.js';
+import { sqliteExporter } from '../../instrumentation.js';
+import { parseSpanAttributes } from '../../utils/telemetry/attributes.js';
+import type { Span } from '../../utils/telemetry/schema.js';
 
 const logger = createLogger('webui:session-routes');
 const warnedLegacyGameModeFiles = new Set<string>();
 
 type SessionConfigPayload = SessionConfig & Partial<Pick<SessionConfigEntry, 'filename' | 'updatedAt'>>;
+
+/** Read only the major player report used by the session monitoring surfaces. */
+async function getMajorPlayers(): Promise<PlayersReport> {
+  const result = await mcpClient.callTool('get-players', {});
+  const playersData = unwrapMcpResponse(result, 'get-players');
+  const allPlayers = (playersData.Result ?? playersData) as PlayersReport;
+  const filteredPlayers: PlayersReport = {};
+  for (const [playerId, playerData] of Object.entries(allPlayers)) {
+    if (typeof playerData === 'object' && playerData !== null && playerData.IsMajor === true) {
+      filteredPlayers[playerId] = playerData;
+    }
+  }
+  return filteredPlayers;
+}
+
+/** Read bounded completed unified wake spans for one live player context. */
+async function getCompletedUnifiedWakes(contextId: string): Promise<CivilizationMindWakeRecord[]> {
+  if (!sqliteExporter.getActiveConnections().includes(contextId)) return [];
+  const db = sqliteExporter.getDatabase(contextId);
+  const rows = await db.selectFrom('spans').selectAll().orderBy('startTime', 'desc').limit(200).execute();
+  const wakes: CivilizationMindWakeRecord[] = [];
+  for (const row of rows) {
+    const span = { ...row, attributes: row.attributes || {} } as Span;
+    const attributes = parseSpanAttributes(span);
+    if (attributes['mind.mode'] !== 'unified-mind' || attributes['mind.span_role'] !== 'wake') continue;
+    const wake = attributes['mind.wake'];
+    if (wake !== 'strategic' && wake !== 'diplomacy' && wake !== 'deal') continue;
+    const input = attributes['tokens.input'];
+    const reasoning = attributes['tokens.reasoning'];
+    const output = attributes['tokens.output'];
+    wakes.push({
+      wake,
+      ...(typeof span.turn === 'number' ? { turn: span.turn } : {}),
+      outcome: typeof attributes['mind.outcome'] === 'string' ? attributes['mind.outcome'] : 'no-output',
+      model: typeof attributes['mind.model'] === 'string'
+        ? attributes['mind.model']
+        : typeof attributes.model === 'string' ? attributes.model : undefined,
+      durationMs: span.durationMs,
+      tokens: {
+        ...(typeof input === 'number' ? { input } : {}),
+        ...(typeof reasoning === 'number' ? { reasoning } : {}),
+        ...(typeof output === 'number' ? { output } : {}),
+      },
+      timestamp: span.startTime,
+      traceId: span.traceId,
+      spanId: span.spanId,
+    });
+  }
+  return wakes.reverse().slice(-60);
+}
+
+/** Build the canonical civilization-mind read model from session/runtime authorities. */
+async function buildCivilizationMinds(session: NonNullable<ReturnType<typeof sessionRegistry.getActive>>): Promise<CivilizationMindReadModel[]> {
+  const players = await getMajorPlayers();
+  const assignments = session.getPlayerAssignments() ?? {};
+  const runtimeContexts = session.getPlayerRuntimeContexts();
+  const ids = new Set<number>([
+    ...Object.keys(players).map(Number),
+    ...Object.keys(assignments).map(Number),
+    ...Object.keys(runtimeContexts).map(Number),
+  ]);
+  return Promise.all([...ids].sort((left, right) => left - right).map(async playerId => {
+    const assignment = assignments[playerId];
+    const runtime = runtimeContexts[playerId];
+    const snapshot = players[String(playerId)];
+    const facts = typeof snapshot === 'object' && snapshot !== null ? snapshot : undefined;
+    const architecture = assignment?.mind === 'unified-mind'
+      ? 'unified-mind' as const
+      : assignment?.strategist === 'human-strategist'
+        ? 'human' as const
+        : assignment ? 'legacy' as const : 'native' as const;
+    const recentWakes = runtime ? await getCompletedUnifiedWakes(runtime.contextId) : [];
+    return {
+      playerId,
+      civilization: facts?.Civilization ?? `Player ${playerId}`,
+      leader: facts?.Leader ?? 'Unknown leader',
+      architecture,
+      ...(assignment?.mindModel ?? assignment?.model ? { model: assignment.mindModel ?? assignment.model } : {}),
+      ...(runtime ? { runtimeContextId: runtime.contextId } : {}),
+      activity: { activeWakes: runtime?.activeWakes ?? [] },
+      game: {
+        ...(typeof facts?.Score === 'number' ? { score: facts.Score } : {}),
+        ...(typeof facts?.CurrentResearch === 'string' ? { currentResearch: facts.CurrentResearch } : {}),
+        activeAgreementCount: Object.values(facts?.DiplomaticDeals ?? {})
+          .flat()
+          .filter(deal => deal.TurnsRemaining > 0).length,
+      },
+      recentWakes,
+    } satisfies CivilizationMindReadModel;
+  }));
+}
 
 /** Returns global LLM definitions stripped to the fields needed for model display and resolution. */
 function sanitizedGlobalLlms(): Record<string, Model | string> {
@@ -481,6 +578,25 @@ export function createSessionRoutes(): Router {
         error: `Failed to get players summary: ${(error as Error).message}`
       };
       res.status(500).json(errorResponse);
+    }
+  });
+
+  /**
+   * GET /api/session/minds
+   * Return one sanitized read model per known civilization seat. Runtime activity comes from live
+   * roots, while history comes only from completed canonical wake spans.
+   */
+  router.get('/minds', async (_req: Request, res: Response<CivilizationMindsResponse | ErrorResponse>) => {
+    const session = sessionRegistry.getActive();
+    if (!session) {
+      res.status(404).json({ error: 'No active session' });
+      return;
+    }
+    try {
+      res.json({ minds: await buildCivilizationMinds(session) });
+    } catch (error) {
+      logger.error('Failed to get civilization minds', { error });
+      res.status(500).json({ error: `Failed to get civilization minds: ${(error as Error).message}` });
     }
   });
 

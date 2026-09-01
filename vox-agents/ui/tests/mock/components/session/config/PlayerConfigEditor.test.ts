@@ -5,7 +5,7 @@ import PlayerConfigEditor from '@/components/session/config/PlayerConfigEditor.v
 import type { PlayerConfig, SelectOption } from '@/utils/types';
 
 const CardStub = defineComponent({ template: '<div><slot name="title" /><slot name="content" /></div>' });
-const ButtonStub = defineComponent({ props: ['label', 'icon'], template: '<button><slot />{{ label }}</button>' });
+const ButtonStub = defineComponent({ props: ['label', 'icon'], emits: ['click'], template: '<button @click="$emit(\'click\')"><slot />{{ label }}</button>' });
 const InputNumberStub = defineComponent({ props: ['modelValue', 'id'], emits: ['update:modelValue'], template: '<input :id="id" :value="modelValue">' });
 const DropdownStub = defineComponent({
   props: ['modelValue', 'options', 'optionLabel', 'optionValue', 'id'],
@@ -34,6 +34,20 @@ function mountEditor(players: Record<number, PlayerConfig>) {
 }
 
 describe('PlayerConfigEditor unified architecture', () => {
+  it('adds a unified AI seat with the first configured model by default', async () => {
+    const wrapper = mountEditor({});
+    await wrapper.find('button').trigger('click');
+    const updates = wrapper.emitted('update:players') ?? [];
+    const updated = updates[updates.length - 1]?.[0] as Record<number, PlayerConfig>;
+
+    expect(updated[0]).toMatchObject({
+      strategist: 'simple-strategist',
+      mind: 'unified-mind',
+      pacing: { everyTurns: 1, interruption: 'none' },
+      llms: { 'unified-mind': 'openrouter/muse-spark' },
+    });
+  });
+
   it('switches a legacy seat to a unified seat with an explicit model', async () => {
     const wrapper = mountEditor({ 0: { strategist: 'simple-strategist', llms: { default: 'old-model' }, pacing: { everyTurns: 2, interruption: 'none' } } });
 

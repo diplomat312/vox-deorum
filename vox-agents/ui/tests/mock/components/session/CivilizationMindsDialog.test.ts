@@ -2,7 +2,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { flushPromises, mount } from '@vue/test-utils';
 import CivilizationMindsDialog from '@/components/session/CivilizationMindsDialog.vue';
 import { api } from '@/api/client';
-import { activeSessions } from '@/stores/telemetry';
 
 vi.mock('vue-router', () => ({ useRouter: () => ({ push: vi.fn() }) }));
 
@@ -25,37 +24,16 @@ const stubs = {
   AgentSelectDialog: { template: '<span />' },
 };
 
-const players = {
-  '0': { Civilization: 'Rome', Leader: 'Augustus', Score: 100, IsMajor: true },
-  '1': { Civilization: 'Greece', Leader: 'Pericles', Score: 90, IsMajor: true },
-  '2': { Civilization: 'Egypt', Leader: 'Cleopatra', Score: 80, IsMajor: true },
-};
-
-const assignments = {
-  0: { strategist: 'unified-mind-strategist', mind: 'unified-mind' as const, mindModel: 'openrouter/minimax-m3', diplomat: 'unified-mind-diplomat', negotiator: 'unified-mind-negotiator', configSlot: 0 },
-  1: { strategist: 'simple-strategist', model: 'openrouter/mimo-v2.5', configSlot: 1 },
-};
-
-const spans = [
-  {
-    contextId: 'game-player-0', turn: 41, traceId: 'trace-1', spanId: 'wake-1', parentSpanId: null,
-    name: 'agent.unified-mind-strategist', startTime: 1_000_000_000, endTime: 1_100_000_000,
-    durationMs: 100, attributes: { 'mind.mode': 'unified-mind', 'mind.wake': 'strategic', 'mind.outcome': 'keep-status-quo', 'mind.model': 'openrouter/minimax-m3', 'usage.input_tokens': 12, 'usage.output_tokens': 8 }, statusCode: 1, statusMessage: null,
-  },
-  {
-    contextId: 'game-player-0', turn: 42, traceId: 'trace-2', spanId: 'wake-2', parentSpanId: null,
-    name: 'agent.unified-mind-diplomat', startTime: 2_000_000_000, endTime: 0,
-    durationMs: 0, attributes: { 'mind.mode': 'unified-mind', 'mind.wake': 'diplomacy', 'mind.outcome': 'spoke', 'mind.model': 'openrouter/minimax-m3' }, statusCode: 0, statusMessage: null,
-  },
-] as never;
+const minds = [
+  { playerId: 0, civilization: 'Rome', leader: 'Augustus', architecture: 'unified-mind', model: 'openrouter/minimax-m3', runtimeContextId: 'game-player-0', activity: { activeWakes: [{ runId: 'run-1', wake: 'diplomacy', startedAt: 2_000 }] }, game: { score: 100, activeAgreementCount: 0 }, recentWakes: [{ wake: 'strategic', turn: 41, outcome: 'keep-status-quo', model: 'openrouter/minimax-m3', durationMs: 100, tokens: { input: 12, output: 8 }, timestamp: 1_000, traceId: 'trace-1', spanId: 'wake-1' }, { wake: 'diplomacy', turn: 42, outcome: 'spoke', model: 'openrouter/minimax-m3', durationMs: 100, tokens: {}, timestamp: 2_000, traceId: 'trace-2', spanId: 'wake-2' }] },
+  { playerId: 1, civilization: 'Greece', leader: 'Pericles', architecture: 'legacy', model: 'openrouter/mimo-v2.5', activity: { activeWakes: [] }, game: { score: 90, activeAgreementCount: 0 }, recentWakes: [] },
+  { playerId: 2, civilization: 'Egypt', leader: 'Cleopatra', architecture: 'native', activity: { activeWakes: [] }, game: { score: 80, activeAgreementCount: 0 }, recentWakes: [] },
+];
 
 describe('CivilizationMindsDialog', () => {
   beforeEach(() => {
     vi.useFakeTimers();
-    activeSessions.value = [];
-    vi.spyOn(api, 'getPlayersSummary').mockResolvedValue({ players: players as never, assignments });
-    vi.spyOn(api, 'getTelemetrySessions').mockResolvedValue({ sessions: [{ sessionId: 'game-player-0', playerID: '0' }] });
-    vi.spyOn(api, 'getSessionSpans').mockResolvedValue({ spans });
+    vi.spyOn(api, 'getCivilizationMinds').mockResolvedValue({ minds: minds as never });
   });
 
   it('shows unified, legacy, and native seats with authoritative wake state', async () => {
@@ -82,7 +60,7 @@ describe('CivilizationMindsDialog', () => {
     expect(wrapper.text()).toContain('Strategy');
     expect(wrapper.text()).toContain('Diplomacy');
     expect(wrapper.text()).toContain('Passed');
-    expect(wrapper.text()).toContain('Open deals');
+    expect(wrapper.text()).toContain('Active agreements');
     expect(wrapper.find('details').exists()).toBe(true);
     expect(wrapper.find('details').attributes('open')).toBeUndefined();
   });

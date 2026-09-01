@@ -19,7 +19,7 @@ The API splits into four groups:
 
 | Group | Where the code lives | What it does |
 | --- | --- | --- |
-| Session control | `src/web/routes/session.ts` | List, save, and delete the session configs in `configs/`; start a [strategist session](strategist.md) in the background; query its status from the session registry; stop it gracefully; and summarize the players in the running game with their AI assignments. |
+| Session control | `src/web/routes/session.ts` | List, save, and delete the session configs in `configs/`; start a [strategist session](strategist.md) in the background; query its status from the session registry; stop it gracefully; and expose the canonical `/api/session/minds` read model for live civilization identity, runtime activity, game facts, and bounded completed wake history. |
 | Agent chat | `src/web/chat/` | List registered agents, create chat threads, and run the unified `POST /api/agents/message` endpoint, which executes the thread's agent and streams text, reasoning, tool-call, and tool-result events back as SSE. |
 | Telemetry | `src/web/routes/telemetry.ts` | Discover telemetry databases on disk, accept uploads, list the contexts currently exporting spans, stream a live context's new spans over SSE, and page through traces and spans of stored databases. See [observability.md](observability.md) for what these spans contain. |
 | Config | `src/web/routes/config.ts` | Read and write `config.json` (model definitions, agent-model mappings) and the API keys in `.env`, diffing against the defaults in `src/utils/config/defaults.ts` and reloading the environment on save. |

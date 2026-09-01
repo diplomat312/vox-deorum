@@ -68,10 +68,12 @@ function addPlayer(): void {
   const startingId = props.autoPlay ? -1 : 0;
   const nextId = Math.max(startingId, ...Object.keys(props.players).map(Number)) + 1;
   const players = { ...props.players };
+  const defaultModel = props.modelOptions[0]?.value || '';
   players[nextId] = {
-    strategist: props.strategistOptions[0]?.value || 'simple-strategist',
+    strategist: 'simple-strategist',
+    mind: 'unified-mind',
     pacing: { everyTurns: 1, interruption: 'none' },
-    llms: {}
+    llms: { 'unified-mind': defaultModel }
   };
   emit('update:players', players);
   selectedPlayerId.value = nextId;

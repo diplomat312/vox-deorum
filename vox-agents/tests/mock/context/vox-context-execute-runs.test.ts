@@ -167,6 +167,11 @@ class DiplomacyOnlyAgent extends VoxAgent<StrategistParameters> {
   override stopCheck(): boolean { return true; }
 }
 
+/** Minimal unified wake agent used to verify root-scoped live activity and semantic outcomes. */
+class UnifiedWakeAgent extends StepAgent {
+  constructor() { super('unified-mind-strategist'); }
+}
+
 beforeAll(() => {
   agentRegistry.register(new StepAgent('test-step-a') as any);
   agentRegistry.register(new StepAgent('test-step-b') as any);
@@ -176,6 +181,7 @@ beforeAll(() => {
   agentRegistry.register(new RepeatNudgeAgent() as any);
   agentRegistry.register(new NestingAgent('test-nesting', 'test-step-child') as any);
   agentRegistry.register(new DiplomacyOnlyAgent('test-diplomacy-only') as any);
+  agentRegistry.register(new UnifiedWakeAgent() as any);
 });
 
 beforeEach(() => {
@@ -184,6 +190,28 @@ beforeEach(() => {
 });
 
 describe('VoxContext.execute token accounting', () => {
+  it('tracks one root-scoped unified wake before export and isolates concurrent outcomes', async () => {
+    const ctx = new VoxContext<StrategistParameters>({}, 'exec-unified-activity');
+    const seen: Array<{ turn: number | undefined; wakes: number }> = [];
+    const gate = deferred();
+    stc.mockImplementation(async () => {
+      seen.push({ turn: ctx.currentParameters?.turn, wakes: ctx.getActiveUnifiedWakes().length });
+      if (seen.length === 2) gate.resolve();
+      await gate.promise;
+      ctx.setMindOutcome(ctx.currentParameters?.turn === 1 ? 'pass' : 'updated');
+      return fakeResult();
+    });
+
+    await Promise.all([
+      ctx.withRun({ parameters: makeStrategistParameters({ turn: 1 }) }, () => ctx.execute('unified-mind-strategist', {})),
+      ctx.withRun({ parameters: makeStrategistParameters({ turn: 2 }) }, () => ctx.execute('unified-mind-strategist', {})),
+    ]);
+
+    expect(seen).toHaveLength(2);
+    expect(seen.every(item => item.wakes === 2)).toBe(true);
+    expect(ctx.getActiveUnifiedWakes()).toEqual([]);
+  });
+
   it('passes the required tool choice through for provider middleware to adapt', async () => {
     const ctx = new VoxContext<StrategistParameters>({}, 'exec-codex-tool-choice');
     const base = makeStrategistParameters();

@@ -869,4 +869,40 @@ describe('session routes', () => {
       expect(res.body).toHaveProperty('error');
     });
   });
+
+  describe('GET /api/session/minds', () => {
+    it('returns 404 when there is no active session', async () => {
+      vi.spyOn(sessionRegistry, 'getActive').mockReturnValue(undefined);
+      const res = await request(app).get('/api/session/minds');
+      expect(res.status).toBe(404);
+    });
+
+    it('returns mixed architecture cards without requiring telemetry export', async () => {
+      vi.spyOn(sessionRegistry, 'getActive').mockReturnValue({
+        id: 's1',
+        getPlayerAssignments: () => ({
+          0: { strategist: 'unified-mind', mind: 'unified-mind', mindModel: 'model-a', configSlot: 0 },
+          1: { strategist: 'simple-strategist', model: 'model-b', configSlot: 1 },
+        }),
+        getPlayerRuntimeContexts: () => ({
+          0: { contextId: 'game-player-0', activeWakes: [{ runId: 'run-1', wake: 'strategic', startedAt: 10 }] },
+        }),
+      } as never);
+      const mcp = installMockMcpClient();
+      mcp.respondWith('get-players', structuredResult({
+        '0': { IsMajor: true, Civilization: 'Rome', Leader: 'Caesar', Score: 10 },
+        '1': { IsMajor: true, Civilization: 'Greece', Leader: 'Pericles', Score: 9 },
+        '2': { IsMajor: true, Civilization: 'Egypt', Leader: 'Cleopatra', Score: 8 },
+      }));
+
+      const res = await request(app).get('/api/session/minds');
+
+      expect(res.status).toBe(200);
+      expect(res.body.minds).toHaveLength(3);
+      expect(res.body.minds[0]).toMatchObject({ architecture: 'unified-mind', runtimeContextId: 'game-player-0' });
+      expect(res.body.minds[0].activity.activeWakes).toHaveLength(1);
+      expect(res.body.minds[1]).toMatchObject({ architecture: 'legacy', model: 'model-b' });
+      expect(res.body.minds[2]).toMatchObject({ architecture: 'native' });
+    });
+  });
 });

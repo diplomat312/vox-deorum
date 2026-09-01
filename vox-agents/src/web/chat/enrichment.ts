@@ -87,10 +87,12 @@ export function displayIdentity(identity: ParticipantIdentity | undefined): stri
 /** Build current-turn and participant display enrichment for a chat response. */
 export function enrichChat(thread: EnvoyThread): ChatResponseEnrichment {
   const context = contextRegistry.get<StrategistParameters>(thread.contextId);
+  const assignment = getActiveAssignments()?.[thread.agent];
   return {
     currentTurn: currentTurnOf(context),
     voicedID: thread.agent,
     voicedCiv: displayIdentity(identityOf(thread, thread.agent)),
     audienceCiv: displayIdentity(identityOf(thread, audienceID(thread))),
+    ...(assignment?.mind === 'unified-mind' ? { voicedMind: 'unified-mind' as const } : {}),
   };
 }

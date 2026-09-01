@@ -150,4 +150,13 @@ describe('chat enrichment', () => {
       audienceCiv: 'Caesar of Rome',
     });
   });
+
+  it('marks a unified voiced seat explicitly for the public chat identity', () => {
+    vi.spyOn(contextRegistry, 'get').mockReturnValue(makeContext({ turn: 9 }) as never);
+    vi.spyOn(sessionRegistry, 'getActive').mockReturnValue({
+      getPlayerAssignments: () => ({ 3: { strategist: 'unified-mind', mind: 'unified-mind', configSlot: 3 } }),
+    } as never);
+
+    expect(enrichChat(makeThread()).voicedMind).toBe('unified-mind');
+  });
 });

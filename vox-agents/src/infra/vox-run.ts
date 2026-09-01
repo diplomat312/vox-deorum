@@ -16,6 +16,16 @@ export interface ExecuteTokenOutput {
   outputTokens: number;
 }
 
+/** The supported unified civilization wake types. */
+export type UnifiedWakeType = 'strategic' | 'diplomacy' | 'deal';
+
+/** Runtime-only state for one active unified civilization wake. */
+export interface UnifiedWakeState {
+  readonly wake: UnifiedWakeType;
+  readonly startedAt: number;
+  outcome?: string;
+}
+
 /** Optional controls for a single agent execution. */
 export interface ExecuteOptions {
   /** Re-throw non-context-length agent errors after recording telemetry. */
@@ -61,6 +71,8 @@ export interface RootRun<TParameters extends AgentParameters> {
   streamProgress?: (message: string) => void;
   /** Cumulative tokens for all executions nested in this run. */
   readonly tokens: ExecuteTokenOutput;
+  /** Active unified wakes owned by this root, kept separate for runtime activity reporting. */
+  readonly activeWakes: Map<string, UnifiedWakeState>;
   /** Set once the run callback settles; makes abort/cleanup idempotent. */
   settled: boolean;
 }
@@ -77,6 +89,8 @@ export interface RootRun<TParameters extends AgentParameters> {
 export interface ExecutionFrame<TParameters extends AgentParameters> {
   readonly root: RootRun<TParameters>;
   readonly input: unknown;
+  /** The unified wake owned by this execution, if this frame is a unified wake. */
+  readonly wakeId?: string;
   /** Per-execution timeout-refresh callback, rebound per model call by the concurrency wrapper. */
   timeoutRefresh: () => void;
 }
@@ -158,6 +172,7 @@ export function createRootRun<TParameters extends AgentParameters>(
     abortController: new AbortController(),
     streamProgress: options.streamProgress,
     tokens: { inputTokens: 0, reasoningTokens: 0, outputTokens: 0 },
+    activeWakes: new Map(),
     settled: false,
   };
 }
@@ -165,9 +180,10 @@ export function createRootRun<TParameters extends AgentParameters>(
 /** Build an execution frame for a root + input, with a fresh per-execution timeout-refresh slot. */
 export function createExecutionFrame<TParameters extends AgentParameters>(
   root: RootRun<TParameters>,
-  input: unknown
+  input: unknown,
+  wakeId?: string,
 ): ExecutionFrame<TParameters> {
-  return { root, input, timeoutRefresh: () => {} };
+  return { root, input, wakeId, timeoutRefresh: () => {} };
 }
 
 /** Abort one root run (idempotent). */

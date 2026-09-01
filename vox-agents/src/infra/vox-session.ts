@@ -7,7 +7,7 @@
 
 import { v4 as uuidv4 } from 'uuid';
 import type { SessionConfig } from '../types/config.js';
-import type { PlayerAssignment, SessionState, SessionStatus } from '../types/api.js';
+import type { PlayerAssignment, PlayerRuntimeContext, SessionState, SessionStatus } from '../types/api.js';
 
 /**
  * Abstract base class for all Vox session types.
@@ -69,6 +69,11 @@ export abstract class VoxSession<TConfig extends SessionConfig = SessionConfig> 
   /** Return the strategist's per-seat agent assignments when the session provides them. */
   getPlayerAssignments(): Record<number, PlayerAssignment> | undefined {
     return undefined;
+  }
+
+  /** Return live player runtime contexts for read-only monitoring surfaces. */
+  getPlayerRuntimeContexts(): Record<number, PlayerRuntimeContext> {
+    return {};
   }
 
   /**

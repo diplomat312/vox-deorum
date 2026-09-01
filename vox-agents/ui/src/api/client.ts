@@ -25,6 +25,7 @@ import type {
   PauseSessionResponse,
   ResumeSessionResponse,
   PlayersSummaryResponse,
+  CivilizationMindsResponse,
   SessionConfig,
   // Config types
   ConfigResponse,
@@ -425,6 +426,11 @@ class ApiClient {
    */
   async getPlayersSummary(): Promise<PlayersSummaryResponse> {
     return this.fetchJson<PlayersSummaryResponse>(`${this.baseUrl}/api/session/players-summary`);
+  }
+
+  /** Get the canonical civilization-mind monitoring read model. */
+  async getCivilizationMinds(): Promise<CivilizationMindsResponse> {
+    return this.fetchJson<CivilizationMindsResponse>(`${this.baseUrl}/api/session/minds`);
   }
 
   // ============= Global Config API Methods =============

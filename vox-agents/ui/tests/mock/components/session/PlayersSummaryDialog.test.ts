@@ -3,6 +3,8 @@ import { flushPromises, mount } from '@vue/test-utils';
 import PlayersSummaryDialog from '@/components/session/PlayersSummaryDialog.vue';
 import { api } from '@/api/client';
 
+vi.mock('vue-router', () => ({ useRouter: () => ({ push: vi.fn() }) }));
+
 const stubs = {
   Dialog: {
     props: ['visible'],
@@ -22,14 +24,8 @@ beforeEach(() => {
 });
 
 describe('PlayersSummaryDialog', () => {
-  it('loads active telemetry sessions while visible and releases polling when closed', async () => {
-    vi.spyOn(api, 'getPlayersSummary').mockResolvedValue({
-      players: { '0': { Civilization: 'Rome', Leader: 'Augustus', IsMajor: true } },
-      assignments: {}
-    });
-    const telemetryRequest = vi.spyOn(api, 'getTelemetrySessions').mockResolvedValue({
-      sessions: [{ sessionId: 'telemetry-1', playerID: '0' }]
-    });
+  it('loads the canonical civilization-mind read model and releases polling when closed', async () => {
+    const mindsRequest = vi.spyOn(api, 'getCivilizationMinds').mockResolvedValue({ minds: [] });
     const wrapper = mount(PlayersSummaryDialog, {
       props: { visible: false },
       global: { stubs }
@@ -37,12 +33,12 @@ describe('PlayersSummaryDialog', () => {
 
     await wrapper.setProps({ visible: true });
     await flushPromises();
-    expect(telemetryRequest).toHaveBeenCalledTimes(1);
+    expect(mindsRequest).toHaveBeenCalledTimes(1);
     expect(wrapper.text()).toContain('Civilization Minds');
 
     await wrapper.setProps({ visible: false });
     await vi.advanceTimersByTimeAsync(10_000);
-    expect(telemetryRequest).toHaveBeenCalledTimes(1);
+    expect(mindsRequest).toHaveBeenCalledTimes(1);
 
     wrapper.unmount();
   });
