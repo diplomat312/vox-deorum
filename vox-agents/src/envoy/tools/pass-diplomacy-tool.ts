@@ -19,6 +19,9 @@ export function createPassDiplomacyTool(
     name: "pass-diplomacy",
     description: "Take no diplomatic action for this wake. Do not speak and do not close the conversation.",
     inputSchema: z.object({}) as z.ZodType<DiplomacyPassInput>,
-    execute: async () => "No diplomatic action taken.",
+    execute: async () => {
+      context.setMindOutcome("pass");
+      return "No diplomatic action taken.";
+    },
   }, context);
 }

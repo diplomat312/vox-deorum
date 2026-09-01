@@ -127,11 +127,6 @@ export class StrategistSession extends VoxSession<StrategistSessionConfig> {
       this.onStateChange('starting');
       sessionRegistry.register(this);
 
-      if (this.config.nativeHumanPlayer !== undefined
-        && (!Number.isInteger(this.config.nativeHumanPlayer) || this.config.nativeHumanPlayer < 0)) {
-        throw new Error('nativeHumanPlayer must be a non-negative integer when configured.');
-      }
-
       // Verify every model reference reachable through each configured seat before launching Civ V.
       for (const playerConfig of Object.values(this.config.llmPlayers)) {
         assertUnifiedMindConfig(playerConfig);
@@ -1045,7 +1040,6 @@ ${overrideLine}Game.SetAIAutoPlay(${autoPlayTurnLimit}, -1);`
   private computePlayerCount(luaScript: string): number | undefined {
     if (this.config.gameMode !== 'start' || luaScript !== 'StartGame.lua') return undefined;
     const playerIds = Object.keys(this.config.llmPlayers).map(Number);
-    if (this.config.nativeHumanPlayer !== undefined) playerIds.push(this.config.nativeHumanPlayer);
     if (playerIds.length === 0) return undefined;
     return Math.max(...playerIds) + 1;
   }

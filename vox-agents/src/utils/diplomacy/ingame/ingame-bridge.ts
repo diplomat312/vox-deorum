@@ -26,6 +26,7 @@ import type {
   ChatErrorEvent,
   ChatMessageEvent,
   ChatStreamSink,
+  ChatTurnOutcome,
   EnvoyThread,
 } from "../../../types/index.js";
 import { civIdentity } from "../../../web/chat/enrichment.js";
@@ -387,6 +388,8 @@ export class IngameChatSink implements ChatStreamSink {
   readonly terminalRows: TranscriptPushMessage[] = [];
   /** Which terminal event arrived, or undefined when the turn has not reported one. */
   terminal?: "done" | "error";
+  /** Semantic result of the completed turn, including a non-spoken deliberate pass. */
+  outcome?: ChatTurnOutcome;
   /** The failure text of a post-commit failure, for callers that want to report it. */
   failure?: string;
 
@@ -447,6 +450,7 @@ export class IngameChatSink implements ChatStreamSink {
   done(data: ChatDoneEvent): void {
     if (this.terminal) return;
     this.terminal = "done";
+    this.outcome = data.outcome;
     this.retain(this.terminalRows, data.rows);
   }
 
@@ -953,10 +957,12 @@ export class IngameBridge {
     }
     await sink.settle();
     if (sink.terminal === "error") return;
-    if (sink.terminal === "done" && sink.terminalRows.length > 0) {
+    if (sink.terminal === "done" && (sink.outcome === "pass" || sink.terminalRows.length > 0)) {
       port.queueStatus("idle");
       await port.settle();
-      await this.notifyOutcome(event, caller, guard, sink.terminalRows);
+      if (sink.outcome !== "pass") {
+        await this.notifyOutcome(event, caller, guard, sink.terminalRows);
+      }
       return;
     }
     port.queueStatus("error", "The envoy could not settle on a response. Please try again.");

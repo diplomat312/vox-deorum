@@ -93,6 +93,30 @@ const gameSwitched = (s: StrategistSession, turn: number, gameID = 'G1') =>
 const luaScripts = () => mcp.calls('lua-executor').map((c) => String(c.args.Script));
 
 describe('handleGameSwitched autoplay reconciliation', () => {
+  it('models the native-play sample as seat 0 human plus four unified AI seats', () => {
+    const config = {
+      name: 'native-play',
+      type: 'strategist',
+      production: 'none',
+      autoPlay: false,
+      gameMode: 'start',
+      llmPlayers: {
+        1: { strategist: 'simple-strategist', mind: 'unified-mind', llms: { 'unified-mind': 'model-a' } },
+        2: { strategist: 'simple-strategist', mind: 'unified-mind', llms: { 'unified-mind': 'model-b' } },
+        3: { strategist: 'simple-strategist', mind: 'unified-mind', llms: { 'unified-mind': 'model-c' } },
+        4: { strategist: 'simple-strategist', mind: 'unified-mind', llms: { 'unified-mind': 'model-a' } },
+      },
+    } as any;
+    const s = new StrategistSession(config, {} as never, null);
+
+    expect((s as any).computePlayerCount('StartGame.lua')).toBe(5);
+    expect(Object.keys(config.llmPlayers)).toEqual(['1', '2', '3', '4']);
+    expect(config.llmPlayers[0]).toBeUndefined();
+    expect(Object.values(config.llmPlayers).map((player: any) => player.mind))
+      .toEqual(['unified-mind', 'unified-mind', 'unified-mind', 'unified-mind']);
+    expect(config.llmPlayers[1].strategist).not.toBe('human-strategist');
+  });
+
   it('interactive load/takeover: clears the override, cancels autoplay, returns seat 0', async () => {
     const s = session(false);
     await gameSwitched(s, 214);

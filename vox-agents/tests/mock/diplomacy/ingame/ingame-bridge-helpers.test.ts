@@ -401,7 +401,7 @@ describe("IngameChatSink", () => {
     const { sink, rows, order, settled } = sinkWithClock();
 
     sink.connected({ sessionId: "s", rows: [durable(10, "text", 1)] });
-    sink.done({ sessionId: "s", messageCount: 2, deals: [], rows: [durable(11), durable(12, "deal-proposal")] });
+    sink.done({ sessionId: "s", messageCount: 2, deals: [], rows: [durable(11), durable(12, "deal-proposal")], outcome: "deal" });
     await sink.settle();
 
     expect(order).toEqual(["rows", "rows"]);
@@ -437,7 +437,7 @@ describe("IngameChatSink", () => {
   it("keeps the first terminal event and ignores a second one", () => {
     const { sink, rows } = sinkWithClock();
 
-    sink.done({ sessionId: "s", messageCount: 1, deals: [], rows: [durable(11)] });
+    sink.done({ sessionId: "s", messageCount: 1, deals: [], rows: [durable(11)], outcome: "spoken" });
     sink.error({ message: "late", rows: [durable(12)] });
 
     expect(sink.terminal).toBe("done");

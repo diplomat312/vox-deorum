@@ -59,7 +59,7 @@ When you save, the wizard silently applies the recommended settings Vox Deorum k
 
 A mid-tier model from your chosen provider is a sensible starting point. Move up or down once you've seen how it plays.
 
-For a ready-made mixed-model Civilization V game, use the unified civilization mind examples in the developer guide. The native-play example lets you play normally while four AI civilizations use separate unified model assignments. The direct example uses the strategic influence panel instead of normal native play.
+For a ready-made mixed-model Civilization V game, use the unified civilization mind examples in the developer guide. The native-play example reserves the runtime's supported native human seat, seat 0, while four AI civilizations use separate unified model assignments. The direct example uses the strategic influence panel instead of normal native play.
 
 ## Controlling cost
 

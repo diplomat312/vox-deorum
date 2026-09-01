@@ -105,6 +105,9 @@ export interface ChatErrorEvent {
   rows: TranscriptPushMessage[];
 }
 
+/** Semantic result of a successfully completed chat turn. */
+export type ChatTurnOutcome = 'spoken' | 'deal' | 'close' | 'pass' | 'unknown';
+
 /**
  * Data sent when a committed turn completes successfully.
  *
@@ -117,6 +120,7 @@ export interface ChatDoneEvent {
   messageCount: number;
   deals: DealTranscriptMessage[];
   rows: TranscriptPushMessage[];
+  outcome: ChatTurnOutcome;
 }
 
 /** Transport-neutral output surface for a chat turn. */

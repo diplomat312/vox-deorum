@@ -112,8 +112,24 @@ describe("unified civilization mind", () => {
     const dealSystem = await negotiator.getSystem(parameters, { thread, briefing: "", activeProposal: undefined }, {} as never);
 
     expect(dealSystem).toContain(buildUnifiedMindCanonicalIdentity(parameters));
-    expect(dealSystem).toContain("binding terminal action");
+    expect(dealSystem).toContain("binding deal action");
+    expect(dealSystem).toContain("Give");
+    expect(dealSystem).toContain("Receive");
+    expect(dealSystem).toContain("Gold 100");
+    expect(dealSystem).toContain("Iron 2");
+    expect(dealSystem).toContain("Third-Party War on <Civilization>");
+    expect(dealSystem).toContain("opening proposal or counter");
     expect(dealSystem).not.toMatch(/serving your leader|behind the diplomat|negotiator decides on its own|the diplomat decides/i);
+  });
+
+  it("keeps another unified seat independent while resolving its own model", () => {
+    const secondSeat: PlayerConfig = {
+      ...unifiedPlayer,
+      llms: { "unified-mind": { provider: "openrouter", name: "mimo-v2.5" } },
+    };
+    const negotiator = agentRegistry.get("unified-mind-negotiator")!;
+    expect(negotiator.getModel(parameters, { thread, briefing: "", activeProposal: undefined }, secondSeat.llms!).name)
+      .toBe("mimo-v2.5");
   });
 
   it("inherits the unified model for advisory child wakes and rejects missing assignments", () => {

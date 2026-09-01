@@ -25,6 +25,7 @@ import { ensureGameState } from '../../strategist/strategy-parameters.js';
 import type {
   ChatMessageRequest,
   ChatStreamSink,
+  ChatTurnOutcome,
   ChatTurnRejection,
   EnvoyThread,
   StreamingEventCallback,
@@ -169,6 +170,26 @@ function dealRowsOf(rows: TranscriptPushMessage[]): DealTranscriptMessage[] {
   return rows.filter(isDealRow) as DealTranscriptMessage[];
 }
 
+/** Return whether an assistant trajectory contains a valid named tool call. */
+function hasToolCall(messages: EnvoyThread['messages'], toolName: string): boolean {
+  return messages.some(({ message }) => {
+    if (message.role !== 'assistant' || !Array.isArray(message.content)) return false;
+    return message.content.some((part) => part.type === 'tool-call' && part.toolName === toolName);
+  });
+}
+
+/** Classify a completed turn from explicit terminal actions and authoritative durable rows. */
+function classifyTurnOutcome(
+  messages: EnvoyThread['messages'],
+  rows: TranscriptPushMessage[],
+): ChatTurnOutcome {
+  if (hasToolCall(messages, 'pass-diplomacy')) return 'pass';
+  if (rows.some(isDealRow) || hasToolCall(messages, 'call-negotiator')) return 'deal';
+  if (rows.some((row) => row.MessageType === 'close') || hasToolCall(messages, 'close-conversation')) return 'close';
+  if (rows.some((row) => row.MessageType === 'text')) return 'spoken';
+  return 'unknown';
+}
+
 /**
  * Run a chat request through validation, durable commit, agent execution, and terminal cleanup.
  * A returned rejection is always pre-stream. Undefined means the request committed and emitted.
@@ -218,7 +239,7 @@ export async function runChatTurn(
    * rows in at the reply boundary (ahead of the normalized reply, matching the durable order), and
    * report them.
    */
-  const emitDone = (): void => {
+  const emitDone = (outcome: ChatTurnOutcome): void => {
     if (terminal) return;
     terminal = 'done';
     const rows = turn.terminalRows();
@@ -233,6 +254,7 @@ export async function runChatTurn(
       messageCount: thread.messages.length,
       deals: dealRowsOf(rows),
       rows,
+      outcome,
     });
   };
 
@@ -342,7 +364,8 @@ export async function runChatTurn(
       // commits any close the diplomat staged mid-run last of all. A staged close is discarded
       // automatically if this turn takes the error path instead.
       await turn.complete();
-      emitDone();
+      const rows = turn.terminalRows();
+      emitDone(classifyTurnOutcome(replySlice, rows));
     });
   } catch (error) {
     logger.error('Failed to execute agent', { error });

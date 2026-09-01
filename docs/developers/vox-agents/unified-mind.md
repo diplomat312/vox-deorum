@@ -4,7 +4,7 @@ Vox Deorum supports an additive `unified-mind` mode for AI seats. A unified seat
 
 ## Play Civ V against unified minds
 
-Use [configs/unified-mind-play-5civ.json](../../../configs/unified-mind-play-5civ.json) for normal native Civ V play. It starts five civilizations, leaves seat 4 for the native human player, and gives seats 0 through 3 separate unified civilization minds. The configured reference models are MiniMax M3 through OpenRouter, MiMo V2.5 through OpenCode, Muse Spark 1.2 Contributor through OpenCode Go, and MiniMax M3 again.
+Use [configs/unified-mind-play-5civ.json](../../../configs/unified-mind-play-5civ.json) for normal native Civ V play. Seat 0 is the native human seat and is intentionally absent from `llmPlayers`; seats 1 through 4 are separate unified civilization minds. The configured reference models are MiniMax M3 through OpenRouter, MiMo V2.5 through OpenCode, Muse Spark 1.2 Contributor through OpenCode Go, and MiniMax M3 again.
 
 From the repository root, run:
 

@@ -305,9 +305,6 @@ export interface StrategistSessionConfig extends SessionConfig {
   /** Map of player IDs to their LLM configurations */
   llmPlayers: Record<number, PlayerConfig>;
 
-  /** Optional native Civ seat for a normal human player outside the Vox player map. */
-  nativeHumanPlayer?: number;
-
   /**
    * Controls randomization of the mapping between config slots and actual game
    * player indices.

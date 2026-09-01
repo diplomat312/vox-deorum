@@ -133,6 +133,20 @@ export class Negotiator extends VoxAgent<StrategistParameters, NegotiatorInput, 
     };
   }
 
+  /** Return the politically neutral deal-authoring contract shared by legacy and unified wakes. */
+  protected getDealMechanicsPrompt(): string {
+    return `# Deal mechanics
+- Call EXACTLY ONE terminal tool after gathering sufficient information.
+- Use \`accept-deal\` to accept the current deal exactly as offered.
+- Use \`reject-deal\` to decline the current deal exactly as offered.
+- Use \`propose-deal\` to author an opening proposal or counter. Include a one-sentence outward \`Message\`.
+- In \`propose-deal\`, \`Give\` lists what our civilization gives the counterpart and \`Receive\` lists what the counterpart gives our civilization. Each side is one term string or a list of plain term strings.
+- Use the exact term names shown in the Tradable Terms menu. Append a number only for Gold, Gold Per Turn, or a resource quantity, such as "Gold 100" or "Iron 2".
+- Joint wars require a third-party civilization name from the menu. "${PROMISE_METADATA.COOP_WAR.label} on <Civilization>" starts after a short countdown; "Third-Party War on <Civilization>" starts immediately.
+- In-game valuation and AI evaluation are advisory evidence. The binding decision must follow this civilization's current strategy, relationships, and commitments.
+- Opening proposals and counters must use only legal terms from the supplied menu and must respond to the current proposal state.`;
+  }
+
   public async getSystem(
     parameters: StrategistParameters,
     _input: NegotiatorInput,
@@ -141,33 +155,17 @@ export class Negotiator extends VoxAgent<StrategistParameters, NegotiatorInput, 
     const leader = parameters.metadata?.YouAre?.Leader ?? "your leader";
     const civName = parameters.metadata?.YouAre?.Name ?? "your civilization";
 
-    return `
-You are the deal negotiator for ${civName}, serving ${leader}. You negotiate and decide ${civName}'s diplomatic deals and terms.
-
-# Expectations
+    return [`You are the deal negotiator for ${civName}, serving ${leader}. You negotiate and decide ${civName}'s diplomatic deals and terms.`,
+      `# Expectations
 - Reason from ${civName}'s strategy, persona, and national interest, not the counterpart's convenience. Drive a hard but realistic bargain.
 - You work behind the diplomat, who speaks to the other civilization and relays you a briefing of the conversational context.
-- There is no user (to respond to), so you ALWAYS and ONLY properly call tools to convey your decisions.
-- Your context includes a fresh inspection and evaluation of the deal on the table (if exists) and all tradable items. 
-- In-game AI's evaluation of deal terms are ADVISORY only. You will make independent judgment based on the leader's intention.
-- You always use the correct tool-calling format for each tool provided in the prompt. Double check that before sending out.
-
-# Goals
-Your goal is to **call EXACTLY ONE terminal tool** after gathering sufficient information.
-- Use the \`accept-deal\` tool to accept the on-the-table deal exactly as-is.
-- Use the \`reject-deal\` tool to decline the on-the-table deal exactly as-is.
-- Use the \`propose-deal\` tool to author a (counter) proposal. You must include a one-sentence outward \`Message\` for the diplomat to voice.
-  - Author \`Give\` (what YOUR civ gives the counterpart) and \`Receive\` (what the counterpart gives YOUR civ); each is a term string or a list of term strings.
-    - Each entry is ONE plain string. Follow the quoted example on each Tradable Terms heading.
-    - Append a number only for Gold, Gold Per Turn, or a resource quantity (e.g. "Gold 100", "Iron 2").
-  - Joint wars need a third-party Civilization Name from the menu.
-    - "${PROMISE_METADATA.COOP_WAR.label} on <Civilization>" creates a joint war that begins after a short countdown.
-    - "Third-Party War on <Civilization>" starts a war right now.
-
-# Resources
-You can access additional information by calling the following tools.
-- Use the \`get-briefing\` tool to retrieve briefings on Military, Economy, and/or Diplomacy.
-  - Call it when you need strategic intelligence to inform your decisions.`.trim();
+- There is no user to respond to, so you ALWAYS and ONLY properly call tools to convey your decisions.
+- Your context includes a fresh inspection and evaluation of the deal on the table, when one exists, and all tradable items.
+- In-game AI evaluation is advisory evidence. Apply the leader's intention through this legacy negotiator path.
+- Use the correct tool-calling format for each tool provided in the prompt.`,
+      this.getDealMechanicsPrompt(),
+      "# Resources\n- Use the `get-briefing` tool to retrieve current military, economic, or diplomatic context when needed.",
+    ].join("\n\n").trim();
   }
 
   /**

@@ -186,6 +186,29 @@ describe('runChatTurn row contract', () => {
     expect(thread.messages.map((m) => m.metadata.id)).toEqual([100, 101]);
   });
 
+  it('completes a deliberate diplomacy pass without speech or closing the thread', async () => {
+    const thread = registerThread();
+    vi.spyOn(contextRegistry, 'get').mockReturnValue(mockContext(async (_name, input) => {
+      input.messages.push({
+        message: {
+          role: 'assistant',
+          content: [{ toolCallId: 'pass-1', toolName: 'pass-diplomacy', type: 'tool-call', input: {} }],
+        },
+        metadata: { datetime: new Date(), turn: 5 },
+      });
+    }));
+    const sink = recordingSink();
+
+    await runChatTurn({ kind: 'text', chatId: thread.id, message: 'No need to respond.' }, sink);
+
+    expect(sink.errorEvents).toHaveLength(0);
+    expect(sink.doneEvents).toHaveLength(1);
+    expect(sink.doneEvents[0]!.outcome).toBe('pass');
+    expect(sink.doneEvents[0]!.rows).toEqual([]);
+    expect(thread.closeTurn).toBeUndefined();
+    expect(thread.messages.map((item) => item.metadata.id)).toEqual([100]);
+  });
+
   it('attaches the retained trace to the echo-cleaned durable reply row', async () => {
     const thread = registerThread();
     vi.spyOn(contextRegistry, 'get').mockReturnValue(mockContext(async (_n, input) => {

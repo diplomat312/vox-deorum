@@ -1660,7 +1660,7 @@ describe('agent routes', () => {
       expect(Object.keys(connected).sort()).toEqual(['deal', 'sessionId']);
       expect(connected.deal.ID).toBe(60);
       const done = JSON.parse(res.text.match(/event: done\ndata: (.*)\n/)![1]!);
-      expect(Object.keys(done).sort()).toEqual(['deals', 'messageCount', 'sessionId']);
+      expect(Object.keys(done).sort()).toEqual(['deals', 'messageCount', 'outcome', 'sessionId']);
       expect(done.deals).toEqual([]);
     });
   });

@@ -133,7 +133,7 @@ describe("IngameBridge runtime transport", () => {
     // A turn that commits the caller row, then completes with the diplomat's archived reply.
     mocks.runChatTurn.mockImplementation(async (_body: unknown, sink: ChatStreamSink) => {
       sink.connected({ sessionId: "s", rows: [row(90, "hello", 1)] });
-      sink.done({ sessionId: "s", messageCount: 2, deals: [], rows: [row(91, "Greetings.")] });
+      sink.done({ sessionId: "s", messageCount: 2, deals: [], rows: [row(91, "Greetings.")], outcome: "spoken" });
       return undefined;
     });
   });
@@ -318,7 +318,7 @@ describe("IngameBridge runtime transport", () => {
       sink.connected({ sessionId: "s", rows: [row(90, "hello", 1)] });
       // The negotiator's terminal tool ran but persisted nothing, so `done` carries no rows at
       // all — settled, but nothing durable to show for it.
-      sink.done({ sessionId: "s", messageCount: 1, deals: [], rows: [] });
+      sink.done({ sessionId: "s", messageCount: 1, deals: [], rows: [], outcome: "unknown" });
       return undefined;
     });
 
@@ -339,6 +339,24 @@ describe("IngameBridge runtime transport", () => {
       .filter((call) => call[1].Name === "VoxDeorumDiploStatus")
       .map((call) => (call[1].Args[2] as { state: string }).state);
     expect(statuses).toEqual(["error"]);
+  });
+
+  it("returns a deliberate diplomacy pass to idle without rows or a notification", async () => {
+    const bridge = bridgeFor();
+    mocks.runChatTurn.mockImplementation(async (_body: unknown, sink: ChatStreamSink) => {
+      sink.connected({ sessionId: "s", rows: [row(90, "hello", 1)] });
+      sink.done({ sessionId: "s", messageCount: 1, deals: [], rows: [], outcome: "pass" });
+      return undefined;
+    });
+
+    bridge.handleNotification(event("DiplomacyChatMessage", 10, { PlayerID: 1, CounterpartID: 3, Text: "hello" }));
+
+    await vi.waitFor(() => expect(pushedNames()).toEqual([
+      "VoxDeorumDiploMessages",
+      "VoxDeorumDiploStatus",
+    ]));
+    expect(pushedArg(1)).toEqual({ state: "idle" });
+    expect(mocks.notify).not.toHaveBeenCalled();
   });
 
   it("queues the same terminal error Status when the turn reneges on ever reporting one", async () => {
@@ -509,7 +527,7 @@ describe("IngameBridge deal actions", () => {
     mocks.readActive.mockResolvedValue({ active: null, status: "none", proposals: [] });
     mocks.runChatTurn.mockImplementation(async (_body: unknown, sink: ChatStreamSink) => {
       sink.connected({ sessionId: "s", rows: [dealRow(80, "deal-proposal")] });
-      sink.done({ sessionId: "s", messageCount: 2, deals: [], rows: [row(81, "Interesting.")] });
+      sink.done({ sessionId: "s", messageCount: 2, deals: [], rows: [row(81, "Interesting.")], outcome: "spoken" });
       return undefined;
     });
   });
@@ -575,7 +593,7 @@ describe("IngameBridge deal actions", () => {
     // though it holds a single structured row.
     mocks.runChatTurn.mockImplementation(async (_body: unknown, sink: ChatStreamSink) => {
       sink.connected({ sessionId: "s", rows: [dealRow(80, "deal-proposal")] });
-      sink.done({ sessionId: "s", messageCount: 2, deals: [], rows: [dealRow(93, "deal-counter")] });
+      sink.done({ sessionId: "s", messageCount: 2, deals: [], rows: [dealRow(93, "deal-counter")], outcome: "deal" });
       return undefined;
     });
 

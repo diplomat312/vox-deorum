@@ -1,31 +1,30 @@
 {
   "name": "unified-mind-play-5civ",
-  "description": "Normal Civ V play as the native human in seat 4 against four unified civilization minds.",
+  "description": "Normal Civ V play as the native human in seat 0 against four unified civilization minds.",
   "type": "strategist",
   "autoPlay": false,
   "production": "test",
   "randomizeSeating": false,
-  "nativeHumanPlayer": 4,
   "llmPlayers": {
-    "0": {
+    "1": {
       "strategist": "simple-strategist",
       "mind": "unified-mind",
       "llms": { "unified-mind": "openrouter/minimax/minimax-m3:free" },
       "pacing": { "everyTurns": 5, "interruption": "importantEvents" }
     },
-    "1": {
+    "2": {
       "strategist": "simple-strategist",
       "mind": "unified-mind",
       "llms": { "unified-mind": "opencode/mimo-v2.5-free" },
       "pacing": { "everyTurns": 5, "interruption": "importantEvents" }
     },
-    "2": {
+    "3": {
       "strategist": "simple-strategist",
       "mind": "unified-mind",
       "llms": { "unified-mind": "opencode-go/muse-spark-1.2-contributor" },
       "pacing": { "everyTurns": 5, "interruption": "importantEvents" }
     },
-    "3": {
+    "4": {
       "strategist": "simple-strategist",
       "mind": "unified-mind",
       "llms": { "unified-mind": "openrouter/minimax/minimax-m3:free" },

@@ -216,6 +216,12 @@ export class VoxContext<TParameters extends AgentParameters> {
     this.lastModelName = undefined;
   }
 
+  /** Record a sanitized semantic outcome on the active unified-mind agent span. */
+  public setMindOutcome(outcome: string): void {
+    const span = trace.getActiveSpan();
+    if (span) span.setAttribute('mind.outcome', outcome);
+  }
+
   /**
    * Constructor for VoxContext
    * @param modelOverrides - Model configuration overrides to replace config.json definitions

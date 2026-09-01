@@ -38,14 +38,14 @@ export class UnifiedNegotiator extends Negotiator {
     _input: NegotiatorInput,
     _context: VoxContext<StrategistParameters>,
   ): Promise<string> {
-    return `${buildUnifiedMindIdentity(parameters, "deal")}
-
-# Deal decision expectations
+    return [
+      buildUnifiedMindIdentity(parameters, "deal"),
+      `# Deal decision expectations
 - This wake belongs to the same civilization mind that sets strategy and speaks in diplomacy.
 - Inspect the available terms, current strategy, relationships, promises, and threats before acting.
-- Choose exactly one binding terminal action: \`accept-deal\`, \`reject-deal\`, or \`propose-deal\`.
-- Use only legal terms from the provided menu and preserve the civilization's existing commitments.
-- The terminal action is the authoritative political decision. Do not defer it to another agent.`.trim();
+${this.getDealMechanicsPrompt().replace("# Deal mechanics\n", "")}
+- The terminal action is the authoritative political decision. Do not defer it to another agent.`,
+    ].join("\n\n").trim();
   }
 
   /** Use civilization-owned wording for the deal wake's shared game context. */
