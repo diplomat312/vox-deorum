@@ -26,14 +26,18 @@ Use [configs/unified-mind-direct-5civ.json](../../../configs/unified-mind-direct
 
 Set `mind` to `unified-mind` on an AI seat and assign its model under that seat's `llms.unified-mind` key. The legacy `strategist` field remains required for backward-compatible parsing, but it does not select the strategic wake for a unified seat. Legacy strategist, diplomat, and negotiator configurations remain available for existing sessions.
 
-The strategic, diplomacy, and deal adapters share the same seat context, canonical civilization identity, current strategic state, and model resolution. Strategic wakes receive a bounded recent diplomacy block from the durable pairwise transcript. Transcript rows are labeled as untrusted historical political data, and proposal, counter, acceptance, rejection, and enacted deal terms remain structured when available. Failed enrichment is logged and does not block the game turn.
+The strategic, diplomacy, deal, and memory-maintenance adapters share the same seat context, canonical civilization identity, current strategic state, and model resolution. Strategic wakes receive a bounded recent diplomacy block from the durable pairwise transcript. Transcript rows are labeled as untrusted historical political data, and proposal, counter, acceptance, rejection, and enacted deal terms remain structured when available. Failed enrichment is logged and does not block the game turn.
 
 The benchmark SocialRuntime is not automatically attached to an ordinary StrategistSession. Its public channels, autonomous AI-to-AI conversations, groups, and broader social episodes remain experimental standalone functionality. Ordinary Civ play currently exposes the existing pairwise diplomacy and deal path, not the full SocialRuntime feature set.
 
+## Civilization continuity
+
+Each unified civilization has one persistent plaintext Current Outlook, a factual append-only Recent Chronicle, and a same-mind Long-Term Chronicle for older history. The configured unified model is the only model that decides what political events mean, updates the Outlook, or compacts the Long-Term Chronicle. The backend records facts, keeps private entries scoped to entitled civilizations, bounds retrieval, and preserves raw evidence. It does not infer trust, promises, betrayal, importance, or relationship scores.
+
+The `update-civilization-outlook` support tool rewrites the civilization's own concise Outlook when its political understanding materially changes. Diplomacy messages, deal lifecycle facts, successful strategy rationales, and visible game events are mechanically recorded without semantic classification. Outlook writes use optimistic revisions and chronicle entries use stable source keys, so retries do not silently overwrite or duplicate memory.
+
+Memory maintenance is a bounded wake of the same configured civilization model. It writes a new Long-Term Chronicle only after a successful model response and then advances an internal checkpoint. A failed maintenance wake leaves the prior long-term text and raw chronicle intact, so ordinary game cognition can continue. Internal revisions and sequence numbers are storage details and are not part of the model's political vocabulary.
+
 ## Diagnostics
 
-The logs and telemetry views identify the civilization player, game, unified mode, wake type, resolved model, outcome, and token totals where the provider reports them. Unified wake labels are `strategic`, `diplomacy`, and `deal`. Private transcript bodies are not added solely for diagnostics.
-
-## Political memory
-
-Unified seats also share one game-scoped SQLite political-memory store across strategic, diplomacy, and deal wakes. The model can sparsely record goals, commitments, subjective relationship assessments, uncertain beliefs, important episodes, and political projects through support tools. Records are scoped to the owning civilization, retain evidence references, and use retry-safe mutation IDs. The Civilization Minds inspector reads this state from the same `/api/session/minds` read model. Raw game facts and recent diplomacy remain separate authoritative evidence.
+The logs and telemetry views identify the civilization player, game, unified mode, wake type, resolved model, outcome, and token totals where the provider reports them. Unified wake labels are `strategic`, `diplomacy`, `deal`, and `memory`. Private transcript bodies are not added solely for diagnostics. The Civilization Minds inspector shows Current Outlook, Long-Term Chronicle, Recent Chronicle, maintenance state, and the ordinary cognition timeline.

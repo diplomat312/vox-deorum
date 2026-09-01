@@ -202,8 +202,10 @@ export class CivilizationMemoryStore {
   /** Read a chronological bounded window without interpreting its contents. */
   public getRecentChronicle(scope: CivilizationMemoryScope, maxCharacters = 80000): CivilizationChronicleEntry[] {
     this.ensureState(scope);
+    const state = this.sqlite.prepare(`SELECT compactedThroughSequence FROM civilizationMemoryState WHERE gameId = ? AND ownerPlayerId = ?`)
+      .get(scope.gameId, scope.ownerPlayerId) as { compactedThroughSequence: number };
     const rows = this.sqlite.prepare(`SELECT * FROM civilizationChronicleEntries
-      WHERE gameId = ? AND ownerPlayerId = ? ORDER BY sequence DESC`).all(scope.gameId, scope.ownerPlayerId) as Record<string, unknown>[];
+      WHERE gameId = ? AND ownerPlayerId = ? AND sequence > ? ORDER BY sequence DESC`).all(scope.gameId, scope.ownerPlayerId, state.compactedThroughSequence) as Record<string, unknown>[];
     const selected: CivilizationChronicleEntry[] = [];
     let characters = 0;
     for (const row of rows) {
@@ -213,6 +215,14 @@ export class CivilizationMemoryStore {
       characters += entry.text.length;
     }
     return selected.reverse();
+  }
+
+  /** Read every factual entry, including compacted raw evidence retained underneath memory. */
+  public getAllChronicle(scope: CivilizationMemoryScope): CivilizationChronicleEntry[] {
+    this.ensureState(scope);
+    const rows = this.sqlite.prepare(`SELECT * FROM civilizationChronicleEntries
+      WHERE gameId = ? AND ownerPlayerId = ? ORDER BY sequence ASC`).all(scope.gameId, scope.ownerPlayerId) as Record<string, unknown>[];
+    return rows.map(chronicleFromRow);
   }
 
   /** Read the latest long-term chronicle revision, if compaction has completed. */
@@ -291,8 +301,10 @@ export class CivilizationMemoryStore {
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
         .run(result.gameId, result.ownerPlayerId, result.revision, result.text, result.compactedThroughSequence,
           result.updatedTurn, scope.wakeTraceId ?? null, Date.now());
-      this.sqlite.prepare(`UPDATE civilizationMemoryState SET longTermRevision = ?, compactedThroughSequence = ?, maintenanceRequired = 0
-        WHERE gameId = ? AND ownerPlayerId = ?`).run(result.revision, result.compactedThroughSequence, scope.gameId, scope.ownerPlayerId);
+      this.sqlite.prepare(`UPDATE civilizationMemoryState SET longTermRevision = ?, compactedThroughSequence = ?, maintenanceRequired = CASE WHEN EXISTS (
+        SELECT 1 FROM civilizationChronicleEntries WHERE gameId = ? AND ownerPlayerId = ? AND sequence > ?
+      ) THEN 1 ELSE 0 END WHERE gameId = ? AND ownerPlayerId = ?`)
+        .run(result.revision, result.compactedThroughSequence, scope.gameId, scope.ownerPlayerId, result.compactedThroughSequence, scope.gameId, scope.ownerPlayerId);
       this.sqlite.prepare(`INSERT INTO civilizationMemoryMutations (operationKey, gameId, ownerPlayerId, resultJson, createdAt) VALUES (?, ?, ?, ?, ?)`)
         .run(range.operationKey, scope.gameId, scope.ownerPlayerId, JSON.stringify(result), Date.now());
     })();
