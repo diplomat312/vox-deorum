@@ -14,18 +14,19 @@ export function createSocialDecisionTools(scope: SocialDecisionToolScope, refere
   const messageRooms = references.messageRooms ?? references.channels;
   const inviteRooms = references.inviteRooms ?? references.channels;
   const inviteParticipants = references.inviteParticipants ?? references.actors;
+  const inviteTargets = references.inviteTargets ?? (inviteRooms.length > 0 && inviteParticipants.length > 0 ? inviteRooms.map((room) => ({ roomRef: room.ref, participantRefs: inviteParticipants.map((participant) => participant.ref) })) : []);
   const leaveRooms = references.leaveRooms ?? references.channels;
   if (scope === 'channel-reaction') {
     tools.social_reply = tool({ description: 'Reply in the current room.', inputSchema: z.object({ text: z.string().min(1).max(12000), replyToMessageId: z.number().int().positive().optional() }), strict: true });
   }
-  if (scope === 'channel-reaction' || scope === 'player-mind') {
+  if ((scope === 'channel-reaction' || scope === 'player-mind') && dmActors.length > 0) {
     tools.social_send_dm = tool({ description: 'Send a private message to one listed participant.', inputSchema: z.object({ participantRef: referenceSchema(dmActors), text: z.string().min(1).max(12000) }), strict: true });
     tools.social_start_group = tool({ description: 'Start a private titled group with listed participants.', inputSchema: z.object({ title: z.string().min(1).max(200), participantRefs: z.array(referenceSchema(groupParticipants)).max(8), text: z.string().min(1).max(12000).optional() }), strict: true });
   }
   if (scope === 'player-mind') {
-    tools.social_send_room_message = tool({ description: 'Send a message to one listed visible room.', inputSchema: z.object({ roomRef: referenceSchema(messageRooms), text: z.string().min(1).max(12000) }), strict: true });
-    tools.social_invite = tool({ description: 'Invite one listed participant to one listed group room.', inputSchema: z.object({ roomRef: referenceSchema(inviteRooms), participantRef: referenceSchema(inviteParticipants) }), strict: true });
-    tools.social_leave_group = tool({ description: 'Leave one listed group room.', inputSchema: z.object({ roomRef: referenceSchema(leaveRooms) }), strict: true });
+    if (messageRooms.length > 0) tools.social_send_room_message = tool({ description: 'Send a message to one listed visible room.', inputSchema: z.object({ roomRef: referenceSchema(messageRooms), text: z.string().min(1).max(12000) }), strict: true });
+    if (inviteTargets.length > 0) tools.social_invite = tool({ description: 'Invite one listed participant to one listed group room.', inputSchema: inviteChoiceSchema(inviteTargets), strict: true });
+    if (leaveRooms.length > 0) tools.social_leave_group = tool({ description: 'Leave one listed group room.', inputSchema: z.object({ roomRef: referenceSchema(leaveRooms) }), strict: true });
   }
   if (scope === 'invitation-decision') tools.social_respond_invitation = tool({ description: 'Accept or decline the invitation described in the situation.', inputSchema: z.object({ accept: z.boolean() }), strict: true });
   for (const definition of extra) {
@@ -66,6 +67,13 @@ function referenceSchema(references: Array<{ ref: string }>): z.ZodType<string> 
   if (references.length === 0) return z.never();
   if (references.length === 1) return z.literal(references[0].ref);
   return z.enum(references.map((reference) => reference.ref) as [string, ...string[]]);
+}
+
+/** Build a compact invite schema containing only legal room and participant pairs. */
+function inviteChoiceSchema(targets: Array<{ roomRef: string; participantRefs: string[] }>): z.ZodType<Record<string, string>> {
+  const choices = targets.flatMap((target) => target.participantRefs.map((participantRef) => z.object({ roomRef: z.literal(target.roomRef), participantRef: z.literal(participantRef) })));
+  if (choices.length === 1) return choices[0] as z.ZodType<Record<string, string>>;
+  return z.union(choices as [typeof choices[0], typeof choices[0], ...typeof choices]);
 }
 
 /** Validate a bounded model text field before converting it to a runtime decision. */

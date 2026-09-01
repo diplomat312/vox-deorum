@@ -60,4 +60,9 @@ describe('structured social decisions', () => {
     expect(context.messages[0].content).toContain('[alice-2] Alice');
     expect((decodeSocialDecision([{ toolName: 'social_reply', input: { text: 'hello', channelId: 'other-room' } }]) as { kind: string }).kind).toBe('reply');
   });
+
+  it('should omit actions with no legal targets', () => {
+    const refs = { actors: [{ ref: 'alice', id: 'alice', label: 'Alice' }], channels: [], dmActors: [], groupParticipants: [], messageRooms: [], inviteRooms: [], inviteParticipants: [], inviteTargets: [], leaveRooms: [] };
+    expect(Object.keys(createSocialDecisionTools('player-mind', refs))).toEqual(['social_pass']);
+  });
 });

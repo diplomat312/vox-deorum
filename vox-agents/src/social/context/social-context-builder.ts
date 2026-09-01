@@ -3,7 +3,7 @@ import type { SocialActor, SocialChannel, SocialExecutionScope, SocialIntention,
 import type { DecisionToolDefinition } from '../runtime/social-decision-tools.js';
 
 export interface SocialReference { ref: string; id: string; label: string; kind?: string; }
-export interface SocialReferenceSet { actors: SocialReference[]; channels: SocialReference[]; dmActors?: SocialReference[]; groupParticipants?: SocialReference[]; messageRooms?: SocialReference[]; inviteRooms?: SocialReference[]; inviteParticipants?: SocialReference[]; leaveRooms?: SocialReference[]; }
+export interface SocialReferenceSet { actors: SocialReference[]; channels: SocialReference[]; dmActors?: SocialReference[]; groupParticipants?: SocialReference[]; messageRooms?: SocialReference[]; inviteRooms?: SocialReference[]; inviteParticipants?: SocialReference[]; inviteTargets?: Array<{ roomRef: string; participantRefs: string[] }>; leaveRooms?: SocialReference[]; }
 export interface SocialContextBundle { system: string; messages: ModelMessage[]; messageCount: number; executionScope?: SocialExecutionScope; references: SocialReferenceSet; decisionTools?: ToolSet; decisionToolDefinitions?: DecisionToolDefinition[]; }
 export interface SocialContextOptions { environment?: string; mode?: string; maxTranscriptMessages?: number; references?: SocialReferenceSet; currentChannel?: SocialChannel; }
 export interface SocialActivity { channel: SocialChannel; messages: SocialMessage[]; }
