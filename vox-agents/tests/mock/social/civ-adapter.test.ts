@@ -14,7 +14,7 @@ import type { CivMcpPort } from '../../../src/social/environments/civ/civ-mcp-po
 import type { GameEventNotification } from '../../../src/utils/models/mcp-client.js';
 import { SocialStore } from '../../../src/social/store/social-store.js';
 import { ActorLane } from '../../../src/social/runtime/actor-lane.js';
-import { SocialContextBuilder } from '../../../src/social/context/social-context-builder.js';
+import { createSocialReferenceSet, SocialContextBuilder } from '../../../src/social/context/social-context-builder.js';
 import type { SocialActor } from '../../../src/social/types.js';
 
 const actors: SocialActor[] = [
@@ -44,6 +44,22 @@ describe('Civ Pass 3 adapter seams', () => {
     await expect(adapter.ingest(event)).resolves.toBe(false);
     expect(onEvent).toHaveBeenCalledTimes(1);
     await expect(adapter.ingest({ ...event, gameId: 'old-game', sourceKey: 'old-game:4:city-lost:3' })).rejects.toThrow(/game ID/);
+  });
+
+  it('should apply the authoritative contact graph to references and event routing', async () => {
+    const adapter = new CivEnvironmentAdapter(new MemoryEnvironmentEventJournal());
+    const contactSeats = seats.slice(0, 2).map((seat) => ({ ...seat, knownPlayerIds: seat.playerId === 7 ? [] : [7] }));
+    await adapter.attach('session', { environment: 'civ5', gameId: 'game-contact', turn: 1, facts: {}, seats: contactSeats, normalizedState: {} }, actors, { 'human-seat': 3, 'llm-seat': 7 });
+    const references = createSocialReferenceSet(actors, [{ id: 'world', sessionId: 'session', kind: 'world', title: 'WORLD', createdByActorId: 'human-seat', canonicalKey: 'world', createdAt: 'now', archived: false }]);
+    const unseen = await adapter.filterReferencesForActor(actors[1], references);
+    expect(unseen.actors.map((reference) => reference.id)).toEqual(['llm-seat']);
+    await expect(adapter.isActorReachable(actors[1], 'human-seat')).resolves.toBe(false);
+    await expect(adapter.ingest({ gameId: 'game-contact', turn: 1, type: 'UnknownFrameworkEvent', sourceKey: 'unknown', payload: {} })).resolves.toBe(false);
+    expect(adapter.eventRecipientActorIds({ gameId: 'game-contact', turn: 1, type: 'UnknownFrameworkEvent', sourceKey: 'unknown', payload: {} })).toEqual([]);
+    adapter.updateSnapshot({ environment: 'civ5', gameId: 'game-contact', turn: 2, facts: {}, seats: contactSeats.map((seat) => seat.playerId === 7 ? { ...seat, knownPlayerIds: [3] } : seat), normalizedState: {} });
+    const seen = await adapter.filterReferencesForActor(actors[1], references);
+    expect(seen.actors.map((reference) => reference.id)).toEqual(['human-seat', 'llm-seat']);
+    await expect(adapter.isActorReachable(actors[1], 'human-seat')).resolves.toBe(true);
   });
 
   it('should bind acting identity structurally and make operation IDs idempotent', async () => {

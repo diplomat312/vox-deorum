@@ -16,7 +16,7 @@ export async function registerExistingCivCapabilities(gateway: CivActionGateway,
 }
 
 /** Construct a read-only model-facing capability whose player is inserted by the gateway. */
-function readDefinition(description: string, inputSchema: z.ZodType): CivActionDefinition { return { category: 'READ', description, inputSchema: inputSchema as z.ZodType<Record<string, unknown>>, modelFacing: true, execute: async () => ({ state: 'FAILED', failureClass: 'unbound-mcp-handler' }) }; }
+function readDefinition(description: string, inputSchema: z.ZodType): CivActionDefinition { return { category: 'READ', description, inputSchema: inputSchema as z.ZodType<Record<string, unknown>>, modelFacing: true, phase: 'support', execute: async () => ({ state: 'FAILED', failureClass: 'unbound-mcp-handler' }) }; }
 
 /** Construct an allowlisted native diplomacy capability over the existing safe deal path. */
 function nativeDealDefinition(): CivActionDefinition { return { category: 'NATIVE_DIPLOMACY', description: 'Reject an open agent deal proposal addressed to the bound Civ actor.', inputSchema: z.object({ targetPlayerId: z.number().int().min(-1), proposalMessageId: z.number().int(), content: z.string().max(12000).optional() }), modelFacing: true, execute: async () => ({ state: 'FAILED', failureClass: 'unbound-mcp-handler' }) }; }

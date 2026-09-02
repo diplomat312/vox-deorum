@@ -25,6 +25,7 @@ export interface UnifiedSocialCognitionInput {
   decisionTools: ToolSet;
   toolNames: string[];
   decisionCalls: CapturedSocialToolCall[];
+  outwardToolNames: string[];
 }
 
 /** Registered VoxAgent adapter that runs live social cognition inside the seat VoxContext. */
@@ -90,7 +91,7 @@ export class UnifiedSocialCognition extends VoxAgent<StrategistParameters, Unifi
     allSteps: StepResult<Record<string, Tool>>[],
   ): boolean {
     const completed = allSteps.some((step) => step.toolResults.some((result) => {
-      if (!input.toolNames.includes(result.toolName)) return false;
+      if (!input.outwardToolNames.includes(result.toolName)) return false;
       const output = result.output;
       return output !== undefined && !(output !== null && typeof output === 'object' && 'isError' in output && output.isError === true);
     }));

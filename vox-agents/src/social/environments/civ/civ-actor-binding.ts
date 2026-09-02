@@ -6,7 +6,7 @@ export type CivControlMode = 'human' | 'llm' | 'native-vp' | 'observer';
 export interface CivActorBinding { sessionId: string; actorId: string; ordinal: number; gameId: string; playerId: number; teamId?: number; civilizationType: string; civilizationName: string; leaderType?: string; leaderName?: string; controlMode: CivControlMode; active: boolean; }
 
 /** Live Civ seat data required to construct stable actor bindings. */
-export interface CivSeat { playerId: number; civilizationType: string; civilizationName: string; leaderType?: string; leaderName?: string; teamId?: number; human?: boolean; nativeVpOnly?: boolean; observer?: boolean; }
+export interface CivSeat { playerId: number; civilizationType: string; civilizationName: string; leaderType?: string; leaderName?: string; teamId?: number; human?: boolean; nativeVpOnly?: boolean; observer?: boolean; knownPlayerIds?: number[]; }
 
 /** Bind actors to live seats by explicit actor identity, never by seat position. */
 export function bindCivActors(sessionId: string, gameId: string, actors: SocialActor[], seats: CivSeat[], actorSeatById: Record<string, number>): CivActorBinding[] {

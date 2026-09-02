@@ -9,6 +9,7 @@ import type { StrategistParameters } from '../strategist/strategy-parameters.js'
 import type { EnvoyThread } from '../types/index.js';
 import type { TranscriptPushMessage } from '../utils/diplomacy/transcript/transcript-utils.js';
 import type { CivilizationMemoryStore } from './civilization-memory-store.js';
+import type { SocialCommittedFact } from '../social/runtime/social-environment-port.js';
 
 /** Return a human-readable participant name from the latest bounded player report. */
 function participantName(parameters: StrategistParameters, playerId: number): string {
@@ -116,5 +117,27 @@ export function appendGameEventFacts(
         scope: 'game',
       });
     }
+  }
+}
+
+/** Append one entitled social communication fact without interpreting its political meaning. */
+export function appendSocialFact(
+  store: CivilizationMemoryStore,
+  parameters: StrategistParameters,
+  fact: SocialCommittedFact,
+): void {
+  const turn = fact.turn ?? parameters.turn;
+  const content = fact.message?.content ?? fact.content ?? 'A social event occurred.';
+  const quoted = content.replace(/\s+/g, ' ').trim().slice(0, 4000);
+  for (const actorId of fact.entitledActorIds) {
+    if (actorId !== `civ-player-${parameters.playerID}`) continue;
+    store.appendChronicle({ gameId: parameters.gameID, ownerPlayerId: parameters.playerID, turn }, {
+      turn,
+      kind: 'private-message',
+      text: `Turn ${turn} · ${fact.kind}: "${quoted}"`,
+      evidenceRef: { kind: 'wake', id: fact.message ? String(fact.message.id) : `${fact.kind}:${fact.channelId ?? 'none'}:${turn}` },
+      dedupeKey: `social:${fact.kind}:${fact.message?.id ?? fact.channelId ?? 'none'}:${parameters.playerID}:${turn}`,
+      scope: fact.kind === 'world-message' ? 'game' : fact.kind.includes('group') ? 'group' : 'private',
+    });
   }
 }

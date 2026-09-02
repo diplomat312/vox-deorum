@@ -3,7 +3,7 @@ import { z } from 'zod';
 import type { SocialDecision } from '../types.js';
 import type { SocialReferenceSet } from '../context/social-context-builder.js';
 
-export interface DecisionToolDefinition { name: string; actionName: string; description: string; inputSchema: z.ZodType; }
+export interface DecisionToolDefinition { name: string; actionName: string; description: string; inputSchema: z.ZodType; phase?: 'support' | 'outward'; }
 export type SocialDecisionToolScope = 'channel-reaction' | 'player-mind' | 'invitation-decision';
 
 /** Build only the semantic actions legal for the current intention. */

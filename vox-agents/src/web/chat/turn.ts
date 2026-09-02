@@ -320,7 +320,7 @@ export async function runChatTurn(
       }
       : undefined;
     let contextLengthFailed = false;
-    await voxContext.withRun({ overrides, streamProgress }, async (run) => {
+    const runCognition = () => voxContext.withRun({ overrides, streamProgress }, async (run) => {
       sink.onDisconnect(() => {
         if (completed) return;
         logger.info('Chat client disconnected');
@@ -380,6 +380,8 @@ export async function runChatTurn(
       const rows = turn.terminalRows();
       emitDone(classifyTurnOutcome(replySlice, rows));
     });
+    if (typeof voxContext.runOnCognitionLane === 'function') await voxContext.runOnCognitionLane(runCognition);
+    else await runCognition();
   } catch (error) {
     logger.error('Failed to execute agent', { error });
     const errorMessage = error instanceof Error ? error.message : 'unknown';

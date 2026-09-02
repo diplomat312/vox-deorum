@@ -51,6 +51,8 @@ import type { CivSeat } from "../social/environments/civ/civ-actor-binding.js";
 import { MemoryEnvironmentEventJournal } from "../social/environments/environment-event.js";
 import { attachCivEnvironment } from "../social/environments/civ/civ-social-attachment.js";
 import { mcpCivPort } from "../social/environments/civ/civ-mcp-port.js";
+import { appendSocialFact } from "../civilization-memory/civilization-memory-ingestion.js";
+import type { SocialCommittedFact } from "../social/runtime/social-environment-port.js";
 
 const logger = createLogger('StrategistSession');
 
@@ -525,13 +527,10 @@ export class StrategistSession extends VoxSession<StrategistSessionConfig> {
     if (player) {
       player.notifyTurn(params.turn);
       this.turn = params.turn;  // Update current turn
+      await player.pauseBeforeOptionalCognition();
       if (this.liveCivAdapter && this.liveCivSnapshot && this.liveCivSnapshot.gameId === params.gameID) {
         this.liveCivSnapshot = { ...this.liveCivSnapshot, turn: params.turn, normalizedState: { ...this.liveCivSnapshot.normalizedState, turn: params.turn } };
         this.liveCivAdapter.updateSnapshot(this.liveCivSnapshot);
-      }
-      if (this.liveSocialRuntime && this.getPlayerAssignments()[params.playerID]?.mind === 'unified-mind') {
-        const actorId = `civ-player-${params.playerID}`;
-        void this.liveSocialRuntime.enqueueIntention({ id: `civ-social-review:${this.gameID}:${params.playerID}:${params.turn}`, actorId, kind: 'strategic-review', channelId: null, sourceMessageId: null, priority: 20, state: 'queued', notBefore: new Date().toISOString(), payload: JSON.stringify({ gameId: this.gameID, turn: params.turn, trigger: 'strategic-review' }), dedupeKey: `civ-social-review:${this.gameID}:${params.playerID}:${params.turn}`, cascadeId: null, operationClass: 'autonomous' }).catch((error) => logger.warn('Could not enqueue live unified social review', { gameID: this.gameID, playerID: params.playerID, turn: params.turn, error }));
       }
     }
   }
@@ -577,7 +576,7 @@ export class StrategistSession extends VoxSession<StrategistSessionConfig> {
       if (stored) await runtime.resume(sessionId, dataDirectory, runner);
       else await runtime.start({ sessionId, actors: actorDefinitions, dataDirectory, modelExecutor: runner, liveCiv: true });
       const adapter = new CivEnvironmentAdapter(new MemoryEnvironmentEventJournal());
-      await attachCivEnvironment(runtime, adapter, snapshot, actorSeatById, mcpCivPort);
+      await attachCivEnvironment(runtime, adapter, snapshot, actorSeatById, mcpCivPort, (fact) => this.recordLiveSocialFact(gameID, fact), (actorId) => this.activePlayers.get(Number(actorId.slice('civ-player-'.length))));
       this.liveSocialRuntime = runtime;
       this.liveCivAdapter = adapter;
       this.liveCivSnapshot = snapshot;
@@ -585,6 +584,19 @@ export class StrategistSession extends VoxSession<StrategistSessionConfig> {
     } catch (error) {
       await runtime.stop().catch(() => undefined);
       throw error;
+    }
+  }
+
+  /** Append a committed live social fact only to the entitled unified seat chronicles. */
+  private recordLiveSocialFact(gameID: string, fact: SocialCommittedFact): void {
+    for (const actorId of fact.entitledActorIds) {
+      const playerID = /^civ-player-(\d+)$/.exec(actorId)?.[1];
+      if (playerID === undefined) continue;
+      const player = this.activePlayers.get(Number(playerID));
+      const parameters = player?.getBaseParameters();
+      if (!parameters?.civilizationMemoryEnabled || !parameters.civilizationMemoryStore) continue;
+      if (parameters.gameID !== gameID || this.getPlayerAssignments()[parameters.playerID]?.mind !== 'unified-mind') continue;
+      appendSocialFact(parameters.civilizationMemoryStore, parameters, fact);
     }
   }
 

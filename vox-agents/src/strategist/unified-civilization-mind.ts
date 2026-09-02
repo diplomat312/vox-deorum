@@ -216,11 +216,8 @@ function diplomacyRelevance(rows: TranscriptMessage[]): number {
   if (rows.length === 0) return 0;
   const newest = rows.reduce((max, row) => Math.max(max, row.ID, row.Turn), 0);
   const dealWeight = rows.some((row) => row.MessageType.startsWith("deal-")) ? 1000000 : 0;
-  const politicalWeight = rows.some((row) => /promise|threat|war|deal|offer|accept|reject/i.test(row.Content))
-    ? 10000
-    : 0;
   const active = deriveActiveProposal(rows).status === "open" ? 100000000 : 0;
-  return active + dealWeight + politicalWeight + newest;
+  return active + dealWeight + newest;
 }
 
 /** Load a bounded private/public diplomacy view visible to this civilization. */

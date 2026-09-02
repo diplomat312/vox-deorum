@@ -49,6 +49,7 @@ export class VoxPlayer {
   private eventCursor: number;
   /** Serializes every authoritative model-bearing wake for this civilization seat. */
   private readonly cognitionLane = new ActorLane();
+  private pendingPause: Promise<void> | undefined;
 
   constructor(
     public readonly playerID: number,
@@ -73,6 +74,7 @@ export class VoxPlayer {
       ? unifiedModelOverrides(playerConfig.llms)
       : (playerConfig.llms ?? {});
     this.context = new VoxContext(modelOverrides, id);
+    this.context.setCognitionAdmission((work) => this.cognitionLane.run(work));
     // Let the context reach its owning session for authoritative state (e.g. the live turn).
     this.context.session = session;
 
@@ -387,9 +389,31 @@ export class VoxPlayer {
     return sessionTurn !== undefined ? sessionTurn : this.getBaseParameters().turn;
   }
 
-  /** Queue any live political wake behind this civilization's authoritative lane. */
+  /**
+   * Queue any live political wake behind this civilization's authoritative lane.
+   * Lock order is scheduler actor lane, then seat cognition lane, then the
+   * existing VoxContext run and thread locks. Nested support or deal calls
+   * reuse the already-held seat lane through ActorLane re-entrancy.
+   */
   runOnCognitionLane<T>(work: () => Promise<T>): Promise<T> {
-    return this.cognitionLane.run(work);
+    return this.context.runOnCognitionLane(async () => {
+      await this.pendingPause;
+      return work();
+    });
+  }
+
+  /** Pause Civ before optional autonomous cognition can compete for the seat lane. */
+  async pauseBeforeOptionalCognition(): Promise<void> {
+    const previous = this.pendingPause ?? Promise.resolve();
+    const pause = previous.catch(() => undefined).then(async () => {
+      await this.context.callTool("pause-game", { PlayerID: this.playerID }, this.parameters);
+    });
+    let tracked: Promise<void>;
+    tracked = pause.finally(() => {
+      if (this.pendingPause === tracked) this.pendingPause = undefined;
+    });
+    this.pendingPause = tracked;
+    await tracked;
   }
 
   /** Return whether this seat is governed by the unified civilization mind. */

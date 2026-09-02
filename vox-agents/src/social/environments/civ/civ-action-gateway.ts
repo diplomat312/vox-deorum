@@ -8,7 +8,7 @@ export type CivActionCategory = 'READ' | 'NATIVE_DIPLOMACY' | 'STRATEGIC_ACTION'
 export type CivActionState = 'REQUESTED' | 'EXECUTING' | 'CONFIRMED' | 'REFUSED' | 'FAILED' | 'UNKNOWN';
 export interface CivActionAttempt { operationId: string; sessionId: string; actorId: string; gameId: string; playerId: number; sourceTurn: number; actionType: string; category: CivActionCategory; normalizedArguments: Record<string, unknown>; state: CivActionState; requestedAt: string; executingAt?: string; completedAt?: string; resultSummary?: string; failureClass?: string; readbackSummary?: string; }
 export interface CivActionExecutionResult { state: Exclude<CivActionState, 'REQUESTED' | 'EXECUTING'>; resultSummary?: string; failureClass?: string; readbackSummary?: string; }
-export interface CivActionDefinition<TArgs = Record<string, unknown>> { category: CivActionCategory; description: string; inputSchema: z.ZodType<TArgs>; modelFacing: boolean; execute(binding: CivActorBinding, args: TArgs, operationId: string): Promise<CivActionExecutionResult>; reconcile?(attempt: CivActionAttempt): Promise<CivActionExecutionResult>; }
+export interface CivActionDefinition<TArgs = Record<string, unknown>> { category: CivActionCategory; description: string; inputSchema: z.ZodType<TArgs>; modelFacing: boolean; phase?: 'support' | 'outward'; execute(binding: CivActorBinding, args: TArgs, operationId: string): Promise<CivActionExecutionResult>; reconcile?(attempt: CivActionAttempt): Promise<CivActionExecutionResult>; }
 export type CivActionHandler = Partial<CivActionDefinition> & Pick<CivActionDefinition, 'category' | 'execute'>;
 
 /** Persistent action-journal operations required by the gateway. */
@@ -49,7 +49,7 @@ export class CivActionGateway {
   /** Register an explicit allowlisted read, diplomacy, strategic, or inspection action. */
   public register<TArgs = Record<string, unknown>>(actionType: string, handler: CivActionDefinition<TArgs> | CivActionHandler): void { if (this.handlers.has(actionType)) throw new Error(`Civ action already registered: ${actionType}`); this.handlers.set(actionType, handler as CivActionDefinition); }
   /** Expose only model-facing definitions as generic decision tools. */
-  public modelDecisionDefinitions(): DecisionToolDefinition[] { return [...this.handlers.entries()].filter(([, handler]) => handler.modelFacing !== false && handler.category !== 'DEV_INSPECTION').map(([actionName, handler]) => ({ name: `environment_${actionName.replace(/[^a-zA-Z0-9_]/g, '_')}`, actionName, description: handler.description ?? `Execute the registered Civ action ${actionName}.`, inputSchema: handler.inputSchema ?? z.record(z.string(), z.unknown()) })); }
+  public modelDecisionDefinitions(): DecisionToolDefinition[] { return [...this.handlers.entries()].filter(([, handler]) => handler.modelFacing !== false && handler.category !== 'DEV_INSPECTION').map(([actionName, handler]) => ({ name: `environment_${actionName.replace(/[^a-zA-Z0-9_]/g, '_')}`, actionName, description: handler.description ?? `Execute the registered Civ action ${actionName}.`, inputSchema: handler.inputSchema ?? z.record(z.string(), z.unknown()), phase: handler.phase ?? 'outward' })); }
   /** Execute one action with structural actor binding and restart-safe operation identity. */
   public async invoke(binding: CivActorBinding, turn: number, actionType: string, args: Record<string, unknown>, operationId: string): Promise<CivActionAttempt> {
     if (!binding.active) throw new Error(`Civ binding for actor ${binding.actorId} is inactive`);

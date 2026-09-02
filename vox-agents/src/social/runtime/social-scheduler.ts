@@ -8,6 +8,7 @@ import type { SocialActor, SocialExecutionScope, SocialIntention } from '../type
 import { SocialStore } from '../store/social-store.js';
 import { SocialEventHub } from '../events/social-event-hub.js';
 import type { DecisionToolDefinition } from './social-decision-tools.js';
+import type { SocialEnvironmentPort } from './social-environment-port.js';
 
 /** Map every supported intention kind to an explicit execution scope. */
 const executionScopes: Readonly<Record<string, SocialExecutionScope>> = {
@@ -31,7 +32,7 @@ export class SocialScheduler {
   private wakeTimer: ReturnType<typeof setTimeout> | undefined;
   private readonly activeControllers = new Set<AbortController>();
 
-  public constructor(private readonly store: SocialStore, private readonly actors: () => Promise<SocialActor[]>, private readonly lanes: Map<string, ActorLane>, private readonly events: SocialEventHub, private readonly modelExecutor: SocialModelExecutor = defaultSocialModelExecutor, private readonly contextBuilder = new SocialContextBuilder(), private readonly maxConcurrentExecutions = 4, private readonly environmentForActor: (actor: SocialActor) => Promise<string | undefined> = async () => undefined, private readonly decisionExecutor = new SocialDecisionExecutor(store, events), private readonly decisionDefinitionsForActor: (actor: SocialActor, intention: SocialIntention) => Promise<DecisionToolDefinition[]> = async () => []) {}
+  public constructor(private readonly store: SocialStore, private readonly actors: () => Promise<SocialActor[]>, private readonly lanes: Map<string, ActorLane>, private readonly events: SocialEventHub, private readonly modelExecutor: SocialModelExecutor = defaultSocialModelExecutor, private readonly contextBuilder = new SocialContextBuilder(), private readonly maxConcurrentExecutions = 4, private readonly environmentForActor: (actor: SocialActor) => Promise<string | undefined> = async () => undefined, private readonly decisionExecutor = new SocialDecisionExecutor(store, events), private readonly decisionDefinitionsForActor: (actor: SocialActor, intention: SocialIntention) => Promise<DecisionToolDefinition[]> = async () => [], private readonly environmentPortForActor: (actor: SocialActor) => Promise<SocialEnvironmentPort | undefined> = async () => undefined) {}
 
   /** Stop future claims and abort active provider calls. */
   public stop(): void { this.stopped = true; if (this.wakeTimer) clearTimeout(this.wakeTimer); this.wakeTimer = undefined; for (const controller of this.activeControllers) controller.abort(); }
@@ -98,14 +99,18 @@ export class SocialScheduler {
       if (!reservation.allowed) { await this.store.completeIntention(intention.id, `pass:${reservation.reason ?? 'cascade-budget-exhausted'}`); if (reservation.reason?.includes('exhausted') || reservation.reason === 'cascade-inactive') await this.store.exhaustCascade(intention.cascadeId, reservation.reason); await this.store.insertDecisionDiagnostic({ intentionId: intention.id, actorId: actor.id, actorDisplayName: actor.displayName, modelRef: actor.modelRef ?? null, executionScope: scope, cascadeId: intention.cascadeId ?? null, selectedKind: null, routingRefsJson: null, validationOutcome: 'skipped-budget', applicationOutcome: 'skipped', error: reservation.reason ?? 'cascade-budget-exhausted', providerLatencyMs: null, queueWaitMs: this.queueWaitMs(intention), durationMs: this.intentionDurationMs(intention), inputTokens: null, outputTokens: null, totalTokens: null, cachedTokens: null, reasoningTokens: null, cost: null, retryCount: 0 }); return; }
     }
     const frozenIntention = await this.store.markModelStarted(intention.id);
-    const memory = await this.store.getMemory(actor.id); const environment = await this.environmentForActor(actor); const definitions = await this.decisionDefinitionsForActor(actor, frozenIntention); let context;
+    const environmentPort = await this.environmentPortForActor(actor); const memory = environmentPort?.useSocialMemory === false ? undefined : await this.store.getMemory(actor.id); const environment = await this.environmentForActor(actor); const definitions = await this.decisionDefinitionsForActor(actor, frozenIntention); let context;
     if (scope === 'channel-reaction') { const channelId = frozenIntention.channelId!; const visibleActors = await this.store.listActiveActors(actor.sessionId, channelId); if (!visibleActors.some((candidate) => candidate.id === actor.id)) { await this.store.completeIntention(frozenIntention.id, 'pass:not-visible'); return; } const channel = await this.store.getChannel(actor.sessionId, channelId); const messages = (await this.store.readMessages(actor.sessionId, channelId, actor.id, 80, undefined, false, frozenIntention.sourceMessageId ?? undefined)).messages; context = this.contextBuilder.build(actor, visibleActors, messages, frozenIntention, memory?.content, { environment, mode: 'new-message', currentChannel: channel ?? undefined, references: createSocialReferenceSet(visibleActors, channel ? [channel] : []) }); }
     else { const activity = await this.store.listVisibleActivity(actor.sessionId, actor.id, 20); context = this.contextBuilder.buildPlayerMind(actor, allActors, activity, frozenIntention, memory?.content, { environment, mode: frozenIntention.kind, references: createSocialReferenceSet(allActors, activity.map(({ channel }) => channel)) }); }
-    context.references = await this.legalReferences(actor, context.references); context.decisionToolDefinitions = definitions; context.decisionTools = createSocialDecisionTools(this.toolScope(scope, frozenIntention), context.references, definitions); const providerStartedAt = Date.now(); let diagnosticId: string | undefined;
-    try {
+    context.references = await this.legalReferences(actor, context.references); if (environmentPort?.filterReferencesForActor) context.references = await environmentPort.filterReferencesForActor(actor, context.references); context.intentionId = frozenIntention.id; context.supportRead = environmentPort?.read ? (actionName, argumentsValue) => environmentPort.read!(actor, this.eventTurn(frozenIntention), actionName, argumentsValue, `social-read:${frozenIntention.id}:${actionName}`) : undefined; context.decisionToolDefinitions = definitions; context.decisionTools = createSocialDecisionTools(this.toolScope(scope, frozenIntention), context.references, definitions); const providerStartedAt = Date.now(); let diagnosticId: string | undefined;
+    const executeWake = async (): Promise<void> => {
       const run = await this.runModel(actor, context, allActors.map((candidate) => candidate.displayName), abortSignal, providerStartedAt);
       const diagnostic = await this.store.insertDecisionDiagnostic({ intentionId: frozenIntention.id, actorId: actor.id, actorDisplayName: actor.displayName, modelRef: actor.modelRef ?? null, executionScope: scope, cascadeId: frozenIntention.cascadeId ?? null, selectedKind: run.decision.kind, routingRefsJson: JSON.stringify(decisionRoutingSummary(run.decision)), validationOutcome: 'validated', applicationOutcome: null, error: null, providerLatencyMs: run.latencyMs, queueWaitMs: this.queueWaitMs(frozenIntention), durationMs: this.intentionDurationMs(frozenIntention), inputTokens: run.usage?.inputTokens ?? null, outputTokens: run.usage?.outputTokens ?? null, totalTokens: run.usage?.totalTokens ?? null, cachedTokens: run.usage?.cachedTokens ?? null, reasoningTokens: run.usage?.reasoningTokens ?? null, cost: run.usage?.cost ?? null, retryCount: run.retryCount, semanticRetryCount: run.semanticRetryCount ?? run.retryCount, providerAttemptCount: run.providerAttemptCount ?? 1, providerRetryCount: run.providerRetryCount ?? 0, providerFailureClass: run.providerFailureClass ?? null, providerHttpStatus: run.providerHttpStatus ?? null, providerErrorType: run.providerErrorType ?? null, providerErrorCode: run.providerErrorCode ?? null, providerErrorSummary: run.providerErrorSummary ?? null, ...diagnosticObservabilityFields(run.diagnostics) }); diagnosticId = diagnostic.id;
       const applied = await this.decisionExecutor.apply(actor, frozenIntention, run.decision, context.references); await this.store.updateDecisionDiagnostic(diagnostic.id, { applicationOutcome: applied.result, durationMs: this.intentionDurationMs(frozenIntention) });
+    };
+    try {
+      if (environmentPort?.runOnCognitionLane) await environmentPort.runOnCognitionLane(actor, executeWake);
+      else await executeWake();
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error); const telemetry = error instanceof SocialDecisionExecutionError ? error.telemetry : undefined; if (diagnosticId) await this.store.updateDecisionDiagnostic(diagnosticId, { applicationOutcome: 'error', error: message.slice(0, 500), durationMs: this.intentionDurationMs(frozenIntention) }); else await this.store.insertDecisionDiagnostic({ intentionId: frozenIntention.id, actorId: actor.id, actorDisplayName: actor.displayName, modelRef: actor.modelRef ?? null, executionScope: scope, cascadeId: frozenIntention.cascadeId ?? null, selectedKind: null, routingRefsJson: null, validationOutcome: 'failed', applicationOutcome: null, error: message.slice(0, 500), providerLatencyMs: telemetry?.latencyMs ?? Date.now() - providerStartedAt, queueWaitMs: this.queueWaitMs(frozenIntention), durationMs: this.intentionDurationMs(frozenIntention), inputTokens: null, outputTokens: null, totalTokens: null, cachedTokens: null, reasoningTokens: null, cost: null, retryCount: telemetry?.retryCount ?? 0, semanticRetryCount: telemetry?.semanticRetryCount ?? 0, providerAttemptCount: telemetry?.providerAttemptCount ?? 0, providerRetryCount: telemetry?.providerRetryCount ?? 0, providerFailureClass: telemetry?.providerFailureClass ?? null, providerHttpStatus: telemetry?.providerHttpStatus ?? null, providerErrorType: telemetry?.providerErrorType ?? null, providerErrorCode: telemetry?.providerErrorCode ?? null, providerErrorSummary: telemetry?.providerErrorSummary ?? null, ...diagnosticObservabilityFields(telemetry?.diagnostics) }); throw error;
     }
@@ -119,7 +124,7 @@ export class SocialScheduler {
   private async legalReferences(actor: SocialActor, references: SocialReferenceSet): Promise<SocialReferenceSet> {
     const dmActors = references.actors.filter((candidate) => candidate.id !== actor.id);
     const groupParticipants = dmActors;
-    const messageRooms = references.channels.filter((candidate) => candidate.id === 'world' || candidate.kind === 'dm' || candidate.kind === 'group');
+    const messageRooms = references.channels.filter((candidate) => candidate.kind === 'world' || candidate.kind === 'dm' || candidate.kind === 'group');
     const groupRooms = references.channels.filter((candidate) => candidate.kind === 'group');
     const leaveRooms = (await Promise.all(groupRooms.map(async (room) => (await this.store.isActiveMember(room.id, actor.id) ? room : undefined)))).filter((room): room is NonNullable<typeof room> => room !== undefined);
     const inviteRooms = leaveRooms;
@@ -127,6 +132,16 @@ export class SocialScheduler {
     const eligibleRefs = [...new Set(inviteTargets.flatMap((target) => target.participantRefs))];
     const eligible = dmActors.filter((candidate) => eligibleRefs.includes(candidate.ref));
     return { ...references, dmActors, groupParticipants, messageRooms, inviteRooms: inviteTargets.length ? inviteRooms : [], inviteParticipants: eligible, inviteTargets, leaveRooms };
+  }
+  /** Recover the source turn for environment support reads without exposing payload bookkeeping to models. */
+  private eventTurn(intention: SocialIntention): number {
+    if (!intention.payload) return 0;
+    try {
+      const payload = JSON.parse(intention.payload) as { turn?: unknown };
+      return typeof payload.turn === 'number' && Number.isSafeInteger(payload.turn) ? payload.turn : 0;
+    } catch {
+      return 0;
+    }
   }
   /** Measure durable wait before a claimed intention began its provider decision. */
   private queueWaitMs(intention: SocialIntention): number { const started = intention.modelStartedAt ? Date.parse(intention.modelStartedAt) : Date.now(); const created = Date.parse(intention.createdAt); return Number.isFinite(created) ? Math.max(0, started - created) : 0; }

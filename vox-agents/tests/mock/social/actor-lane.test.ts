@@ -22,4 +22,10 @@ describe('ActorLane', () => {
     expect(await run('recovered')).toBe('recovered');
     expect(maximum).toBe(1);
   });
+
+  it('should allow nested admission for support and deal work', async () => {
+    const lane = new ActorLane();
+    const result = await lane.run(async () => lane.run(async () => 'nested'));
+    expect(result).toBe('nested');
+  });
 });

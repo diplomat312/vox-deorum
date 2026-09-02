@@ -142,6 +142,9 @@ export class VoxContext<TParameters extends AgentParameters> {
   /** Set once shutdown begins; new runs are rejected. */
   private closing = false;
 
+  /** Optional owner-provided admission gate for authoritative seat cognition. */
+  private cognitionAdmission: <TResult>(work: () => Promise<TResult>) => Promise<TResult> = (work) => work();
+
   /**
    * Total input tokens (seat-wide, across all runs)
    */
@@ -378,6 +381,16 @@ export class VoxContext<TParameters extends AgentParameters> {
   /** The context-owned base parameters, if any (seat state usable outside a run). */
   public getBaseParameters(): TParameters | undefined {
     return this.baseParameters;
+  }
+
+  /** Install the seat owner’s serialization gate for all authoritative model-bearing roots. */
+  public setCognitionAdmission(admission: <TResult>(work: () => Promise<TResult>) => Promise<TResult>): void {
+    this.cognitionAdmission = admission;
+  }
+
+  /** Run a live authoritative wake through the owner’s seat-level admission gate. */
+  public runOnCognitionLane<TResult>(work: () => Promise<TResult>): Promise<TResult> {
+    return this.cognitionAdmission(work);
   }
 
   // The run-construction primitives — composeParameters, forkSnapshotParameters, createRootRun,
