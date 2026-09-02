@@ -13,6 +13,7 @@ import {
   RECENT_CHRONICLE_HARD_TOKEN_LIMIT,
   RECENT_CHRONICLE_SOFT_TOKEN_LIMIT,
   RECENT_CHRONICLE_TARGET_TOKEN_LIMIT,
+  CHRONICLE_RENDER_OVERHEAD_CHARACTERS,
   estimateChronicleTokens,
 } from '../../../src/civilization-memory/civilization-memory-budget.js';
 
@@ -143,6 +144,24 @@ describe('CivilizationMemoryStore', () => {
     appendTokenBlock(store, scope, RECENT_CHRONICLE_SOFT_TOKEN_LIMIT, 'eventual-overflow');
     expect(store.needsMaintenance(scope)).toBe(true);
     store.close();
+  });
+
+  it('treats the soft threshold as strict and the hard threshold as inclusive', () => {
+    const store = openStore();
+    const scope = { gameId: 'game-memory-test', ownerPlayerId: 1, turn: 35 };
+    const exactSoftText = 's'.repeat(RECENT_CHRONICLE_SOFT_TOKEN_LIMIT * 4 - CHRONICLE_RENDER_OVERHEAD_CHARACTERS);
+    store.appendChronicle(scope, { turn: 35, kind: 'self-note', text: exactSoftText });
+    expect(store.getSnapshot(scope).uncompactedChronicleTokenCount).toBe(RECENT_CHRONICLE_SOFT_TOKEN_LIMIT);
+    expect(store.needsMaintenance(scope)).toBe(false);
+
+    const exactHardText = 'h'.repeat(RECENT_CHRONICLE_HARD_TOKEN_LIMIT * 4 - CHRONICLE_RENDER_OVERHEAD_CHARACTERS);
+    const hardStore = openStore();
+    hardStore.appendChronicle(scope, { turn: 35, kind: 'self-note', text: exactHardText });
+    const snapshot = hardStore.getSnapshot(scope);
+    expect(snapshot.recentChronicleTokenCount).toBe(RECENT_CHRONICLE_HARD_TOKEN_LIMIT);
+    expect(snapshot.recentChronicleTruncated).toBe(false);
+    store.close();
+    hardStore.close();
   });
 
   it('selects a budget-sized oldest range and leaves the raw history intact', () => {

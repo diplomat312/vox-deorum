@@ -26,6 +26,7 @@ import {
   MAX_OUTLOOK_CHARACTERS,
   CHRONICLE_RENDER_OVERHEAD_CHARACTERS,
   civilizationMemoryTokenCharacters,
+  estimateChronicleCharacters,
   estimateChronicleTokens,
 } from './civilization-memory-budget.js';
 
@@ -269,11 +270,14 @@ export class CivilizationMemoryStore {
     const rows = this.sqlite.prepare(`SELECT * FROM civilizationChronicleEntries
       WHERE gameId = ? AND ownerPlayerId = ? AND sequence > ? ORDER BY sequence DESC`).all(scope.gameId, scope.ownerPlayerId, state.compactedThroughSequence) as Record<string, unknown>[];
     const selected: CivilizationChronicleEntry[] = [];
+    let selectedCharacters = 0;
+    const maxCharacters = civilizationMemoryTokenCharacters(maxTokens);
     for (const row of rows) {
       const entry = chronicleFromRow(row);
-      const candidate = [...selected, entry];
-      if (estimateChronicleTokens(candidate) <= maxTokens) {
+      const candidateCharacters = selectedCharacters + entry.text.length + CHRONICLE_RENDER_OVERHEAD_CHARACTERS + (selected.length > 0 ? 1 : 0);
+      if (candidateCharacters <= maxCharacters) {
         selected.push(entry);
+        selectedCharacters = candidateCharacters;
         continue;
       }
       if (selected.length > 0) break;
@@ -360,11 +364,13 @@ export class CivilizationMemoryStore {
     const state = this.sqlite.prepare(`SELECT compactedThroughSequence, longTermRevision FROM civilizationMemoryState WHERE gameId = ? AND ownerPlayerId = ?`)
       .get(scope.gameId, scope.ownerPlayerId) as { compactedThroughSequence: number; longTermRevision: number };
     const entries: CivilizationChronicleEntry[] = [];
-    let remainingEntries = allEntries;
-    for (const entry of allEntries) {
-      if (entries.length >= maxEntries || estimateChronicleTokens(remainingEntries) <= targetRemainingTokens) break;
+    let remainingCharacters = estimateChronicleCharacters(allEntries);
+    for (let index = 0; index < allEntries.length; index += 1) {
+      if (entries.length >= maxEntries || Math.ceil(remainingCharacters / 4) <= targetRemainingTokens) break;
+      const entry = allEntries[index]!;
       entries.push(entry);
-      remainingEntries = remainingEntries.slice(1);
+      const entriesAfterRemoval = allEntries.length - index - 1;
+      remainingCharacters -= entry.text.length + CHRONICLE_RENDER_OVERHEAD_CHARACTERS + (entriesAfterRemoval > 0 ? 1 : 0);
     }
     if (entries.length === 0) return undefined;
     const throughSequence = entries[entries.length - 1]!.sequence;

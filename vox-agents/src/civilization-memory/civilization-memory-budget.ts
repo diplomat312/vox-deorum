@@ -12,7 +12,12 @@ export const RECENT_CHRONICLE_HARD_TOKEN_LIMIT = 32_000;
 /** Maximum size of the model-authored Current Outlook. */
 export const MAX_OUTLOOK_CHARACTERS = 12_000;
 
-/** Reserve predictable labels and separators added when Chronicle entries enter a prompt. */
+/**
+ * Reserve the fixed entry-label budget used by the Chronicle renderer.
+ *
+ * The rendered prefix is bounded to fit this allowance: scope label, turn label, a bounded
+ * civilization name, and punctuation. Sequence separators are counted explicitly below.
+ */
 export const CHRONICLE_RENDER_OVERHEAD_CHARACTERS = 80;
 
 /** Convert plaintext size to the conservative token estimate used by continuity budgets. */
@@ -25,11 +30,15 @@ export function estimateChronicleEntryTokens(entry: { text: string }): number {
   return estimateChronicleTokens([entry]);
 }
 
+/** Count the conservative rendered characters for a Chronicle sequence. */
+export function estimateChronicleCharacters(entries: Array<{ text: string }>): number {
+  if (entries.length === 0) return 0;
+  return entries.reduce((total, entry) => total + entry.text.length + CHRONICLE_RENDER_OVERHEAD_CHARACTERS, 0) + entries.length - 1;
+}
+
 /** Estimate a Chronicle sequence, including one predictable separator between entries. */
 export function estimateChronicleTokens(entries: Array<{ text: string }>): number {
-  if (entries.length === 0) return 0;
-  const characters = entries.reduce((total, entry) => total + entry.text.length + CHRONICLE_RENDER_OVERHEAD_CHARACTERS, 0) + entries.length - 1;
-  return Math.ceil(characters / 4);
+  return Math.ceil(estimateChronicleCharacters(entries) / 4);
 }
 
 /** Convert a token budget to its conservative character approximation. */

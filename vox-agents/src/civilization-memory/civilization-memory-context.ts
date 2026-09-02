@@ -11,7 +11,7 @@ import type { CivilizationChronicleEntry, CivilizationMemoryScope, CivilizationM
 
 /** Return the model-visible name for the active civilization. */
 function civilizationName(parameters: StrategistParameters): string {
-  return parameters.metadata?.YouAre?.Name ?? 'our civilization';
+  return (parameters.metadata?.YouAre?.Name ?? 'our civilization').slice(0, 32);
 }
 
 /** Render one factual chronicle entry without exposing internal storage metadata. */
