@@ -31,7 +31,7 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 import fs from 'node:fs';
 import path from 'node:path';
 import { trace, SpanStatusCode, context } from '@opentelemetry/api';
-import { spanProcessor } from '../instrumentation.js';
+import { sqliteExporter } from '../instrumentation.js';
 import { VoxSpanExporter } from '../utils/telemetry/vox-exporter.js';
 import { countMessagesTokens } from "../utils/models/token-counter.js";
 import { emitProviderExecutedToolSpans } from "../utils/telemetry/provider-tool-spans.js";
@@ -1070,7 +1070,7 @@ export class VoxContext<TParameters extends AgentParameters> {
       this.abort(true);
 
       // Force flush telemetry data to ensure all spans are written
-      await spanProcessor.forceFlush();
+      await sqliteExporter.forceFlush();
 
       // Close the SQLite database for this specific context
       await VoxSpanExporter.getInstance().closeContext(this.id);

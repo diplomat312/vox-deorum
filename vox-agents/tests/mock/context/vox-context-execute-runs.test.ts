@@ -204,15 +204,6 @@ describe('VoxContext.execute token accounting', () => {
   it('exports one canonical wake and one step span per implementation step', async () => {
     const contextId = `exec-canonical-wake-${Date.now()}`;
     const ctx = new VoxContext<StrategistParameters>({}, contextId);
-    let exported = false;
-    const exportObserved = new Promise<void>(resolve => {
-      const listener = () => {
-        exported = true;
-        sqliteExporter.offSpansExported(contextId, listener);
-        resolve();
-      };
-      sqliteExporter.onSpansExported(contextId, listener);
-    });
     let call = 0;
     stc.mockImplementation(async () => {
       call += 1;
@@ -226,8 +217,7 @@ describe('VoxContext.execute token accounting', () => {
     await ctx.withRun({ parameters: makeStrategistParameters({ turn: 41 }) }, async () => {
       await ctx.execute('unified-mind-diplomat', {});
     });
-    await spanProcessor.forceFlush();
-    await exportObserved;
+    await sqliteExporter.forceFlush();
 
     const rows = await sqliteExporter.getDatabase(contextId).selectFrom('spans').selectAll().where('contextId', '=', contextId).execute();
     const attributes = rows.map(row => ({ ...row, parsed: row.attributes ? JSON.parse(row.attributes) as Record<string, string | number> : {} }));
@@ -238,7 +228,6 @@ describe('VoxContext.execute token accounting', () => {
     expect(wakes[0].parsed['mind.wake']).toBe('diplomacy');
     expect(wakes[0].parsed['mind.outcome']).toBe('pass');
     expect(wakes[0].parsed['tokens.input']).toBe(30);
-    expect(exported).toBe(true);
     await sqliteExporter.closeContext(contextId);
   });
 

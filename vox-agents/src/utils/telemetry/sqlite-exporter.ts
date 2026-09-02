@@ -47,6 +47,7 @@ const customFolders = new Map<string, string>();
 export class SQLiteSpanExporter extends VoxSpanExporter {
   private dataDir: string;
   private eventEmitter: EventEmitter;
+  private readonly activeExports = new Set<Promise<void>>();
 
   constructor(dataDir: string = 'telemetry') {
     super();
@@ -193,6 +194,17 @@ export class SQLiteSpanExporter extends VoxSpanExporter {
    * Export spans to SQLite databases using Kysely
    */
   async export(spans: ReadableSpan[], resultCallback: (result: ExportResult) => void): Promise<void> {
+    const operation = this.writeSpans(spans, resultCallback);
+    this.activeExports.add(operation);
+    try {
+      await operation;
+    } finally {
+      this.activeExports.delete(operation);
+    }
+  }
+
+  /** Write one batch and resolve its OpenTelemetry callback after SQLite persistence completes. */
+  private async writeSpans(spans: ReadableSpan[], resultCallback: (result: ExportResult) => void): Promise<void> {
     try {
       // Group spans by context ID for batch inserts
       const spansByContext = new Map<string, NewSpan[]>();
@@ -239,6 +251,9 @@ export class SQLiteSpanExporter extends VoxSpanExporter {
   async forceFlush(): Promise<void> {
     try {
       await spanProcessor.forceFlush();
+      while (this.activeExports.size > 0) {
+        await Promise.all([...this.activeExports]);
+      }
 
       // Checkpoint all databases to ensure data is written
       for (const connection of databases.values()) {
