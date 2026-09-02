@@ -1,10 +1,11 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { CivilizationMemoryStore } from '../../../src/civilization-memory/civilization-memory-store.js';
 import { buildCivilizationMemoryContext } from '../../../src/civilization-memory/civilization-memory-context.js';
 import { createCivilizationMemoryTools } from '../../../src/civilization-memory/civilization-memory-tools.js';
+import { runCivilizationMemoryMaintenance } from '../../../src/civilization-memory/civilization-memory-maintenance-runner.js';
 import { createFakeVoxContext } from '../../helpers/fake-vox-context.js';
 import type { StrategistParameters } from '../../../src/strategist/strategy-parameters.js';
 import {
@@ -12,6 +13,7 @@ import {
   RECENT_CHRONICLE_HARD_TOKEN_LIMIT,
   RECENT_CHRONICLE_SOFT_TOKEN_LIMIT,
   RECENT_CHRONICLE_TARGET_TOKEN_LIMIT,
+  estimateChronicleTokens,
 } from '../../../src/civilization-memory/civilization-memory-budget.js';
 
 const temporaryDirectories: string[] = [];
@@ -120,17 +122,21 @@ describe('CivilizationMemoryStore', () => {
     expect(store.needsMaintenance(scope)).toBe(false);
     appendTokenBlock(store, scope, 10, 'small');
     expect(store.needsMaintenance(scope)).toBe(false);
-    appendTokenBlock(store, scope, RECENT_CHRONICLE_SOFT_TOKEN_LIMIT - 10, 'below-soft');
+    appendTokenBlock(store, scope, RECENT_CHRONICLE_SOFT_TOKEN_LIMIT - 200, 'below-soft');
     expect(store.needsMaintenance(scope)).toBe(false);
-    appendTokenBlock(store, scope, 20, 'over-soft');
+    appendTokenBlock(store, scope, 200, 'over-soft');
     expect(store.needsMaintenance(scope)).toBe(true);
+    const beforeCompaction = store.getSnapshot(scope);
+    expect(beforeCompaction.uncompactedChronicleTokenCount).toBe(estimateChronicleTokens(store.getAllChronicle(scope)));
 
     const range = store.selectCompactionRange(scope, { targetRemainingTokens: RECENT_CHRONICLE_TARGET_TOKEN_LIMIT, maxEntries: 100 });
     expect(range).toBeDefined();
     store.commitCompaction(scope, range!, 'The oldest Chronicle facts remain available in raw history.');
     const after = store.getSnapshot(scope);
     expect(after.maintenanceRequired).toBe(false);
-    expect(after.uncompactedChronicleTokenCount).toBeLessThanOrEqual(RECENT_CHRONICLE_TARGET_TOKEN_LIMIT + 20);
+    expect(after.uncompactedChronicleTokenCount).toBeLessThanOrEqual(RECENT_CHRONICLE_TARGET_TOKEN_LIMIT + 100);
+    expect(after.recentChronicleTokenCount).toBe(estimateChronicleTokens(after.recentChronicle));
+    expect(after.uncompactedChronicleTokenCount).toBe(estimateChronicleTokens(after.recentChronicle));
 
     appendTokenBlock(store, scope, 500, 'small-after-compaction');
     expect(store.needsMaintenance(scope)).toBe(false);
@@ -143,7 +149,7 @@ describe('CivilizationMemoryStore', () => {
     const store = openStore();
     const scope = { gameId: 'game-memory-test', ownerPlayerId: 1, turn: 35 };
     appendTokenBlock(store, scope, 12_000, 'old-one');
-    appendTokenBlock(store, scope, 16_000, 'recent-tail');
+    appendTokenBlock(store, scope, 15_900, 'recent-tail');
     const range = store.selectCompactionRange(scope, { targetRemainingTokens: RECENT_CHRONICLE_TARGET_TOKEN_LIMIT, maxEntries: 100 })!;
     expect(range.entries.map(entry => entry.text.startsWith('old'))).toEqual([true]);
     expect(store.getAllChronicle(scope)).toHaveLength(2);
@@ -163,6 +169,67 @@ describe('CivilizationMemoryStore', () => {
     expect(snapshot.recentChronicleTruncated).toBe(true);
     expect(snapshot.recentChronicle[0]?.text).toContain('newest-hot-history');
     expect(store.getAllChronicle(scope)).toHaveLength(2);
+    store.close();
+  });
+
+  it('bounds a single oversized Chronicle entry without changing raw history', () => {
+    const store = openStore();
+    const scope = { gameId: 'game-memory-test', ownerPlayerId: 1, turn: 35 };
+    const oversized = `oversized-event ${'x'.repeat(RECENT_CHRONICLE_HARD_TOKEN_LIMIT * 4)}`;
+    store.appendChronicle(scope, { turn: 35, kind: 'game-event', text: oversized });
+    const snapshot = store.getSnapshot(scope);
+    const message = buildCivilizationMemoryContext(parameters(store), 'strategic')!;
+    expect(store.getAllChronicle(scope)[0]?.text).toBe(oversized);
+    expect(snapshot.recentChronicleTokenCount).toBeLessThanOrEqual(RECENT_CHRONICLE_HARD_TOKEN_LIMIT);
+    expect(snapshot.recentChronicleTruncated).toBe(true);
+    expect(String(message.content)).toContain('truncated in working context');
+    expect(String(message.content)).toContain('complete source remains stored in raw history');
+    store.close();
+  });
+
+  it('runs maintenance once only after overflow and retriggers after later overflow', async () => {
+    const store = openStore();
+    const context = createFakeVoxContext('civilization-memory-maintenance');
+    const scope = { gameId: 'game-memory-test', ownerPlayerId: 1, turn: 35 };
+    const params = parameters(store);
+    appendTokenBlock(store, scope, RECENT_CHRONICLE_SOFT_TOKEN_LIMIT - 500, 'below-soft');
+    await runCivilizationMemoryMaintenance(context.asContext(), params);
+    expect(context.execute).not.toHaveBeenCalled();
+
+    appendTokenBlock(store, scope, 600, 'cross-soft');
+    context.execute.mockImplementation(async (_agentName, input) => {
+      const range = (input as { range: { entries: unknown[] } }).range;
+      store.commitCompaction(scope, range as never, 'Compacted continuity from the oldest factual entries.');
+    });
+    await runCivilizationMemoryMaintenance(context.asContext(), params);
+    expect(context.execute).toHaveBeenCalledTimes(1);
+    expect(store.getSnapshot(scope).maintenanceRequired).toBe(false);
+    const longTermRevision = store.getLongTerm(scope)?.revision;
+    const cursor = store.getLongTerm(scope)?.compactedThroughSequence;
+
+    await runCivilizationMemoryMaintenance(context.asContext(), params);
+    expect(context.execute).toHaveBeenCalledTimes(1);
+    expect(store.getLongTerm(scope)?.revision).toBe(longTermRevision);
+    expect(store.getLongTerm(scope)?.compactedThroughSequence).toBe(cursor);
+
+    appendTokenBlock(store, scope, RECENT_CHRONICLE_SOFT_TOKEN_LIMIT, 'cross-soft-again');
+    await runCivilizationMemoryMaintenance(context.asContext(), params);
+    expect(context.execute).toHaveBeenCalledTimes(2);
+    store.close();
+  });
+
+  it('leaves continuity unchanged when maintenance execution fails', async () => {
+    const store = openStore();
+    const context = createFakeVoxContext('civilization-memory-maintenance-failure');
+    const scope = { gameId: 'game-memory-test', ownerPlayerId: 1, turn: 35 };
+    const params = parameters(store);
+    appendTokenBlock(store, scope, RECENT_CHRONICLE_SOFT_TOKEN_LIMIT + 1_000, 'overflow');
+    context.execute.mockRejectedValue(new Error('provider unavailable'));
+    await runCivilizationMemoryMaintenance(context.asContext(), params);
+    expect(context.execute).toHaveBeenCalledTimes(1);
+    expect(store.getLongTerm(scope)).toBeUndefined();
+    expect(store.getAllChronicle(scope)).toHaveLength(1);
+    expect(store.getSnapshot(scope).maintenanceRequired).toBe(true);
     store.close();
   });
 
@@ -206,7 +273,7 @@ describe('CivilizationMemoryStore', () => {
     const snapshot = store.getSnapshot(scope);
     expect(snapshot.outlook?.text).toContain('informal boundary');
     expect(snapshot.longTerm?.text).toContain('ambiguous');
-    expect(snapshot.recentChronicle[0]?.text).toContain('Border history fact 7');
+    expect(snapshot.recentChronicle[0]?.text).toContain('Border history fact 8');
     store.close();
   });
 

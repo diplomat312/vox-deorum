@@ -25,7 +25,7 @@ const stubs = {
 };
 
 const minds = [
-  { playerId: 0, civilization: 'Rome', leader: 'Augustus', architecture: 'unified-mind', model: 'openrouter/minimax-m3', runtimeContextId: 'game-player-0', activity: { activeWakes: [{ runId: 'run-1', wake: 'diplomacy', startedAt: 2_000 }] }, game: { score: 100, activeAgreementCount: 0 }, memory: { outlook: { gameId: 'g', ownerPlayerId: 0, text: 'Repair Greece ties', revision: 1, createdTurn: 1, updatedTurn: 2 }, recentChronicle: [], recentChronicleTokenCount: 0, maintenanceRequired: false }, recentWakes: [{ wake: 'strategic', turn: 41, outcome: 'keep-status-quo', model: 'openrouter/minimax-m3', durationMs: 100, tokens: { input: 12, output: 8 }, timestamp: 1_000, traceId: 'trace-1', spanId: 'wake-1' }, { wake: 'diplomacy', turn: 42, outcome: 'spoke', model: 'openrouter/minimax-m3', durationMs: 100, tokens: {}, timestamp: 2_000, traceId: 'trace-2', spanId: 'wake-2' }] },
+  { playerId: 0, civilization: 'Rome', leader: 'Augustus', architecture: 'unified-mind', model: 'openrouter/minimax-m3', runtimeContextId: 'game-player-0', activity: { activeWakes: [{ runId: 'run-1', wake: 'diplomacy', startedAt: 2_000 }] }, game: { score: 100, activeAgreementCount: 0 }, memory: { outlook: { gameId: 'g', ownerPlayerId: 0, text: 'Repair Greece ties', revision: 1, createdTurn: 1, updatedTurn: 2 }, recentChronicle: [], recentChronicleTokenCount: 0, recentChronicleTruncated: true, maintenanceRequired: false }, recentWakes: [{ wake: 'strategic', turn: 41, outcome: 'keep-status-quo', model: 'openrouter/minimax-m3', durationMs: 100, tokens: { input: 12, output: 8 }, timestamp: 1_000, traceId: 'trace-1', spanId: 'wake-1' }, { wake: 'diplomacy', turn: 42, outcome: 'spoke', model: 'openrouter/minimax-m3', durationMs: 100, tokens: {}, timestamp: 2_000, traceId: 'trace-2', spanId: 'wake-2' }] },
   { playerId: 1, civilization: 'Greece', leader: 'Pericles', architecture: 'legacy', model: 'openrouter/mimo-v2.5', activity: { activeWakes: [] }, game: { score: 90, activeAgreementCount: 0 }, recentWakes: [] },
   { playerId: 2, civilization: 'Egypt', leader: 'Cleopatra', architecture: 'native', activity: { activeWakes: [] }, game: { score: 80, activeAgreementCount: 0 }, recentWakes: [] },
 ];
@@ -66,5 +66,6 @@ describe('CivilizationMindsDialog', () => {
     expect(wrapper.text()).toContain('Civilization continuity');
     expect(wrapper.text()).toContain('Current Outlook');
     expect(wrapper.text()).toContain('Repair Greece ties');
+    expect(wrapper.text()).toContain('Older raw Chronicle entries are temporarily omitted');
   });
 });
