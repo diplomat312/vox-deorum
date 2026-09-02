@@ -385,7 +385,7 @@ export class VoxPlayer {
 
   /** Return known major civilization IDs from this seat's latest authoritative player report. */
   getKnownPlayerIds(): number[] {
-    return getKnownMajorPlayerIds(this.getBaseParameters(), this.playerID);
+    return getKnownMajorPlayerIds(this.getBaseParameters(), this.playerID, this.getCurrentTurn());
   }
 
   /** Return the freshest session turn without mutating the strategist event cursor. */

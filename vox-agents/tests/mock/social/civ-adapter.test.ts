@@ -68,17 +68,34 @@ describe('Civ Pass 3 adapter seams', () => {
 
   it('should refresh the live contact graph from cached player visibility without recreating the adapter', async () => {
     const adapter = new CivEnvironmentAdapter(new MemoryEnvironmentEventJournal());
-    const parameters = { playerID: 7, turn: 1, gameStates: { 1: { turn: 1, players: { '3': 'Unmet Major Civilization', '7': { IsMajor: true } }, reports: {} } } } as StrategistParameters;
-    const player = { getKnownPlayerIds: () => getKnownMajorPlayerIds(parameters, 7) } as unknown as VoxPlayer;
+    const parameters = { playerID: 7, turn: 1, gameStates: { 1: { turn: 1, players: { '3': 'Unmet Major Civilization', '7': { IsMajor: true } }, reports: {} }, 2: { turn: 2, players: { '3': { IsMajor: true }, '7': { IsMajor: true } }, reports: {} }, 3: { turn: 3, players: { '3': { IsMajor: true }, '5': { IsMajor: true }, '7': { IsMajor: true } }, reports: {} } } } as StrategistParameters;
+    let liveTurn = 1;
+    const player = { getCurrentTurn: () => liveTurn, getBaseParameters: () => parameters, getKnownPlayerIds: () => getKnownMajorPlayerIds(parameters, 7, liveTurn) } as unknown as VoxPlayer;
     await adapter.attach('session', { environment: 'civ5', gameId: 'game-refresh', turn: 1, facts: {}, seats: seats.slice(0, 2), normalizedState: {} }, actors, { 'human-seat': 3, 'llm-seat': 7 });
     await refreshCivContactGraph(adapter, (actorId) => actorId === 'civ-player-7' ? player : undefined);
     const references = createSocialReferenceSet(actors, [{ id: 'world', sessionId: 'session', kind: 'world', title: 'WORLD', createdByActorId: 'human-seat', canonicalKey: 'world', createdAt: 'now', archived: false }]);
     await expect(adapter.filterReferencesForActor(actors[1], references)).resolves.toMatchObject({ actors: [expect.objectContaining({ id: 'llm-seat' })] });
-    parameters.turn = 2;
-    parameters.gameStates[2] = { turn: 2, players: { '3': { IsMajor: true }, '7': { IsMajor: true } }, reports: {} };
+    liveTurn = 2;
     await refreshCivContactGraph(adapter, (actorId) => actorId === 'civ-player-7' ? player : undefined);
     await expect(adapter.filterReferencesForActor(actors[1], references)).resolves.toMatchObject({ actors: expect.arrayContaining([expect.objectContaining({ id: 'human-seat' })]) });
     await expect(adapter.isActorReachable(actors[1], 'human-seat')).resolves.toBe(true);
+    expect(getKnownMajorPlayerIds(parameters, 7, 2)).toEqual([3]);
+    expect(getKnownMajorPlayerIds(parameters, 7, 3)).toEqual([3, 5]);
+  });
+
+  it('should require a third-party observer to know both endpoints of a two-party event', async () => {
+    const adapter = new CivEnvironmentAdapter(new MemoryEnvironmentEventJournal());
+    const eventActors = [...actors, { id: 'egypt-seat', ordinal: 2, control: 'model' as const, displayName: 'Egypt', sessionId: 'session', createdAt: 'now', status: 'active' as const }];
+    const eventSeats = [
+      { ...seats[0], knownPlayerIds: [7] },
+      { ...seats[1], knownPlayerIds: [3, 9] },
+      { ...seats[2], nativeVpOnly: false, knownPlayerIds: [3, 7] },
+    ];
+    await adapter.attach('session', { environment: 'civ5', gameId: 'game-events', turn: 1, facts: {}, seats: eventSeats, normalizedState: {} }, eventActors, { 'human-seat': 3, 'llm-seat': 7, 'egypt-seat': 9 });
+    const event = { gameId: 'game-events', turn: 1, type: 'WarDeclared', sourceKey: 'war-1', sourcePlayerId: 7, targetPlayerId: 9, payload: {} };
+    expect(adapter.eventRecipientActorIds(event)).toEqual(['llm-seat', 'egypt-seat']);
+    adapter.updateSnapshot({ environment: 'civ5', gameId: 'game-events', turn: 2, facts: {}, seats: eventSeats.map((seat) => seat.playerId === 3 ? { ...seat, knownPlayerIds: [7, 9] } : seat), normalizedState: {} });
+    expect(adapter.eventRecipientActorIds({ ...event, sourceKey: 'war-2' })).toEqual(['human-seat', 'llm-seat', 'egypt-seat']);
   });
 
   it('should give distinct stable operation IDs to support reads with different arguments', async () => {

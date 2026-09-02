@@ -93,13 +93,15 @@ describe('CivilizationMemoryStore', () => {
       },
     };
     appendSocialFact(store, params, { kind: 'dm-message', actorId: 'civ-player-2', channelId: 'dm-1', channelTitle: 'DM with Rome', message: { id: 17, channelId: 'dm-1', speakerActorId: 'civ-player-2', content: 'A bounded private message.', replyToMessageId: null, createdAt: 'now', intentionId: null, idempotencyKey: null }, turn: 80, eventId: 'message-17', recipientActorIds: ['civ-player-1'], entitledActorIds: ['civ-player-1'] });
+    appendSocialFact(store, params, { kind: 'invitation-received', actorId: 'civ-player-1', channelId: 'group-1', channelTitle: 'Eastern Council', content: 'Received an invitation to group Eastern Council.', turn: 80, eventId: 'membership-0', recipientActorIds: ['civ-player-2'], entitledActorIds: ['civ-player-1'] });
     appendSocialFact(store, params, { kind: 'group-joined', actorId: 'civ-player-1', channelId: 'group-1', channelTitle: 'Eastern Council', content: 'Joined the group.', turn: 80, eventId: 'membership-1', entitledActorIds: ['civ-player-1'] });
     appendSocialFact(store, params, { kind: 'group-joined', actorId: 'civ-player-1', channelId: 'group-1', channelTitle: 'Eastern Council', content: 'Joined the group again.', turn: 80, eventId: 'membership-2', entitledActorIds: ['civ-player-1'] });
     const entries = store.getAllChronicle({ gameId: 'game-memory-test', ownerPlayerId: 1, turn: 80 });
-    expect(entries).toHaveLength(3);
+    expect(entries).toHaveLength(4);
     expect(entries[0]?.text).toContain('Private message · DM with Rome · Greece / Pericles → Rome / Augustus');
     expect(entries[0]?.text).toContain('A bounded private message.');
-    expect(entries[1]?.text).toContain('Joined group · Eastern Council · Rome / Augustus');
+    expect(entries[1]?.text).toContain('Group invitation received · Eastern Council · Rome / Augustus → Greece / Pericles');
+    expect(entries[2]?.text).toContain('Joined group · Eastern Council · Rome / Augustus');
     store.close();
   });
 

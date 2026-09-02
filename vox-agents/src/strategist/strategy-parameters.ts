@@ -404,8 +404,8 @@ export function getRecentGameState(
 }
 
 /** Derive currently known major civilizations from the authoritative get-players snapshot. */
-export function getKnownMajorPlayerIds(parameters: StrategistParameters, playerID = parameters.playerID): number[] {
-  const state = getRecentGameState(parameters, parameters.turn);
+export function getKnownMajorPlayerIds(parameters: StrategistParameters, playerID = parameters.playerID, maxTurn = parameters.turn): number[] {
+  const state = getRecentGameState(parameters, maxTurn);
   if (!state?.players || playerID === undefined) return [];
   return Object.entries(state.players)
     .filter(([id, value]) => {

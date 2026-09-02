@@ -10,10 +10,11 @@ import type { EnvoyThread } from '../types/index.js';
 import type { TranscriptPushMessage } from '../utils/diplomacy/transcript/transcript-utils.js';
 import type { CivilizationMemoryStore } from './civilization-memory-store.js';
 import type { SocialCommittedFact } from '../social/runtime/social-environment-port.js';
+import { getRecentGameState } from '../strategist/strategy-parameters.js';
 
 /** Return a human-readable participant name from the latest bounded player report. */
-function participantName(parameters: StrategistParameters, playerId: number): string {
-  const players = parameters.gameStates[parameters.turn]?.players as Record<string, unknown> | undefined;
+function participantName(parameters: StrategistParameters, playerId: number, maxTurn = parameters.turn): string {
+  const players = getRecentGameState(parameters, maxTurn)?.players as Record<string, unknown> | undefined;
   const raw = players?.[String(playerId)];
   const player = raw && typeof raw === 'object' ? raw as Record<string, unknown> : undefined;
   const civilization = typeof player?.Civilization === 'string' ? player.Civilization : undefined;
@@ -130,12 +131,12 @@ export function appendSocialFact(
   const content = fact.message?.content ?? fact.content ?? 'A social event occurred.';
   const quoted = content.replace(/\s+/g, ' ').trim().slice(0, 4000);
   const speakerId = fact.message?.speakerActorId ?? fact.actorId;
-  const speaker = socialParticipantName(parameters, speakerId);
-  const recipients = [...new Set((fact.recipientActorIds ?? []).filter((actorId) => actorId !== speakerId).map((actorId) => socialParticipantName(parameters, actorId)))];
+  const speaker = socialParticipantName(parameters, speakerId, turn);
+  const recipients = [...new Set((fact.recipientActorIds ?? []).filter((actorId) => actorId !== speakerId).map((actorId) => socialParticipantName(parameters, actorId, turn)))];
   const label = socialFactLabel(fact.kind);
   const location = fact.channelTitle ? ` · ${fact.channelTitle}` : '';
   const route = recipients.length > 0 ? `${speaker} → ${recipients.join(', ')}` : speaker;
-  const text = fact.message ? `Turn ${turn} · ${label}${location} · ${route}: "${quoted}"` : `Turn ${turn} · ${label}${location} · ${speaker}: ${quoted}`;
+  const text = fact.message ? `Turn ${turn} · ${label}${location} · ${route}: "${quoted}"` : `Turn ${turn} · ${label}${location} · ${route}: ${quoted}`;
   for (const actorId of fact.entitledActorIds) {
     if (actorId !== `civ-player-${parameters.playerID}`) continue;
     store.appendChronicle({ gameId: parameters.gameID, ownerPlayerId: parameters.playerID, turn }, {
@@ -150,9 +151,9 @@ export function appendSocialFact(
 }
 
 /** Resolve one social actor identity through the owner's authoritative Civ state. */
-function socialParticipantName(parameters: StrategistParameters, actorId: string): string {
+function socialParticipantName(parameters: StrategistParameters, actorId: string, maxTurn = parameters.turn): string {
   const match = /^civ-player-(\d+)$/.exec(actorId);
-  return match ? participantName(parameters, Number(match[1])) : actorId;
+  return match ? participantName(parameters, Number(match[1]), maxTurn) : actorId;
 }
 
 /** Convert an internal social fact kind into factual model-facing wording. */

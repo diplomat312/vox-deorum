@@ -10,6 +10,7 @@ import { createSocialReferenceSet } from '../../../src/social/context/social-con
 import { SocialContextBuilder } from '../../../src/social/context/social-context-builder.js';
 import { createSocialDecisionTools } from '../../../src/social/runtime/social-decision-tools.js';
 import type { SocialActor, SocialIntention } from '../../../src/social/types.js';
+import type { SocialEnvironmentPort } from '../../../src/social/runtime/social-environment-port.js';
 
 const cleanups: Array<() => Promise<void>> = [];
 afterEach(async () => { for (const cleanup of cleanups.splice(0)) await cleanup(); });
@@ -43,6 +44,17 @@ describe('structured social decisions', () => {
     const group = (await store.listChannels('decisions', 'bob')).find((channel) => channel.title === 'Secret council'); const roomRefs = createSocialReferenceSet(actors, group ? [group] : []);
     const leaveIntention = await running(store, 'leave-1', 'bob', 'autonomous-social', invitation.channelId); await applied.apply(actors[2], leaveIntention, { kind: 'leave_group', roomRef: 'secret-council' }, roomRefs); await expect(store.readMessages('decisions', dm!.id, 'bob')).resolves.toBeDefined();
     const hidden = await store.createGroup('decisions', 'human', 'Hidden room', []); const unauthorizedIntention = await running(store, 'unauthorized-1', 'alice'); const hiddenRefs = createSocialReferenceSet(actors, [hidden]); expect((await applied.apply(actors[1], unauthorizedIntention, { kind: 'send_message', roomRef: 'hidden-room', content: 'This must be refused' }, hiddenRefs)).result).toBe('refused');
+  });
+
+  it('should attribute group invitations to the inviter and invitee in committed facts', async () => {
+    const { store, actors } = await createFixture();
+    const facts: Array<{ kind: string; actorId: string; recipientActorIds?: string[]; entitledActorIds: string[] }> = [];
+    const environment = { contextForActor: async () => undefined, decisionDefinitionsForActor: async () => [], execute: async () => ({ state: 'CONFIRMED' }), recordCommittedFact: (fact: { kind: string; actorId: string; recipientActorIds?: string[]; entitledActorIds: string[] }) => { facts.push(fact); } } as unknown as SocialEnvironmentPort;
+    const events = new SocialEventHub();
+    const applied = new SocialDecisionExecutor(store, events, async () => environment);
+    const intention = await running(store, 'group-attribution', 'alice');
+    await applied.apply(actors[1], intention, { kind: 'start_group', title: 'Private council', participantRefs: ['bob'] }, createSocialReferenceSet(actors));
+    expect(facts).toContainEqual(expect.objectContaining({ kind: 'invitation-received', actorId: 'alice', recipientActorIds: ['bob'], entitledActorIds: ['bob'] }));
   });
 
   it('should expose semantic references and omit runtime-owned routing and memory fields', () => {
