@@ -33,6 +33,9 @@ function renderMemory(snapshot: CivilizationMemorySnapshot, parameters: Strategi
   lines.push('', '# Recent Chronicle');
   if (snapshot.recentChronicle.length === 0) lines.push('No recent chronicle entries.');
   else lines.push(...snapshot.recentChronicle.map(entry => renderEntry(entry, parameters)));
+  if (snapshot.recentChronicleTruncated) {
+    lines.push('', 'The oldest uncompacted Chronicle entries are temporarily omitted from this prompt because the recent-history hard limit was reached. They remain preserved and will be available after maintenance.');
+  }
   return lines.join('\n');
 }
 
@@ -57,7 +60,7 @@ export function buildCivilizationMemoryContext(
   return { role: 'user', content: renderMemory(snapshot, parameters, wake) };
 }
 
-/** Return the one semantic continuity support tool exposed to unified wakes. */
+/** Return the one Current Outlook support tool exposed to unified wakes. */
 export function civilizationMemoryToolNames(): string[] {
   return ['update-civilization-outlook'];
 }

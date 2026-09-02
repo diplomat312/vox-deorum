@@ -90,7 +90,7 @@ ${SimpleBriefer.eventsPrompt}`.trim();
     return messages;
   }
 
-  /** Expose semantic-memory support tools alongside ordinary strategic actions. */
+  /** Expose Current Outlook support alongside ordinary strategic actions. */
   override getExtraTools(context: VoxContext<StrategistParameters>) {
     return createCivilizationMemoryTools(context);
   }

@@ -55,7 +55,7 @@ ${this.getDealMechanicsPrompt().replace("# Deal mechanics\n", "")}
     return buildGameContextMessages(parameters, { unifiedMind: true });
   }
 
-  /** Expose the same semantic-memory support actions without changing deal terminal actions. */
+  /** Expose the same Current Outlook support without changing deal terminal actions. */
   override getExtraTools(context: VoxContext<StrategistParameters>) {
     return { ...super.getExtraTools(context), ...createCivilizationMemoryTools(context) };
   }
@@ -65,7 +65,7 @@ ${this.getDealMechanicsPrompt().replace("# Deal mechanics\n", "")}
     return ["get-briefing", "get-diplomatic-events", ...civilizationMemoryToolNames(), ...this.completionTools];
   }
 
-  /** Insert counterpart-focused political memory into the common deal prompt. */
+  /** Insert shared civilization continuity into the common deal prompt. */
   override async getInitialMessages(
     parameters: StrategistParameters,
     input: NegotiatorInput,

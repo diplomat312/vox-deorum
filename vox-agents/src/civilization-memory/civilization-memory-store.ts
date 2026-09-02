@@ -19,8 +19,28 @@ import type {
   ChronicleCompactionRange,
   LongTermChronicle,
 } from './types.js';
+import {
+  RECENT_CHRONICLE_HARD_TOKEN_LIMIT,
+  RECENT_CHRONICLE_SOFT_TOKEN_LIMIT,
+  RECENT_CHRONICLE_TARGET_TOKEN_LIMIT,
+  MAX_OUTLOOK_CHARACTERS,
+  civilizationMemoryTokenCharacters,
+  estimateCivilizationMemoryTokens,
+} from './civilization-memory-budget.js';
 
 type Sqlite = InstanceType<typeof Database>;
+
+/** A normal optimistic-concurrency conflict that the active civilization wake can reconcile. */
+export class CivilizationOutlookConflictError extends Error {
+  public readonly latest?: CivilizationOutlook;
+
+  /** Create a conflict carrying the latest plaintext state without exposing storage metadata. */
+  public constructor(latest?: CivilizationOutlook) {
+    super('Your Current Outlook changed during this wake.');
+    this.name = 'CivilizationOutlookConflictError';
+    this.latest = latest;
+  }
+}
 
 /** Parse a JSON evidence value without allowing malformed historical rows to break a wake. */
 function parseEvidence(value: string | null): CivilizationEvidenceRef | undefined {
@@ -42,11 +62,6 @@ function parseParticipants(value: string | null): number[] | undefined {
   } catch {
     return undefined;
   }
-}
-
-/** Estimate text size with the same conservative four-characters-per-token rule used by prompts. */
-function estimateTokens(text: string): number {
-  return Math.ceil(text.length / 4);
 }
 
 /** Convert a database row to a chronicle entry. */
@@ -138,6 +153,24 @@ export class CivilizationMemoryStore {
     `).run(scope.gameId, scope.ownerPlayerId);
   }
 
+  /** Count all uncompacted raw Chronicle text without applying the prompt display window. */
+  private getUncompactedChronicleTokens(scope: CivilizationMemoryScope): number {
+    this.ensureState(scope);
+    const state = this.sqlite.prepare(`SELECT compactedThroughSequence FROM civilizationMemoryState WHERE gameId = ? AND ownerPlayerId = ?`)
+      .get(scope.gameId, scope.ownerPlayerId) as { compactedThroughSequence: number };
+    const row = this.sqlite.prepare(`SELECT COALESCE(SUM(LENGTH(text)), 0) AS characters
+      FROM civilizationChronicleEntries WHERE gameId = ? AND ownerPlayerId = ? AND sequence > ?`)
+      .get(scope.gameId, scope.ownerPlayerId, state.compactedThroughSequence) as { characters: number };
+    return Math.ceil(Number(row.characters ?? 0) / 4);
+  }
+
+  /** Reconcile the persisted flag with the authoritative uncompacted Chronicle size. */
+  private refreshMaintenanceState(scope: CivilizationMemoryScope, tokenCount = this.getUncompactedChronicleTokens(scope)): number {
+    this.sqlite.prepare(`UPDATE civilizationMemoryState SET maintenanceRequired = ? WHERE gameId = ? AND ownerPlayerId = ?`)
+      .run(tokenCount > RECENT_CHRONICLE_SOFT_TOKEN_LIMIT ? 1 : 0, scope.gameId, scope.ownerPlayerId);
+    return tokenCount;
+  }
+
   /** Read the current outlook revision for a civilization. */
   public getOutlook(scope: CivilizationMemoryScope): CivilizationOutlook | undefined {
     this.ensureState(scope);
@@ -168,18 +201,21 @@ export class CivilizationMemoryStore {
   /** Persist a new self-authored outlook only if the caller still owns the observed revision. */
   public updateOutlook(scope: CivilizationMemoryScope, text: string, expectedRevision: number, operationKey: string): CivilizationOutlook {
     this.ensureState(scope);
-    const existing = this.sqlite.prepare('SELECT resultJson FROM civilizationMemoryMutations WHERE operationKey = ?').get(operationKey) as { resultJson: string } | undefined;
-    if (existing) return JSON.parse(existing.resultJson) as CivilizationOutlook;
-    const current = this.sqlite.prepare(`SELECT outlookRevision FROM civilizationMemoryState WHERE gameId = ? AND ownerPlayerId = ?`).get(scope.gameId, scope.ownerPlayerId) as { outlookRevision: number };
-    if (current.outlookRevision !== expectedRevision) {
-      throw new Error('Your Current Outlook changed during this wake. Re-read it before replacing it.');
-    }
-    const result: CivilizationOutlook = {
-      gameId: scope.gameId, ownerPlayerId: scope.ownerPlayerId, text: text.trim(),
-      revision: expectedRevision + 1, createdTurn: scope.turn, updatedTurn: scope.turn,
-      ...(scope.wakeTraceId ? { updatedByWakeTraceId: scope.wakeTraceId } : {}),
-    };
-    this.sqlite.transaction(() => {
+    const normalizedText = text.trim();
+    if (normalizedText.length === 0) throw new Error('Current Outlook cannot be empty.');
+    if (normalizedText.length > MAX_OUTLOOK_CHARACTERS) throw new Error('Current Outlook is too long. Rewrite it more concisely.');
+    const write = this.sqlite.transaction(() => {
+      const existing = this.sqlite.prepare('SELECT resultJson FROM civilizationMemoryMutations WHERE operationKey = ?').get(operationKey) as { resultJson: string } | undefined;
+      if (existing) return JSON.parse(existing.resultJson) as CivilizationOutlook;
+      const current = this.sqlite.prepare(`SELECT outlookRevision FROM civilizationMemoryState WHERE gameId = ? AND ownerPlayerId = ?`).get(scope.gameId, scope.ownerPlayerId) as { outlookRevision: number };
+      if (current.outlookRevision !== expectedRevision) {
+        throw new CivilizationOutlookConflictError(this.getOutlook(scope));
+      }
+      const result: CivilizationOutlook = {
+        gameId: scope.gameId, ownerPlayerId: scope.ownerPlayerId, text: normalizedText,
+        revision: expectedRevision + 1, createdTurn: scope.turn, updatedTurn: scope.turn,
+        ...(scope.wakeTraceId ? { updatedByWakeTraceId: scope.wakeTraceId } : {}),
+      };
       this.sqlite.prepare(`INSERT INTO civilizationOutlookRevisions
         (gameId, ownerPlayerId, revision, turn, wakeTraceId, text, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?)`)
         .run(result.gameId, result.ownerPlayerId, result.revision, scope.turn, scope.wakeTraceId ?? null, result.text, Date.now());
@@ -187,8 +223,9 @@ export class CivilizationMemoryStore {
         .run(result.revision, scope.gameId, scope.ownerPlayerId);
       this.sqlite.prepare(`INSERT INTO civilizationMemoryMutations (operationKey, gameId, ownerPlayerId, resultJson, createdAt) VALUES (?, ?, ?, ?, ?)`)
         .run(operationKey, scope.gameId, scope.ownerPlayerId, JSON.stringify(result), Date.now());
-    })();
-    return result;
+      return result;
+    });
+    return write();
   }
 
   /** Append one factual chronicle entry, returning the existing entry on a deterministic retry. */
@@ -216,14 +253,15 @@ export class CivilizationMemoryStore {
         .run(result.id, result.gameId, result.ownerPlayerId, result.sequence, result.turn, result.timestamp, result.kind,
           result.text, result.evidenceRef ? JSON.stringify(result.evidenceRef) : null, result.dedupeKey ?? null,
           result.scope ?? null, result.participantPlayerIds ? JSON.stringify(result.participantPlayerIds) : null);
-      this.sqlite.prepare(`UPDATE civilizationMemoryState SET nextSequence = nextSequence + 1, maintenanceRequired = 1 WHERE gameId = ? AND ownerPlayerId = ?`)
+      this.sqlite.prepare(`UPDATE civilizationMemoryState SET nextSequence = nextSequence + 1 WHERE gameId = ? AND ownerPlayerId = ?`)
         .run(scope.gameId, scope.ownerPlayerId);
+      this.refreshMaintenanceState(scope);
     })();
     return result;
   }
 
   /** Read a chronological bounded window without interpreting its contents. */
-  public getRecentChronicle(scope: CivilizationMemoryScope, maxCharacters = 80000): CivilizationChronicleEntry[] {
+  public getRecentChronicle(scope: CivilizationMemoryScope, maxCharacters = civilizationMemoryTokenCharacters(RECENT_CHRONICLE_HARD_TOKEN_LIMIT)): CivilizationChronicleEntry[] {
     this.ensureState(scope);
     const state = this.sqlite.prepare(`SELECT compactedThroughSequence FROM civilizationMemoryState WHERE gameId = ? AND ownerPlayerId = ?`)
       .get(scope.gameId, scope.ownerPlayerId) as { compactedThroughSequence: number };
@@ -262,37 +300,60 @@ export class CivilizationMemoryStore {
   }
 
   /** Return bounded continuity and the deterministic maintenance flag for a wake. */
-  public getSnapshot(scope: CivilizationMemoryScope, maxCharacters = 80000): CivilizationMemorySnapshot {
+  public getSnapshot(scope: CivilizationMemoryScope, maxCharacters = civilizationMemoryTokenCharacters(RECENT_CHRONICLE_HARD_TOKEN_LIMIT)): CivilizationMemorySnapshot {
     this.ensureState(scope);
-    const state = this.sqlite.prepare(`SELECT maintenanceRequired FROM civilizationMemoryState WHERE gameId = ? AND ownerPlayerId = ?`)
-      .get(scope.gameId, scope.ownerPlayerId) as { maintenanceRequired: number };
+    const uncompactedChronicleTokenCount = this.refreshMaintenanceState(scope);
     const recentChronicle = this.getRecentChronicle(scope, maxCharacters);
+    const recentChronicleTokenCount = recentChronicle.reduce((total, entry) => total + estimateCivilizationMemoryTokens(entry.text), 0);
+    const recentChronicleTruncated = recentChronicleTokenCount < uncompactedChronicleTokenCount;
     return {
       ...(this.getOutlook(scope) ? { outlook: this.getOutlook(scope) } : {}),
       ...(this.getLongTerm(scope) ? { longTerm: this.getLongTerm(scope) } : {}),
       recentChronicle,
-      recentChronicleTokenCount: estimateTokens(recentChronicle.map(entry => entry.text).join('\n')),
-      maintenanceRequired: state.maintenanceRequired === 1,
+      recentChronicleTokenCount,
+      uncompactedChronicleTokenCount,
+      recentChronicleTruncated,
+      maintenanceRequired: uncompactedChronicleTokenCount > RECENT_CHRONICLE_SOFT_TOKEN_LIMIT,
     };
+  }
+
+  /** Return whether uncompacted factual history has crossed the maintenance soft limit. */
+  public needsMaintenance(scope: CivilizationMemoryScope): boolean {
+    return this.refreshMaintenanceState(scope) > RECENT_CHRONICLE_SOFT_TOKEN_LIMIT;
   }
 
   /** Mark maintenance as required without changing any model-authored content. */
   public markMaintenanceRequired(scope: CivilizationMemoryScope): void {
     this.ensureState(scope);
-    this.sqlite.prepare(`UPDATE civilizationMemoryState SET maintenanceRequired = 1 WHERE gameId = ? AND ownerPlayerId = ?`)
-      .run(scope.gameId, scope.ownerPlayerId);
+    this.refreshMaintenanceState(scope);
   }
 
-  /** Select the oldest un-compacted entries for a deterministic same-mind maintenance wake. */
-  public selectCompactionRange(scope: CivilizationMemoryScope, maxEntries: number): ChronicleCompactionRange | undefined {
+  /** Select the oldest whole entries needed to return recent history near the target budget. */
+  public selectCompactionRange(
+    scope: CivilizationMemoryScope,
+    options: { targetRemainingTokens?: number; maxEntries?: number } | number = {},
+  ): ChronicleCompactionRange | undefined {
     this.ensureState(scope);
+    const normalizedOptions = typeof options === 'number' ? { maxEntries: options } : options;
+    const targetRemainingTokens = normalizedOptions.targetRemainingTokens ?? RECENT_CHRONICLE_TARGET_TOKEN_LIMIT;
+    const maxEntries = normalizedOptions.maxEntries ?? 1000;
+    const currentTokens = this.getUncompactedChronicleTokens(scope);
+    if (currentTokens <= RECENT_CHRONICLE_SOFT_TOKEN_LIMIT) return undefined;
     const state = this.sqlite.prepare(`SELECT compactedThroughSequence, longTermRevision FROM civilizationMemoryState WHERE gameId = ? AND ownerPlayerId = ?`)
       .get(scope.gameId, scope.ownerPlayerId) as { compactedThroughSequence: number; longTermRevision: number };
     const rows = this.sqlite.prepare(`SELECT * FROM civilizationChronicleEntries
-      WHERE gameId = ? AND ownerPlayerId = ? AND sequence > ? ORDER BY sequence ASC LIMIT ?`)
-      .all(scope.gameId, scope.ownerPlayerId, state.compactedThroughSequence, maxEntries) as Record<string, unknown>[];
+      WHERE gameId = ? AND ownerPlayerId = ? AND sequence > ? ORDER BY sequence ASC`)
+      .all(scope.gameId, scope.ownerPlayerId, state.compactedThroughSequence) as Record<string, unknown>[];
     if (rows.length === 0) return undefined;
-    const entries = rows.map(chronicleFromRow);
+    const allEntries = rows.map(chronicleFromRow);
+    const entries: CivilizationChronicleEntry[] = [];
+    let remainingTokens = currentTokens;
+    for (const entry of allEntries) {
+      if (entries.length >= maxEntries || remainingTokens <= targetRemainingTokens) break;
+      entries.push(entry);
+      remainingTokens -= estimateCivilizationMemoryTokens(entry.text);
+    }
+    if (entries.length === 0) return undefined;
     const throughSequence = entries[entries.length - 1]!.sequence;
     return {
       fromSequence: entries[0]!.sequence,
@@ -324,10 +385,10 @@ export class CivilizationMemoryStore {
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
         .run(result.gameId, result.ownerPlayerId, result.revision, result.text, result.compactedThroughSequence,
           result.updatedTurn, scope.wakeTraceId ?? null, Date.now());
-      this.sqlite.prepare(`UPDATE civilizationMemoryState SET longTermRevision = ?, compactedThroughSequence = ?, maintenanceRequired = CASE WHEN EXISTS (
-        SELECT 1 FROM civilizationChronicleEntries WHERE gameId = ? AND ownerPlayerId = ? AND sequence > ?
-      ) THEN 1 ELSE 0 END WHERE gameId = ? AND ownerPlayerId = ?`)
-        .run(result.revision, result.compactedThroughSequence, scope.gameId, scope.ownerPlayerId, result.compactedThroughSequence, scope.gameId, scope.ownerPlayerId);
+      this.sqlite.prepare(`UPDATE civilizationMemoryState SET longTermRevision = ?, compactedThroughSequence = ?
+        WHERE gameId = ? AND ownerPlayerId = ?`)
+        .run(result.revision, result.compactedThroughSequence, scope.gameId, scope.ownerPlayerId);
+      this.refreshMaintenanceState(scope);
       this.sqlite.prepare(`INSERT INTO civilizationMemoryMutations (operationKey, gameId, ownerPlayerId, resultJson, createdAt) VALUES (?, ?, ?, ?, ?)`)
         .run(range.operationKey, scope.gameId, scope.ownerPlayerId, JSON.stringify(result), Date.now());
     })();

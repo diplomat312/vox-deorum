@@ -68,6 +68,10 @@ export interface CivilizationMemorySnapshot {
   longTerm?: LongTermChronicle;
   recentChronicle: CivilizationChronicleEntry[];
   recentChronicleTokenCount: number;
+  /** Total estimated tokens before the prompt-size window is applied. */
+  uncompactedChronicleTokenCount?: number;
+  /** True when the hard-limit prompt window omitted oldest raw entries. */
+  recentChronicleTruncated?: boolean;
   maintenanceRequired: boolean;
 }
 

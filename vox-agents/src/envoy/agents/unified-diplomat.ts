@@ -71,7 +71,7 @@ export class UnifiedDiplomat extends Diplomat {
     };
   }
 
-  /** Add the same counterpart-focused political memory to every unified diplomacy wake. */
+  /** Add the same shared civilization continuity to every unified diplomacy wake. */
   protected override async getExtraContext(
     parameters: StrategistParameters,
     input: EnvoyThread,

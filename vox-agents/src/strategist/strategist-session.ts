@@ -81,7 +81,7 @@ export class StrategistSession extends VoxSession<StrategistSessionConfig> {
     getAssignments: () => this.getPlayerAssignments(),
   });
 
-  /** Persistent stores keyed by game so crash recovery and resumed games retain semantic memory. */
+  /** Persistent stores keyed by game so crash recovery and resumed games retain continuity. */
   private readonly civilizationMemoryStores = new Map<string, CivilizationMemoryStore>();
 
   /**
@@ -1006,14 +1006,14 @@ ${overrideLine}Game.SetAIAutoPlay(${autoPlayTurnLimit}, -1);`
     return this.isInteractiveMode && this.config.llmPlayers[0] === undefined ? 0 : undefined;
   }
 
-  /** Return durable semantic political memory for a unified seat. */
+  /** Return durable civilization continuity for a unified seat. */
   override getCivilizationMemorySnapshot(playerId: number): CivilizationMemorySnapshot | undefined {
     if (!this.gameID || this.getPlayerAssignments()[playerId]?.mind !== 'unified-mind') return undefined;
     const store = this.civilizationMemoryStores.get(this.gameID);
     return store?.getSnapshot({ gameId: this.gameID, ownerPlayerId: playerId, turn: this.turn ?? 0 });
   }
 
-  /** Open or reuse the game-scoped political memory database. */
+  /** Open or reuse the game-scoped civilization continuity database. */
   private getCivilizationMemoryStore(gameID: string): CivilizationMemoryStore {
     const existing = this.civilizationMemoryStores.get(gameID);
     if (existing) return existing;

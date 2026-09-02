@@ -36,7 +36,7 @@ Each unified civilization has one persistent plaintext Current Outlook, a factua
 
 The `update-civilization-outlook` support tool rewrites the civilization's own concise Outlook when its political understanding materially changes. Diplomacy messages, deal lifecycle facts, successful strategy rationales, and visible game events are mechanically recorded without semantic classification. Outlook writes use optimistic revisions and chronicle entries use stable source keys, so retries do not silently overwrite or duplicate memory.
 
-Memory maintenance is a bounded wake of the same configured civilization model. It writes a new Long-Term Chronicle only after a successful model response and then advances an internal checkpoint. A failed maintenance wake leaves the prior long-term text and raw chronicle intact, so ordinary game cognition can continue. Internal revisions and sequence numbers are storage details and are not part of the model's political vocabulary.
+Memory maintenance is a bounded wake of the same configured civilization model. It is requested only when uncompacted Recent Chronicle history crosses the 24,000 estimated-token soft limit, and successful compaction targets about 16,000 tokens. The normal wake has a 32,000-token hard window, so diplomacy and deal activity remain bounded even when maintenance is unavailable. A failed maintenance wake leaves the prior long-term text and raw chronicle intact, so ordinary game cognition can continue. Maintenance is currently attempted before strategic wakes, rather than as a separate background scheduler. Internal revisions and sequence numbers are storage details and are not part of the model's political vocabulary.
 
 ## Diagnostics
 

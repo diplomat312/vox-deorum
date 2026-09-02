@@ -7,6 +7,12 @@ import { buildCivilizationMemoryContext } from '../../../src/civilization-memory
 import { createCivilizationMemoryTools } from '../../../src/civilization-memory/civilization-memory-tools.js';
 import { createFakeVoxContext } from '../../helpers/fake-vox-context.js';
 import type { StrategistParameters } from '../../../src/strategist/strategy-parameters.js';
+import {
+  MAX_OUTLOOK_CHARACTERS,
+  RECENT_CHRONICLE_HARD_TOKEN_LIMIT,
+  RECENT_CHRONICLE_SOFT_TOKEN_LIMIT,
+  RECENT_CHRONICLE_TARGET_TOKEN_LIMIT,
+} from '../../../src/civilization-memory/civilization-memory-budget.js';
 
 const temporaryDirectories: string[] = [];
 const openStores: CivilizationMemoryStore[] = [];
@@ -43,6 +49,11 @@ function parameters(store: CivilizationMemoryStore, ownerPlayerId = 1, turn = 35
   };
 }
 
+/** Append one deterministic block with an approximate token size for budget tests. */
+function appendTokenBlock(store: CivilizationMemoryStore, scope: { gameId: string; ownerPlayerId: number; turn: number }, tokens: number, index: string): void {
+  store.appendChronicle(scope, { turn: scope.turn, kind: 'self-note', text: `${index} ${'x'.repeat(Math.max(0, tokens * 4 - index.length - 1))}` });
+}
+
 /** Close stores and remove temporary test directories. */
 afterEach(() => {
   for (const store of openStores.splice(0)) store.close();
@@ -75,14 +86,94 @@ describe('CivilizationMemoryStore', () => {
     store.close();
   });
 
+  it('recovers an Outlook conflict inside the same wake and advances the local revision', async () => {
+    const store = openStore();
+    const context = createFakeVoxContext('civilization-memory-conflict');
+    const scope = { gameId: 'game-memory-test', ownerPlayerId: 1, turn: 35 };
+    const paramsA = parameters(store);
+    const paramsB = parameters(store);
+    paramsB.civilizationMemoryOutlookRevision = 0;
+    const tool = createCivilizationMemoryTools(context.asContext())['update-civilization-outlook']!;
+
+    await context.withRun({ parameters: paramsA }, () => tool.execute!({ Outlook: 'Greece is becoming dangerous.' }, { toolCallId: 'outlook-a', messages: [] }));
+    const conflict = await context.withRun({ parameters: paramsB }, () => tool.execute!({ Outlook: 'Greece remains cooperative.' }, { toolCallId: 'outlook-b', messages: [] }));
+    expect(String(conflict)).toContain('Greece is becoming dangerous.');
+    expect(String(conflict)).not.toContain('Greece is both');
+    expect(paramsB.civilizationMemoryOutlookRevision).toBe(1);
+
+    await context.withRun({ parameters: paramsB }, () => tool.execute!({ Outlook: 'Greece is dangerous, but its trade remains useful.' }, { toolCallId: 'outlook-b-retry', messages: [] }));
+    expect(store.getOutlook(scope)?.revision).toBe(2);
+    expect(store.getOutlook(scope)?.text).toContain('trade remains useful');
+    store.close();
+  });
+
+  it('keeps Current Outlook concise and rejects oversized direct writes', () => {
+    const store = openStore();
+    const scope = { gameId: 'game-memory-test', ownerPlayerId: 1, turn: 35 };
+    expect(() => store.updateOutlook(scope, 'x'.repeat(MAX_OUTLOOK_CHARACTERS + 1), 0, 'too-large')).toThrow(/too long/);
+    store.close();
+  });
+
+  it('uses soft, target, and hard Chronicle budgets with hysteresis', () => {
+    const store = openStore();
+    const scope = { gameId: 'game-memory-test', ownerPlayerId: 1, turn: 35 };
+    expect(store.needsMaintenance(scope)).toBe(false);
+    appendTokenBlock(store, scope, 10, 'small');
+    expect(store.needsMaintenance(scope)).toBe(false);
+    appendTokenBlock(store, scope, RECENT_CHRONICLE_SOFT_TOKEN_LIMIT - 10, 'below-soft');
+    expect(store.needsMaintenance(scope)).toBe(false);
+    appendTokenBlock(store, scope, 20, 'over-soft');
+    expect(store.needsMaintenance(scope)).toBe(true);
+
+    const range = store.selectCompactionRange(scope, { targetRemainingTokens: RECENT_CHRONICLE_TARGET_TOKEN_LIMIT, maxEntries: 100 });
+    expect(range).toBeDefined();
+    store.commitCompaction(scope, range!, 'The oldest Chronicle facts remain available in raw history.');
+    const after = store.getSnapshot(scope);
+    expect(after.maintenanceRequired).toBe(false);
+    expect(after.uncompactedChronicleTokenCount).toBeLessThanOrEqual(RECENT_CHRONICLE_TARGET_TOKEN_LIMIT + 20);
+
+    appendTokenBlock(store, scope, 500, 'small-after-compaction');
+    expect(store.needsMaintenance(scope)).toBe(false);
+    appendTokenBlock(store, scope, RECENT_CHRONICLE_SOFT_TOKEN_LIMIT, 'eventual-overflow');
+    expect(store.needsMaintenance(scope)).toBe(true);
+    store.close();
+  });
+
+  it('selects a budget-sized oldest range and leaves the raw history intact', () => {
+    const store = openStore();
+    const scope = { gameId: 'game-memory-test', ownerPlayerId: 1, turn: 35 };
+    appendTokenBlock(store, scope, 12_000, 'old-one');
+    appendTokenBlock(store, scope, 16_000, 'recent-tail');
+    const range = store.selectCompactionRange(scope, { targetRemainingTokens: RECENT_CHRONICLE_TARGET_TOKEN_LIMIT, maxEntries: 100 })!;
+    expect(range.entries.map(entry => entry.text.startsWith('old'))).toEqual([true]);
+    expect(store.getAllChronicle(scope)).toHaveLength(2);
+    store.commitCompaction(scope, range, 'The older facts are preserved as long-term continuity.');
+    expect(store.getAllChronicle(scope)).toHaveLength(2);
+    expect(store.getSnapshot(scope).recentChronicle[0]?.text).toContain('recent-tail');
+    store.close();
+  });
+
+  it('keeps the newest history within the hard prompt window when maintenance is unavailable', () => {
+    const store = openStore();
+    const scope = { gameId: 'game-memory-test', ownerPlayerId: 1, turn: 35 };
+    appendTokenBlock(store, scope, RECENT_CHRONICLE_HARD_TOKEN_LIMIT - 8_000, 'older-hot-history');
+    appendTokenBlock(store, scope, 20_000, 'newest-hot-history');
+    const snapshot = store.getSnapshot(scope);
+    expect(snapshot.uncompactedChronicleTokenCount).toBeGreaterThan(RECENT_CHRONICLE_HARD_TOKEN_LIMIT);
+    expect(snapshot.recentChronicleTruncated).toBe(true);
+    expect(snapshot.recentChronicle[0]?.text).toContain('newest-hot-history');
+    expect(store.getAllChronicle(scope)).toHaveLength(2);
+    store.close();
+  });
+
   it('deduplicates factual source records without deleting them during compaction', () => {
     const store = openStore();
     const scope = { gameId: 'game-memory-test', ownerPlayerId: 1, turn: 35 };
     const entry = { turn: 35, kind: 'game-event' as const, text: 'Persia declared war on Greece.', dedupeKey: 'game-event:77:1', scope: 'game' as const };
     store.appendChronicle(scope, entry);
     store.appendChronicle(scope, entry);
-    for (let index = 0; index < 24; index += 1) store.appendChronicle(scope, { turn: 36 + index, kind: 'self-note', text: `Fact ${index}` });
-    const range = store.selectCompactionRange(scope, 10)!;
+    for (let index = 0; index < 24; index += 1) appendTokenBlock(store, { ...scope, turn: 36 + index }, 2_000, `Fact ${index}`);
+    const range = store.selectCompactionRange(scope, { targetRemainingTokens: RECENT_CHRONICLE_TARGET_TOKEN_LIMIT, maxEntries: 10 })!;
     store.commitCompaction(scope, range, 'Persia declared war on Greece.');
     const facts = store.getAllChronicle(scope);
     expect(facts.filter(item => item.dedupeKey === entry.dedupeKey)).toHaveLength(1);
@@ -109,13 +200,13 @@ describe('CivilizationMemoryStore', () => {
     const store = openStore();
     const scope = { gameId: 'game-memory-test', ownerPlayerId: 1, turn: 35 };
     store.updateOutlook(scope, 'The river remains an informal boundary and ambiguity should be discussed before escalation.', 0, 'outlook-border');
-    for (let index = 0; index < 15; index += 1) store.appendChronicle(scope, { turn: 35 + index, kind: 'private-message', text: `Border history fact ${index}`, dedupeKey: `border:${index}`, scope: 'private', participantPlayerIds: [1, 2] });
-    const range = store.selectCompactionRange(scope, 10)!;
+    for (let index = 0; index < 15; index += 1) appendTokenBlock(store, { ...scope, turn: 35 + index }, 2_000, `Border history fact ${index}`);
+    const range = store.selectCompactionRange(scope, { targetRemainingTokens: RECENT_CHRONICLE_TARGET_TOKEN_LIMIT, maxEntries: 100 })!;
     store.commitCompaction(scope, range, 'The river remains an informal boundary; later settlement facts were ambiguous.');
     const snapshot = store.getSnapshot(scope);
     expect(snapshot.outlook?.text).toContain('informal boundary');
     expect(snapshot.longTerm?.text).toContain('ambiguous');
-    expect(snapshot.recentChronicle[0]?.text).toContain('Border history fact 10');
+    expect(snapshot.recentChronicle[0]?.text).toContain('Border history fact 7');
     store.close();
   });
 
