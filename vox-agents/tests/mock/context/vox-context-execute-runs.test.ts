@@ -183,6 +183,9 @@ class MultiStepUnifiedDiplomat extends VoxAgent<StrategistParameters> {
 }
 
 beforeAll(() => {
+  // This file runs in the shared single-fork worker. Restore spies left by earlier files so the
+  // telemetry assertion exercises the real batch processor and exporter flush path.
+  vi.restoreAllMocks();
   agentRegistry.register(new StepAgent('test-step-a') as any);
   agentRegistry.register(new StepAgent('test-step-b') as any);
   agentRegistry.register(new StepAgent('test-step-child') as any);
