@@ -42,7 +42,7 @@ function renderMemory(snapshot: CivilizationMemorySnapshot, parameters: Strategi
 /** Build the shared continuity message and capture the revision used by the update tool. */
 export function buildCivilizationMemoryContext(
   parameters: StrategistParameters,
-  wake: 'strategic' | 'diplomacy' | 'deal' | 'memory',
+  wake: 'strategic' | 'diplomacy' | 'deal' | 'memory' | 'social',
   counterpartPlayerId?: number,
 ): ModelMessage | undefined {
   const store = parameters.civilizationMemoryStore;

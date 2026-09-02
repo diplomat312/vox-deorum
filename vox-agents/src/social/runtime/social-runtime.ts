@@ -12,7 +12,7 @@ import { getSocialPacingBudget, type SocialPacingProfile } from './social-pacing
 import type { SocialEnvironmentPort } from './social-environment-port.js';
 
 /** Configuration for one standalone social sandbox. */
-export interface SocialRuntimeConfig { sessionId?: string; humanActorId?: string; title?: string; pacingProfile?: SocialPacingProfile; actors: SocialActorDefinition[]; dataDirectory: string; modelExecutor?: SocialDecisionExecutor; }
+export interface SocialRuntimeConfig { sessionId?: string; humanActorId?: string; title?: string; pacingProfile?: SocialPacingProfile; actors: SocialActorDefinition[]; dataDirectory: string; modelExecutor?: SocialDecisionExecutor; liveCiv?: boolean; }
 
 /** Lifecycle owner for one durable, game-independent social session. */
 export class SocialRuntime {
@@ -27,9 +27,9 @@ export class SocialRuntime {
   /** Create and persist a new social session. */
   public async start(config: SocialRuntimeConfig): Promise<void> {
     if (this.store) throw new Error('A social session is already running');
-    const humanActorId = config.humanActorId ?? 'human';
-    if (!config.actors.some((actor) => actor.id === humanActorId && actor.control === 'human')) throw new Error('The social session requires one human actor');
-    if (config.actors.length < 2 || config.actors.length > 8) throw new Error('A social session requires 2 to 8 actors');
+    const humanActorId = config.liveCiv ? (config.humanActorId ?? '') : (config.humanActorId ?? 'human');
+    if (!config.liveCiv && !config.actors.some((actor) => actor.id === humanActorId && actor.control === 'human')) throw new Error('The social session requires one human actor');
+    if (config.actors.length < (config.liveCiv ? 1 : 2) || config.actors.length > 8) throw new Error(`A social session requires ${config.liveCiv ? '1' : '2'} to 8 actors`);
     await mkdir(config.dataDirectory, { recursive: true });
     this.session = { id: config.sessionId ?? randomUUID(), humanActorId, title: config.title, pacingProfile: config.pacingProfile ?? 'balanced' };
     this.store = new SocialStore(path.join(config.dataDirectory, `${this.session.id}.sqlite`));
@@ -39,7 +39,7 @@ export class SocialRuntime {
     this.scheduler = this.createScheduler();
   }
   /** Reopen a persisted social session without creating duplicate channels or messages. */
-  public async resume(sessionId: string, dataDirectory: string): Promise<void> { if (this.store) throw new Error('A social session is already running'); if (!/^[a-zA-Z0-9_-]+$/.test(sessionId)) throw new Error('Invalid social session ID'); const store = new SocialStore(path.join(dataDirectory, `${sessionId}.sqlite`)); const session = await store.getSession(sessionId); if (!session) { await store.close(); throw new Error('Persisted social session was not found'); } this.store = store; this.session = session; for (const actor of await store.listActors(sessionId)) this.lanes.set(actor.id, new ActorLane()); await store.recoverInterruptedIntentions(); this.scheduler = this.createScheduler(); this.scheduler.kick(); }
+  public async resume(sessionId: string, dataDirectory: string, modelExecutor?: SocialDecisionExecutor): Promise<void> { if (this.store) throw new Error('A social session is already running'); if (!/^[a-zA-Z0-9_-]+$/.test(sessionId)) throw new Error('Invalid social session ID'); const store = new SocialStore(path.join(dataDirectory, `${sessionId}.sqlite`)); const session = await store.getSession(sessionId); if (!session) { await store.close(); throw new Error('Persisted social session was not found'); } this.store = store; this.session = session; this.modelExecutor = modelExecutor; for (const actor of await store.listActors(sessionId)) this.lanes.set(actor.id, new ActorLane()); await store.recoverInterruptedIntentions(); this.scheduler = this.createScheduler(); this.scheduler.kick(); }
   /** List persisted sessions available for resume. */
   public async listStoredSessions(dataDirectory: string): Promise<Array<{ session: SocialSessionDefinition; actors: SocialActor[] }>> { await mkdir(dataDirectory, { recursive: true }); const files = await readdir(dataDirectory); const sessions: Array<{ session: SocialSessionDefinition; actors: SocialActor[] }> = []; for (const file of files.filter((candidate) => candidate.endsWith('.sqlite'))) { const sessionId = file.slice(0, -'.sqlite'.length); if (!/^[a-zA-Z0-9_-]+$/.test(sessionId)) continue; const store = new SocialStore(path.join(dataDirectory, file)); const session = await store.getSession(sessionId); if (session) sessions.push({ session, actors: await store.listActors(sessionId) }); await store.close(); } return sessions.sort((a, b) => (b.session.updatedAt ?? b.session.createdAt ?? '').localeCompare(a.session.updatedAt ?? a.session.createdAt ?? '')); }
   /** Update durable homepage metadata for a persisted session. */

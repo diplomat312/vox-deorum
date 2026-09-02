@@ -14,14 +14,16 @@ export async function attachCivEnvironment(runtime: SocialRuntime, adapter: CivE
   const sessionId = runtime.getSessionId();
   const eventBridge = new CivEventBridge({ enqueueIntention: (input) => runtime.enqueueIntention(input) });
   adapter.configurePersistence(new SocialStoreEnvironmentEventJournal(store, sessionId, snapshot.environment), { list: (id, environmentType, gameId) => store.listEnvironmentBindings(id, environmentType, gameId), reconcile: (bindings) => store.reconcileEnvironmentBindings(bindings.map((binding) => ({ ...binding, environmentType: snapshot.environment }))) }, async (event) => {
-    if (!event.actorId) return;
-    const actor = (await runtime.listActors()).find((candidate) => candidate.id === event.actorId);
-    if (actor?.control === 'model') await eventBridge.route(event, actor.id);
+    const liveActors = await runtime.listActors();
+    const recipients = new Set(adapter.eventRecipientActorIds(event));
+    if (event.actorId) recipients.add(event.actorId);
+    for (const actor of liveActors) if (actor.control === 'model' && recipients.has(actor.id)) await eventBridge.route(event, actor.id);
   });
   await adapter.attach(sessionId, snapshot, await runtime.listActors(), actorSeatById);
   const context = new CivContextProvider(adapter);
   const gateway = new CivActionGateway(new SocialStoreCivActionJournal(store));
   await registerExistingCivCapabilities(gateway, port);
+  await gateway.recover(sessionId);
   const environment: SocialEnvironmentPort = {
     contextForActor: (actor) => context.forActor(actor),
     decisionDefinitionsForActor: async () => gateway.modelDecisionDefinitions(),

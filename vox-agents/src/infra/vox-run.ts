@@ -17,7 +17,7 @@ export interface ExecuteTokenOutput {
 }
 
 /** The supported unified civilization wake types. */
-export type UnifiedWakeType = 'strategic' | 'diplomacy' | 'deal' | 'memory';
+export type UnifiedWakeType = 'strategic' | 'diplomacy' | 'deal' | 'memory' | 'social';
 
 /** Runtime-only state for one active unified civilization wake. */
 export interface UnifiedWakeState {

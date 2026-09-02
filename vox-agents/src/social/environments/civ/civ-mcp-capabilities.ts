@@ -22,7 +22,7 @@ function readDefinition(description: string, inputSchema: z.ZodType): CivActionD
 function nativeDealDefinition(): CivActionDefinition { return { category: 'NATIVE_DIPLOMACY', description: 'Reject an open agent deal proposal addressed to the bound Civ actor.', inputSchema: z.object({ targetPlayerId: z.number().int().min(-1), proposalMessageId: z.number().int(), content: z.string().max(12000).optional() }), modelFacing: true, execute: async () => ({ state: 'FAILED', failureClass: 'unbound-mcp-handler' }) }; }
 
 /** Call the canonical MCP client with the acting player structurally inserted. */
-async function callMcp(port: CivMcpPort, actionType: string, binding: CivActorBinding, args: Record<string, unknown>, operationId: string): Promise<CivActionExecutionResult> {
+async function callMcp(port: CivMcpPort, actionType: string, binding: CivActorBinding, args: Record<string, unknown>, _operationId: string): Promise<CivActionExecutionResult> {
   const underlying = actionType === 'reject-agent-deal'
     ? { PlayerAID: binding.playerId, PlayerBID: args.targetPlayerId, ProposalMessageID: args.proposalMessageId, SpeakerID: binding.playerId, Content: args.content, ExpectedGameID: binding.gameId }
     : { ...args, PlayerID: binding.playerId };

@@ -70,6 +70,7 @@ function unifiedWakeForAgent(agentName: string): UnifiedWakeType | undefined {
   if (agentName === "unified-mind-diplomat") return "diplomacy";
   if (agentName === "unified-mind-negotiator") return "deal";
   if (agentName === "unified-mind-memory") return "memory";
+  if (agentName === "unified-mind-social") return "social";
   return undefined;
 }
 
@@ -724,7 +725,9 @@ export class VoxContext<TParameters extends AgentParameters> {
                           : toolNames.has('send-message') ? 'spoke' : undefined
                     : wake === 'memory'
                       ? toolNames.has('save-long-term-chronicle') ? 'compacted' : undefined
-                      : toolNames.has('accept-deal') ? 'accepted'
+                      : wake === 'social'
+                        ? [...toolNames].some((name) => name.startsWith('social_')) ? 'action' : undefined
+                        : toolNames.has('accept-deal') ? 'accepted'
                       : toolNames.has('reject-deal') ? 'rejected'
                         : toolNames.has('propose-deal') ? 'proposed' : undefined;
                 if (outcome) wakeState!.outcome = outcome;

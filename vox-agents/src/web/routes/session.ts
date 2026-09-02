@@ -69,7 +69,7 @@ async function getCompletedUnifiedWakes(contextId: string): Promise<Civilization
     const attributes = parseSpanAttributes(span);
     if (attributes['mind.mode'] !== 'unified-mind' || attributes['mind.span_role'] !== 'wake') continue;
     const wake = attributes['mind.wake'];
-    if (wake !== 'strategic' && wake !== 'diplomacy' && wake !== 'deal') continue;
+    if (wake !== 'strategic' && wake !== 'diplomacy' && wake !== 'deal' && wake !== 'memory' && wake !== 'social') continue;
     const input = attributes['tokens.input'];
     const reasoning = attributes['tokens.reasoning'];
     const output = attributes['tokens.output'];

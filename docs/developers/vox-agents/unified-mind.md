@@ -26,9 +26,9 @@ Use [configs/unified-mind-direct-5civ.json](../../../configs/unified-mind-direct
 
 Set `mind` to `unified-mind` on an AI seat and assign its model under that seat's `llms.unified-mind` key. The legacy `strategist` field remains required for backward-compatible parsing, but it does not select the strategic wake for a unified seat. Legacy strategist, diplomat, and negotiator configurations remain available for existing sessions.
 
-The strategic, diplomacy, deal, and memory-maintenance adapters share the same seat context, canonical civilization identity, current strategic state, and model resolution. Strategic wakes receive a bounded recent diplomacy block from the durable pairwise transcript. Transcript rows are labeled as untrusted historical political data, and proposal, counter, acceptance, rejection, and enacted deal terms remain structured when available. Failed enrichment is logged and does not block the game turn.
+The strategic, diplomacy, deal, memory-maintenance, and live social adapters share the same seat context, canonical civilization identity, current strategic state, and model resolution. Strategic wakes receive a bounded recent diplomacy block from the durable pairwise transcript. Transcript rows are labeled as untrusted historical political data, and proposal, counter, acceptance, rejection, and enacted deal terms remain structured when available. Failed enrichment is logged and does not block the game turn.
 
-The benchmark SocialRuntime is not automatically attached to an ordinary StrategistSession. Its public channels, autonomous AI-to-AI conversations, groups, and broader social episodes remain experimental standalone functionality. Ordinary Civ play currently exposes the existing pairwise diplomacy and deal path, not the full SocialRuntime feature set.
+Unified Civ sessions with at least one unified AI seat also attach the generic SocialRuntime to the live game. Unified AI actors receive bounded strategic-review and environment-event opportunities in WORLD, and their legal social actions are applied through the existing durable social store and Civ environment gateway. The attachment uses the existing seat VoxContext and model assignment, not the SocialActor model reference, and keeps one cognition lane per civilization. Native human diplomacy still uses the existing pairwise diplomacy and deal surface; routing arbitrary human UI messages into the broader SocialRuntime is not yet exposed.
 
 ## Civilization continuity
 
@@ -40,4 +40,4 @@ Memory maintenance is a bounded wake of the same configured civilization model. 
 
 ## Diagnostics
 
-The logs and telemetry views identify the civilization player, game, unified mode, wake type, resolved model, outcome, and token totals where the provider reports them. Unified wake labels are `strategic`, `diplomacy`, `deal`, and `memory`. Private transcript bodies are not added solely for diagnostics. The Civilization Minds inspector shows Current Outlook, Long-Term Chronicle, Recent Chronicle, maintenance state, and the ordinary cognition timeline.
+The logs and telemetry views identify the civilization player, game, unified mode, wake type, resolved model, outcome, and token totals where the provider reports them. Unified wake labels are `strategic`, `diplomacy`, `deal`, `memory`, and `social`. Private transcript bodies are not added solely for diagnostics. The Civilization Minds inspector shows Current Outlook, Long-Term Chronicle, Recent Chronicle, maintenance state, and the ordinary cognition timeline.

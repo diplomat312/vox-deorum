@@ -30,6 +30,7 @@ import { Summarizer } from "../telepathist/summarizer.js";
 import { EpisodeRetriever } from "../telepathist/episode-retriever.js";
 import { OracleAgent } from "../oracle/oracle-agent.js";
 import { CivilizationMemoryMaintenance } from "../civilization-memory/civilization-memory-maintenance.js";
+import { UnifiedSocialCognition } from "../strategist/agents/unified-social-cognition.js";
 
 /**
  * Registry for managing available Vox agents.
@@ -156,6 +157,7 @@ class AgentRegistry {
     // Register oracle agent
     this.register(new OracleAgent());
     this.register(new CivilizationMemoryMaintenance());
+    this.register(new UnifiedSocialCognition());
 
     this.defaultsInitialized = true;
     this.logger.info(`Default agents initialized: ${this.agents.size} agents registered`);

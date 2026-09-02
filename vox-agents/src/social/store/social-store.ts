@@ -2,7 +2,7 @@ import { Kysely, sql, type Transaction } from 'kysely';
 import { randomUUID } from 'node:crypto';
 import { openSqliteKysely, type OpenedSqlite } from '../../utils/telemetry/sqlite-helpers.js';
 import type { SocialActor, SocialActorDefinition, SocialCascadeBudget, SocialChannel, SocialChannelKind, SocialDecisionDiagnostic, SocialIntention, SocialInvitation, SocialMembership, SocialMessage, SocialMemory, SocialSessionDefinition, VisibleMessagePage } from '../types.js';
-import type { SocialDatabase, SocialActorRow, SocialChannelRow, SocialEnvironmentBindingRow, SocialEnvironmentEventRow, SocialCivActionAttemptRow, SocialCascadeRow, SocialDecisionDiagnosticRow, SocialIntentionRow, SocialMembershipRow, SocialMessageRow } from './schema.js';
+import type { SocialDatabase, SocialActorRow, SocialChannelRow, SocialEnvironmentBindingRow, SocialCivActionAttemptRow, SocialCascadeRow, SocialDecisionDiagnosticRow, SocialIntentionRow, SocialMembershipRow, SocialMessageRow } from './schema.js';
 import { migrateSocialSchema } from './migrations.js';
 import { getSocialPacingBudget } from '../runtime/social-pacing.js';
 
@@ -17,15 +17,17 @@ export class SocialStore {
   public async close(): Promise<void> { await this.opened.db.destroy(); }
   /** Create a session, its actors, WORLD, and WORLD memberships atomically. */
   public async createSession(session: SocialSessionDefinition, actors: SocialActorDefinition[]): Promise<void> {
-    if (actors.length < 2 || actors.length > 8) throw new Error('A social session requires 2 to 8 actors');
-    if (actors.filter((actor) => actor.control === 'human').length !== 1 || !actors.some((actor) => actor.id === session.humanActorId && actor.control === 'human')) throw new Error('A social session requires exactly one configured human actor');
+    if (actors.length < 1 || actors.length > 8) throw new Error('A social session requires 1 to 8 actors');
+    const humans = actors.filter((actor) => actor.control === 'human');
+    if (session.humanActorId && (humans.length !== 1 || !humans.some((actor) => actor.id === session.humanActorId))) throw new Error('A social session with a human requires exactly one configured human actor');
+    if (!session.humanActorId && humans.length !== 0) throw new Error('A model-only social session cannot contain a human actor');
     if (new Set(actors.map((actor) => actor.id)).size !== actors.length) throw new Error('Actor IDs must be unique');
     if (new Set(actors.map((actor) => actor.ordinal)).size !== actors.length || actors.some((actor) => !actor.displayName.trim())) throw new Error('Actor ordinals and display names must be unique and nonblank');
     const now = session.createdAt ?? new Date().toISOString();
     await this.opened.db.transaction().execute(async (trx) => {
       await trx.insertInto('socialSessions').values({ id: session.id, humanActorId: session.humanActorId, title: session.title ?? 'Untitled sandbox', archived: session.archived ? 1 : 0, pacingProfile: session.pacingProfile ?? 'balanced', createdAt: now, updatedAt: session.updatedAt ?? now }).execute();
       for (const actor of actors) await trx.insertInto('socialActors').values({ id: actor.id, sessionId: session.id, ordinal: actor.ordinal, control: actor.control, displayName: actor.displayName, modelRef: actor.modelRef ?? null, profile: actor.profile ?? null, createdAt: now, status: 'active' }).execute();
-      await trx.insertInto('socialChannels').values({ id: 'world', sessionId: session.id, kind: 'world', title: 'WORLD', createdByActorId: session.humanActorId, canonicalKey: 'world', createdAt: now, archived: 0 }).execute();
+      await trx.insertInto('socialChannels').values({ id: 'world', sessionId: session.id, kind: 'world', title: 'WORLD', createdByActorId: session.humanActorId || actors[0].id, canonicalKey: 'world', createdAt: now, archived: 0 }).execute();
       for (const actor of actors) await this.insertMembership(trx, 'world', actor.id, 'active', null, 0, now);
     });
   }

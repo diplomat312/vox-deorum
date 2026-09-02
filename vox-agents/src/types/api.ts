@@ -639,7 +639,7 @@ export interface PlayersSummaryResponse {
 /** One active unified wake exposed by the live runtime, before span export. */
 export interface CivilizationMindActivityWake {
   runId: string;
-  wake: 'strategic' | 'diplomacy' | 'deal' | 'memory';
+  wake: 'strategic' | 'diplomacy' | 'deal' | 'memory' | 'social';
   startedAt: number;
 }
 
@@ -661,7 +661,7 @@ export interface CivilizationMindTokens {
 
 /** Completed canonical unified wake metadata shown in the monitoring UI. */
 export interface CivilizationMindWakeRecord {
-  wake: 'strategic' | 'diplomacy' | 'deal' | 'memory';
+  wake: 'strategic' | 'diplomacy' | 'deal' | 'memory' | 'social';
   turn?: number;
   outcome: string;
   model?: string;

@@ -57,7 +57,7 @@ export class SocialScheduler {
   public async waitForSettled(timeoutMs = 90_000): Promise<{ settled: boolean; timedOut: boolean }> {
     this.kick();
     const deadline = Date.now() + Math.max(0, timeoutMs);
-    while (true) {
+    for (;;) {
       while (this.drainPromise) { const current = this.drainPromise; if (!await this.waitForPromise(current, deadline)) return { settled: false, timedOut: true }; }
       if (!await this.store.hasUnsettledIntentions((await this.actors())[0]?.sessionId ?? '')) return { settled: true, timedOut: false };
       if (Date.now() >= deadline) return { settled: false, timedOut: true };
@@ -71,7 +71,7 @@ export class SocialScheduler {
   public async waitForCascadeSettled(cascadeId: string, timeoutMs = 90_000): Promise<{ cascade: import('../types.js').SocialCascade | undefined; settled: boolean; timedOut: boolean }> {
     this.kick();
     const deadline = Date.now() + Math.max(0, timeoutMs);
-    while (true) {
+    for (;;) {
       const cascade = await this.store.settleCascade(cascadeId);
       if (!cascade || cascade.state !== 'active') return { cascade, settled: true, timedOut: false };
       if (Date.now() >= deadline) return { cascade, settled: false, timedOut: true };
@@ -79,7 +79,7 @@ export class SocialScheduler {
     }
   }
   /** Drain all currently eligible durable intentions, including model cascades. */
-  private async drain(): Promise<void> { while (!this.stopped) { const tasks: Promise<void>[] = []; for (let index = 0; index < this.maxConcurrentExecutions; index += 1) { const intention = await this.store.claimNextIntention(); if (!intention) break; tasks.push(this.execute(intention)); } if (!tasks.length) { await this.scheduleWake(); return; } await Promise.all(tasks); } }
+  private async drain(): Promise<void> { for (;;) { if (this.stopped) return; const tasks: Promise<void>[] = []; for (let index = 0; index < this.maxConcurrentExecutions; index += 1) { const intention = await this.store.claimNextIntention(); if (!intention) break; tasks.push(this.execute(intention)); } if (!tasks.length) { await this.scheduleWake(); return; } await Promise.all(tasks); } }
   /** Execute one intention under the actor lane and, only for channel reactions, a channel lane. */
   private async execute(intention: SocialIntention): Promise<void> {
     const scope = executionScopes[intention.kind]; const actorLane = this.lanes.get(intention.actorId); const controller = new AbortController(); this.activeControllers.add(controller);

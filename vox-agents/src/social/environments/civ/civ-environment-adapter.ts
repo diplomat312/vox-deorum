@@ -4,12 +4,14 @@ import type { SocialActor } from '../../types.js';
 import { bindCivActors, type CivActorBinding, type CivSeat } from './civ-actor-binding.js';
 import type { CivMcpPort } from './civ-mcp-port.js';
 import type { GameEventNotification } from '../../../utils/models/mcp-client.js';
+import { createLogger } from '../../../utils/logger.js';
 
 export interface CivSnapshot extends EnvironmentSnapshot { environment: 'civ5'; seats: CivSeat[]; normalizedState: Record<string, string | number | boolean>; }
 export interface CivBindingPersistence { list(sessionId: string, environmentType: string, gameId?: string): Promise<Array<Pick<CivActorBinding, 'actorId' | 'playerId'> & { gameId?: string }>>; reconcile(bindings: CivActorBinding[]): Promise<void>; }
 
 /** Civ environment adapter that owns binding reconciliation and the existing MCP notification subscription. */
 export class CivEnvironmentAdapter implements EnvironmentAdapter<CivSnapshot> {
+  private readonly logger = createLogger('civ-environment-adapter');
   private sessionId: string | undefined;
   private currentSnapshot: CivSnapshot | undefined;
   private readonly bindings = new Map<string, CivActorBinding>();
@@ -22,11 +24,13 @@ export class CivEnvironmentAdapter implements EnvironmentAdapter<CivSnapshot> {
   /** Attach a game snapshot, reconcile stored bindings, and reject unsafe seat remaps. */
   public async attach(sessionId: string, snapshot: CivSnapshot, actors: SocialActor[] = [], actorSeatById: Record<string, number> = {}): Promise<void> { if (snapshot.environment !== 'civ5' || !snapshot.gameId || !Number.isSafeInteger(snapshot.turn)) throw new Error('Invalid Civ environment snapshot'); if (this.currentSnapshot && this.currentSnapshot.gameId !== snapshot.gameId) throw new Error(`Cannot rebind social session from game ${this.currentSnapshot.gameId} to ${snapshot.gameId}`); const nextBindings = bindCivActors(sessionId, snapshot.gameId, actors, snapshot.seats, actorSeatById); const saved = await this.persistence?.list(sessionId, snapshot.environment) ?? []; for (const prior of saved) { if (prior.gameId && prior.gameId !== snapshot.gameId) throw new Error(`Cannot attach Civ game ${snapshot.gameId}; persisted session belongs to game ${prior.gameId}`); const next = nextBindings.find((binding) => binding.actorId === prior.actorId); if (next && next.playerId !== prior.playerId) throw new Error(`Unsafe Civ actor-seat remap for ${prior.actorId}: stored player ${prior.playerId}, live player ${next.playerId}`); } await this.persistence?.reconcile(nextBindings); this.sessionId = sessionId; this.currentSnapshot = snapshot; this.bindings.clear(); for (const binding of nextBindings) this.bindings.set(binding.actorId, binding); }
   /** Subscribe once to the canonical MCP notification stream. */
-  public start(port: CivMcpPort): void { if (this.removeNotificationListener) return; this.removeNotificationListener = port.onNotification((notification) => { void this.ingestNotification(notification).catch(() => undefined); }); }
+  public start(port: CivMcpPort): void { if (this.removeNotificationListener) return; this.removeNotificationListener = port.onNotification((notification) => { void this.ingestNotification(notification).catch((error) => { this.logger.warn('Could not ingest Civ environment notification', { gameId: notification.gameID, turn: notification.turn, event: notification.event, error }); }); }); }
   /** Detach from MCP notifications without affecting the shared client. */
   public detach(): void { this.removeNotificationListener?.(); this.removeNotificationListener = undefined; }
   /** Return the current authoritative environment snapshot. */
   public async snapshot(): Promise<CivSnapshot> { if (!this.currentSnapshot) throw new Error('No Civ environment is attached'); return this.currentSnapshot; }
+  /** Refresh the bounded snapshot while preserving the established game and seat bindings. */
+  public updateSnapshot(snapshot: CivSnapshot): void { if (!this.currentSnapshot) throw new Error('No Civ environment is attached'); if (snapshot.environment !== 'civ5' || snapshot.gameId !== this.currentSnapshot.gameId || snapshot.turn < this.currentSnapshot.turn) throw new Error('Invalid Civ environment snapshot update'); this.currentSnapshot = { ...snapshot, seats: this.currentSnapshot.seats.map((seat) => ({ ...seat })) }; }
   /** Ingest one unseen normalized event and wake its bound actor after durable dedupe. */
   public async ingest(event: EnvironmentEvent): Promise<boolean> { const snapshot = await this.snapshot(); if (event.gameId !== snapshot.gameId) throw new Error('Environment event game ID does not match attached game'); if (await this.journal.has(event.sourceKey)) return false; const recorded = await this.journal.record(event); if (recorded === false) return false; await this.onEvent(event); return true; }
   /** Return the stable binding for an actor. */
@@ -35,6 +39,8 @@ export class CivEnvironmentAdapter implements EnvironmentAdapter<CivSnapshot> {
   public listBindings(): CivActorBinding[] { return [...this.bindings.values()].sort((a, b) => a.ordinal - b.ordinal); }
   /** Return all live Civ seats for UI/environment inspection, including non-social participants. */
   public async listParticipants(): Promise<CivSeat[]> { return (await this.snapshot()).seats.map((seat) => ({ ...seat })); }
+  /** Return actor IDs eligible for a factual event without exposing event payloads. */
+  public eventRecipientActorIds(event: EnvironmentEvent): string[] { const bindings = this.listBindings(); const ids = new Set<string>(); if (event.targetPlayerId !== undefined && event.targetPlayerId >= 0) { for (const binding of bindings) if (binding.playerId === event.targetPlayerId || binding.playerId === event.sourcePlayerId) ids.add(binding.actorId); } else if (event.sourcePlayerId !== undefined && event.sourcePlayerId >= 0) { const source = bindings.find((binding) => binding.playerId === event.sourcePlayerId); if (source) ids.add(source.actorId); } else { for (const binding of bindings) ids.add(binding.actorId); } return [...ids]; }
   /** Return the attached session identifier. */
   public getSessionId(): string { if (!this.sessionId) throw new Error('No Civ environment is attached'); return this.sessionId; }
   /** Convert a canonical MCP notification into a bounded environment event. */

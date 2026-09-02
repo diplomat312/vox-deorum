@@ -21,6 +21,7 @@ import { isScheduledDecision, normalizePacing, shouldInterruptDecision, type Nor
 import { isUnifiedMindPlayer, strategicAgentForPlayer, unifiedModelOverrides } from "./unified-civilization-mind.js";
 import type { CivilizationMemoryStore } from "../civilization-memory/civilization-memory-store.js";
 import { appendGameEventFacts } from "../civilization-memory/civilization-memory-ingestion.js";
+import { ActorLane } from "../social/runtime/actor-lane.js";
 
 /**
  * Manages a single player's strategist execution within a game session.
@@ -46,6 +47,8 @@ export class VoxPlayer {
    * player (not the shared parameters) so concurrent chat/analyst runs can't disturb it.
    */
   private eventCursor: number;
+  /** Serializes every authoritative model-bearing wake for this civilization seat. */
+  private readonly cognitionLane = new ActorLane();
 
   constructor(
     public readonly playerID: number,
@@ -197,7 +200,7 @@ export class VoxPlayer {
               // One root run per turn owns this turn's cancellation, token sink, and the run-local
               // turn/before/after. It covers pause, refresh, pacing, the optional LLM decision, and
               // resume — all the work belonging to this strategist turn.
-              await this.context.withRun({ overrides: { turn, before, after } }, async (run) => {
+              await this.cognitionLane.run(() => this.context.withRun({ overrides: { turn, before, after } }, async (run) => {
                 const params = run.parameters;
                 await this.context.callTool("pause-game", { PlayerID: this.playerID }, params);
                 // Refresh all strategy parameters
@@ -291,7 +294,7 @@ export class VoxPlayer {
                   'deliberation.ms': Number(params.workingMemory["deliberationMs"] ?? "0")
                 });
                 turnSpan.setStatus({ code: SpanStatusCode.OK });
-              });
+              }));
             });
           } catch (error) {
             this.logger.error(`Player ${this.playerID} (${this.parameters.gameID}) execution error:`, error);
@@ -373,8 +376,29 @@ export class VoxPlayer {
     return this.context?.id;
   }
 
+  /** Return the stable seat parameters used as the source for new root runs. */
+  getBaseParameters(): StrategistParameters {
+    return this.context.getBaseParameters() ?? this.parameters;
+  }
+
+  /** Return the freshest session turn without mutating the strategist event cursor. */
+  getCurrentTurn(): number {
+    const sessionTurn = this.context.session?.getTurn();
+    return sessionTurn !== undefined ? sessionTurn : this.getBaseParameters().turn;
+  }
+
+  /** Queue any live political wake behind this civilization's authoritative lane. */
+  runOnCognitionLane<T>(work: () => Promise<T>): Promise<T> {
+    return this.cognitionLane.run(work);
+  }
+
+  /** Return whether this seat is governed by the unified civilization mind. */
+  isUnifiedMind(): boolean {
+    return isUnifiedMindPlayer(this.playerConfig);
+  }
+
   /** Return active unified wakes without exposing prompts, model input, or private messages. */
-  getActiveUnifiedWakes(): Array<{ runId: string; wake: 'strategic' | 'diplomacy' | 'deal' | 'memory'; startedAt: number }> {
+  getActiveUnifiedWakes(): Array<{ runId: string; wake: 'strategic' | 'diplomacy' | 'deal' | 'memory' | 'social'; startedAt: number }> {
     return this.context.getActiveUnifiedWakes();
   }
 

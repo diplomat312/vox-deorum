@@ -44,6 +44,13 @@ import {
   buildObserverOverrideLua,
   buildStrategicViewLua,
 } from "../utils/game/control-lua.js";
+import { SocialRuntime } from "../social/runtime/social-runtime.js";
+import { LiveCivilizationMindRunner } from "../social/runtime/live-civilization-mind-runner.js";
+import { CivEnvironmentAdapter } from "../social/environments/civ/civ-environment-adapter.js";
+import type { CivSeat } from "../social/environments/civ/civ-actor-binding.js";
+import { MemoryEnvironmentEventJournal } from "../social/environments/environment-event.js";
+import { attachCivEnvironment } from "../social/environments/civ/civ-social-attachment.js";
+import { mcpCivPort } from "../social/environments/civ/civ-mcp-port.js";
 
 const logger = createLogger('StrategistSession');
 
@@ -83,6 +90,12 @@ export class StrategistSession extends VoxSession<StrategistSessionConfig> {
 
   /** Persistent stores keyed by game so crash recovery and resumed games retain continuity. */
   private readonly civilizationMemoryStores = new Map<string, CivilizationMemoryStore>();
+  /** Live generic social runtime attached to the current Civ game, when unified seats exist. */
+  private liveSocialRuntime?: SocialRuntime;
+  /** Civ adapter owned by the live social attachment. */
+  private liveCivAdapter?: CivEnvironmentAdapter;
+  /** Last bounded snapshot used to refresh the live Civ environment context. */
+  private liveCivSnapshot?: import("../social/environments/civ/civ-environment-adapter.js").CivSnapshot;
 
   /**
    * Single owner of seeding + seed-cycle state, always constructed. In the
@@ -360,6 +373,10 @@ export class StrategistSession extends VoxSession<StrategistSessionConfig> {
     this.ingameBridge.dispose();
     this.detachMcpListeners();
     this.abortController.abort();
+    await this.liveSocialRuntime?.stop().catch((error) => logger.warn('Live social runtime shutdown failed', { error }));
+    this.liveSocialRuntime = undefined;
+    this.liveCivAdapter = undefined;
+    this.liveCivSnapshot = undefined;
 
     // Abort all active players; on victory we mark them successful so their
     // contexts flush as completed rather than aborted. Reject any pending
@@ -508,6 +525,66 @@ export class StrategistSession extends VoxSession<StrategistSessionConfig> {
     if (player) {
       player.notifyTurn(params.turn);
       this.turn = params.turn;  // Update current turn
+      if (this.liveCivAdapter && this.liveCivSnapshot && this.liveCivSnapshot.gameId === params.gameID) {
+        this.liveCivSnapshot = { ...this.liveCivSnapshot, turn: params.turn, normalizedState: { ...this.liveCivSnapshot.normalizedState, turn: params.turn } };
+        this.liveCivAdapter.updateSnapshot(this.liveCivSnapshot);
+      }
+      if (this.liveSocialRuntime && this.getPlayerAssignments()[params.playerID]?.mind === 'unified-mind') {
+        const actorId = `civ-player-${params.playerID}`;
+        void this.liveSocialRuntime.enqueueIntention({ id: `civ-social-review:${this.gameID}:${params.playerID}:${params.turn}`, actorId, kind: 'strategic-review', channelId: null, sourceMessageId: null, priority: 20, state: 'queued', notBefore: new Date().toISOString(), payload: JSON.stringify({ gameId: this.gameID, turn: params.turn, trigger: 'strategic-review' }), dedupeKey: `civ-social-review:${this.gameID}:${params.playerID}:${params.turn}`, cascadeId: null, operationClass: 'autonomous' }).catch((error) => logger.warn('Could not enqueue live unified social review', { gameID: this.gameID, playerID: params.playerID, turn: params.turn, error }));
+      }
+    }
+  }
+
+  /** Attach the generic SocialRuntime to unified Civ seats using the existing seat contexts. */
+  private async startLiveCivilizationSocial(gameID: string, turn: number, seatingMap: Record<string, number>): Promise<void> {
+    const unifiedEntries = Object.entries(this.config.llmPlayers).filter(([, playerConfig]) => isUnifiedMindPlayer(playerConfig));
+    if (unifiedEntries.length === 0) return;
+
+    const nativeHumanID = this.isInteractiveMode && this.config.llmPlayers[0] === undefined ? 0 : undefined;
+    const actorDefinitions: Array<{ id: string; ordinal: number; control: 'human' | 'model'; displayName: string; modelRef?: string }> = unifiedEntries.map(([configSlot, playerConfig], ordinal) => {
+      const playerID = seatingMap[configSlot] ?? Number(configSlot);
+      const player = this.activePlayers.get(playerID);
+      const identity = player?.getBaseParameters().metadata?.YouAre;
+      return {
+        id: `civ-player-${playerID}`,
+        ordinal: nativeHumanID === undefined ? ordinal : ordinal + 1,
+        control: 'model' as const,
+        displayName: typeof identity?.Name === 'string' ? identity.Name : `Civ Player ${playerID}`,
+        modelRef: unifiedModelReference(playerConfig.llms),
+      };
+    });
+    if (nativeHumanID !== undefined) actorDefinitions.unshift({ id: `civ-player-${nativeHumanID}`, ordinal: 0, control: 'human' as const, displayName: 'Human Player' });
+
+    const seats: CivSeat[] = [];
+    for (const [configSlot, playerConfig] of Object.entries(this.config.llmPlayers)) {
+      const playerID = seatingMap[configSlot] ?? Number(configSlot);
+      const player = this.activePlayers.get(playerID);
+      const identity = player?.getBaseParameters().metadata?.YouAre;
+      seats.push({ playerId: playerID, civilizationType: `PLAYER_${playerID}`, civilizationName: typeof identity?.Name === 'string' ? identity.Name : `Civ Player ${playerID}`, leaderName: typeof identity?.Leader === 'string' ? identity.Leader : undefined, nativeVpOnly: !isUnifiedMindPlayer(playerConfig) });
+    }
+    if (nativeHumanID !== undefined && !seats.some((seat) => seat.playerId === nativeHumanID)) seats.push({ playerId: nativeHumanID, civilizationType: `PLAYER_${nativeHumanID}`, civilizationName: 'Human Civilization', human: true });
+
+    const actorSeatById = Object.fromEntries(actorDefinitions.map((actor) => [actor.id, Number(actor.id.slice('civ-player-'.length))]));
+    const snapshot = { environment: 'civ5' as const, gameId: gameID, turn, facts: { turn }, seats, normalizedState: { turn } };
+    const safeGameID = gameID.replace(/[^a-zA-Z0-9_-]/g, '_');
+    const dataDirectory = path.join(config.telemetryDir || 'telemetry', 'social-civ');
+    const sessionId = `civ-${safeGameID}`;
+    const runner = new LiveCivilizationMindRunner((actorId) => this.activePlayers.get(Number(actorId.slice('civ-player-'.length))));
+    const runtime = new SocialRuntime();
+    try {
+      const stored = (await runtime.listStoredSessions(dataDirectory)).find((item) => item.session.id === sessionId && new Set(item.actors.map((actor) => actor.id)).size === actorDefinitions.length && item.actors.every((actor) => actorDefinitions.some((candidate) => candidate.id === actor.id)));
+      if (stored) await runtime.resume(sessionId, dataDirectory, runner);
+      else await runtime.start({ sessionId, actors: actorDefinitions, dataDirectory, modelExecutor: runner, liveCiv: true });
+      const adapter = new CivEnvironmentAdapter(new MemoryEnvironmentEventJournal());
+      await attachCivEnvironment(runtime, adapter, snapshot, actorSeatById, mcpCivPort);
+      this.liveSocialRuntime = runtime;
+      this.liveCivAdapter = adapter;
+      this.liveCivSnapshot = snapshot;
+      logger.info('Attached live SocialRuntime to unified Civ seats', { gameID, turn, sessionId, actorCount: actorDefinitions.length, unifiedSeats: unifiedEntries.length });
+    } catch (error) {
+      await runtime.stop().catch(() => undefined);
+      throw error;
     }
   }
 
@@ -527,6 +604,10 @@ export class StrategistSession extends VoxSession<StrategistSessionConfig> {
     this.ingameBridge.resetForGame(params.gameID);
     // Stop existing production before switching game context
     await this.obsCall('stopProduction', () => this.production!.stop());
+    await this.liveSocialRuntime?.stop();
+    this.liveSocialRuntime = undefined;
+    this.liveCivAdapter = undefined;
+    this.liveCivSnapshot = undefined;
 
     this.lastGameID = params.gameID;
     this.gameID = params.gameID;  // Update current game ID
@@ -599,6 +680,8 @@ export class StrategistSession extends VoxSession<StrategistSessionConfig> {
       this.activePlayers.set(actualPlayerID, player);
       player.execute();
     }
+
+    await this.startLiveCivilizationSocial(params.gameID, params.turn, seatingMap);
 
     // `experiment` key — consumed by the archivist pipeline to group runs of
     // the same StrategistSessionConfig together for outcome analysis.
