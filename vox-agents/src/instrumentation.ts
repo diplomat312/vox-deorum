@@ -39,7 +39,7 @@ export const spanProcessor = new BatchSpanProcessor(sqliteExporter, {
  * OpenTelemetry tracer provider configured with SQLite processor.
  * Automatically registers itself to capture spans from instrumented code.
  */
-const tracerProvider = new NodeTracerProvider({
+export const tracerProvider = new NodeTracerProvider({
   spanProcessors: [spanProcessor],
 });
 

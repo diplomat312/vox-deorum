@@ -9,6 +9,7 @@
  */
 
 import { describe, it, expect, beforeAll, beforeEach, vi } from 'vitest';
+import { trace } from '@opentelemetry/api';
 
 // Mock only the model factory + streaming call; keep the rest of each module real.
 vi.mock('../../../src/utils/models/models.js', async (orig) => {
@@ -24,7 +25,7 @@ import { VoxContext } from '../../../src/infra/vox-context.js';
 import { VoxAgent } from '../../../src/infra/vox-agent.js';
 import { agentRegistry } from '../../../src/infra/agent-registry.js';
 import { streamTextWithConcurrency } from '../../../src/utils/models/concurrency.js';
-import { spanProcessor, sqliteExporter } from '../../../src/instrumentation.js';
+import { spanProcessor, sqliteExporter, tracerProvider } from '../../../src/instrumentation.js';
 import { VoxSpanExporter } from '../../../src/utils/telemetry/vox-exporter.js';
 import type { StrategistParameters } from '../../../src/strategist/strategy-parameters.js';
 import { makeStrategistParameters } from '../../helpers/fake-vox-context.js';
@@ -186,6 +187,10 @@ beforeAll(() => {
   // This file runs in the shared single-fork worker. Restore spies left by earlier files so the
   // telemetry assertion exercises the real batch processor and exporter flush path.
   vi.restoreAllMocks();
+  // OpenTelemetry's global provider also survives between files in the shared worker. Rebind it to
+  // this file's real exporter so the database queried below is the provider receiving these spans.
+  trace.disable();
+  tracerProvider.register();
   agentRegistry.register(new StepAgent('test-step-a') as any);
   agentRegistry.register(new StepAgent('test-step-b') as any);
   agentRegistry.register(new StepAgent('test-step-child') as any);
