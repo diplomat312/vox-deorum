@@ -129,15 +129,44 @@ export function appendSocialFact(
   const turn = fact.turn ?? parameters.turn;
   const content = fact.message?.content ?? fact.content ?? 'A social event occurred.';
   const quoted = content.replace(/\s+/g, ' ').trim().slice(0, 4000);
+  const speakerId = fact.message?.speakerActorId ?? fact.actorId;
+  const speaker = socialParticipantName(parameters, speakerId);
+  const recipients = [...new Set((fact.recipientActorIds ?? []).filter((actorId) => actorId !== speakerId).map((actorId) => socialParticipantName(parameters, actorId)))];
+  const label = socialFactLabel(fact.kind);
+  const location = fact.channelTitle ? ` · ${fact.channelTitle}` : '';
+  const route = recipients.length > 0 ? `${speaker} → ${recipients.join(', ')}` : speaker;
+  const text = fact.message ? `Turn ${turn} · ${label}${location} · ${route}: "${quoted}"` : `Turn ${turn} · ${label}${location} · ${speaker}: ${quoted}`;
   for (const actorId of fact.entitledActorIds) {
     if (actorId !== `civ-player-${parameters.playerID}`) continue;
     store.appendChronicle({ gameId: parameters.gameID, ownerPlayerId: parameters.playerID, turn }, {
       turn,
       kind: 'private-message',
-      text: `Turn ${turn} · ${fact.kind}: "${quoted}"`,
+      text,
       evidenceRef: { kind: 'wake', id: fact.message ? String(fact.message.id) : `${fact.kind}:${fact.channelId ?? 'none'}:${turn}` },
-      dedupeKey: `social:${fact.kind}:${fact.message?.id ?? fact.channelId ?? 'none'}:${parameters.playerID}:${turn}`,
+      dedupeKey: `social:${fact.kind}:${fact.eventId ?? fact.message?.id ?? `${fact.channelId ?? 'none'}:${turn}`}:${parameters.playerID}`,
       scope: fact.kind === 'world-message' ? 'game' : fact.kind.includes('group') ? 'group' : 'private',
     });
+  }
+}
+
+/** Resolve one social actor identity through the owner's authoritative Civ state. */
+function socialParticipantName(parameters: StrategistParameters, actorId: string): string {
+  const match = /^civ-player-(\d+)$/.exec(actorId);
+  return match ? participantName(parameters, Number(match[1])) : actorId;
+}
+
+/** Convert an internal social fact kind into factual model-facing wording. */
+function socialFactLabel(kind: string): string {
+  switch (kind) {
+    case 'dm-message': return 'Private message';
+    case 'world-message': return 'Public statement';
+    case 'group-message': return 'Group message';
+    case 'group-created': return 'Group created';
+    case 'invitation-sent': return 'Group invitation sent';
+    case 'invitation-received': return 'Group invitation received';
+    case 'group-joined': return 'Joined group';
+    case 'invitation-declined': return 'Declined group invitation';
+    case 'group-left': return 'Left group';
+    default: return kind;
   }
 }

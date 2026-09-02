@@ -403,6 +403,21 @@ export function getRecentGameState(
   return bestTurn !== undefined ? parameters.gameStates[bestTurn] : undefined;
 }
 
+/** Derive currently known major civilizations from the authoritative get-players snapshot. */
+export function getKnownMajorPlayerIds(parameters: StrategistParameters, playerID = parameters.playerID): number[] {
+  const state = getRecentGameState(parameters, parameters.turn);
+  if (!state?.players || playerID === undefined) return [];
+  return Object.entries(state.players)
+    .filter(([id, value]) => {
+      const candidateId = Number(id);
+      if (!Number.isSafeInteger(candidateId) || candidateId === playerID || typeof value !== 'object' || value === null) return false;
+      const candidate = value as { IsMajor?: unknown };
+      return candidate.IsMajor === true;
+    })
+    .map(([id]) => Number(id))
+    .sort((left, right) => left - right);
+}
+
 /**
  * Build the turn-context sentence for a strategist decision prompt.
  */

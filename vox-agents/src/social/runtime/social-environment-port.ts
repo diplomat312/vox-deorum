@@ -6,7 +6,7 @@ import type { SocialReferenceSet } from '../context/social-context-builder.js';
 export interface SocialEnvironmentActionResult { state: string; }
 
 /** Factual communication committed by the generic runtime for an environment to journal. */
-export interface SocialCommittedFact { kind: string; actorId: string; channelId?: string; message?: SocialMessage; content?: string; turn?: number; entitledActorIds: string[]; }
+export interface SocialCommittedFact { kind: string; actorId: string; channelId?: string; channelTitle?: string; message?: SocialMessage; content?: string; turn?: number; eventId?: string; recipientActorIds?: string[]; entitledActorIds: string[]; }
 
 /** Minimal environment boundary used by the generic social runtime. */
 export interface SocialEnvironmentPort {

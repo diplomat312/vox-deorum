@@ -6,6 +6,7 @@ import { CivilizationMemoryStore } from '../../../src/civilization-memory/civili
 import { buildCivilizationMemoryContext } from '../../../src/civilization-memory/civilization-memory-context.js';
 import { createCivilizationMemoryTools } from '../../../src/civilization-memory/civilization-memory-tools.js';
 import { runCivilizationMemoryMaintenance } from '../../../src/civilization-memory/civilization-memory-maintenance-runner.js';
+import { appendSocialFact } from '../../../src/civilization-memory/civilization-memory-ingestion.js';
 import { createFakeVoxContext } from '../../helpers/fake-vox-context.js';
 import type { StrategistParameters } from '../../../src/strategist/strategy-parameters.js';
 import {
@@ -77,6 +78,29 @@ describe('CivilizationMemoryStore', () => {
     expect(snapshot.outlook?.text).toContain('river understanding');
     expect(snapshot.recentChronicle).toHaveLength(1);
     reopened.close();
+  });
+
+  it('records social scope, authoritative names, audience, and distinct event identities', () => {
+    const store = openStore();
+    store.registerOwner(1);
+    const params = parameters(store, 1, 80);
+    params.gameStates[80] = {
+      turn: 80,
+      reports: {},
+      players: {
+        '1': { Civilization: 'Rome', Leader: 'Augustus', IsMajor: true },
+        '2': { Civilization: 'Greece', Leader: 'Pericles', IsMajor: true },
+      },
+    };
+    appendSocialFact(store, params, { kind: 'dm-message', actorId: 'civ-player-2', channelId: 'dm-1', channelTitle: 'DM with Rome', message: { id: 17, channelId: 'dm-1', speakerActorId: 'civ-player-2', content: 'A bounded private message.', replyToMessageId: null, createdAt: 'now', intentionId: null, idempotencyKey: null }, turn: 80, eventId: 'message-17', recipientActorIds: ['civ-player-1'], entitledActorIds: ['civ-player-1'] });
+    appendSocialFact(store, params, { kind: 'group-joined', actorId: 'civ-player-1', channelId: 'group-1', channelTitle: 'Eastern Council', content: 'Joined the group.', turn: 80, eventId: 'membership-1', entitledActorIds: ['civ-player-1'] });
+    appendSocialFact(store, params, { kind: 'group-joined', actorId: 'civ-player-1', channelId: 'group-1', channelTitle: 'Eastern Council', content: 'Joined the group again.', turn: 80, eventId: 'membership-2', entitledActorIds: ['civ-player-1'] });
+    const entries = store.getAllChronicle({ gameId: 'game-memory-test', ownerPlayerId: 1, turn: 80 });
+    expect(entries).toHaveLength(3);
+    expect(entries[0]?.text).toContain('Private message · DM with Rome · Greece / Pericles → Rome / Augustus');
+    expect(entries[0]?.text).toContain('A bounded private message.');
+    expect(entries[1]?.text).toContain('Joined group · Eastern Council · Rome / Augustus');
+    store.close();
   });
 
   it('keeps outlook updates optimistic and retries idempotently', () => {

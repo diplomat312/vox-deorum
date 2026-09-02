@@ -560,7 +560,7 @@ export class StrategistSession extends VoxSession<StrategistSessionConfig> {
       const playerID = seatingMap[configSlot] ?? Number(configSlot);
       const player = this.activePlayers.get(playerID);
       const identity = player?.getBaseParameters().metadata?.YouAre;
-      seats.push({ playerId: playerID, civilizationType: `PLAYER_${playerID}`, civilizationName: typeof identity?.Name === 'string' ? identity.Name : `Civ Player ${playerID}`, leaderName: typeof identity?.Leader === 'string' ? identity.Leader : undefined, nativeVpOnly: !isUnifiedMindPlayer(playerConfig) });
+      seats.push({ playerId: playerID, civilizationType: `PLAYER_${playerID}`, civilizationName: typeof identity?.Name === 'string' ? identity.Name : `Civ Player ${playerID}`, leaderName: typeof identity?.Leader === 'string' ? identity.Leader : undefined, nativeVpOnly: !isUnifiedMindPlayer(playerConfig), knownPlayerIds: player?.getKnownPlayerIds() ?? [] });
     }
     if (nativeHumanID !== undefined && !seats.some((seat) => seat.playerId === nativeHumanID)) seats.push({ playerId: nativeHumanID, civilizationType: `PLAYER_${nativeHumanID}`, civilizationName: 'Human Civilization', human: true });
 

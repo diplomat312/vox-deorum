@@ -9,13 +9,17 @@ import { CivActionGateway, MemoryCivActionJournal, SocialStoreCivActionJournal }
 import { CivEventBridge } from '../../../src/social/environments/civ/civ-event-bridge.js';
 import { CivContextProvider } from '../../../src/social/environments/civ/civ-context-provider.js';
 import { CivPlayerMind } from '../../../src/social/environments/civ/civ-player-mind.js';
+import { refreshCivContactGraph } from '../../../src/social/environments/civ/civ-social-attachment.js';
 import { registerExistingCivCapabilities } from '../../../src/social/environments/civ/civ-mcp-capabilities.js';
 import type { CivMcpPort } from '../../../src/social/environments/civ/civ-mcp-port.js';
 import type { GameEventNotification } from '../../../src/utils/models/mcp-client.js';
 import { SocialStore } from '../../../src/social/store/social-store.js';
 import { ActorLane } from '../../../src/social/runtime/actor-lane.js';
+import { createSupportReadOperationId } from '../../../src/social/runtime/social-scheduler.js';
 import { createSocialReferenceSet, SocialContextBuilder } from '../../../src/social/context/social-context-builder.js';
 import type { SocialActor } from '../../../src/social/types.js';
+import { getKnownMajorPlayerIds, type StrategistParameters } from '../../../src/strategist/strategy-parameters.js';
+import type { VoxPlayer } from '../../../src/strategist/vox-player.js';
 
 const actors: SocialActor[] = [
   { id: 'human-seat', ordinal: 0, control: 'human', displayName: 'Rome', sessionId: 'session', createdAt: 'now', status: 'active' },
@@ -60,6 +64,37 @@ describe('Civ Pass 3 adapter seams', () => {
     const seen = await adapter.filterReferencesForActor(actors[1], references);
     expect(seen.actors.map((reference) => reference.id)).toEqual(['human-seat', 'llm-seat']);
     await expect(adapter.isActorReachable(actors[1], 'human-seat')).resolves.toBe(true);
+  });
+
+  it('should refresh the live contact graph from cached player visibility without recreating the adapter', async () => {
+    const adapter = new CivEnvironmentAdapter(new MemoryEnvironmentEventJournal());
+    const parameters = { playerID: 7, turn: 1, gameStates: { 1: { turn: 1, players: { '3': 'Unmet Major Civilization', '7': { IsMajor: true } }, reports: {} } } } as StrategistParameters;
+    const player = { getKnownPlayerIds: () => getKnownMajorPlayerIds(parameters, 7) } as unknown as VoxPlayer;
+    await adapter.attach('session', { environment: 'civ5', gameId: 'game-refresh', turn: 1, facts: {}, seats: seats.slice(0, 2), normalizedState: {} }, actors, { 'human-seat': 3, 'llm-seat': 7 });
+    await refreshCivContactGraph(adapter, (actorId) => actorId === 'civ-player-7' ? player : undefined);
+    const references = createSocialReferenceSet(actors, [{ id: 'world', sessionId: 'session', kind: 'world', title: 'WORLD', createdByActorId: 'human-seat', canonicalKey: 'world', createdAt: 'now', archived: false }]);
+    await expect(adapter.filterReferencesForActor(actors[1], references)).resolves.toMatchObject({ actors: [expect.objectContaining({ id: 'llm-seat' })] });
+    parameters.turn = 2;
+    parameters.gameStates[2] = { turn: 2, players: { '3': { IsMajor: true }, '7': { IsMajor: true } }, reports: {} };
+    await refreshCivContactGraph(adapter, (actorId) => actorId === 'civ-player-7' ? player : undefined);
+    await expect(adapter.filterReferencesForActor(actors[1], references)).resolves.toMatchObject({ actors: expect.arrayContaining([expect.objectContaining({ id: 'human-seat' })]) });
+    await expect(adapter.isActorReachable(actors[1], 'human-seat')).resolves.toBe(true);
+  });
+
+  it('should give distinct stable operation IDs to support reads with different arguments', async () => {
+    const first = createSupportReadOperationId('intention-1', 0, 'get-cities', { Owner: 'Rome' });
+    const second = createSupportReadOperationId('intention-1', 1, 'get-cities', { Owner: 'Greece' });
+    expect(first).not.toBe(second);
+    expect(first).toContain('intention-1');
+    expect(second).toContain('get-cities');
+    const execute = vi.fn(async (_binding: { playerId: number }, args: Record<string, unknown>) => ({ state: 'CONFIRMED' as const, resultSummary: JSON.stringify(args) }));
+    const gateway = new CivActionGateway(new MemoryCivActionJournal());
+    gateway.register('get-cities', { category: 'READ', execute });
+    const binding = { sessionId: 'session', actorId: 'llm-seat', ordinal: 1, gameId: 'game-1', playerId: 7, civilizationType: 'CIVILIZATION_ROME_2', civilizationName: 'Rome', controlMode: 'llm' as const, active: true };
+    await gateway.invoke(binding, 1, 'get-cities', { Owner: 'Rome' }, first);
+    await gateway.invoke(binding, 1, 'get-cities', { Owner: 'Greece' }, second);
+    expect(execute).toHaveBeenCalledTimes(2);
+    expect(execute.mock.calls.map((call) => call[1])).toEqual([{ Owner: 'Rome' }, { Owner: 'Greece' }]);
   });
 
   it('should bind acting identity structurally and make operation IDs idempotent', async () => {

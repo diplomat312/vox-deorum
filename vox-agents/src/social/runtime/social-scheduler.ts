@@ -9,6 +9,7 @@ import { SocialStore } from '../store/social-store.js';
 import { SocialEventHub } from '../events/social-event-hub.js';
 import type { DecisionToolDefinition } from './social-decision-tools.js';
 import type { SocialEnvironmentPort } from './social-environment-port.js';
+import { createHash } from 'node:crypto';
 
 /** Map every supported intention kind to an explicit execution scope. */
 const executionScopes: Readonly<Record<string, SocialExecutionScope>> = {
@@ -102,7 +103,7 @@ export class SocialScheduler {
     const environmentPort = await this.environmentPortForActor(actor); const memory = environmentPort?.useSocialMemory === false ? undefined : await this.store.getMemory(actor.id); const environment = await this.environmentForActor(actor); const definitions = await this.decisionDefinitionsForActor(actor, frozenIntention); let context;
     if (scope === 'channel-reaction') { const channelId = frozenIntention.channelId!; const visibleActors = await this.store.listActiveActors(actor.sessionId, channelId); if (!visibleActors.some((candidate) => candidate.id === actor.id)) { await this.store.completeIntention(frozenIntention.id, 'pass:not-visible'); return; } const channel = await this.store.getChannel(actor.sessionId, channelId); const messages = (await this.store.readMessages(actor.sessionId, channelId, actor.id, 80, undefined, false, frozenIntention.sourceMessageId ?? undefined)).messages; context = this.contextBuilder.build(actor, visibleActors, messages, frozenIntention, memory?.content, { environment, mode: 'new-message', currentChannel: channel ?? undefined, references: createSocialReferenceSet(visibleActors, channel ? [channel] : []) }); }
     else { const activity = await this.store.listVisibleActivity(actor.sessionId, actor.id, 20); context = this.contextBuilder.buildPlayerMind(actor, allActors, activity, frozenIntention, memory?.content, { environment, mode: frozenIntention.kind, references: createSocialReferenceSet(allActors, activity.map(({ channel }) => channel)) }); }
-    context.references = await this.legalReferences(actor, context.references); if (environmentPort?.filterReferencesForActor) context.references = await environmentPort.filterReferencesForActor(actor, context.references); context.intentionId = frozenIntention.id; context.supportRead = environmentPort?.read ? (actionName, argumentsValue) => environmentPort.read!(actor, this.eventTurn(frozenIntention), actionName, argumentsValue, `social-read:${frozenIntention.id}:${actionName}`) : undefined; context.decisionToolDefinitions = definitions; context.decisionTools = createSocialDecisionTools(this.toolScope(scope, frozenIntention), context.references, definitions); const providerStartedAt = Date.now(); let diagnosticId: string | undefined;
+    context.references = await this.legalReferences(actor, context.references); if (environmentPort?.filterReferencesForActor) context.references = await environmentPort.filterReferencesForActor(actor, context.references); context.intentionId = frozenIntention.id; let supportReadIndex = 0; context.supportRead = environmentPort?.read ? (actionName, argumentsValue) => { const callIndex = supportReadIndex++; const operationId = createSupportReadOperationId(frozenIntention.id, callIndex, actionName, argumentsValue); return environmentPort.read!(actor, this.eventTurn(frozenIntention), actionName, argumentsValue, operationId); } : undefined; context.decisionToolDefinitions = definitions; context.decisionTools = createSocialDecisionTools(this.toolScope(scope, frozenIntention), context.references, definitions); const providerStartedAt = Date.now(); let diagnosticId: string | undefined;
     const executeWake = async (): Promise<void> => {
       const run = await this.runModel(actor, context, allActors.map((candidate) => candidate.displayName), abortSignal, providerStartedAt);
       const diagnostic = await this.store.insertDecisionDiagnostic({ intentionId: frozenIntention.id, actorId: actor.id, actorDisplayName: actor.displayName, modelRef: actor.modelRef ?? null, executionScope: scope, cascadeId: frozenIntention.cascadeId ?? null, selectedKind: run.decision.kind, routingRefsJson: JSON.stringify(decisionRoutingSummary(run.decision)), validationOutcome: 'validated', applicationOutcome: null, error: null, providerLatencyMs: run.latencyMs, queueWaitMs: this.queueWaitMs(frozenIntention), durationMs: this.intentionDurationMs(frozenIntention), inputTokens: run.usage?.inputTokens ?? null, outputTokens: run.usage?.outputTokens ?? null, totalTokens: run.usage?.totalTokens ?? null, cachedTokens: run.usage?.cachedTokens ?? null, reasoningTokens: run.usage?.reasoningTokens ?? null, cost: run.usage?.cost ?? null, retryCount: run.retryCount, semanticRetryCount: run.semanticRetryCount ?? run.retryCount, providerAttemptCount: run.providerAttemptCount ?? 1, providerRetryCount: run.providerRetryCount ?? 0, providerFailureClass: run.providerFailureClass ?? null, providerHttpStatus: run.providerHttpStatus ?? null, providerErrorType: run.providerErrorType ?? null, providerErrorCode: run.providerErrorCode ?? null, providerErrorSummary: run.providerErrorSummary ?? null, ...diagnosticObservabilityFields(run.diagnostics) }); diagnosticId = diagnostic.id;
@@ -149,6 +150,17 @@ export class SocialScheduler {
   private intentionDurationMs(intention: SocialIntention): number { const created = Date.parse(intention.createdAt); return Number.isFinite(created) ? Math.max(0, Date.now() - created) : 0; }
   /** Retain one timer for the nearest deferred intention. */
   private async scheduleWake(): Promise<void> { if (this.stopped) return; const next = await this.store.nextDeferredAt(); if (!next) return; const delay = Math.max(0, Date.parse(next) - Date.now()); if (this.wakeTimer) clearTimeout(this.wakeTimer); this.wakeTimer = setTimeout(() => { this.wakeTimer = undefined; this.kick(); }, delay); }
+}
+
+/** Create a stable, non-model-visible operation identity for one support read invocation. */
+export function createSupportReadOperationId(intentionId: string, callIndex: number, actionName: string, argumentsValue: Record<string, unknown>): string {
+  const argumentHash = createHash('sha256').update(JSON.stringify(sortRecord(argumentsValue))).digest('hex').slice(0, 16);
+  return `social-read:${intentionId}:${callIndex}:${actionName}:${argumentHash}`;
+}
+
+/** Sort nested record keys before hashing support-read arguments. */
+function sortRecord(value: Record<string, unknown>): Record<string, unknown> {
+  return Object.fromEntries(Object.entries(value).sort(([left], [right]) => left.localeCompare(right)).map(([key, nested]) => [key, nested && typeof nested === 'object' && !Array.isArray(nested) ? sortRecord(nested as Record<string, unknown>) : nested]));
 }
 
 /** Convert optional executor observability into SQLite-safe diagnostic columns. */

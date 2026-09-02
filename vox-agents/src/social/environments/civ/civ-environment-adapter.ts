@@ -16,7 +16,8 @@ export const civCognitionEventTypes = new Set(['CityFounded', 'CityCaptureComple
 /** Return whether an event is safe to turn into an autonomous cognition wake. */
 export function isCivCognitionEventType(type: string): boolean { return civCognitionEventTypes.has(type); }
 
-const publicCognitionEventTypes = new Set(['PlayerVictory', 'PlayerDefeated', 'WarDeclared', 'PeaceMade', 'CityCaptureComplete', 'CityFlipped', 'CityLiberated', 'city-captured', 'WonderBuilt']);
+// No event is assumed globally visible until the underlying Civ projection proves that fact.
+const publicCognitionEventTypes = new Set<string>();
 
 /** Civ environment adapter that owns binding reconciliation and the existing MCP notification subscription. */
 export class CivEnvironmentAdapter implements EnvironmentAdapter<CivSnapshot> {

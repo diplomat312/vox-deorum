@@ -13,7 +13,7 @@ import { createLogger } from "../utils/logger.js";
 import { setTimeout } from 'node:timers/promises';
 import { sqliteExporter, spanProcessor } from "../instrumentation.js";
 import { config } from "../utils/config.js";
-import { ensureGameState, withEventWindowFallback, type GameState, StrategistParameters } from "./strategy-parameters.js";
+import { ensureGameState, getKnownMajorPlayerIds, withEventWindowFallback, type GameState, StrategistParameters } from "./strategy-parameters.js";
 import { VoxSpanExporter } from "../utils/telemetry/vox-exporter.js";
 import { PlayerConfig } from "../types/config.js";
 import { HumanDecisionBus } from "./human-decision-bus.js";
@@ -381,6 +381,11 @@ export class VoxPlayer {
   /** Return the stable seat parameters used as the source for new root runs. */
   getBaseParameters(): StrategistParameters {
     return this.context.getBaseParameters() ?? this.parameters;
+  }
+
+  /** Return known major civilization IDs from this seat's latest authoritative player report. */
+  getKnownPlayerIds(): number[] {
+    return getKnownMajorPlayerIds(this.getBaseParameters(), this.playerID);
   }
 
   /** Return the freshest session turn without mutating the strategist event cursor. */

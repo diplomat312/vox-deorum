@@ -10,6 +10,13 @@ import { registerExistingCivCapabilities } from './civ-mcp-capabilities.js';
 import type { SocialCommittedFact } from '../../runtime/social-environment-port.js';
 import type { VoxPlayer } from '../../../strategist/vox-player.js';
 
+/** Refresh live Civ contact edges from each seat's cached authoritative player report. */
+export async function refreshCivContactGraph(adapter: CivEnvironmentAdapter, playerForActor?: (actorId: string) => VoxPlayer | undefined): Promise<void> {
+  if (!playerForActor) return;
+  const current = await adapter.snapshot();
+  adapter.updateSnapshot({ ...current, seats: current.seats.map((seat) => { const player = playerForActor(`civ-player-${seat.playerId}`); return player ? { ...seat, knownPlayerIds: player.getKnownPlayerIds() } : seat; }) });
+}
+
 /** Attach Civ to an already-created social session through the generic environment boundary. */
 export async function attachCivEnvironment(runtime: SocialRuntime, adapter: CivEnvironmentAdapter, snapshot: CivSnapshot, actorSeatById: Record<string, number>, port: CivMcpPort = mcpCivPort, recordCommittedFact?: (fact: SocialCommittedFact) => Promise<void> | void, playerForActor?: (actorId: string) => VoxPlayer | undefined): Promise<void> {
   const store = runtime.getSocialStoreForEnvironment();
@@ -29,7 +36,7 @@ export async function attachCivEnvironment(runtime: SocialRuntime, adapter: CivE
   const environment: SocialEnvironmentPort = {
     useSocialMemory: false,
     runOnCognitionLane: async (actor, work) => { const player = playerForActor?.(actor.id); return player ? player.runOnCognitionLane(work) : work(); },
-    contextForActor: (actor) => context.forActor(actor),
+    contextForActor: async (actor) => { await refreshCivContactGraph(adapter, playerForActor); return context.forActor(actor); },
     decisionDefinitionsForActor: async () => gateway.modelDecisionDefinitions(),
     read: async (actor, turn, actionName, argumentsValue, operationId) => {
       const attempt = await gateway.invoke(adapter.binding(actor.id), turn, actionName, argumentsValue, operationId);
