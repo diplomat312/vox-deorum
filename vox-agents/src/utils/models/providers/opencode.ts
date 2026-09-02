@@ -48,6 +48,7 @@ export const openCodeModelNames: Record<string, readonly string[]> = {
     'grok-4.6', 'glm-5.3-flash', 'glm-5.3', 'glm-5.2', 'glm-5.1', 'gpt-5.6-luna',
     'kimi-k3', 'kimi-k2.7-code', 'kimi-k2.6', 'longcat-2.0', 'mimo-v2.5', 'mimo-v2.5-pro',
     'minimax-m3', 'minimax-m2.7', 'minimax-m2.5', 'muse-spark-1.2-contributor',
+    'muse-spark-1.3-contributor',
     'qwen3.8-max', 'qwen3.8-flash', 'qwen3.7-max', 'qwen3.7-plus', 'qwen3.6-plus',
     'deepseek-v4-pro', 'deepseek-v4-flash', 'deepseek-v4-flash-vision-exp', 'hy4-preview', 'hy3',
   ],

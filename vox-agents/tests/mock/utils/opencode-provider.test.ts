@@ -94,5 +94,6 @@ describe('OpenCode provider registry', () => {
   it('should keep the planned model catalog explicit', () => {
     expect(openCodeModelNames.opencode).toContain('mimo-v2.5-free');
     expect(openCodeModelNames['opencode-go']).toEqual(expect.arrayContaining(['longcat-2.0', 'deepseek-v4-flash', 'mimo-v2.5', 'minimax-m3', 'minimax-m2.7']));
+    expect(openCodeModelNames['opencode-go']).toContain('muse-spark-1.3-contributor');
   });
 });
