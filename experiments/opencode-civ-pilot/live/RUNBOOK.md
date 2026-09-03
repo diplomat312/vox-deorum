@@ -11,7 +11,7 @@ Siam turn (PowerShell, detached, poll FILES not sessions):
     then poll runs-siam telemetry-live.jsonl and transcript-live.md
 Rundir must be ABSOLUTE. Redirect console and error to files.
 
-Portugal observation: node observe-seat.mjs --player 0 --turn N --since M. Same builder as the harness.
+Portugal observation: node observe-seat.mjs --player 0 --turn N --since M --state live/civ-state-portugal.json. Same builder as the harness; --state keeps the Portugal seat file tracked the way run-live-turn.mjs tracks Siam.
 
 Prefix guard: node check-prefix.mjs (fail means a model-visible change). Re-baseline only after a deliberate batched change with --update.
 Model-visible prefix: agent/civ.md plus opencode.json plus vox-civ tool schemas. Dashboard text and inspect results are suffix and freely tunable.

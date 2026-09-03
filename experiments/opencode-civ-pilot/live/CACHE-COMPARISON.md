@@ -78,6 +78,38 @@ input, uncached input, total provider-visible input, latency, request
 count, quality/coherence, failures, context growth. No equivalent
 numbers exist in-tree today.
 
+## Unified-Mind instrumentation plan (no code taken, hook points surveyed)
+
+- Fan-out to cover per turn: strategist variants
+- (vox-agents/src/strategist/agents: simple-strategist plus briefed /
+- learned / staffed derivatives, null/none/human) plus envoy agents
+- (vox-agents/src/envoy/agents: diplomat, negotiator, resolve-negotiator,
+- spokesperson), plus briefer sub-agent calls declared via
+- modelDependencies, plus envoy context builders (src/envoy/context) and
+- wake adapters (VoxContext, buildGameContextMessages) that rebuild each
+- prompt. Every one of these is a distinct provider prefix.
+- Hook: centralize logging in vox-agents/src/utils/models (models.ts /
+- concurrency.ts, where AI SDK requests fan out). Log one JSONL row per
+- physical request mirroring runs-siam/telemetry-live.jsonl field names,
+- plus agent (which file above initiated it) and prefix_hash (sha of the
+- system content + tool schemas for that request, so DISTINCT prefixes per
+- turn fall out by counting hashes). Provider cache categories come from
+- AI SDK usage + providerMetadata (verify field names for the Spark route
+- at implementation time); token-counter.ts covers local estimates only.
+- Existing OTel SQLite telemetry (src/instrumentation.ts, utils/telemetry)
+- already spans agent executions and can carry the new attributes.
+- Runs: 21 cognition opportunities on the SAME model
+- (opencode-go/muse-spark-1.3-contributor) post-restart — strategic turns
+- plus envoy-handled diplomatic events, same opportunity mix as the pilot
+- side. Caveat honestly: game state will have moved past T116-T180, so
+- compare per-opportunity shapes (requests, distinct prefixes, summed
+- input, hit behavior), not turn-identical values.
+- Analysis: sum provider-visible input per opportunity across ALL agents,
+- count distinct prefix_hash values per opportunity, then place beside the
+- pilot table (1 prefix, ~4.5 requests/turn, ~1.7k fresh + ~212k re-read
+- steady-state). The hypothesis predicts the gap scales with fan-out
+- times prefix size; the logged rows will show the exact factor.
+
 ## Next rows to append
 
 - T207 post-restart bank: expect one ~120k cold start (idle + batched

@@ -334,3 +334,19 @@ Shift ~03:20-03:40 (game still wedged at T207, services untouched):
 - (communicate schema + civ.md one-liner) with ONE deliberate prefix
 - re-baseline while cold (civ.md 41baad69/tools 47c9fb62, opencode.json
 - unchanged). Suite 49/49 (27 channel + 14 routing + 8 guard).
+-
+Shift ~03:40-04:00 (game still wedged at T207, services untouched):
+- Track 1 (both seats tracked): observe-seat.mjs gains --state <file>,
+- writing a small seat record (seat/civ/turn/since/observedAt/obs_chars,
+- file-only) so Portugal tracks via civ-state-portugal.json the way
+- run-live-turn.mjs tracks Siam. Module-load verified offline (usage
+- path); first live write queued post-restart with the Portugal refresh.
+- Track 2 deferred deliberately: transcript shows zero inspect(victory)
+- calls in 21 turns and no grounded shape exists, so no condenser was
+- built on guessed fields (will condense from the first observed shape).
+- Phase-4 planning: CACHE-COMPARISON.md gains a concrete Unified-Mind
+- instrumentation plan grounded in source (agent fan-out paths, central
+- hook in utils/models, prefix_hash per request for distinct-prefix
+- counts, 21-opportunity rerun procedure with honest moved-state caveat).
+- Fresh verification: node --check green, prefix stable on the new
+- baseline (41baad69/d0653cd0/47c9fb62), suite 49/49 re-confirmed.

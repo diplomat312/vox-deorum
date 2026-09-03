@@ -1,7 +1,11 @@
 // Print one seat's shared observation to stdout.
 // Same builder the OpenCode harness uses (observe.mjs), so seat 0 (Codex)
 // and seat 1 (harness) always see the same dashboard shape.
-// Usage: node observe-seat.mjs --player 0 --turn 108 [--game live-duel]
+// Usage: node observe-seat.mjs --player 0 --turn 108 [--game live-duel] [--since M] [--state <file>]
+// With --state, also writes a small seat-tracking record (file-only, never
+// model-visible) so BOTH seats stay tracked: Siam via run-live-turn.mjs
+// (civ-state-siam.json), Portugal via this script (civ-state-portugal.json).
+import fs from "node:fs";
 import { buildObservation } from "./observe.mjs";
 
 const SEATS = {
@@ -35,3 +39,8 @@ const obs = await buildObservation({
   lastSeenTurn: Number(arg("since", 0)),
 });
 console.log(obs);
+const statePath = arg("state", null);
+if (statePath) {
+  const rec = { seat: playerID, civ: s.civ, leader: s.leader, turn, since: Number(arg("since", 0)), observedAt: new Date().toISOString(), obs_chars: obs.length };
+  fs.writeFileSync(statePath, JSON.stringify(rec, null, 1) + "\n");
+}

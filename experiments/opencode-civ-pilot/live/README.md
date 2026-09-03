@@ -47,6 +47,7 @@ opencode.json; the agent identity is frozen in agent/civ.md.
 - inspect(diplomacy) opinion lines, default + single-civ views.
 - Model tech/policy `path:` walk end to end.
 - Portugal seat refresh (civ-state-portugal.json, turn 167).
+- Portugal refresh uses observe-seat.mjs --state (both-seats-tracked).
 - T207 cold-start cache row + wall_gap_sec population.
 - 21-opportunity Unified-Mind comparison runs (same model).
 - inspect(diplomacy, "<civ>") traits block (get-civilization static read).
