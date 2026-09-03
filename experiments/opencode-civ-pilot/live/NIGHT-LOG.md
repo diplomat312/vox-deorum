@@ -219,3 +219,12 @@ Shift ~02:10-02:12 (game still wedged at T207, services untouched):
 - buildObservation with their own seat IDs, so dashboard shape, channel
 - inbox, and the new membership line are identical for both seats by
 - construction. No divergence found; no changes needed.
+-
+Shift ~02:12-02:15 (game still wedged at T207, services untouched):
+- Phase-4 structural framing added to CACHE-COMPARISON.md: pilot side is
+- 1 session / 1 prefix / ~4.5 requests per turn all sharing it, vs
+- Unified Mind fan-out across strategist + envoy agents
+- (diplomat/negotiator/resolve-negotiator/spokesperson) with per-wake
+- reconstructed prompts. Comparison runs must count distinct prefixes
+- and summed input per turn, not just hit ratios. Agent-file claims are
+- from source layout, flagged for confirmation by instrumented runs.

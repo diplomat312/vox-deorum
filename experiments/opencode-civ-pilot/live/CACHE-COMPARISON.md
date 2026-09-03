@@ -85,3 +85,24 @@ numbers exist in-tree today.
 - Model policy-walk end to end (inspect research/policy `path:` live).
 - Portugal seat refresh (stuck at turn 167) for the both-seats-tracked
   requirement.
+-
+## Structural contrast (source layout; confirm with instrumented runs)
+
+- Pilot: 1 session per civ, 1 persistent prefix. 21 banked turns used 94
+  tool calls (~4.5 requests/turn: 61 inspect + 30 commit_turn + 3
+  communicate), ALL against the one reused prefix. Commit-only turns are
+  a single request; inspect-heavy turns chain follow-ups on the same
+  prefix. Steady-state provider-visible input per turn: ~1.7k fresh +
+  ~212k re-read.
+- Unified Mind (vox-agents source layout): cognition fans out across
+  separate agents per turn — strategist variants (src/strategist/agents)
+  plus envoy agents (src/envoy/agents: diplomat, negotiator,
+  resolve-negotiator, spokesperson), briefers and context builders — each
+  invoked with a prompt reconstructed for that wake (VoxContext, wake
+  adapters): MULTIPLE distinct prefixes per turn, each paying full
+  uncached input.
+- The comparison runs must therefore count, per turn: total model
+  requests, DISTINCT prefixes, and summed provider-visible input across
+  agents — not just per-request hit ratios. The hypothesis predicts the
+  pilot wins on all three by roughly the agent-fanout factor times the
+  prefix size (~200k+ tokens).
