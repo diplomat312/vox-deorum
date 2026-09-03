@@ -157,7 +157,10 @@ export async function buildObservation({
   let messageLines = [];
   let worldMessages = [];
   try {
-    const gm = liveText(await live("get-global-messages", { Limit: 10 }));
+    // Wide window: group tags ride world broadcast, and a narrow Limit could
+    // push an unread tagged message out of the fetch before its invitee's
+    // next turn. Per-channel filtering still shows only what is new.
+    const gm = liveText(await live("get-global-messages", { Limit: 30 }));
     worldMessages = gm?.messages ?? [];
     const fresh = (gm?.messages ?? []).filter(
       (m) => (m?.Turn ?? 0) > lastSeenTurn && m?.SpeakerID !== playerID
