@@ -173,3 +173,9 @@ Shift ~02:01-02:05 (game still wedged at T207, services untouched):
 - get-technology), so the diplomacy zoom can append rival traits/UU/UB
 - with zero game-lock risk and stable-per-game cache behavior. Ships after
 - the opinion-lines enrichment validates live. No live probes run tonight.
+-
+Shift ~02:03-02:06 (game still wedged at T207, services untouched):
+- Watcher attempt 13 failed closed; game procs + watcher alive, no STOP.
+- New live/README.md: pilot overview, doc index, operating rules, queued
+- live verifications. Fresh off-window evidence: suite 33/33, prefix
+- stable (fingerprint unchanged).
