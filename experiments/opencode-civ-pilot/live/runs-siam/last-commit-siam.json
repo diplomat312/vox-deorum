@@ -1,28 +1,28 @@
 {
-  "committedAt": "2026-09-03T05:08:00.642Z",
+  "committedAt": "2026-09-03T05:11:15.322Z",
   "playerID": 1,
   "actions": [
     {
       "params": {
         "economic": [
-          "finish Scrivener/Herbalist/Artemis/Sophia"
+          "finish Armory/Circus/Colossus/Forge, grow Ragusa alliance"
         ],
-        "grandStrategy": "Machinery into Chemistry, Statecraft",
+        "grandStrategy": "Chemistry into Philosophy, Trade Confederacy for routes/ally",
         "military": [
-          "hold Trebs, clear Sukhothai swordsman and Mbanza pikes, guard Phitsanulok"
+          "keep Trebs home per message, clear Mbanza/Lampang pikes, guard Phitsanulok"
         ]
       },
       "type": "strategy"
     },
     {
       "params": {
-        "technology": "Chemistry"
+        "technology": "Philosophy"
       },
       "type": "research"
     },
     {
       "params": {
-        "policy": "Statecraft"
+        "policy": "Trade Confederacy"
       },
       "type": "policy"
     },
@@ -35,5 +35,5 @@
       "type": "posture"
     }
   ],
-  "rationale": "Lead 853-611, 238-208, +69gpt. Chemistry after Machinery, Statecraft, finish wonders and clear barbs."
+  "rationale": "Lead 1008-688, 323-241, Ragusa allied. Philosophy after Chemistry, Trade Confederacy continues Statecraft, honor peace."
 }

@@ -1780,3 +1780,159 @@ You may inspect anything else you need (inspect). When finished, commit your act
     "out": "{\n \"result\": {\n  \"content\": [\n   {\n    \"type\": \"text\",\n    \"text\": \"{\\n  \\\"Success\\\": true\\n}\"\n   }\n  ],\n  \"structuredContent\": {\n   \"Success\": true\n  }\n },\n \"jsonrpc\": \"2.0\",\n \"id\": 1788412088350\n}\n"
   }
 ]
+
+
+## Siam live turn 145 (session ses_f9a74a908ffeMXPkF3Y5Bh37Ba)
+
+### Observation sent
+
+TURN 145 (live game live-duel)
+
+You are Ramkhamhaeng, leader of Siam (seat 1). Portugal (Maria I, seat 0) is played by another mind.
+
+Current:
+* Treasury: 190 (+45/turn). Happiness: Happy (78%). Research: Chemistry (Estimated in 24 turns). Research must name ONE exact technology from: Philosophy, Drama and Poetry. Next policy in 35 turns ({"Progress":["Progress","Organization","Liberty","Expertise","Equality","Fraternity"],"Statecraft":["Statecraft"]}). Policy must name ONE exact entry from: Foreign Service (Continuing Statecraft Branch) (1/6); Trade Confederacy (Continuing Statecraft Branch) (1/6); Fealty (New Branch); Artistry (New Branch); Authority (New Branch); Tradition (New Branch).
+* Cities (5): population 39, territory 58, military strength 323, units 18 (supply 19), score 1008.
+- Sukhothai p10 -> Armory (2t left)
+- Si Satchanalai p9 -> Circus (2t left)
+- Muang Saluang p9 -> Colossus (3t left)
+- Lampang p8 -> Circus (1t left)
+- Phitsanulok p3 -> Forge (3t left)
+* Zones:
+- Land @Sukhothai: Friendly (F412) — Siam 1xTrebuchet 1xCrossbowman 2xPikeman 1xComposite Bowman
+- Land @M'banza-Kongo: Friendly (F208/N25) — Siam 1xTrebuchet, Barbarians 1xPikeman 1xComposite Bowman, City-State M'banza-Kongo 1xTrireme
+- Land @Hanoi: Friendly (F214/N29) — Barbarians 1xComposite Bowman, City-State Hanoi 1xPikeman
+- Land @Kyzyl: Friendly (F356/N28) — City-State Kyzyl 1xPikeman, Portugal 1xComposite Bowman
+- Land @Ragusa: Friendly (F342/N29) — City-State Ragusa 1xPikeman, Barbarians 1xSpearman, Siam 1xComposite Bowman
+- Land @Brussels: Friendly (F76/N21) — Siam 1xHorseman, City-State Brussels 1xLongswordsman
+- Land @Huari: Friendly (F92/N25) — Siam 1xSpearman, City-State Huari 1xPikeman
+- Land @Si Satchanalai: Friendly (F349) — Siam 1xLongswordsman 1xArcher
+- Land @Muang Saluang: Friendly (F273) — Siam 1xCrossbowman 1xComposite Bowman 1xHeavy Skirmisher, Barbarians 2xPikeman
+- Land @Lampang: Friendly (F214) — Siam 1xTrebuchet 1xSpearman, Barbarians 1xLongswordsman
+- Land @Phitsanulok: Friendly (F312) — Siam 1xHorseman 1xSpearman
+- Sea @Huari: Friendly (F130/N25) — City-State Huari 2xTrireme
+- Sea @Muang Saluang: Friendly (F282) — Siam 1xGalley, City-State Hanoi 1xChariot Archer
+- Sea @Hanoi: Friendly (F282/N29) — City-State Hanoi 2xTrireme, Portugal 1xGalley
+- Sea @Ragusa: Friendly (F146/N29) — Siam 1xScout, City-State Ragusa 1xTrireme
+- Sea @Kyzyl: Friendly (F149/N28) — City-State Kyzyl 1xPikeman
+- Sea @Phitsanulok: Friendly (F138) — City-State Ragusa 1xTrireme
+* Relationships: Portugal: Distance: Neighbors; Peace Treaty; Denounced Them.
+* Portugal visible: score 688, treasury ~99, research undefined, 4 cities, military 241.
+
+Since your previous opportunity to act:
+- Nothing new recorded.
+
+What happened to your last committed actions:
+- strategy applied.
+- research applied.
+- policy NOT applied: {
+ "result": {
+  "content": [
+   {
+    "type": "text",
+    "text": "Error executing tool set-policy: Policy \"Statecraft\" has already been adopted. Please check your availability list."
+   }
+  ],
+  "
+- posture applied.
+
+Politics since your last opportunity (war/peace, city-states, deals):
+- T142: **Siam** became friend of **Ragusa** (at 68 influence)
+- T142: **Siam** became ally of **Ragusa** (at 68 influence)
+- T142: **Ragusa** ally changed: **none** → **Siam**
+- T144: **M'banza-Kongo** gifted a military unit to **Siam**
+- T145: **Hanoi** gifted a military unit to **Siam**
+- T146: Trade route completed: **Siam** → **Siam**
+- T146: **Siam** converted a unit from **Siam**
+- T146: **Siam** converted a unit from **Siam**
+
+Messages for you (reply with communicate if warranted, at most one message per turn):
+- [PRIVATE] T145 Portugal (Maria I): Ramkhamhaeng, the peace holds because it suits us both. Keep your Trebuchets behind your walls and my Catapults will stay behind mine. - Maria
+
+Outstanding deals: deal inspection arrives in a later phase; treat proposals in messages as talk, not commitments.
+
+You may inspect anything else you need (inspect). When finished, commit your actions (commit_turn) or pass. Keep the rationale short.
+
+### Tool calls
+
+[
+  {
+    "tool": "vox-civ_communicate",
+    "input": null
+  },
+  {
+    "tool": "vox-civ_commit_turn",
+    "input": null
+  }
+]
+
+### Commit
+
+{
+  "committedAt": "2026-09-03T05:11:15.322Z",
+  "playerID": 1,
+  "actions": [
+    {
+      "params": {
+        "economic": [
+          "finish Armory/Circus/Colossus/Forge, grow Ragusa alliance"
+        ],
+        "grandStrategy": "Chemistry into Philosophy, Trade Confederacy for routes/ally",
+        "military": [
+          "keep Trebs home per message, clear Mbanza/Lampang pikes, guard Phitsanulok"
+        ]
+      },
+      "type": "strategy"
+    },
+    {
+      "params": {
+        "technology": "Philosophy"
+      },
+      "type": "research"
+    },
+    {
+      "params": {
+        "policy": "Trade Confederacy"
+      },
+      "type": "policy"
+    },
+    {
+      "params": {
+        "private": 0,
+        "public": 0,
+        "targetID": "Portugal"
+      },
+      "type": "posture"
+    }
+  ],
+  "rationale": "Lead 1008-688, 323-241, Ragusa allied. Philosophy after Chemistry, Trade Confederacy continues Statecraft, honor peace."
+}
+
+### Applied to live game
+
+[
+  {
+    "type": "strategy",
+    "tool": "set-strategy",
+    "ok": true,
+    "out": "{\n \"result\": {\n  \"content\": [\n   {\n    \"type\": \"text\",\n    \"text\": \"{\\n  \\\"Success\\\": true\\n}\"\n   }\n  ],\n  \"structuredContent\": {\n   \"Success\": true\n  }\n },\n \"jsonrpc\": \"2.0\",\n \"id\": 1788412278516\n}\n"
+  },
+  {
+    "type": "research",
+    "tool": "set-research",
+    "ok": true,
+    "out": "{\n \"result\": {\n  \"content\": [\n   {\n    \"type\": \"text\",\n    \"text\": \"{\\n  \\\"Success\\\": true\\n}\"\n   }\n  ],\n  \"structuredContent\": {\n   \"Success\": true\n  }\n },\n \"jsonrpc\": \"2.0\",\n \"id\": 1788412278883\n}\n"
+  },
+  {
+    "type": "policy",
+    "tool": "set-policy",
+    "ok": true,
+    "out": "{\n \"result\": {\n  \"content\": [\n   {\n    \"type\": \"text\",\n    \"text\": \"{\\n  \\\"Success\\\": true\\n}\"\n   }\n  ],\n  \"structuredContent\": {\n   \"Success\": true\n  }\n },\n \"jsonrpc\": \"2.0\",\n \"id\": 1788412280063\n}\n"
+  },
+  {
+    "type": "posture",
+    "tool": "set-relationship",
+    "ok": true,
+    "out": "{\n \"result\": {\n  \"content\": [\n   {\n    \"type\": \"text\",\n    \"text\": \"{\\n  \\\"Success\\\": true\\n}\"\n   }\n  ],\n  \"structuredContent\": {\n   \"Success\": true\n  }\n },\n \"jsonrpc\": \"2.0\",\n \"id\": 1788412280275\n}\n"
+  }
+]

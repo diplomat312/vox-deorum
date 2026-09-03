@@ -89,6 +89,78 @@ export async function buildObservation({
   }
   const eventLines = events.map((e) => `- ${JSON.stringify(e).slice(0, 220)}`);
 
+  // Political diary + correspondence deltas. Quiet turns render stable
+  // "- Nothing new." lines so the provider prefix stays cache-friendly.
+  const speakerName = (id) => {
+    if (id === playerID) return `${civ} (you)`;
+    if (id === rivalID) return `${rivalCiv} (${rivalLeader})`;
+    if (id === -1) return "Observer";
+    return `Player ${id}`;
+  };
+  let politicsLines = [];
+  try {
+    const dip = liveText(
+      await callLive("get-diplomatic-events", {
+        PlayerID: playerID,
+        Formatted: true,
+        FromTurn: lastSeenTurn + 1,
+      })
+    );
+    for (const [t, entries] of Object.entries(dip ?? {})) {
+      for (const e of entries ?? []) {
+        politicsLines.push(`- T${t}: ${String(e).slice(0, 200)}`);
+      }
+    }
+    politicsLines = politicsLines.slice(-8);
+  } catch {
+    /* politics optional; dashboard still usable */
+  }
+  let messageLines = [];
+  try {
+    const gm = liveText(await callLive("get-global-messages", { Limit: 10 }));
+    const fresh = (gm?.messages ?? []).filter(
+      (m) => (m?.Turn ?? 0) > lastSeenTurn
+    );
+    for (const m of fresh.slice(-3)) {
+      messageLines.push(
+        `- [WORLD] T${m.Turn} ${speakerName(m.SpeakerID)}: ${String(
+          m.Content
+        ).slice(0, 220)}`
+      );
+    }
+  } catch {
+    /* world channel optional */
+  }
+  try {
+    const tr = liveText(
+      await callLive("read-transcript", {
+        PlayerAID: Math.min(playerID, rivalID),
+        PlayerBID: Math.max(playerID, rivalID),
+        MessageType: "text",
+        Limit: 10,
+      })
+    );
+    const rows = Array.isArray(tr) ? tr : tr?.messages ?? tr?.rows ?? [];
+    const get = (r, ...keys) => {
+      for (const k of keys) if (r?.[k] !== undefined) return r[k];
+      return undefined;
+    };
+    const fresh = rows.filter(
+      (r) => (get(r, "Turn", "turn") ?? 0) > lastSeenTurn
+    );
+    for (const r of fresh.slice(-3)) {
+      const sid = get(r, "SpeakerID", "speaker", "speakerID");
+      if (sid === playerID) continue; // own sends; the other side's words matter
+      messageLines.push(
+        `- [PRIVATE] T${get(r, "Turn", "turn")} ${speakerName(sid)}: ${String(
+          get(r, "Content", "content", "text", "message") ?? ""
+        ).slice(0, 220)}`
+      );
+    }
+  } catch {
+    /* private thread optional */
+  }
+
   const appliedLines = (lastApplied ?? []).map((a) => {
     if (a.ok) return `- ${a.type} applied.`;
     return `- ${a.type} NOT applied: ${(a.note ?? a.out ?? "rejected")
@@ -152,7 +224,13 @@ ${eventLines.length ? eventLines.join("\n") : "- Nothing new recorded."}
 What happened to your last committed actions:
 ${appliedLines.length ? appliedLines.join("\n") : "- First live turn; nothing committed yet."}
 
-Outstanding requests/deals/messages: none tracked yet (phase 1 strategic test).
+Politics since your last opportunity (war/peace, city-states, deals):
+${politicsLines.length ? politicsLines.join("\n") : "- Nothing new recorded."}
+
+Messages for you (reply with communicate if warranted, at most one message per turn):
+${messageLines.length ? messageLines.join("\n") : "- None."}
+
+Outstanding deals: deal inspection arrives in a later phase; treat proposals in messages as talk, not commitments.
 
 You may inspect anything else you need (inspect). When finished, commit your actions (commit_turn) or pass. Keep the rationale short.`;
 }
