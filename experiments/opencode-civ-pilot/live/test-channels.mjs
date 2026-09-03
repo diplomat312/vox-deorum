@@ -118,13 +118,23 @@ const routed = await callServer([
   { name: 'communicate', arguments: { channel: 'dm:7', target: 'x', message: 'hi' } },
   { name: 'communicate', arguments: { channel: 'group:create:   ', target: 'x', message: 'hi' } },
   { name: 'communicate', arguments: { channel: 'group:deadbeef', target: 'x', message: 'hi' } },
+  { name: 'communicate', arguments: { channel: 'group:leave:deadbeef', target: 'x', message: 'bye' } },
+  { name: 'communicate', arguments: { channel: 'group:archive:deadbeef', target: 'x', message: 'done' } },
+  { name: 'communicate', arguments: { channel: 'group:invite:deadbeef:0', target: 'x', message: 'join us' } },
+  { name: 'communicate', arguments: { channel: 'group:invite:deadbeef:xx', target: 'x', message: 'join us' } },
+  { name: 'communicate', arguments: { channel: 'group:leave:', target: 'x', message: 'bye' } },
   { name: 'inspect', arguments: { subject: 'nope' } },
 ]);
-ok(routed.length === 4, 'four routing responses');
+ok(routed.length === 9, 'nine routing responses');
 ok(isErr(routed[0]) && textOf(routed[0]).indexOf('two seats') >= 0, 'dm:non-rival rejected offline');
 ok(isErr(routed[1]) && textOf(routed[1]).indexOf('needs a title') >= 0, 'group:create without title rejected offline');
 ok(isErr(routed[2]) && textOf(routed[2]).indexOf('unknown group') >= 0, 'unknown group rejected offline');
-ok(isErr(routed[3]) && textOf(routed[3]).indexOf('unknown subject') >= 0, 'unknown subject rejected offline');
+ok(isErr(routed[3]) && textOf(routed[3]).indexOf('unknown group') >= 0, 'group:leave unknown rejected offline');
+ok(isErr(routed[4]) && textOf(routed[4]).indexOf('unknown group') >= 0, 'group:archive unknown rejected offline');
+ok(isErr(routed[5]) && textOf(routed[5]).indexOf('unknown group') >= 0, 'group:invite unknown rejected offline');
+ok(isErr(routed[6]) && textOf(routed[6]).indexOf('seat number') >= 0, 'group:invite non-seat rejected offline');
+ok(isErr(routed[7]) && textOf(routed[7]).indexOf('needs an id') >= 0, 'group:leave without id rejected offline');
+ok(isErr(routed[8]) && textOf(routed[8]).indexOf('unknown subject') >= 0, 'unknown subject rejected offline');
 // Full round-trip: create -> tag -> inbox, with invite isolation. Mirrors
 // what communicate channel 'group:create:<title>' does on the live path.
 const g4 = ch.createGroup({ title: 'Round Trip', creator: 1, members: [1] });

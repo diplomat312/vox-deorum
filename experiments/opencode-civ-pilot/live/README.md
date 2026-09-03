@@ -53,3 +53,6 @@ opencode.json; the agent identity is frozen in agent/civ.md.
 - Tech `path:` forward edges (`leadsTo`) in one live walk.
 - Backpressure: second send in one live turn must reject server-side.
 - Compaction flag + `communicates` count on the next telemetry rows.
+- Model group lifecycle live: invite/leave/archive forms end to end
+- (logic + offline rejects green; prefix re-baselined once for the
+- batched description update, one deliberate re-cache while cold).

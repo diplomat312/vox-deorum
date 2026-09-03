@@ -19,7 +19,7 @@ import {
 } from "../mcp-server/node_modules/@modelcontextprotocol/sdk/dist/esm/types.js";
 import fs from "node:fs";
 import path from "node:path";
-import { createGroup, getGroup, markMemberActive, tagMessage, checkSend, markSent } from "./channels.mjs";
+import { createGroup, getGroup, markMemberActive, tagMessage, checkSend, markSent, leaveGroup, archiveGroup, inviteToGroup, memberStatus } from "./channels.mjs";
 
 const PLAYER_ID = Number(process.env.CIV_PILOT_PLAYER_ID ?? 1);
 const MCP_URL = process.env.MCP_URL || "http://127.0.0.1:4000/mcp";
@@ -444,7 +444,7 @@ function toolDefs() {
     {
       name: "communicate",
       description:
-        "Send one diplomatic message: channel 'world' broadcasts publicly, 'private' (default) writes a private letter to the rival, 'dm:<seat>' writes a direct message to one seat, 'group:<id>' writes to a group you belong to (first send accepts an invite), 'group:create:<title>' opens a new group with your message. At most ONE message per turn total across all channels. Keep it short and in character.",
+        "Send one diplomatic message: channel 'world' broadcasts publicly, 'private' (default) writes a private letter to the rival, 'dm:<seat>' writes a direct message to one seat, 'group:<id>' writes to a group you belong to (first send accepts an invite), 'group:create:<title>' opens a new group with your message. Manage memberships with 'group:invite:<id>:<seat>' (your message is the invite note), 'group:leave:<id>' (posts a farewell, then leaves), 'group:archive:<id>' (posts a closing line, then closes the group). At most ONE message per turn total across all channels. Keep it short and in character.",
       inputSchema: {
         type: "object",
         properties: {
@@ -592,6 +592,101 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
           );
           try { markSent(ch); } catch {}
           return { content: [{ type: "text", text: JSON.stringify({ ok: true, channel: "group:" + g.id, id: res.ID ?? null }) }] };
+        } catch (e) {
+          return { content: [{ type: "text", text: "communicate failed: " + e.message }], isError: true };
+        }
+      }
+      if (ch.startsWith("group:invite:")) {
+        const rest = ch.slice("group:invite:".length).trim();
+        const cut = rest.indexOf(":");
+        const gid = (cut >= 0 ? rest.slice(0, cut) : rest).trim();
+        const seat = cut >= 0 ? Number(rest.slice(cut + 1).trim()) : NaN;
+        if (!gid) {
+          return { content: [{ type: "text", text: "group:invite needs an id and seat, e.g. channel 'group:invite:ab12cd34:0'" }], isError: true };
+        }
+        if (!Number.isInteger(seat)) {
+          return { content: [{ type: "text", text: "group:invite needs a seat number, e.g. channel 'group:invite:ab12cd34:0'" }], isError: true };
+        }
+        // Invite first (validates the inviter is active), then post the
+        // invite note: a failed send leaves a benign pending invite, never
+        // a lost membership.
+        let g = null;
+        try {
+          g = inviteToGroup(gid, seat, PLAYER_ID);
+        } catch (e) {
+          return { content: [{ type: "text", text: "group invite failed: " + e.message }], isError: true };
+        }
+        const tagged = tagMessage(g.id, g.title, message).slice(0, 1000);
+        try {
+          const res = liveJson(
+            await liveCall("broadcast-message", { PlayerID: PLAYER_ID, Content: tagged })
+          );
+          try { markSent(ch); } catch {}
+          return { content: [{ type: "text", text: JSON.stringify({ ok: true, channel: "group:" + g.id, invited: seat, id: res.ID ?? null }) }] };
+        } catch (e) {
+          return { content: [{ type: "text", text: "communicate failed: " + e.message }], isError: true };
+        }
+      }
+      if (ch.startsWith("group:leave:")) {
+        const gid = ch.slice("group:leave:".length).trim();
+        if (!gid) {
+          return { content: [{ type: "text", text: "group:leave needs an id, e.g. channel 'group:leave:ab12cd34'" }], isError: true };
+        }
+        let g = null;
+        try {
+          g = getGroup(gid);
+        } catch (e) {
+          return { content: [{ type: "text", text: "unknown group '" + gid + "'" }], isError: true };
+        }
+        if (memberStatus(gid, PLAYER_ID) !== "active") {
+          return { content: [{ type: "text", text: "not a member of group '" + gid + "'" }], isError: true };
+        }
+        // Farewell first, membership change after: a failed send leaves the
+        // seat still a member (fail closed), never a silent departure.
+        const tagged = tagMessage(g.id, g.title, message).slice(0, 1000);
+        try {
+          const res = liveJson(
+            await liveCall("broadcast-message", { PlayerID: PLAYER_ID, Content: tagged })
+          );
+          try {
+            leaveGroup(gid, PLAYER_ID, res.ID ?? null);
+          } catch (e) {
+            return { content: [{ type: "text", text: "group leave failed: " + e.message }], isError: true };
+          }
+          try { markSent(ch); } catch {}
+          return { content: [{ type: "text", text: JSON.stringify({ ok: true, channel: "group:" + g.id, left: true, id: res.ID ?? null }) }] };
+        } catch (e) {
+          return { content: [{ type: "text", text: "communicate failed: " + e.message }], isError: true };
+        }
+      }
+      if (ch.startsWith("group:archive:")) {
+        const gid = ch.slice("group:archive:".length).trim();
+        if (!gid) {
+          return { content: [{ type: "text", text: "group:archive needs an id, e.g. channel 'group:archive:ab12cd34'" }], isError: true };
+        }
+        let g = null;
+        try {
+          g = getGroup(gid);
+        } catch (e) {
+          return { content: [{ type: "text", text: "unknown group '" + gid + "'" }], isError: true };
+        }
+        if (memberStatus(gid, PLAYER_ID) !== "active") {
+          return { content: [{ type: "text", text: "not a member of group '" + gid + "'" }], isError: true };
+        }
+        // Closing line first, archive after: a failed send keeps the group
+        // open (fail closed), never a silent close.
+        const tagged = tagMessage(g.id, g.title, message).slice(0, 1000);
+        try {
+          const res = liveJson(
+            await liveCall("broadcast-message", { PlayerID: PLAYER_ID, Content: tagged })
+          );
+          try {
+            archiveGroup(gid, PLAYER_ID);
+          } catch (e) {
+            return { content: [{ type: "text", text: "group archive failed: " + e.message }], isError: true };
+          }
+          try { markSent(ch); } catch {}
+          return { content: [{ type: "text", text: JSON.stringify({ ok: true, channel: "group:" + g.id, archived: true, id: res.ID ?? null }) }] };
         } catch (e) {
           return { content: [{ type: "text", text: "communicate failed: " + e.message }], isError: true };
         }

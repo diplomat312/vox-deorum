@@ -320,3 +320,17 @@ Shift ~03:10-03:20 (game still wedged at T207, services untouched):
 - d0653cd0/tools 66780718), suite 44/44 (27 channel + 9 routing + 8
 - guard). Queued for post-restart live verify: traits block, leadsTo
 - walk, guard second-send rejection, compaction/communicates rows.
+-
+Shift ~03:20-03:40 (game still wedged at T207, services untouched):
+- Overnight track 3 continued (robust social): model-facing group
+- lifecycle via communicate channels, no new tool schemas.
+- group:invite:<id>:<seat> invites then posts the note;
+- group:leave:<id> farewells then leaves; group:archive:<id> closes then
+- archives (post-first/mutate-after = fail closed). Specific-before-generic
+- prefix ordering (invite/leave/archive ahead of group:). All consume the
+- one-send budget and mark the guard. Offline routing asserts cover every
+- reject before any live call (unknown group, bad seat, missing id);
+- success paths queued for live verify. Batched description update
+- (communicate schema + civ.md one-liner) with ONE deliberate prefix
+- re-baseline while cold (civ.md 41baad69/tools 47c9fb62, opencode.json
+- unchanged). Suite 49/49 (27 channel + 14 routing + 8 guard).
