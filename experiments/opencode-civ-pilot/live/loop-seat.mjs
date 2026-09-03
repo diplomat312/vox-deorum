@@ -142,7 +142,7 @@ async function confirmAndRun(wake) {
       log("new game; watermark reset");
     }
   }
-  const cs = loadCogState();
+  const cs = !running ? loadCogState() : null;
   if (cs && cs.gameId === gameID && cs.pendingDecisionTurn != null && cs.pendingStatus !== "completed" && cs.pendingStatus !== "missed") {
     if (st.turn <= cs.pendingDecisionTurn) {
       log("retrying pending T" + cs.pendingDecisionTurn + " (status " + cs.pendingStatus + ")");
