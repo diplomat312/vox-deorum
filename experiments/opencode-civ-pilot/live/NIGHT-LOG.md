@@ -42,3 +42,37 @@ Overnight shift (~01:00-02:00, game still wedged at T207, services untouched):
 - T207 cognition banks and we get fresh cache numbers plus the policy-walk
 - end to end by the model. Portugal seat refresh (lastSeenTurn 167) and the
 - Unified-Mind phase-4 comparison both need the live lock back.
+
+Cache ledger, 21 banked Siam turns through T180 (telemetry-live.jsonl):
+steady state ~0.99 read-hit; model-visible prefix changes (T145 deal-social,
+T154, T156 deal-v1) each cost one ~100k+ miss; idle TTL expiry (T177/T180
+after 15-25min gaps) costs the same ~120k fresh. Cumulative 594967 uncached
+vs 4286512 cache-read = 0.878.
+
+turn | uncached | cache_read | hit
+116 | 2779 | 252115 | 0.989
+119 | 3692 | 260947 | 0.986
+121 | 1361 | 179426 | 0.992
+123 | 1186 | 182050 | 0.994
+125 | 1331 | 184418 | 0.993
+127 | 1462 | 187106 | 0.992
+129 | 1224 | 189858 | 0.994
+130 | 1301 | 192226 | 0.993
+132 | 1279 | 194658 | 0.993
+134 | 1357 | 197218 | 0.993
+135 | 1462 | 199778 | 0.993
+137 | 1267 | 202722 | 0.994
+139 | 1593 | 205218 | 0.992
+140 | 1348 | 208290 | 0.994
+145 | 107185 | 213331 | 0.666
+148 | 2297 | 324947 | 0.993
+154 | 110455 | 220243 | 0.666
+156 | 112329 | 112098 | 0.499
+165 | 2607 | 226466 | 0.989
+177 | 117570 | 234003 | 0.666
+180 | 119882 | 119394 | 0.499
+
+Follow-up checks: Siam session re-exported at 110 msgs with identical tool
+counts (61 inspect / 30 commit / 3 communicate) — failed T207 watcher
+attempts cause zero session pollution. Routing tests extended to 26 asserts
+with a createGroup -> tag -> inbox round-trip incl. invite isolation.

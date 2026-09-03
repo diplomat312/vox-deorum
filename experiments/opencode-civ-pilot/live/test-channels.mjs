@@ -99,4 +99,17 @@ ok(isErr(routed[0]) && textOf(routed[0]).indexOf('two seats') >= 0, 'dm:non-riva
 ok(isErr(routed[1]) && textOf(routed[1]).indexOf('needs a title') >= 0, 'group:create without title rejected offline');
 ok(isErr(routed[2]) && textOf(routed[2]).indexOf('unknown group') >= 0, 'unknown group rejected offline');
 ok(isErr(routed[3]) && textOf(routed[3]).indexOf('unknown subject') >= 0, 'unknown subject rejected offline');
+// Full round-trip: create -> tag -> inbox, with invite isolation. Mirrors
+// what communicate channel 'group:create:<title>' does on the live path.
+const g4 = ch.createGroup({ title: 'Round Trip', creator: 1, members: [1] });
+ch.inviteToGroup(g4.id, 0, 1);
+const w1 = [{ ID: 20, Turn: 200, SpeakerID: 1, Content: ch.tagMessage(g4.id, g4.title, 'hello duel') }];
+let box4 = ch.groupInbox(0, w1, 199);
+ok(box4.invites.some((l) => l.includes(g4.id)), 'invitee sees invite before accepting');
+ok(box4.lines.join(' ').includes('hello duel') === false, 'invitee sees no messages before accepting');
+ch.markMemberActive(g4.id, 0);
+box4 = ch.groupInbox(0, w1.concat([{ ID: 21, Turn: 201, SpeakerID: 1, Content: ch.tagMessage(g4.id, g4.title, 'second') }]), 199);
+ok(box4.lines.join(' ').includes('second'), 'member sees messages after accepting');
+box4 = ch.groupInbox(1, w1, 199);
+ok(box4.lines.join(' ').includes('hello duel'), 'creator sees group messages');
 console.log('All ' + pass + ' asserts passed (channels + routing).');
