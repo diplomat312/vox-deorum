@@ -1,8 +1,10 @@
-// Turn-gated supervisor loop for one seat (brief: monitor Spain). Each cycle:
-// wait for the seat turn, pause the game, run one cognition opportunity,
-// resume on commit (or on timeout, so a stuck mind never holds the game
-// hostage). Only commit_ok advances the done watermark, so a failed turn is
-// retried next cycle. Stop by creating STOP in the rundir.
+// Event-driven turn-gated supervisor for one seat. Game events arrive over
+// the bridge SSE stream; each turn advance wakes the loop, which pauses the
+// game, runs one cognition opportunity on the seat persistent session, and
+// resumes on commit. Pause-upfront is deliberate: the world waits for the
+// mind, so observations never race the game and commits land at decision
+// time. Execution is serial per seat, STOP is honored between phases, and
+// reconnects use capped backoff with the gap logged and one catch-up run.
 import { spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
@@ -10,21 +12,23 @@ import { fileURLToPath } from "node:url";
 import { callLive } from "./live-mcp.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
+const NL = String.fromCharCode(10);
+const SSE_URL = process.env.CIV_PILOT_SSE_URL || "http://127.0.0.1:5000/events";
 function arg(name, dflt = null) {
   const i = process.argv.indexOf("--" + name);
   return i >= 0 ? (process.argv[i + 1] ?? dflt) : dflt;
 }
 const seat = Number(arg("seat", NaN));
-const game = arg("game", "fourway-spain");
+const game = arg("game", "fourway");
 const rundirArg = arg("rundir", null);
-const pollMs = Number(arg("poll-ms", 15000));
 const runBudgetMs = Number(arg("run-budget-ms", 12 * 60 * 1000));
 if (!Number.isInteger(seat) || !rundirArg) { console.error("usage: loop-seat.mjs --seat N --rundir ABS [--game g]"); process.exit(2); }
 const rundir = path.isAbsolute(rundirArg) ? rundirArg : path.resolve(process.cwd(), rundirArg);
 fs.mkdirSync(rundir, { recursive: true });
 const stopf = path.join(rundir, "STOP");
 const logf = path.join(rundir, "loop-seat-" + seat + ".log");
-function log(m) { fs.appendFileSync(logf, new Date().toISOString() + " " + m + "\n"); }
+function log(m) { fs.appendFileSync(logf, new Date().toISOString() + " " + m + NL); }
+const stopped = () => fs.existsSync(stopf);
 async function status() {
   const r = await callLive("get-game-status", {});
   return r.structuredContent ?? r;
@@ -42,19 +46,84 @@ function runOnce(turn) {
   });
 }
 let doneTurn = -1;
-log("loop start seat " + seat);
-while (!fs.existsSync(stopf)) {
-  let st = null;
-  try { st = await status(); } catch (e) { await new Promise((r) => setTimeout(r, pollMs)); continue; }
-  if (st.activePlayerId === seat && st.turn > doneTurn) {
-    log("seat turn " + st.turn + " pausing");
+let gameID = null;
+let running = false;
+async function handleTurn(turn) {
+  if (running || stopped() || turn <= doneTurn) return;
+  running = true;
+  try {
+    log("seat turn " + turn + " pausing");
     await pause();
-    const res = await runOnce(st.turn);
-    log("turn " + st.turn + " exit " + res.code);
-    if (res.code === 0) doneTurn = st.turn;
+    if (stopped()) { await resume(); return; }
+    const res = await runOnce(turn);
+    log("turn " + turn + " exit " + res.code);
+    if (res.code === 0) doneTurn = turn;
+    if (stopped()) return;
     await resume();
-  } else {
-    await new Promise((r) => setTimeout(r, pollMs));
+  } finally { running = false; }
+}
+async function confirmAndRun() {
+  let st = null;
+  try { st = await status(); } catch (e) { log("status failed: " + e.message); return; }
+  if (st.gameID !== gameID) { gameID = st.gameID; doneTurn = -1; log("new game; watermark reset"); }
+  await handleTurn(st.turn);
+}
+function sleepMs(ms) { return new Promise((r) => setTimeout(r, ms)); }
+async function watch() {
+  let backoff = 1000;
+  while (!stopped()) {
+    try {
+      await streamEvents();
+      if (stopped()) break;
+      log("stream ended; reconnecting");
+    } catch (e) {
+      log("stream error: " + e.message);
+    }
+    const wait = Math.min(backoff, 30000);
+    backoff = Math.min(backoff * 2, 30000);
+    const t0 = Date.now();
+    while (Date.now() - t0 < wait && !stopped()) await sleepMs(1000);
+    if (stopped()) break;
+    log("reconnecting; will catch up from the live turn");
+    await confirmAndRun();
+    backoff = 1000;
+  }
+  log("loop stopped");
+}
+const CR = String.fromCharCode(13);
+async function streamEvents() {
+  const res = await fetch(SSE_URL, { headers: { Accept: "text/event-stream" } });
+  if (!res.ok || !res.body) throw new Error("sse connect failed");
+  log("stream connected");
+  await confirmAndRun();
+  const reader = res.body.getReader();
+  const dec = new TextDecoder();
+  let buf = "";
+  for (;;) {
+    if (stopped()) { try { await reader.cancel(); } catch (e) {} return; }
+    const { done, value } = await reader.read();
+    if (done) return;
+    buf += dec.decode(value, { stream: true }).split(String.fromCharCode(13) + NL).join(NL);
+    let cut = buf.indexOf("\n\n");
+    while (cut >= 0) {
+      const block = buf.slice(0, cut);
+      buf = buf.slice(cut + 2);
+      onBlock(block);
+      cut = buf.indexOf("\n\n");
+    }
   }
 }
-log("loop stopped");
+function onBlock(block) {
+  const datas = block.split("\n").filter((l) => l.indexOf("data:") === 0).map((l) => l.slice(5).trim());
+  if (!datas.length) return;
+  let payload = null;
+  try { payload = JSON.parse(datas.join("\n")); } catch (e) { return; }
+  const items = Array.isArray(payload) ? payload : [payload];
+  for (const it of items) {
+    const p = it?.payload ?? it?.data ?? it;
+    const t = Number(p?.Turn ?? p?.turn);
+    if (Number.isFinite(t)) confirmAndRun();
+  }
+}
+log("loop start seat " + seat);
+await watch();
