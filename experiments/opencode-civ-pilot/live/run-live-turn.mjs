@@ -38,11 +38,14 @@ if (!Object.keys(SEAT_BY_NAME).length) SEAT_BY_NAME = { siam: PLAYER_ID, portuga
 function coerceTargetID(v, dflt) {
   if (typeof v === "number" && Number.isInteger(v)) return v;
   if (typeof v === "string") {
+    if (v.trim() === "") return dflt;
     const hit = SEAT_BY_NAME[v.trim().toLowerCase()];
     if (hit !== undefined) return hit;
     const n = Number(v);
-    if (Number.isInteger(n)) return n;
+    if (v.trim() !== "" && Number.isInteger(n)) return n;
+    return v;
   }
+  if (v === undefined || v === null) return dflt;
   return dflt;
 }
 

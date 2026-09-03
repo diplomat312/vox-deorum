@@ -31,7 +31,7 @@ export function toolDefs() {
     {
       name: "communicate",
       description:
-        "Send one diplomatic message: channel 'world' broadcasts publicly, 'private' (default) writes a private letter to the rival, 'dm:<seat>' writes a direct message to one seat, 'group:<id>' writes to a group you belong to (first send accepts an invite), 'group:create:<title>' opens a new group with your message. Manage memberships with 'group:invite:<id>:<seat>' (your message is the invite note), 'group:leave:<id>' (posts a farewell, then leaves), 'group:archive:<id>' (posts a closing line, then closes the group). group:accept:<id> accepts a pending invite (posts a join note), group:decline:<id> declines it silently without spending the turn send. At most ONE message per turn total across all channels. Keep it short and in character.",
+        "Send one diplomatic message: channel 'world' broadcasts publicly, 'private' (default) writes a private letter to the rival, 'dm:<seat>' writes a direct message to one seat, 'group:<id>' writes to a group you belong to (first send accepts an invite), 'group:create:<title>' opens a new group with your message. Manage memberships with 'group:invite:<id>:<seat>' (your message is the invite note), 'group:leave:<id>' (posts a farewell, then leaves), 'group:archive:<id>' (posts a closing line, then closes the group). group:accept:<id> accepts a pending invite (posts a join note), group:decline:<id> declines it silently (still counts as the turn send, like every communicate call). At most ONE message per turn total across all channels. Keep it short and in character.",
       inputSchema: {
         type: "object",
         properties: {

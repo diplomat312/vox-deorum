@@ -19,6 +19,7 @@ import {
 } from "../mcp-server/node_modules/@modelcontextprotocol/sdk/dist/esm/types.js";
 import fs from "node:fs";
 import { SUBJECTS, toolDefs, validateCommit } from "../driver/civ-tools.mjs";
+import { classifyChannel } from "../driver/communicate-forms.mjs";
 import path from "node:path";
 import { createGroup, getGroup, markMemberActive, tagMessage, checkSend, markSent, leaveGroup, archiveGroup, inviteToGroup, resolveInvite, memberStatus } from "./channels.mjs";
 
@@ -452,10 +453,9 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
       return { content: [{ type: "text", text: "message too long (1000 chars max); keep it short" }], isError: true };
     }
     // Backpressure enforcement (file-based, prefix-safe): at most ONE send
-    // per turn across all channels. Inert when CIV_PILOT_TURN is unset
-    // (offline routing tests), enforced on live turns. The driver marks the
-    // guard after each run, so a nudge follow-up in the same turn cannot
-    // double-send either.
+    // per turn across all channels, including membership decisions with no
+    // visible message. Inert when CIV_PILOT_TURN is unset (offline routing
+    // tests), enforced on live turns.
     try {
       checkSend();
     } catch (e) {
@@ -463,17 +463,14 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
     }
     try {
       const ch = String(args?.channel ?? "private");
-      if (ch.startsWith("dm:")) {
-        const seat = Number(ch.slice("dm:".length).trim());
-        if (!Number.isInteger(seat)) {
-          return { content: [{ type: "text", text: "dm channel needs a seat number, e.g. channel 'dm:0'" }], isError: true };
-        }
-        if (seat === PLAYER_ID) {
-          return { content: [{ type: "text", text: "cannot DM yourself; pick another seat" }], isError: true };
-        }
-        if (seat < 0 || seat > 63) {
-          return { content: [{ type: "text", text: "dm seat out of range" }], isError: true };
-        }
+      // Single parser for both backends (driver/communicate-forms.mjs):
+      // validation accepts and rejects identically on mock and live.
+      const form = classifyChannel(ch, PLAYER_ID);
+      if (form.kind === "invalid") {
+        return { content: [{ type: "text", text: form.error }], isError: true };
+      }
+      if (form.kind === "dm") {
+        const seat = form.seat;
         const res = liveJson(
           await liveCall("append-message", {
             PlayerAID: Math.min(PLAYER_ID, seat),
@@ -488,11 +485,8 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
         try { markSent(ch); } catch {}
         return { content: [{ type: "text", text: JSON.stringify({ ok: true, channel: ch, sent: true }) }] };
       }
-      if (ch.startsWith("group:create:")) {
-        const title = ch.slice("group:create:".length).trim().slice(0, 60);
-        if (!title) {
-          return { content: [{ type: "text", text: "group:create needs a title, e.g. channel 'group:create:War Council'" }], isError: true };
-        }
+      if (form.kind === "create") {
+        const title = form.title;
         let g = null;
         try {
           g = createGroup({ title, creator: PLAYER_ID, members: [PLAYER_ID] });
@@ -510,17 +504,9 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
           return { content: [{ type: "text", text: "communicate failed: " + e.message }], isError: true };
         }
       }
-      if (ch.startsWith("group:invite:")) {
-        const rest = ch.slice("group:invite:".length).trim();
-        const cut = rest.indexOf(":");
-        const gid = (cut >= 0 ? rest.slice(0, cut) : rest).trim();
-        const seat = cut >= 0 ? Number(rest.slice(cut + 1).trim()) : NaN;
-        if (!gid) {
-          return { content: [{ type: "text", text: "group:invite needs an id and seat, e.g. channel 'group:invite:ab12cd34:0'" }], isError: true };
-        }
-        if (!Number.isInteger(seat)) {
-          return { content: [{ type: "text", text: "group:invite needs a seat number, e.g. channel 'group:invite:ab12cd34:0'" }], isError: true };
-        }
+      if (form.kind === "invite") {
+        const gid = form.id;
+        const seat = form.seat;
         // Invite first (validates the inviter is active), then post the
         // invite note: a failed send leaves a benign pending invite, never
         // a lost membership.
@@ -541,11 +527,8 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
           return { content: [{ type: "text", text: "communicate failed: " + e.message }], isError: true };
         }
       }
-      if (ch.startsWith("group:accept:")) {
-        const gid = ch.slice("group:accept:".length).trim();
-        if (!gid) {
-          return { content: [{ type: "text", text: "group:accept needs an id" }], isError: true };
-        }
+      if (form.kind === "accept") {
+        const gid = form.id;
         let gAccept = null;
         try {
           gAccept = resolveInvite(gid, PLAYER_ID, true);
@@ -561,23 +544,20 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
           return { content: [{ type: "text", text: "communicate failed: " + e.message }], isError: true };
         }
       }
-      if (ch.startsWith("group:decline:")) {
-        const gid = ch.slice("group:decline:".length).trim();
-        if (!gid) {
-          return { content: [{ type: "text", text: "group:decline needs an id" }], isError: true };
-        }
+      if (form.kind === "decline") {
+        const gid = form.id;
         try {
           resolveInvite(gid, PLAYER_ID, false);
         } catch (e) {
           return { content: [{ type: "text", text: "group decline failed: " + e.message }], isError: true };
         }
+        // Silent but not free: declining spends the turn send like any
+        // other communicate call, so the budget cannot be bypassed.
+        try { markSent(ch); } catch {}
         return { content: [{ type: "text", text: JSON.stringify({ ok: true, channel: "group:" + gid, accepted: false }) }] };
       }
-if (ch.startsWith("group:leave:")) {
-        const gid = ch.slice("group:leave:".length).trim();
-        if (!gid) {
-          return { content: [{ type: "text", text: "group:leave needs an id, e.g. channel 'group:leave:ab12cd34'" }], isError: true };
-        }
+      if (form.kind === "leave") {
+        const gid = form.id;
         let g = null;
         try {
           g = getGroup(gid);
@@ -595,7 +575,7 @@ if (ch.startsWith("group:leave:")) {
             await liveCall("broadcast-message", { PlayerID: PLAYER_ID, Content: tagged })
           );
           try {
-            leaveGroup(gid, PLAYER_ID, res.ID ?? null);
+            leaveGroup(gid, PLAYER_ID);
           } catch (e) {
             return { content: [{ type: "text", text: "group leave failed: " + e.message }], isError: true };
           }
@@ -605,11 +585,8 @@ if (ch.startsWith("group:leave:")) {
           return { content: [{ type: "text", text: "communicate failed: " + e.message }], isError: true };
         }
       }
-      if (ch.startsWith("group:archive:")) {
-        const gid = ch.slice("group:archive:".length).trim();
-        if (!gid) {
-          return { content: [{ type: "text", text: "group:archive needs an id, e.g. channel 'group:archive:ab12cd34'" }], isError: true };
-        }
+      if (form.kind === "archive") {
+        const gid = form.id;
         let g = null;
         try {
           g = getGroup(gid);
@@ -637,8 +614,8 @@ if (ch.startsWith("group:leave:")) {
           return { content: [{ type: "text", text: "communicate failed: " + e.message }], isError: true };
         }
       }
-      if (ch.startsWith("group:")) {
-        const gid = ch.slice("group:".length).trim();
+      if (form.kind === "group") {
+        const gid = form.id;
         let g = null;
         try {
           g = getGroup(gid);
@@ -662,12 +639,12 @@ if (ch.startsWith("group:leave:")) {
           return { content: [{ type: "text", text: `communicate failed: ${e.message}` }], isError: true };
         }
       }
-      if ((args?.channel ?? "private") === "world") {
+      if (form.kind === "world") {
         const res = liveJson(
           await liveCall("broadcast-message", { PlayerID: PLAYER_ID, Content: message.slice(0, 1000) })
         );
-          try { markSent(ch); } catch {}
-          return { content: [{ type: "text", text: JSON.stringify({ ok: true, channel: "world", id: res.ID ?? null }) }] };
+        try { markSent(ch); } catch {}
+        return { content: [{ type: "text", text: JSON.stringify({ ok: true, channel: "world", id: res.ID ?? null }) }] };
       }
       const res = liveJson(
         await liveCall("append-message", {

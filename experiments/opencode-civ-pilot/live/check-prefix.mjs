@@ -73,7 +73,11 @@ const parts = [
 const fingerprint = parts.join("\n") + "\n";
 
 if (process.argv.includes("--update")) {
-  fs.writeFileSync(fingerprintFile, fingerprint);
+  const NL = String.fromCharCode(10);
+const at = process.argv.indexOf("--update");
+const reason = process.argv.slice(at + 1).join(" ").trim();
+const stamped = fingerprint + "updated=" + new Date().toISOString() + NL + (reason ? "reason=" + reason + NL : "");
+fs.writeFileSync(fingerprintFile, stamped);
   console.log("prefix fingerprint updated:\n" + fingerprint);
   process.exit(0);
 }

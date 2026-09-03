@@ -84,9 +84,9 @@ console.log('All ' + pass + ' channel asserts passed.');
 const { spawn } = await import('node:child_process');
 const { fileURLToPath } = await import('node:url');
 const serverHere = path.dirname(fileURLToPath(import.meta.url));
-function callServer(payloads) {
+function callServer(payloads, extraEnv, rel) {
   return new Promise((resolve, reject) => {
-    const child = spawn('node', [path.join(serverHere, 'vox-live-server.mjs')], { stdio: ['pipe', 'pipe', 'inherit'] });
+    const child = spawn('node', [path.join(serverHere, rel || 'vox-live-server.mjs')], { stdio: ['pipe', 'pipe', 'inherit'], env: { ...process.env, ...(extraEnv || {}) } });
     let buf = '';
     const out = [];
     const timer = setTimeout(() => { child.kill(); reject(new Error('server routing timed out')); }, 15000);
@@ -169,4 +169,64 @@ ok(ch.lastSend() === null, 'corrupt guard fails open');
 ok(ch.checkSend() === false, 'corrupt guard does not block');
 delete process.env.CIV_PILOT_TURN;
 delete process.env.CIV_PILOT_SEND_FILE;
-console.log('All ' + pass + ' asserts passed (channels + routing + guard).');
+// Mock/live parity: every validation accept and reject below is decided
+// before any transport, so both backends must answer identically. Transports
+// (Vox broadcast vs world-file log) stay backend-specific and untested here.
+const parityEnv = {
+  CIV_PILOT_PLAYER_ID: '0',
+  CIV_PILOT_SEND_FILE: '',
+  CIV_PILOT_TURN: '',
+  CIV_PILOT_CHANNELS_FILE: '',
+};
+// Guard and registry env must be empty (not unset) so spawned servers see
+// no turn and the shared classifier decides alone.
+const parityPayloads = [
+  { name: 'communicate', arguments: { channel: 'dm:0', target: 'x', message: 'hi' } },
+  { name: 'communicate', arguments: { channel: 'dm:x', target: 'x', message: 'hi' } },
+  { name: 'communicate', arguments: { channel: 'dm:64', target: 'x', message: 'hi' } },
+  { name: 'communicate', arguments: { channel: 'group:create:   ', target: 'x', message: 'hi' } },
+  { name: 'communicate', arguments: { channel: 'group:invite:deadbeef:xx', target: 'x', message: 'hi' } },
+  { name: 'communicate', arguments: { channel: 'group:accept:', target: 'x', message: 'ok' } },
+  { name: 'communicate', arguments: { channel: 'group:decline:', target: 'x', message: 'no' } },
+  { name: 'communicate', arguments: { channel: 'group:leave:', target: 'x', message: 'bye' } },
+  { name: 'communicate', arguments: { channel: 'group:archive:', target: 'x', message: 'done' } },
+  { name: 'communicate', arguments: { channel: 'group:accept:deadbeef', target: 'x', message: 'ok' } },
+  { name: 'communicate', arguments: { channel: 'group:decline:deadbeef', target: 'x', message: 'no' } },
+  { name: 'communicate', arguments: { channel: 'world', target: 'x', message: '' } },
+  { name: 'communicate', arguments: { channel: 'world', target: 'x', message: 'y'.repeat(1001) } },
+  { name: 'inspect', arguments: { subject: 'nope' } },
+]; 
+const liveParity = await callServer(parityPayloads, parityEnv, 'vox-live-server.mjs');
+const mockParity = await callServer(parityPayloads, parityEnv, '../mcp-server/index.mjs');
+ok(liveParity.length === parityPayloads.length, 'live parity responses complete');
+ok(mockParity.length === parityPayloads.length, 'mock parity responses complete');
+for (let k = 0; k < parityPayloads.length; k = k + 1) {
+  const a = liveParity[k];
+  const b = mockParity[k];
+  ok(isErr(a) === isErr(b), 'parity isErr case ' + k + ' (' + parityPayloads[k].arguments.channel + ')');
+  ok(textOf(a) === textOf(b), 'parity text case ' + k + ' (' + parityPayloads[k].arguments.channel + ')');
+}
+// Decline-budget evidence: a seeded invite declined through the live server
+// resolves the membership AND spends the turn send, so the next send in the
+// same turn is rejected by the backpressure guard.
+const declineFile = path.join(tmp, 'channels-decline.json');
+const declineGuard = path.join(tmp, 'send-guard-decline.json');
+process.env.CIV_PILOT_CHANNELS_FILE = declineFile;
+const gD = ch.createGroup({ title: 'Peace Talks', creator: 1, members: [1] });
+ch.inviteToGroup(gD.id, 0, 1);
+const declineEnv = {
+  CIV_PILOT_PLAYER_ID: '0',
+  CIV_PILOT_TURN: '500',
+  CIV_PILOT_SEND_FILE: declineGuard,
+  CIV_PILOT_CHANNELS_FILE: declineFile,
+};
+const declined = await callServer([
+  { name: 'communicate', arguments: { channel: 'group:decline:' + gD.id, target: 'x', message: 'not now' } },
+  { name: 'communicate', arguments: { channel: 'world', target: 'x', message: 'hello' } },
+], declineEnv, 'vox-live-server.mjs');
+ok(declined.length === 2, 'decline plus follow-up answered');
+ok(!isErr(declined[0]) && textOf(declined[0]).indexOf('accepted') >= 0, 'decline resolves silently');
+ok(ch.memberStatus(gD.id, 0) === 'declined', 'declined membership recorded');
+ok(isErr(declined[1]) && textOf(declined[1]).includes('already sent'), 'decline spent the turn send');
+process.env.CIV_PILOT_CHANNELS_FILE = path.join(tmp, 'channels.json');
+console.log('All ' + pass + ' asserts passed (channels + routing + guard + parity).');
