@@ -376,3 +376,16 @@ Shift ~03:40-04:00 (game still wedged at T207, services untouched):
 - - records nulls and the state horizon is preserved, same as today.
 - - Verified: node --check green, prefix stable
 - - (41baad69/d0653cd0/47c9fb62), suite 49/49, session still 110.
+-
+- Shift ~03:30-03:40 UTC (game still wedged at T207, services untouched):
+- - Phase-4 grounding (read-only source survey, no shared-code changes):
+- - verified modelDependencies (diplomat, live-envoy, briefed/staffed
+- - strategists, strategist-session, vox-agent) and
+- - buildGameContextMessages (analyst, live-envoy, negotiator,
+- - strategy-parameters) via recursive grep; confirmed 8 strategist + 4
+- - envoy agent files, utils/models hook files, OTel telemetry files.
+- - Earlier non-recursive greps had returned empty and would have falsely
+- - suggested the plan's names were wrong; re-ran correctly and recorded
+- - the inventory in CACHE-COMPARISON.md. No code touched.
+- - Also verified send-guard.json absent (no post-guard sends pending) and
+- - civ-state-siam.json steady (messageCount 110, lastSeenTurn 180).

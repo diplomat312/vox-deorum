@@ -88,6 +88,17 @@ numbers exist in-tree today.
 - modelDependencies, plus envoy context builders (src/envoy/context) and
 - wake adapters (VoxContext, buildGameContextMessages) that rebuild each
 - prompt. Every one of these is a distinct provider prefix.
+- Verified 2026-09-03 (recursive source grep, no code taken):
+- modelDependencies in diplomat.ts, live-envoy.ts,
+- simple-strategist-briefed/staffed.ts, strategist-session.ts,
+- vox-agent.ts; buildGameContextMessages in analyst.ts, live-envoy.ts,
+- negotiator.ts, strategy-parameters.ts. Agent dirs hold 8 strategist
+- files and 4 envoy files as listed above. Hook files present:
+- utils/models/models.ts, concurrency.ts, token-counter.ts, plus
+- utils/telemetry OTel exporter files. Turn-level entry points spotted
+- (request counts not yet mapped): utils/diplomacy/turn/,
+- web/chat/turn.ts, telepathist/preparation/turn-preparation.ts.
+- Request-count mapping still needs implementation-time tracing.
 - Hook: centralize logging in vox-agents/src/utils/models (models.ts /
 - concurrency.ts, where AI SDK requests fan out). Log one JSONL row per
 - physical request mirroring runs-siam/telemetry-live.jsonl field names,
