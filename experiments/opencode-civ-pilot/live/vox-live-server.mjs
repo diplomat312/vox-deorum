@@ -95,6 +95,69 @@ function pick(obj, keys) {
   return o;
 }
 
+// Server-side tech-tree walk: one inspect answers "what stands between me and
+// X" instead of the model chaining single-tech lookups across round-trips.
+// SUFFIX-ONLY: result content, never identity or tool schemas. Prefix guard
+// (check-prefix.mjs) must stay green after this change.
+async function techPath(target) {
+  const p = liveJson(await liveCall("get-players", { playerIDs: [PLAYER_ID] }));
+  const me = p[String(PLAYER_ID)] ?? {};
+  const techName = (x) => String(typeof x === "string" ? x : (x?.Name ?? x?.name ?? x?.Type ?? ""));
+  // get-players reports Technologies as a COUNT, not a list. Researchability
+  // is the ground truth instead: get-options lists exactly what is pickable
+  // now, and anything behind the current research/available set is owned
+  // (prereqs of a live option must be researched). Statuses guide ordering,
+  // not ownership: compare chain names against availableTechnologies.
+  let availableNow = new Set();
+  try {
+    const opt = liveJson(await liveCall("get-options", { PlayerID: PLAYER_ID }));
+    availableNow = new Set(Object.keys(opt?.Options?.Technologies ?? {}).map((s) => s.toLowerCase()));
+  } catch { /* chain still useful without availability marks */ }
+  const researching = String(me.CurrentResearch ?? "").toLowerCase();
+  const seen = new Set();
+  const steps = [];
+  const queue = [target];
+  let calls = 0;
+  while (queue.length && calls < 10) {
+    const name = queue.shift();
+    const key = String(name).toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    let item = null;
+    try {
+      const r = liveJson(await liveCall("get-technology", { Search: name, MaxResults: 3 }));
+      calls++;
+      const items = r?.Items ?? [];
+      item = items.find((i) => techName(i).toLowerCase() === key) ?? items[0] ?? null;
+    } catch {
+      calls++;
+    }
+    if (!item) {
+      steps.push({ name, status: "unknown" });
+      continue;
+    }
+    const prereqs = item.TechsPrereq ?? [];
+    steps.push({
+      name: item.Name, cost: item.Cost, era: item.Era, prereqs,
+      status: availableNow.has(key) ? "available" : key === researching ? "researching" : "chained",
+    });
+    for (const pre of prereqs) {
+      const pk = String(pre).toLowerCase();
+      if (!seen.has(pk)) queue.push(pre);
+    }
+  }
+  const needed = steps.filter((s) => s.status !== "unknown").reverse();
+  return {
+    target,
+    path: needed.map((s) => s.name),
+    // Full-cone cost: techs you already own cost nothing, so the remaining
+    // bill is coneCost minus whatever sits behind your available set.
+    coneCost: needed.reduce((a, s) => a + (Number(s.cost) || 0), 0),
+    detail: steps.reverse().slice(0, 12),
+    hint: "status available = pickable now (matches availableTechnologies); researching = in progress; chained = deeper in the cone (owned if behind an available tech). research {technology} names ONE exact technology",
+  };
+}
+
 // detail enables one-hop graph walks without new schemas: research "<tech
 // name>" returns cost/prereqs/unlocks for that tech; policies "<policy>"
 // returns that policy's data; cities "<name>" narrows to one city.
@@ -111,6 +174,9 @@ async function inspectLive(subject, detail) {
       return pick(p[me] ?? {}, ["Gold", "GoldPerTurn", "HappinessSituation", "HappinessPercentage", "CulturePerTurn", "FaithPerTurn", "SciencePerTurn", "TourismPerTurn", "Population", "Cities", "Territory"]);
     }
     case "research": {
+      if (detail && /^path:/i.test(detail)) {
+        return await techPath(detail.replace(/^path:/i, "").trim());
+      }
       if (detail) return liveJson(await liveCall("get-technology", { Search: detail, MaxResults: 3 }));
       const p = liveJson(await liveCall("get-players", { playerIDs: [PLAYER_ID] }));
       const cur = pick(p[me] ?? {}, ["Technologies", "CurrentResearch", "SciencePerTurn"]);
@@ -121,7 +187,7 @@ async function inspectLive(subject, detail) {
         const techs = opt?.Options?.Technologies ?? {};
         available = Object.keys(techs);
       } catch { /* keep current-only on failure */ }
-      return { ...cur, availableTechnologies: available, hint: "inspect(research, \"<name>\") for cost, prereqs and unlocks of one technology" };
+      return { ...cur, availableTechnologies: available, hint: "inspect(research, \"<name>\") for one technology; inspect(research, \"path:<name>\") for the full prereq chain with costs" };
     }
     case "policies": {
       if (detail) return liveJson(await liveCall("get-policy", { Search: detail, MaxResults: 3 }));
