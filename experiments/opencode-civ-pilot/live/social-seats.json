@@ -1,26 +1,30 @@
 [
   {
     "seat": 0,
-    "civ": "Portugal",
-    "leader": "Maria I",
-    "playedBy": "opencode"
+    "civ": "The Aztecs",
+    "leader": "Montezuma",
+    "playedBy": "opencode",
+    "playerID": 0
   },
   {
     "seat": 1,
-    "civ": "Siam",
-    "leader": "Ramkhamhaeng",
-    "playedBy": "opencode"
+    "civ": "The Iroquois",
+    "leader": "Hiawatha",
+    "playedBy": "opencode",
+    "playerID": 1
   },
   {
     "seat": 2,
-    "civ": "TBD",
-    "leader": "TBD",
-    "playedBy": "opencode"
+    "civ": "Babylon",
+    "leader": "Nebuchadnezzar II",
+    "playedBy": "opencode",
+    "playerID": 2
   },
   {
     "seat": 3,
-    "civ": "TBD",
-    "leader": "TBD",
-    "playedBy": "opencode"
+    "civ": "Russia",
+    "leader": "Catherine",
+    "playedBy": "opencode",
+    "playerID": 3
   }
 ]

@@ -1,5 +1,5 @@
-civ.md=41baad69f73600e8
+civ.md=36d7ccf559facd09
 opencode.json=d0653cd0f8978d3b
 tools=fa92705df9bc809d
-updated=2026-09-03T19:04:36.104Z
-reason=batched communicate operations budget-8 fanout-privacy explicit-invites
+updated=2026-09-03T19:10:45.084Z
+reason=generic four-seat identity with 8-op budget

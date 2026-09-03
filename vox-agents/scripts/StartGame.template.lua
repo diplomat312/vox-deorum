@@ -64,7 +64,7 @@ function onEndFrame()
     t.climate = 0; -- Temperate
     t.seaLevel = 0; -- Medium
     t.era = 0; -- Ancient
-    -- Player slots
+    -- Player slots (0-based engine indices; generator pins [0] so slot 0 is not human)
     -- 0 = empty
     -- 1 = human
     -- 2 = computer

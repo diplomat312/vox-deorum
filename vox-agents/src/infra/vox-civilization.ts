@@ -217,8 +217,9 @@ export class VoxCivilization {
     // Calculate appropriate world size
     const worldSize = this.calculateWorldSize(roundedPlayerCount);
 
-    // Generate player slots array (all AI = 2)
-    const playerSlots = Array(roundedPlayerCount).fill(2).join(', ');
+    // Generate player slots array (all AI = 2). The engine reads slots
+    // 0-based, but Lua literals are 1-based, so pin index 0 explicitly.
+    const playerSlots = "[0] = 2, " + Array(roundedPlayerCount - 1).fill(2).join(", ");
 
     logger.info(`Generating StartGame.lua for ${roundedPlayerCount} players (requested: ${playerCount}) with world size ${worldSize}`);
 
