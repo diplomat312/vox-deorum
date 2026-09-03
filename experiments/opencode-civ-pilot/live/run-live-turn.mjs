@@ -296,6 +296,7 @@ if (usage) {
 
 const tele = {
   game, civ: CIV, turn, seq: turn, model: MODEL, sessionId,
+  trigger_turn: Number(process.env.CIV_PILOT_TRIGGER_TURN ?? turn), horizon_before: lastSeenTurn, horizon_after: commitOk ? turn : lastSeenTurn,
   uncached_input_tokens: tot.uncached, cache_read_input_tokens: tot.read,
   cache_write_input_tokens: tot.write, output_tokens: tot.output,
   reasoning_tokens: tot.reasoning, latency_ms: nowMs - t0,

@@ -46,26 +46,46 @@ function runOnce(turn) {
   });
 }
 let doneTurn = -1;
+let pending = [];
+function appendEpoch(e) { try { fs.appendFileSync(path.join(rundir, "epochs.jsonl"), JSON.stringify(e) + NL); } catch (err) { log("epoch write failed"); } }
 let gameID = null;
 let running = false;
 async function handleTurn(turn) {
   if (running || stopped() || turn <= doneTurn) return;
   running = true;
+  const triggers = pending.splice(0);
+  if (!triggers.includes(turn)) triggers.push(turn);
+  const epoch = { ts: new Date().toISOString(), seat, gameID, observationTurn: turn, triggers, collapsed: triggers.filter((t) => t < turn) };
+  const t0 = Date.now();
+  let code = -1;
   try {
     log("seat turn " + turn + " pausing");
     await pause();
-    if (stopped()) { await resume(); return; }
+    if (stopped()) return;
+    process.env.CIV_PILOT_TRIGGER_TURN = String(turn);
+    const t1 = Date.now();
     const res = await runOnce(turn);
+    code = res.code;
+    epoch.cognitionMs = Date.now() - t1;
     log("turn " + turn + " exit " + res.code);
     if (res.code === 0) doneTurn = turn;
-    if (stopped()) return;
-    await resume();
-  } finally { running = false; }
+  } finally {
+    try { await resume(); } catch (e) {}
+    epoch.exit = code;
+    epoch.committedTurn = code === 0 ? turn : null;
+    epoch.pausedMs = Date.now() - t0;
+    appendEpoch(epoch);
+    running = false;
+  }
 }
 async function confirmAndRun() {
   let st = null;
   try { st = await status(); } catch (e) { log("status failed: " + e.message); return; }
   if (st.gameID !== gameID) { gameID = st.gameID; doneTurn = -1; log("new game; watermark reset"); }
+  if (running) {
+    if (st.turn > doneTurn && !pending.includes(st.turn)) { pending.push(st.turn); log("trigger T" + st.turn + " arrived while busy"); }
+    return;
+  }
   await handleTurn(st.turn);
 }
 function sleepMs(ms) { return new Promise((r) => setTimeout(r, ms)); }
