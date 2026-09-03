@@ -276,3 +276,8 @@ Shift ~02:21-02:24 (game still wedged at T207, services untouched):
 - Doc-staleness sweep: only hits are chronological history, correctly
 - left in place; living docs current. Fresh verification: suite 36/36,
 - prefix stable, session re-exported at 110.
+-
+Shift ~02:23-02:25 (game still wedged at T207, services untouched):
+- Watcher attempt 4 failed closed. Syntax sweep: all 10 pilot JS files
+- (9 live + driver/session-manager) pass node --check. No code changes
+- since the 36/36 green; bank path parsed and ready.
