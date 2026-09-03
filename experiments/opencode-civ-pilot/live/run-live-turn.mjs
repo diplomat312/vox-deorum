@@ -27,7 +27,14 @@ const MODEL = process.env.CIV_PILOT_MODEL ?? "opencode-go/muse-spark-1.3-contrib
 const MCP_URL = process.env.MCP_URL || "http://127.0.0.1:4000/mcp";
 
 // Civ name -> seat ID for posture targets (model sometimes sends names).
-const SEAT_BY_NAME = { siam: PLAYER_ID, portugal: RIVAL_ID };
+let SEAT_BY_NAME = {};
+try {
+  const seatsCfg = JSON.parse(fs.readFileSync(process.env.CIV_PILOT_SEATS_FILE ?? path.join(here, "social-seats.json"), "utf8"));
+  for (const entry of seatsCfg) {
+    if (entry && typeof entry.civ === "string" && Number.isInteger(Number(entry.seat))) SEAT_BY_NAME[entry.civ.trim().toLowerCase()] = Number(entry.seat);
+  }
+} catch {}
+if (!Object.keys(SEAT_BY_NAME).length) SEAT_BY_NAME = { siam: PLAYER_ID, portugal: RIVAL_ID };
 function coerceTargetID(v, dflt) {
   if (typeof v === "number" && Number.isInteger(v)) return v;
   if (typeof v === "string") {
@@ -130,7 +137,6 @@ process.env.CIV_PILOT_PLAYER_ID = String(PLAYER_ID);
 process.env.CIV_PILOT_TURN = String(turn);
 process.env.CIV_PILOT_SEND_FILE = path.join(rundir, "send-guard.json");
 process.env.MCP_URL = MCP_URL;
-delete process.env.ALLOW_DIPLOMACY;
 clearCommit(commitFile);
 
 const t0 = Date.now();
@@ -143,6 +149,7 @@ if (res.sessionId) sessionId = res.sessionId;
 const allCalls = [...res.toolCalls];
 let commit = readCommit(commitFile);
 let nudged = false;
+let timedOut = res.exitCode === 124;
 if (!commit || (!commit.actions && !commit.pass)) {
   nudged = true;
   const r2 = await appendToSession({
@@ -151,6 +158,7 @@ if (!commit || (!commit.actions && !commit.pass)) {
     model: MODEL, timeoutMs: 180000,
   });
   for (const t of r2.toolCalls) allCalls.push({ ...t, followup: true });
+  timedOut = timedOut || r2.exitCode === 124;
   commit = readCommit(commitFile);
 }
 
@@ -262,7 +270,7 @@ const tele = {
   reasoning_tokens: tot.reasoning, latency_ms: nowMs - t0,
   wall_gap_sec: wallGapSec, session_messages: usage?.newCount ?? null,
   tool_calls: allCalls.map((t) => t.tool + (t.followup ? "+nudge" : "")),
-  nudged, commit_ok: commitOk, applied, compaction: usage?.compaction ?? false,
+  nudged, timed_out: timedOut, commit_ok: commitOk, applied, compaction: usage?.compaction ?? false,
   // Backpressure observability: count of speech tool calls this turn (the
   // guard allows at most one send; >1 here means the model tried twice).
   communicates: allCalls.filter((t) => String(t.tool ?? "").indexOf("communicate") >= 0).length,
@@ -272,4 +280,5 @@ appendTelemetry(path.join(rundir, "telemetry-live.jsonl"), tele);
 fs.mkdirSync(rundir, { recursive: true });
 fs.appendFileSync(path.join(rundir, "transcript-live.md"),
   `\n\n## ${CIV} live turn ${turn} (session ${sessionId})\n\n### Observation sent\n\n${observation}\n\n### Tool calls\n\n${JSON.stringify(allCalls, null, 2)}\n\n### Commit\n\n${JSON.stringify(commit, null, 2)}\n\n### Applied to live game\n\n${JSON.stringify(applied, null, 2)}\n`);
-console.log(JSON.stringify({ civ: CIV, turn, sessionId, commit_ok: commitOk, applied, nudged, usage: tot, tool_calls: tele.tool_calls }, null, 2));
+console.log(JSON.stringify({ civ: CIV, turn, sessionId, commit_ok: commitOk, applied, nudged, timed_out: timedOut, usage: tot, tool_calls: tele.tool_calls }, null, 2));
+process.exitCode = commitOk ? 0 : 1;
