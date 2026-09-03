@@ -138,3 +138,14 @@ Shift ~01:53-01:56 (game still wedged at T207, services untouched):
 - silently break tag/parse matching and lose the group's messages.
 - Store invariant, registry-only change: no model-visible prefix impact.
 - 3 new offline asserts (sanitize, tag/parse round-trip, inbox delivery).
+-
+Shift ~01:54-02:00 (game still wedged at T207, services untouched):
+- Watcher attempt 11 failed closed; no STOP file; game procs alive.
+- New deliverable live/CACHE-COMPARISON.md: cache experiment as a
+- first-class doc. Method, full 21-turn pilot table regenerated from
+- telemetry-live.jsonl (matches: 594967 uncached / 4286512 read / 0.878
+- cumulative), steady/cold split (16 x ~0.992 with ~1.7k fresh/turn vs
+- 5 x ~113k fresh/turn), session-export cross-check, TTL finding, blank
+- Unified-Mind side with the exact fill procedure, and next-rows checklist
+- (T207 cold start, policy-walk, Portugal refresh). Numbers verified
+- against source, not copied from prose.
