@@ -559,13 +559,16 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
         if (!Number.isInteger(seat)) {
           return { content: [{ type: "text", text: "dm channel needs a seat number, e.g. channel 'dm:0'" }], isError: true };
         }
-        if (seat !== RIVAL_ID) {
-          return { content: [{ type: "text", text: "this game has two seats; your counterpart is seat " + RIVAL_ID }], isError: true };
+        if (seat === PLAYER_ID) {
+          return { content: [{ type: "text", text: "cannot DM yourself; pick another seat" }], isError: true };
+        }
+        if (seat < 0 || seat > 63) {
+          return { content: [{ type: "text", text: "dm seat out of range" }], isError: true };
         }
         const res = liveJson(
           await liveCall("append-message", {
-            PlayerAID: Math.min(PLAYER_ID, RIVAL_ID),
-            PlayerBID: Math.max(PLAYER_ID, RIVAL_ID),
+            PlayerAID: Math.min(PLAYER_ID, seat),
+            PlayerBID: Math.max(PLAYER_ID, seat),
             PlayerARole: "strategist",
             PlayerBRole: "strategist",
             SpeakerID: PLAYER_ID,

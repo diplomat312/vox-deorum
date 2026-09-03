@@ -39,7 +39,10 @@ import createAppendMessageTool from "./actions/append-message.js";
 import createEnactAgentDealTool from "./actions/enact-agent-deal.js";
 import createRejectAgentDealTool from "./actions/reject-agent-deal.js";
 import createPostNotificationTool from "./actions/post-notification.js";
+import createBroadcastMessageTool from "./actions/broadcast-message.js";
 import createReadTranscriptTool from "./knowledge/read-transcript.js";
+import createGetGlobalMessagesTool from "./knowledge/get-global-messages.js";
+import createGetGameStatusTool from "./knowledge/get-game-status.js";
 import createInspectDealTool from "./knowledge/inspect-deal.js";
 import type { MCPServer } from "../server.js";
 
@@ -84,6 +87,9 @@ const toolFactories = {
     enactAgentDeal: createEnactAgentDealTool,
     rejectAgentDeal: createRejectAgentDealTool,
     postNotification: createPostNotificationTool,
+    broadcastMessage: createBroadcastMessageTool,
+    getGlobalMessages: createGetGlobalMessagesTool,
+    getGameStatus: createGetGameStatusTool,
     presentDecision: createPresentDecisionTool,
     pauseGame: createPauseGameTool,
     resumeGame: createResumeGameTool,

@@ -54,7 +54,10 @@ import type {
   InspectDealResponse,
   DealRejectRequest,
   DealAcceptRequest,
-  DealMessagesResponse
+  DealMessagesResponse,
+  // Social layer types
+  SocialStatusResponse,
+  SocialMessagesResponse
 } from '../utils/types';
 import type { TextStreamPart, ToolSet } from 'ai';
 
@@ -393,6 +396,56 @@ class ApiClient {
    */
   async getPlayersSummary(): Promise<PlayersSummaryResponse> {
     return this.fetchJson<PlayersSummaryResponse>(`${this.baseUrl}/api/session/players-summary`);
+  }
+
+  // ============= Social API Methods (Civ pilot) =============
+
+  /**
+   * Get social status: game context, seats with per-seat lastSeenTurn, groups.
+   */
+  async getSocialStatus(): Promise<SocialStatusResponse> {
+    return this.fetchJson<SocialStatusResponse>(`${this.baseUrl}/api/social/status`);
+  }
+
+  /**
+   * Get the composed inbox for one control seat: world, groups, DMs.
+   */
+  async getSocialMessages(seat: number): Promise<SocialMessagesResponse> {
+    return this.fetchJson<SocialMessagesResponse>(`${this.baseUrl}/api/social/messages?seat=${seat}`);
+  }
+
+  /**
+   * Send a message as a seat ('world' | 'dm:<seat>' | 'group:<id>' | 'group:create:<title>' | 'group:invite:<id>:<seat>').
+   */
+  async sendSocialMessage(seat: number, channel: string, message: string): Promise<{ ok: boolean; channel?: string; id?: number; invited?: number }> {
+    return this.fetchJson<{ ok: boolean; channel?: string; id?: number; invited?: number }>(
+      `${this.baseUrl}/api/social/send`,
+      { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ seat, channel, message }) }
+    );
+  }
+
+  /** Accept or decline a pending group invite. */
+  async resolveGroupInvite(groupId: string, seat: number, accept: boolean): Promise<{ ok: boolean; groupId: string; accepted: boolean; title: string }> {
+    return this.fetchJson<{ ok: boolean; groupId: string; accepted: boolean; title: string }>(
+      `${this.baseUrl}/api/social/groups/resolve`,
+      { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ groupId, seat, accept }) }
+    );
+  }
+
+  /** Leave a group as a seat. */
+  async socialLeaveGroup(groupId: string, seat: number): Promise<{ ok: boolean; groupId: string; title: string }> {
+    return this.fetchJson<{ ok: boolean; groupId: string; title: string }>(
+      `${this.baseUrl}/api/social/groups/leave`,
+      { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ groupId, seat }) }
+    );
+  }
+
+  /** Archive a group (active members only). */
+  async socialArchiveGroup(groupId: string, seat: number): Promise<{ ok: boolean; groupId: string; title: string }> {
+    return this.fetchJson<{ ok: boolean; groupId: string; title: string }>(
+      `${this.baseUrl}/api/social/groups/archive`,
+      { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ groupId, seat }) }
+    );
   }
 
   // ============= Global Config API Methods =============

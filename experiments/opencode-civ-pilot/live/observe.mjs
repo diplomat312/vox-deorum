@@ -93,6 +93,8 @@ export async function buildObservation({
   game,
   lastSeenTurn = 0,
   lastApplied = [],
+  peerIDs = null,
+  peerNames = null,
 }) {
   // The players read is the only unwrapped one: everything below keys off it.
   // The backend occasionally wedges mid-turn-computation (ports open, game
@@ -139,11 +141,18 @@ export async function buildObservation({
 
   // Political diary + correspondence deltas. Quiet turns render stable
   // "- Nothing new." lines so the provider prefix stays cache-friendly.
+  // N-seat speaker map: 2-player duel renders the rival as civ (leader);
+  // extra seats render via peerNames when provided, else a stable Seat id.
+  // Suffix-only (dashboard text), prefix-safe.
+  const peers = peerIDs?.length ? [...new Set(peerIDs)] : [rivalID];
+  const peerNameMap = peerNames ?? {};
   const speakerName = (id) => {
     if (id === playerID) return `${civ} (you)`;
     if (id === rivalID) return `${rivalCiv} (${rivalLeader})`;
     if (id === -1) return "Observer";
-    return `Player ${id}`;
+    const named = peerNameMap[id];
+    if (named !== undefined && named !== null && String(named) !== "") return String(named);
+    return `Seat ${id}`;
   };
   let politicsLines = [];
   try {
@@ -187,25 +196,40 @@ export async function buildObservation({
   } catch {
     /* world channel optional */
   }
-  // ONE transcript fetch serves both the private-message inbox and the deal
-  // thread (previously two read-transcript calls per turn). Same rendered
-  // shape, one fewer live round-trip per cognition opportunity.
+  // Per-peer transcript fetches serve both the private-message inbox and the
+  // deal thread. 2-player duel = one fetch (same as before); N-seat games
+  // loop over peers with per-pair fail-open so one wedged thread cannot blank
+  // the whole inbox. Merged rows are turn-sorted, then rendered as before.
+  // Suffix-only (dashboard text), prefix-safe.
   try {
-    const trd = liveText(
-      await live("read-transcript", {
-        PlayerAID: Math.min(playerID, rivalID),
-        PlayerBID: Math.max(playerID, rivalID),
-        Limit: 20,
-      })
-    );
-    const rows = Array.isArray(trd) ? trd : trd?.messages ?? trd?.rows ?? [];
     const get = (r, ...keys) => {
       for (const k of keys) if (r?.[k] !== undefined) return r[k];
       return undefined;
     };
     const mtype = (r) => String(get(r, "MessageType", "messageType") ?? "");
+    const turnOf = (r) => Number(get(r, "Turn", "turn") ?? 0);
+    const idOf = (r) => Number(get(r, "ID", "id") ?? 0);
+    const allRows = [];
+    for (const peer of peers) {
+      if (peer === playerID) continue;
+      try {
+        const trd = liveText(
+          await live("read-transcript", {
+            PlayerAID: Math.min(playerID, peer),
+            PlayerBID: Math.max(playerID, peer),
+            Limit: 20,
+          })
+        );
+        const rows = Array.isArray(trd) ? trd : trd?.messages ?? trd?.rows ?? [];
+        for (const r of rows) allRows.push(r);
+      } catch {
+        /* per-pair optional; other peers still render */
+      }
+    }
+    allRows.sort((a, b) => turnOf(a) - turnOf(b) || idOf(a) - idOf(b));
+    const rows = allRows;
     const freshText = rows.filter(
-      (r) => (get(r, "Turn", "turn") ?? 0) > lastSeenTurn && mtype(r) === "text"
+      (r) => turnOf(r) > lastSeenTurn && mtype(r) === "text"
     );
     for (const r of freshText.slice(-3)) {
       const sid = get(r, "SpeakerID", "speaker", "speakerID");

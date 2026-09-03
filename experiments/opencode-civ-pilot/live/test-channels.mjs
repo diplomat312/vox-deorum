@@ -115,7 +115,7 @@ function callServer(payloads) {
 function isErr(m) { return !!(m && m.result && m.result.isError); }
 function textOf(m) { return String((m && m.result && m.result.content && m.result.content[0] && m.result.content[0].text) || ''); }
 const routed = await callServer([
-  { name: 'communicate', arguments: { channel: 'dm:7', target: 'x', message: 'hi' } },
+  { name: 'communicate', arguments: { channel: 'dm:1', target: 'x', message: 'hi' } },
   { name: 'communicate', arguments: { channel: 'group:create:   ', target: 'x', message: 'hi' } },
   { name: 'communicate', arguments: { channel: 'group:deadbeef', target: 'x', message: 'hi' } },
   { name: 'communicate', arguments: { channel: 'group:leave:deadbeef', target: 'x', message: 'bye' } },
@@ -126,7 +126,7 @@ const routed = await callServer([
   { name: 'inspect', arguments: { subject: 'nope' } },
 ]);
 ok(routed.length === 9, 'nine routing responses');
-ok(isErr(routed[0]) && textOf(routed[0]).indexOf('two seats') >= 0, 'dm:non-rival rejected offline');
+ok(isErr(routed[0]) && textOf(routed[0]).indexOf('cannot DM yourself') >= 0, 'dm:self rejected offline');
 ok(isErr(routed[1]) && textOf(routed[1]).indexOf('needs a title') >= 0, 'group:create without title rejected offline');
 ok(isErr(routed[2]) && textOf(routed[2]).indexOf('unknown group') >= 0, 'unknown group rejected offline');
 ok(isErr(routed[3]) && textOf(routed[3]).indexOf('unknown group') >= 0, 'group:leave unknown rejected offline');

@@ -16,6 +16,7 @@ import telemetryRoutes from './routes/telemetry.js';
 import configRoutes from './routes/config.js';
 import { createAgentRoutes } from './routes/agent.js';
 import sessionRoutes from './routes/session.js';
+import socialRoutes from './routes/social.js';
 import { processManager } from '../infra/process-manager.js';
 import type { HealthStatus, ErrorResponse } from '../types/index.js';
 import { isAllowedDashboardRequest, isAllowedLoopbackOrigin } from './origin.js';
@@ -142,6 +143,9 @@ app.use('/api', createAgentRoutes());
 
 // Mount session routes
 app.use('/api/session', sessionRoutes);
+
+// Mount social routes (Civ pilot: World / Groups / DMs + turn order)
+app.use('/api/social', socialRoutes);
 
 // Health check endpoint - minimal API foundation
 app.get('/api/health', (_req: Request, res: Response<HealthStatus>) => {

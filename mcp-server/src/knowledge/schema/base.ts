@@ -19,7 +19,8 @@ import {
   PlayerOptions,
   VictoryProgress,
   TacticalZones,
-  DiplomaticMessage
+  DiplomaticMessage,
+  GlobalMessage
 } from './timed';
 import { PlayerInformation } from './public';
 
@@ -133,6 +134,7 @@ export interface KnowledgeDatabase {
   PlayerOptions: PlayerOptions;
   TacticalZones: TacticalZones;
   DiplomaticMessages: DiplomaticMessage;
+  GlobalMessages: GlobalMessage;
   RelationshipChanges: RelationshipChange;
   // Mutable Knowledge
   PlayerSummaries: PlayerSummary;

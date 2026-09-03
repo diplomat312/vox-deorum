@@ -25,3 +25,78 @@ export type SelectOption<T = string> = { label: string; value: T; description?: 
 
 /** Mode used when opening the session configuration dialog. */
 export type ConfigDialogMode = 'add' | 'edit' | 'duplicate';
+
+// ============= Social layer (Civ pilot) =============
+
+/** One civilization seat the human can control from the Social tab. */
+export interface SocialSeat {
+  seat: number;
+  civ: string;
+  leader: string;
+  playedBy?: 'codex' | 'opencode' | 'human';
+  sessionId?: string;
+  stateFile?: string;
+  lastSeenTurn?: number;
+  lastTurnAt?: number;
+  messageCount?: number;
+}
+
+/** Group registry entry (mirrors live/channels.json). */
+export interface SocialGroup {
+  id: string;
+  title: string;
+  createdBy: number;
+  createdAt?: string;
+  archived: boolean;
+  members: Array<{ seat: number; status: string; visibleAfter?: number; leftAfter?: number | null }>;
+}
+
+/** Response of GET /api/social/status. */
+export interface SocialStatusResponse {
+  socialDir: string;
+  game: { gameID: string; turn: number; activePlayerId: number } | null;
+  seats: SocialSeat[];
+  groups: SocialGroup[];
+}
+
+/** A world-channel message. */
+export interface SocialWorldMessage {
+  ID: number;
+  Turn: number;
+  SpeakerID: number;
+  SpeakerRole: string | null;
+  Content: string;
+  ReplyToID: number | null;
+  CreatedAt: number;
+  speaker: string;
+}
+
+/** A DM / transcript row. */
+export interface SocialDmMessage {
+  ID?: number;
+  Turn: number;
+  SpeakerID: number;
+  SpeakerRole?: string | null;
+  MessageType?: string;
+  Content?: string;
+  Payload?: Record<string, unknown>;
+  speaker: string;
+}
+
+/** Response of GET /api/social/messages. */
+export interface SocialMessagesResponse {
+  seat: number;
+  lastSeenTurn: number;
+  world: SocialWorldMessage[];
+  groups: Array<{
+    id: string;
+    title: string;
+    createdBy: number;
+    archived: boolean;
+    myStatus: string;
+    members: Array<{ seat: number; status: string }>;
+    messages: Array<SocialWorldMessage & { body: string }>;
+  }>;
+  dms: Array<{ seat: number; civ: string; leader: string; messages: SocialDmMessage[] }>;
+  invites: string[];
+}

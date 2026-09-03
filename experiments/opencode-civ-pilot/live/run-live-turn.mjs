@@ -15,11 +15,15 @@ import { buildObservation } from "./observe.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const pilotDir = path.resolve(here, "..");
-const CIV = "Siam";
-const LEADER = "Ramkhamhaeng";
-const PLAYER_ID = 1;
-const RIVAL_ID = 0;
-const MODEL = "opencode-go/muse-spark-1.3-contributor";
+// Seat-parameterized (env): run-live-seat.mjs fills these from
+// social-seats.json so the SAME driver serves every civilization.
+const CIV = process.env.CIV_PILOT_CIV ?? "Siam";
+const LEADER = process.env.CIV_PILOT_LEADER ?? "Ramkhamhaeng";
+const PLAYER_ID = Number(process.env.CIV_PILOT_PLAYER_ID ?? 1);
+const RIVAL_ID = Number(process.env.CIV_PILOT_RIVAL_ID ?? 1 - PLAYER_ID);
+const RIVAL_CIV = process.env.CIV_PILOT_RIVAL_CIV ?? "Portugal";
+const RIVAL_LEADER = process.env.CIV_PILOT_RIVAL_LEADER ?? "Maria I";
+const MODEL = process.env.CIV_PILOT_MODEL ?? "opencode-go/muse-spark-1.3-contributor";
 const MCP_URL = process.env.MCP_URL || "http://127.0.0.1:4000/mcp";
 
 // Civ name -> seat ID for posture targets (model sometimes sends names).
@@ -52,7 +56,7 @@ const rundirArg = arg("rundir", "runs/live");
 const rundir = path.isAbsolute(rundirArg) ? rundirArg : path.resolve(process.cwd(), rundirArg);
 let sessionId = arg("session", null);
 
-const stateFile = path.join(here, "civ-state-siam.json");
+const stateFile = process.env.CIV_PILOT_STATE_FILE ?? path.join(here, "civ-state-siam.json");
 let state = {};
 try {
   state = JSON.parse(fs.readFileSync(stateFile, "utf8"));
@@ -113,11 +117,11 @@ function mcpCallSync(tool, args) {
 // observe-seat.mjs, plus condensed military zones and city builds.
 const observation = await buildObservation({
   playerID: PLAYER_ID, civ: CIV, leader: LEADER, seat: PLAYER_ID,
-  rivalID: RIVAL_ID, rivalCiv: "Portugal", rivalLeader: "Maria I", rivalSeat: RIVAL_ID,
+  rivalID: RIVAL_ID, rivalCiv: RIVAL_CIV, rivalLeader: RIVAL_LEADER, rivalSeat: RIVAL_ID,
   turn, game, lastSeenTurn, lastApplied,
 });
 
-const commitFile = path.join(rundir, "last-commit-siam.json");
+const commitFile = path.join(rundir, process.env.CIV_PILOT_COMMIT_BASENAME ?? "last-commit-siam.json");
 process.env.CIV_PILOT_COMMIT_FILE = commitFile;
 process.env.CIV_PILOT_PLAYER_ID = String(PLAYER_ID);
 // Turn-aware backpressure: vox-live-server.mjs enforces one send per turn
@@ -132,6 +136,7 @@ clearCommit(commitFile);
 const t0 = Date.now();
 let res = await appendToSession({
   dir: here, sessionId, message: observation, model: MODEL,
+  agent: process.env.CIV_PILOT_AGENT ?? "civ",
   title: `${CIV} civ mind (live)`, timeoutMs: 300000,
 });
 if (res.sessionId) sessionId = res.sessionId;
@@ -141,7 +146,7 @@ let nudged = false;
 if (!commit || (!commit.actions && !commit.pass)) {
   nudged = true;
   const r2 = await appendToSession({
-    dir: here, sessionId,
+    dir: here, sessionId, agent: process.env.CIV_PILOT_AGENT ?? "civ",
     message: "You have not committed this turn. Call commit_turn (or pass) now.",
     model: MODEL, timeoutMs: 180000,
   });

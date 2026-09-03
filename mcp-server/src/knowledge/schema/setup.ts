@@ -364,5 +364,24 @@ export async function setupKnowledgeDatabase(
     .ifNotExists()
     .execute();
 
+  // Create GlobalMessages table (TimedKnowledge implementation).
+  // One public world-channel feed shared by every civilization and the observer:
+  // append-ordered by ID, visible to all, no per-player-pair thread identity.
+  await createTimedKnowledgeTable(db, 'GlobalMessages')
+    .addColumn('SpeakerID', 'integer', (col) => col.notNull())
+    .addColumn('SpeakerRole', 'text')
+    .addColumn('Content', 'text', (col) => col.notNull())
+    .addColumn('ReplyToID', 'integer')
+    .execute();
+  // Standard timed indexes for GlobalMessages table
+  await createTimedKnowledgeIndexes(db, 'GlobalMessages');
+  // Ordering/paging index for the feed read (newest first by append ID)
+  await db.schema
+    .createIndex('idx_globalmessages_id')
+    .on('GlobalMessages')
+    .columns(['ID'])
+    .ifNotExists()
+    .execute();
+
   return db;
 }
