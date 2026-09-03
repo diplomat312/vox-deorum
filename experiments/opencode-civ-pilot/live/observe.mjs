@@ -7,6 +7,27 @@
 // Game-state authority stays in Vox; this module only reads via MCP.
 import { callLive, liveText } from "./live-mcp.mjs";
 
+// Fail fast instead of hanging a turn forever: the live Vox backend can wedge
+// (ports open, Civ rendered, but a tool call never returns — seen 2026-09-02
+// with get-players hanging >10s). Every read below goes through live() so one
+// stuck call surfaces as a timeout error and the existing per-section
+// fallbacks still render a usable dashboard. Harness-only change: the
+// dashboard shape sent to the model is unchanged.
+const LIVE_TIMEOUT_MS = Number(process.env.VOX_LIVE_TIMEOUT_MS ?? 10000);
+async function live(tool, args) {
+  let timer = null;
+  try {
+    return await Promise.race([
+      callLive(tool, args),
+      new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new Error(`live MCP ${tool} timed out after ${LIVE_TIMEOUT_MS}ms`)), LIVE_TIMEOUT_MS);
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
 function fmtUnits(units) {
   const parts = [];
   for (const [owner, byType] of Object.entries(units ?? {})) {
@@ -64,7 +85,7 @@ export async function buildObservation({
   lastApplied = [],
 }) {
   const players = liveText(
-    await callLive("get-players", { playerIDs: [playerID, rivalID] })
+    await live("get-players", { playerIDs: [playerID, rivalID] })
   );
   const me = players[String(playerID)] ?? {};
   const rival = players[String(rivalID)] ?? {};
@@ -76,7 +97,7 @@ export async function buildObservation({
 
   let events = [];
   try {
-    const ev = liveText(await callLive("get-events", { PlayerID: playerID }));
+    const ev = liveText(await live("get-events", { PlayerID: playerID }));
     const arr = Array.isArray(ev) ? ev : ev?.events ?? [];
     events = arr.filter((e) => (e?.Turn ?? 0) > lastSeenTurn).slice(-10);
     if (!events.length && Array.isArray(arr)) {
@@ -100,7 +121,7 @@ export async function buildObservation({
   let politicsLines = [];
   try {
     const dip = liveText(
-      await callLive("get-diplomatic-events", {
+      await live("get-diplomatic-events", {
         PlayerID: playerID,
         Formatted: true,
         FromTurn: lastSeenTurn + 1,
@@ -117,7 +138,7 @@ export async function buildObservation({
   }
   let messageLines = [];
   try {
-    const gm = liveText(await callLive("get-global-messages", { Limit: 10 }));
+    const gm = liveText(await live("get-global-messages", { Limit: 10 }));
     const fresh = (gm?.messages ?? []).filter(
       (m) => (m?.Turn ?? 0) > lastSeenTurn && m?.SpeakerID !== playerID
     );
@@ -131,24 +152,27 @@ export async function buildObservation({
   } catch {
     /* world channel optional */
   }
+  // ONE transcript fetch serves both the private-message inbox and the deal
+  // thread (previously two read-transcript calls per turn). Same rendered
+  // shape, one fewer live round-trip per cognition opportunity.
   try {
-    const tr = liveText(
-      await callLive("read-transcript", {
+    const trd = liveText(
+      await live("read-transcript", {
         PlayerAID: Math.min(playerID, rivalID),
         PlayerBID: Math.max(playerID, rivalID),
-        MessageType: "text",
-        Limit: 10,
+        Limit: 20,
       })
     );
-    const rows = Array.isArray(tr) ? tr : tr?.messages ?? tr?.rows ?? [];
+    const rows = Array.isArray(trd) ? trd : trd?.messages ?? trd?.rows ?? [];
     const get = (r, ...keys) => {
       for (const k of keys) if (r?.[k] !== undefined) return r[k];
       return undefined;
     };
-    const fresh = rows.filter(
-      (r) => (get(r, "Turn", "turn") ?? 0) > lastSeenTurn
+    const mtype = (r) => String(get(r, "MessageType", "messageType") ?? "");
+    const freshText = rows.filter(
+      (r) => (get(r, "Turn", "turn") ?? 0) > lastSeenTurn && mtype(r) === "text"
     );
-    for (const r of fresh.slice(-3)) {
+    for (const r of freshText.slice(-3)) {
       const sid = get(r, "SpeakerID", "speaker", "speakerID");
       if (sid === playerID) continue; // own sends; the other side's words matter
       messageLines.push(
@@ -157,8 +181,21 @@ export async function buildObservation({
         ).slice(0, 220)}`
       );
     }
+    // Open deal thread: proposals, counters, acceptances, rejections.
+    const deals = rows.filter((r) => mtype(r).startsWith("deal-"));
+    var dealLines = [];
+    for (const r of deals.slice(-3)) {
+      const mt = get(r, "MessageType", "messageType");
+      const sid = get(r, "SpeakerID", "speakerID");
+      dealLines.push(
+        `- T${get(r, "Turn", "turn")} ${speakerName(sid)} ${mt} (id ${
+          get(r, "ID", "id")
+        }): ${String(r?.Content ?? r?.content ?? "").slice(0, 180)}`
+      );
+    }
   } catch {
-    /* private thread optional */
+    /* transcript optional; inbox + deal thread stay empty */
+    var dealLines = [];
   }
 
   const appliedLines = (lastApplied ?? []).map((a) => {
@@ -173,7 +210,7 @@ export async function buildObservation({
   let techNames = [],
     policyNames = [];
   try {
-    const opt = liveText(await callLive("get-options", { PlayerID: playerID }));
+    const opt = liveText(await live("get-options", { PlayerID: playerID }));
     techNames = Object.keys(opt?.Options?.Technologies ?? {});
     policyNames = Object.keys(opt?.Options?.Policies ?? {});
   } catch {
@@ -185,7 +222,7 @@ export async function buildObservation({
   let zoneLines = [];
   try {
     const rep = liveText(
-      await callLive("get-military-report", { PlayerID: playerID })
+      await live("get-military-report", { PlayerID: playerID })
     );
     zoneLines = condenseZones(rep);
   } catch (e) {
@@ -195,7 +232,7 @@ export async function buildObservation({
   // One line per owned city: what it is building and when it finishes.
   let cityLines = [];
   try {
-    const all = liveText(await callLive("get-cities", { PlayerID: playerID }));
+    const all = liveText(await live("get-cities", { PlayerID: playerID }));
     const mine =
       all?.[civ] ??
       Object.values(all ?? {})[0] ??
@@ -230,7 +267,8 @@ ${politicsLines.length ? politicsLines.join("\n") : "- Nothing new recorded."}
 Messages for you (reply with communicate if warranted, at most one message per turn):
 ${messageLines.length ? messageLines.join("\n") : "- None."}
 
-Outstanding deals: deal inspection arrives in a later phase; treat proposals in messages as talk, not commitments.
+Deal thread (deal_propose sends; deal_accept {proposalId} enacts; deal_reject {proposalId} declines; inspect(deals) shows what is tradable):
+${dealLines.length ? dealLines.join("\n") : "- No deals on the table."}
 
 You may inspect anything else you need (inspect). When finished, commit your actions (commit_turn) or pass. Keep the rationale short.`;
 }

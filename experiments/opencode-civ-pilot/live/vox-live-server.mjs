@@ -33,7 +33,8 @@ const SUBJECTS = [
 ];
 
 const PHASE1_ACTIONS = new Set([
-  "strategy", "research", "policy", "posture", "production_mode", "keep_status_quo",
+  "strategy", "research", "policy", "posture", "production_mode",
+  "keep_status_quo", "deal_propose", "deal_accept", "deal_reject",
 ]);
 
 function commitFile() {
@@ -160,8 +161,41 @@ async function inspectLive(subject, detail) {
       if (!Array.isArray(arr)) return ev;
       return arr.slice(-12).map((e) => JSON.stringify(e).slice(0, 300));
     }
-    case "deals":
-      return { note: "deal inspection is phase-2 and not wired yet; no outstanding deal tracking." };
+    case "deals": {
+      // Live tradable range, condensed: legal terms plus short reasons.
+      const r = liveJson(
+        await liveCall("inspect-deal", { PlayerAID: PLAYER_ID, PlayerBID: RIVAL_ID })
+      );
+      const tr = r?.tradableRange ?? {};
+      const keys = Object.keys(tr);
+      const side = tr[String(PLAYER_ID)] ?? tr[keys[0]] ?? {};
+      const out = { netGoldPerTurn: side.netGoldPerTurn };
+      for (const k of ["gold", "goldPerTurn", "maps", "openBorders", "defensivePact", "peaceTreaty", "allowEmbassy", "declarationOfFriendship", "vassalage"]) {
+        const e = side[k];
+        if (!e) continue;
+        out[k] =
+          e.legal === true || e.available === true
+            ? `LEGAL${e.max !== undefined ? ` (max ${e.max})` : ""}`
+            : `no (${(e.reasons ?? []).join("; ").slice(0, 160)})`;
+      }
+      if (Array.isArray(side.resources)) {
+        out.resourcesLegal = side.resources
+          .filter((x) => x.legal)
+          .slice(0, 12)
+          .map((x) => `${x.name} x${x.quantityAvailable}`);
+      }
+      for (const k of ["technologies", "techs", "cities"]) {
+        if (Array.isArray(side[k])) {
+          const legal = side[k].filter((x) => x.legal);
+          out[`${k}Legal`] = legal
+            .slice(0, 8)
+            .map((x) => x.name ?? JSON.stringify(x).slice(0, 60));
+        }
+      }
+      out.hint =
+        "deal_propose {items:[{fromPlayerID,toPlayerID,itemType,amount?}], message?} sends a formal proposal; deal_accept {proposalId} enacts an open proposal; deal_reject {proposalId} declines it. itemType: GOLD, GOLD_PER_TURN, MAPS, RESOURCES, CITIES, OPEN_BORDERS, DEFENSIVE_PACT, RESEARCH_AGREEMENT, PEACE_TREATY, ALLOW_EMBASSY, DECLARATION_OF_FRIENDSHIP, TECHS, VASSALAGE.";
+      return out;
+    }
     default:
       throw new Error(`unknown subject '${subject}'`);
   }
@@ -201,7 +235,7 @@ function toolDefs() {
     {
       name: "commit_turn",
       description:
-        "Terminal action. Commit this turn's actions with a short rationale. Allowed types and params shapes: strategy {grandStrategy?, economic[]?, military[]?} (grand strategy names like Culture/UnitedNations/Spaceship/Conquest); research {technology REQUIRED} (exact technology name); policy {policy REQUIRED} (exact policy or branch name); posture {targetID?, public -100..100?, private -100..100?} (diplomatic stance toward one MAJOR civilization, never a city); production_mode {enabled REQUIRED boolean} (global AI production toggle, never a city build choice — leave city builds to the game); keep_status_quo {} (hold current direction).",
+        "Terminal action. Commit this turn's actions with a short rationale. Allowed types and params shapes: strategy {grandStrategy?, economic[]?, military[]?} (grand strategy names like Culture/UnitedNations/Spaceship/Conquest); research {technology REQUIRED} (exact technology name); policy {policy REQUIRED} (exact policy or branch name); posture {targetID?, public -100..100?, private -100..100?} (diplomatic stance toward one MAJOR civilization, never a city); production_mode {enabled REQUIRED boolean} (global AI production toggle, never a city build choice — leave city builds to the game); keep_status_quo {} (hold current direction); deal_propose {items REQUIRED [{fromPlayerID,toPlayerID,itemType,amount?}], promises?, message?} (send a formal deal proposal — only terms you mean; check inspect(deals) first); deal_accept {proposalId REQUIRED} (enact an open proposal; binding); deal_reject {proposalId REQUIRED, reason?} (decline an open proposal).",
       inputSchema: {
         type: "object",
         properties: {

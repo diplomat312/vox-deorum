@@ -180,8 +180,28 @@ if (commit && (commit.actions || commit.pass)) {
         if (typeof p.enabled !== "boolean") { applied.push({ type: a.type, ok: false, note: "skipped: no boolean params.enabled (city builds stay with the game)" }); continue; }
         mapped = ["set-production-mode", { enabled: p.enabled }];
         break;
+      case "deal_propose": {
+        // Formal proposal: Vox validates legality; failures return with reasons.
+        const items = p.items;
+        if (!Array.isArray(items) || !items.length) { applied.push({ type: a.type, ok: false, note: "missing params.items[] (deal item list)" }); continue; }
+        const msg = typeof p.message === "string" && p.message.trim() ? p.message : `Proposal from ${CIV}.`;
+        mapped = ["append-message", { PlayerAID: Math.min(PLAYER_ID, RIVAL_ID), PlayerBID: Math.max(PLAYER_ID, RIVAL_ID), PlayerARole: "strategist", PlayerBRole: "strategist", SpeakerID: PLAYER_ID, MessageType: "deal-proposal", Content: msg, Payload: { Deal: { version: 1, items, promises: Array.isArray(p.promises) ? p.promises : [] }, message: msg } }];
+        break;
+      }
+      case "deal_accept": {
+        const id = p.proposalId ?? p.proposalID ?? p.id;
+        if (!Number.isInteger(id)) { applied.push({ type: a.type, ok: false, note: "missing params.proposalId (deal-proposal message ID)" }); continue; }
+        mapped = ["enact-agent-deal", { ProposalMessageID: id }];
+        break;
+      }
+      case "deal_reject": {
+        const id = p.proposalId ?? p.proposalID ?? p.id;
+        if (!Number.isInteger(id)) { applied.push({ type: a.type, ok: false, note: "missing params.proposalId (deal-proposal message ID)" }); continue; }
+        mapped = ["reject-agent-deal", { PlayerAID: Math.min(PLAYER_ID, RIVAL_ID), PlayerBID: Math.max(PLAYER_ID, RIVAL_ID), ProposalMessageID: id, SpeakerID: PLAYER_ID, ...(typeof p.reason === "string" && p.reason.trim() ? { Content: p.reason } : {}) }];
+        break;
+      }
       default:
-        applied.push({ type: a.type, ok: false, note: "no live mapping yet (phase-2?)" });
+        applied.push({ type: a.type, ok: false, note: "no live mapping yet" });
         continue;
     }
     const r = mcpCallSync(mapped[0], mapped[1]);
