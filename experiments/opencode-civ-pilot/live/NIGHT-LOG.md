@@ -84,3 +84,14 @@ attempt counter fresh, no turn in flight). Game services untouched.
 Driver audit: run-live-turn clears the commit file before appending to the
 session, so a silent turn can never re-apply a stale commit; telemetry shows
 all 21 banked turns committed first-try (zero nudges, zero commit_ok=false).
+Phase-4 scaffold (comparison vs Unified Mind, same model). Pilot side,
+21 Siam turns, pre-filled from telemetry-live.jsonl: 21 model requests,
+594967 uncached input, 4286512 cache-read input, 12691 output,
+6415 reasoning, mean turn latency 24.3s wall (observe + model + applies),
+94 tool calls (61 inspect / 30 commit_turn / 3 communicate), 1 harmless
+apply rejection (T180 duplicate policy, caught by validation), session 110
+msgs, steady observation 1.7-5k chars. Unified-Mind side is blank: no
+equivalent numbers exist in-tree, so after the lock clears, run the same
+count of cognition opportunities through the current Unified Mind path on
+Muse Spark 1.3 and capture per-request uncached / cache-read / output /
+latency / tool calls the same way before comparing.
