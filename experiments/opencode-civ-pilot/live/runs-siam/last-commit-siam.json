@@ -1,15 +1,15 @@
 {
-  "committedAt": "2026-09-03T05:05:21.257Z",
+  "committedAt": "2026-09-03T05:06:13.864Z",
   "playerID": 1,
   "actions": [
     {
       "params": {
         "economic": [
-          "finish StoneWorks/Arena/Mausoleum/Caravansary, use +29gpt"
+          "finish Aqueducts/Caravansaries, grow 32pop"
         ],
-        "grandStrategy": "Peace dividend: Steel into Machinery, open Statecraft for trade/CS",
+        "grandStrategy": "Steel into Machinery, Statecraft trade",
         "military": [
-          "hold Trebs defensively at Lampang, clear Sukhothai barbs, keep Braga scout"
+          "hold 2 Trebs Lampang, clear Sukhothai/Mbanza barbs, monitor Braga"
         ]
       },
       "type": "strategy"
@@ -35,5 +35,5 @@
       "type": "posture"
     }
   ],
-  "rationale": "Peace, lead 763-600 and 253-211, +29gpt. Machinery after Steel, Statecraft for routes/CS instead of Authority."
+  "rationale": "Peace lead 788-601, 255-231, +44gpt. Machinery after Steel, Statecraft, grow and hold."
 }

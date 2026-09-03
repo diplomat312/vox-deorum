@@ -1394,3 +1394,130 @@ You may inspect anything else you need (inspect). When finished, commit your act
     "out": "{\n \"result\": {\n  \"content\": [\n   {\n    \"type\": \"text\",\n    \"text\": \"{\\n  \\\"Success\\\": true\\n}\"\n   }\n  ],\n  \"structuredContent\": {\n   \"Success\": true\n  }\n },\n \"jsonrpc\": \"2.0\",\n \"id\": 1788411929445\n}\n"
   }
 ]
+
+
+## Siam live turn 137 (session ses_f9a74a908ffeMXPkF3Y5Bh37Ba)
+
+### Observation sent
+
+TURN 137 (live game live-duel)
+
+You are Ramkhamhaeng, leader of Siam (seat 1). Portugal (Maria I, seat 0) is played by another mind.
+
+Current:
+* Treasury: 373 (+44/turn). Happiness: Happy (100%). Research: Steel (Estimated in 3 turns). Research must name ONE exact technology from: Philosophy, Drama and Poetry, Machinery. Next policy in 12 turns ({"Progress":["Progress","Organization","Liberty","Expertise","Equality","Fraternity"]}). Policy must name ONE exact entry from: Statecraft (New Branch); Fealty (New Branch); Artistry (New Branch); Authority (New Branch); Tradition (New Branch).
+* Cities (4): population 32, territory 47, military strength 255, units 15 (supply 18), score 788.
+- Sukhothai p8 -> Aqueduct (2t left)
+- Si Satchanalai p9 -> Caravansary (3t left)
+- Muang Saluang p8 -> Aqueduct (1t left)
+- Lampang p7 -> Caravansary (2t left)
+* Zones:
+- Land @Sukhothai: Friendly (F317) — Siam 1xTrebuchet 2xSpearman 1xComposite Bowman, Barbarians 1xSpearman
+- Land @M'banza-Kongo: Friendly (F223/N20) — Siam 1xSpearman 1xArcher, Barbarians 1xSpearman, City-State M'banza-Kongo 1xTrireme
+- Land @Hanoi: Friendly (F118/N27) — Barbarians 1xComposite Bowman, City-State Hanoi 1xTrireme 1xSpearman
+- Land @Kyzyl: Friendly (F136/N26) — Siam 1xSpearman, Barbarians 1xSpearman 1xComposite Bowman
+- Land @Ragusa: Friendly (F249/N21) — Barbarians 1xSpearman, Portugal 1xComposite Bowman
+- Land @Braga: Friendly (F329/N19) — Portugal 1xSpearman
+- Land @Si Satchanalai: Friendly (F349) — Siam 1xHorseman 1xComposite Bowman, Portugal 1xArcher
+- Land @Muang Saluang: Friendly (F240) — Siam 1xComposite Bowman, Barbarians 1xSpearman
+- Land @Lampang: Friendly (F303) — Siam 2xTrebuchet
+- Sea @Ragusa: Friendly (F304/N21) — City-State Ragusa 1xTrireme, Barbarians 1xTrireme, Siam 1xLiburna
+- Sea @Hanoi: Friendly (F203/N27) — Siam 1xSpearman, Barbarians 1xSpearman
+- Sea @Kyzyl: Friendly (F148/N26) — Portugal 1xLiburna
+- Sea @Muang Saluang: Friendly (F195) — City-State Hanoi 1xTrireme 1xChariot Archer
+- Sea @Brussels: Friendly (F65/N20) — Siam 1xHorseman, Barbarians 1xTrireme
+* Relationships: Portugal: Distance: Neighbors; Peace Treaty; Denounced Them.
+* Portugal visible: score 601, treasury ~46, research Physics (Estimated in 8 turns), 4 cities, military 231.
+
+Since your previous opportunity to act:
+- Nothing new recorded.
+
+What happened to your last committed actions:
+- strategy applied.
+- research applied.
+- policy applied.
+- posture applied.
+
+Outstanding requests/deals/messages: none tracked yet (phase 1 strategic test).
+
+You may inspect anything else you need (inspect). When finished, commit your actions (commit_turn) or pass. Keep the rationale short.
+
+### Tool calls
+
+[
+  {
+    "tool": "vox-civ_commit_turn",
+    "input": null
+  }
+]
+
+### Commit
+
+{
+  "committedAt": "2026-09-03T05:06:13.864Z",
+  "playerID": 1,
+  "actions": [
+    {
+      "params": {
+        "economic": [
+          "finish Aqueducts/Caravansaries, grow 32pop"
+        ],
+        "grandStrategy": "Steel into Machinery, Statecraft trade",
+        "military": [
+          "hold 2 Trebs Lampang, clear Sukhothai/Mbanza barbs, monitor Braga"
+        ]
+      },
+      "type": "strategy"
+    },
+    {
+      "params": {
+        "technology": "Machinery"
+      },
+      "type": "research"
+    },
+    {
+      "params": {
+        "policy": "Statecraft"
+      },
+      "type": "policy"
+    },
+    {
+      "params": {
+        "private": 0,
+        "public": 0,
+        "targetID": "Portugal"
+      },
+      "type": "posture"
+    }
+  ],
+  "rationale": "Peace lead 788-601, 255-231, +44gpt. Machinery after Steel, Statecraft, grow and hold."
+}
+
+### Applied to live game
+
+[
+  {
+    "type": "strategy",
+    "tool": "set-strategy",
+    "ok": true,
+    "out": "{\n \"result\": {\n  \"content\": [\n   {\n    \"type\": \"text\",\n    \"text\": \"{\\n  \\\"Success\\\": true\\n}\"\n   }\n  ],\n  \"structuredContent\": {\n   \"Success\": true\n  }\n },\n \"jsonrpc\": \"2.0\",\n \"id\": 1788411976460\n}\n"
+  },
+  {
+    "type": "research",
+    "tool": "set-research",
+    "ok": true,
+    "out": "{\n \"result\": {\n  \"content\": [\n   {\n    \"type\": \"text\",\n    \"text\": \"{\\n  \\\"Success\\\": true\\n}\"\n   }\n  ],\n  \"structuredContent\": {\n   \"Success\": true\n  }\n },\n \"jsonrpc\": \"2.0\",\n \"id\": 1788411978168\n}\n"
+  },
+  {
+    "type": "policy",
+    "tool": "set-policy",
+    "ok": true,
+    "out": "{\n \"result\": {\n  \"content\": [\n   {\n    \"type\": \"text\",\n    \"text\": \"{\\n  \\\"Success\\\": true\\n}\"\n   }\n  ],\n  \"structuredContent\": {\n   \"Success\": true\n  }\n },\n \"jsonrpc\": \"2.0\",\n \"id\": 1788411978794\n}\n"
+  },
+  {
+    "type": "posture",
+    "tool": "set-relationship",
+    "ok": true,
+    "out": "{\n \"result\": {\n  \"content\": [\n   {\n    \"type\": \"text\",\n    \"text\": \"{\\n  \\\"Success\\\": true\\n}\"\n   }\n  ],\n  \"structuredContent\": {\n   \"Success\": true\n  }\n },\n \"jsonrpc\": \"2.0\",\n \"id\": 1788411979014\n}\n"
+  }
+]
