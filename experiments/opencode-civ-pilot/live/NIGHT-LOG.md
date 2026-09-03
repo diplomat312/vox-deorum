@@ -81,6 +81,8 @@ Follow-up checks: Siam session re-exported at 110 msgs with identical tool
 counts (61 inspect / 30 commit / 3 communicate) — failed T207 watcher
 attempts cause zero session pollution. Routing tests extended to 26 asserts
 with a createGroup -> tag -> inbox round-trip incl. invite isolation.
+Re-checked after 12 total failed T207 attempts (9 + 3 on the restarted
+watcher): still exactly 110 msgs. Fail-closed holds across the restart.
 Sample transcript deliverable: live/SAMPLE-TRANSCRIPT.md (T165 steady-state,
 T177 white-peace acceptance, T180 post-peace — verbatim, one session).
 Watcher budget extended 40 -> 100 attempts (~8h, full overnight) and the
