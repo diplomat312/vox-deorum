@@ -1,15 +1,15 @@
 {
-  "committedAt": "2026-09-03T05:01:21.575Z",
+  "committedAt": "2026-09-03T05:02:16.477Z",
   "playerID": 1,
   "actions": [
     {
       "params": {
         "economic": [
-          "finish Caravansaries, deploy new routes"
+          "finish Caravan/Arena, Mausoleum for gold"
         ],
-        "grandStrategy": "Physics into Steel Longswords, Authority",
+        "grandStrategy": "Physics into Steel, Authority",
         "military": [
-          "hold Si Satchanalai 192v33 and Lampang catapult, clear Sukhothai barbs, avoid Kyzyl 22v115"
+          "reinforce lone CompBow at Si Satchanalai, hold Lampang catapult, clear Sukhothai barb, watch Portugal Metal Casting"
         ]
       },
       "type": "strategy"
@@ -35,5 +35,5 @@
       "type": "posture"
     }
   ],
-  "rationale": "Lead 735-558, mil 208-171, Physics 6t. Steel next, Authority, finish trade builds."
+  "rationale": "Up 710-571 but parity 192-196, Physics 5t. Steel for Longswords vs Portugal Berserkers, Authority."
 }
