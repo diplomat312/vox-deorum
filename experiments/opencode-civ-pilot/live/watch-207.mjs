@@ -8,7 +8,7 @@ const q = String.fromCharCode(34);
 function log(m) {
   fs.appendFileSync(logf, new Date().toISOString() + ' ' + m + String.fromCharCode(10));
 }
-const maxAttempts = 12;
+const maxAttempts = 40;
 const waitMs = 4 * 60 * 1000;
 const attemptBudgetMs = 10 * 60 * 1000;
 let attempt = 0;
