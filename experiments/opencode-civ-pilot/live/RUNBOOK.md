@@ -3,6 +3,12 @@ Live duel runbook (game live-duel).
 Seats: Portugal seat 0 (Maria I, Codex-played) vs Siam seat 1 (Ramkhamhaeng, OpenCode harness).
 Siam session ses_f9a74a908ffeMXPkF3Y5Bh37Ba, model opencode-go/muse-spark-1.3-contributor. One session per civ, always.
 
+Fresh scripted games stall on turn 0 with slot 0 waiting on the local human,
+regardless of StartGame slot values. After DLL connect, enable the engine AI
+autoplay the native way (same call strategist-session uses):
+lua-executor { Script: Game.SetPausePlayer(-1); Game.SetAIAutoPlay(1000, -1); }.
+Verify by watching activePlayerId move and the turn leave 0.
+
 Backend: MCP 127.0.0.1:4000, bridge 5000, dashboard 5555. Civ V stays rendered. Never restart services under a watched game.
 
 Siam turn (PowerShell, detached, poll FILES not sessions):
