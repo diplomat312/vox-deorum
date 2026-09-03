@@ -71,6 +71,13 @@ driver/rollup.mjs aggregates turns, commits, tokens, hit ratio, latency, and
 social operations per seat and total. Provider cost is not exposed, so cost
 stays an explicit gap.
 
+## Booting a fresh game
+
+Scripted starts stall on turn 0 with slot 0 waiting on the local human. After
+the DLL connects, enable engine AI autoplay through lua-executor:
+Game.SetPausePlayer(-1); Game.SetAIAutoPlay(1000, -1). Watch activePlayerId
+move and the turn leave 0 before standing up seats.
+
 ## Live operations
 
 Watchers, prefix guard, and lock notes: live/RUNBOOK.md. Offline suite:
