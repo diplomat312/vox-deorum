@@ -311,6 +311,6 @@ const tele = {
 appendTelemetry(path.join(rundir, "telemetry-live.jsonl"), tele);
 fs.mkdirSync(rundir, { recursive: true });
 fs.appendFileSync(path.join(rundir, "transcript-live.md"),
-  `\n\n## ${CIV} live turn ${turn} (session ${sessionId})\n\n### Observation sent\n\n${observation}\n\n### Tool calls\n\n${JSON.stringify(allCalls, null, 2)}\n\n### Commit\n\n${JSON.stringify(commit, null, 2)}\n\n### Applied to live game\n\n${JSON.stringify(applied, null, 2)}\n`);
+  `\n\n## ${CIV} live turn ${turn} (session ${sessionId})\n\n### Observation sent\n\n${observation}\n\n### Tool calls\n\n${JSON.stringify(allCalls, null, 2)}\n\n### Model words\n\n${String(res.finalText || "").slice(0, 2000)}\n\n### Commit\n\n${JSON.stringify(commit, null, 2)}\n\n### Applied to live game\n\n${JSON.stringify(applied, null, 2)}\n`);
 console.log(JSON.stringify({ civ: CIV, turn, sessionId, commit_ok: commitOk, applied, nudged, timed_out: timedOut, usage: tot, tool_calls: tele.tool_calls }, null, 2));
 process.exitCode = commitOk ? 0 : 1;
