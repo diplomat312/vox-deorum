@@ -52,3 +52,51 @@ let threw2 = false;
 try { ch.markMemberActive('deadbeef', 1); } catch (e) { threw2 = true; }
 ok(threw2, 'unknown group rejects');
 console.log('All ' + pass + ' channel asserts passed.');
+
+// Pilot server routing checks (offline-safe: every case below is rejected
+// by validation before any live MCP call, so no game state is touched).
+const { spawn } = await import('node:child_process');
+const { fileURLToPath } = await import('node:url');
+const serverHere = path.dirname(fileURLToPath(import.meta.url));
+function callServer(payloads) {
+  return new Promise((resolve, reject) => {
+    const child = spawn('node', [path.join(serverHere, 'vox-live-server.mjs')], { stdio: ['pipe', 'pipe', 'inherit'] });
+    let buf = '';
+    const out = [];
+    const timer = setTimeout(() => { child.kill(); reject(new Error('server routing timed out')); }, 15000);
+    child.stdout.on('data', (d) => {
+      buf += d.toString();
+      const lines = buf.split('\n');
+      buf = lines.pop();
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        let msg = null;
+        try { msg = JSON.parse(line); } catch { continue; }
+        if (msg.id !== undefined && msg.id !== 1) out.push(msg);
+        if (out.length === payloads.length) { clearTimeout(timer); child.kill(); resolve(out); }
+      }
+    });
+    child.on('error', reject);
+    child.stdin.write(JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2024-11-05', capabilities: {}, clientInfo: { name: 'routing-test', version: '1' } } }) + '\n');
+    child.stdin.write(JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' }) + '\n');
+    let id = 2;
+    for (const p of payloads) {
+      child.stdin.write(JSON.stringify({ jsonrpc: '2.0', id: id, method: 'tools/call', params: p }) + '\n');
+      id = id + 1;
+    }
+  });
+}
+function isErr(m) { return !!(m && m.result && m.result.isError); }
+function textOf(m) { return String((m && m.result && m.result.content && m.result.content[0] && m.result.content[0].text) || ''); }
+const routed = await callServer([
+  { name: 'communicate', arguments: { channel: 'dm:7', target: 'x', message: 'hi' } },
+  { name: 'communicate', arguments: { channel: 'group:create:   ', target: 'x', message: 'hi' } },
+  { name: 'communicate', arguments: { channel: 'group:deadbeef', target: 'x', message: 'hi' } },
+  { name: 'inspect', arguments: { subject: 'nope' } },
+]);
+ok(routed.length === 4, 'four routing responses');
+ok(isErr(routed[0]) && textOf(routed[0]).indexOf('two seats') >= 0, 'dm:non-rival rejected offline');
+ok(isErr(routed[1]) && textOf(routed[1]).indexOf('needs a title') >= 0, 'group:create without title rejected offline');
+ok(isErr(routed[2]) && textOf(routed[2]).indexOf('unknown group') >= 0, 'unknown group rejected offline');
+ok(isErr(routed[3]) && textOf(routed[3]).indexOf('unknown subject') >= 0, 'unknown subject rejected offline');
+console.log('All ' + pass + ' asserts passed (channels + routing).');

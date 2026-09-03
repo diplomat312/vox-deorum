@@ -19,11 +19,22 @@ Model-visible prefix: agent/civ.md plus opencode.json plus vox-civ tool schemas.
 Channels: registry live/channels.json. Create with channels.mjs createGroup, invite with inviteToGroup. 2p groups ride world broadcast as tagged lines. Send via communicate channel group:ID. Backpressure: one send per turn TOTAL.
 Duel Hall group c53f2974 (Portugal plus Siam, opened T207).
 
+Inspect walkers (suffix-only, no prefix cost): research/policies accept a name
+or 'path:<name>' (full prereq chain with costs and unlocks); military accepts
+'zone:<city or zone>' or 'stats' (zone lines also carry posture + zone value);
+cities accepts a city name; diplomacy accepts a civilization name and the
+no-detail view now includes a city-state table (status + quest count).
+Model-facing channels: world | private (default) | dm:<seat> | group:<id> |
+group:create:<title>. Prefix re-baselined 2026-09-03 for the batched
+description + civ.md update (one deliberate re-cache while cold).
+
 Known quirks:
 - get-players takes a game lock and can hang mid-turn-computation while cheap calls answer in ms. observe.mjs retries 3x10s then fails the turn closed, so no polluted session. Never stack parallel lock probes.
 - Probe hygiene: always race with a timeout AND process.exit, else hung fetch sockets linger on the lock.
 - opencode run strips OPENCODE password vars in the child env (see driver/session-manager.mjs).
 - PowerShell echo writes CRLF; repo files are LF. Write files via node to keep patches matching.
 - apply_patch needs bare marker lines.
+- Session leanness is verified, not assumed: opencode export shows only
+- vox-civ_* tool calls and zero plugin/MCP/skill leakage into context.
 
 Watcher: node watch-207.mjs retries turn 207 up to 40 attempts, 4min apart (about 3h coverage), stops on first banked commit. Create runs-siam/STOP to stop it early.

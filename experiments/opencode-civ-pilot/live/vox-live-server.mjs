@@ -19,7 +19,7 @@ import {
 } from "../mcp-server/node_modules/@modelcontextprotocol/sdk/dist/esm/types.js";
 import fs from "node:fs";
 import path from "node:path";
-import { getGroup, markMemberActive, tagMessage } from "./channels.mjs";
+import { createGroup, getGroup, markMemberActive, tagMessage } from "./channels.mjs";
 
 const PLAYER_ID = Number(process.env.CIV_PILOT_PLAYER_ID ?? 1);
 const MCP_URL = process.env.MCP_URL || "http://127.0.0.1:4000/mcp";
@@ -140,6 +140,12 @@ async function techPath(target) {
     const prereqs = item.TechsPrereq ?? [];
     steps.push({
       name: item.Name, cost: item.Cost, era: item.Era, prereqs,
+      unlocks: [
+        ...(item.UnitsUnlocked ?? []),
+        ...(item.BuildingsUnlocked ?? []),
+        ...(item.WorldWondersUnlocked ?? []),
+        ...(item.NationalWondersUnlocked ?? []),
+      ].slice(0, 5),
       status: availableNow.has(key) ? "available" : key === researching ? "researching" : "chained",
     });
     for (const pre of prereqs) {
@@ -267,11 +273,46 @@ async function inspectLive(subject, detail) {
       return { ...cur, availablePolicies: available, hint: "inspect(policies, \"<name>\") for detail on one policy; inspect(policies, \"path:<name>\") for the full prereq chain" };
     }
     case "diplomacy": {
+      if (detail) {
+        const all = liveJson(await liveCall("get-players", {}));
+        const want = String(detail).toLowerCase();
+        const hit = Object.entries(all ?? {}).find(
+          ([id, v]) => v && typeof v === "object" && String(v.Civilization ?? "").toLowerCase() === want
+        );
+        if (hit) return { [hit[0]]: hit[1] };
+        return { note: "no civilization named '" + detail + "' visible" };
+      }
       const p = liveJson(await liveCall("get-players", { playerIDs: [PLAYER_ID] }));
-      return pick(p[me] ?? {}, ["Relationships", "MilitaryStrength", "Score"]);
+      const out = pick(p[me] ?? {}, ["Relationships", "MilitaryStrength", "Score"]);
+      try {
+        const all = liveJson(await liveCall("get-players", {}));
+        const minors = [];
+        const myName = p[me]?.Civilization;
+        for (const [id, v] of Object.entries(all ?? {})) {
+          if (!v || typeof v !== "object" || v.IsMajor !== false) continue;
+          const rel = v.Relationships ?? {};
+          const mine = (myName && rel[myName]) ?? Object.values(rel)[0];
+          const q = v.Quests?.["Player" + PLAYER_ID] ?? [];
+          minors.push({ civ: v.Civilization, status: mine ?? null, quests: Array.isArray(q) ? q.length : 0 });
+        }
+        out.cityStates = minors.slice(0, 16);
+      } catch { /* majors-only on failure */ }
+      out.hint = "inspect(diplomacy, \"<civilization>\") for one entry (majors and city-states alike)";
+      return out;
     }
-    case "military":
-      return liveJson(await liveCall("get-military-report", { PlayerID: PLAYER_ID }));
+    case "military": {
+      const rep = liveJson(await liveCall("get-military-report", { PlayerID: PLAYER_ID }));
+      if (detail && /^stats?$/i.test(detail)) return rep["Unit Stats"] ?? rep;
+      if (detail && /^zone:/i.test(detail)) {
+        const want = detail.replace(/^zone:/i, "").trim().toLowerCase();
+        const hit = Object.entries(rep ?? {}).find(
+          ([k, z]) => k.toLowerCase() === want || String(z?.City ?? "").toLowerCase() === want || k.toLowerCase().includes(want)
+        );
+        if (hit) return { [hit[0]]: hit[1] };
+        return { note: "no zone matching '" + detail + "' visible", zones: Object.keys(rep ?? {}) };
+      }
+      return { ...rep, hint: "inspect(military, \"zone:<city or zone name>\") for one zone; inspect(military, \"stats\") for unit stats" };
+    }
     case "cities": {
       const c = liveJson(await liveCall("get-cities", { PlayerID: PLAYER_ID }));
       if (detail) {
@@ -337,7 +378,7 @@ function toolDefs() {
     {
       name: "inspect",
       description:
-        "Request authoritative live detail about one subject: self|civ|military|cities|economy|research|policies|victory|diplomacy|deals|events. Optional detail string narrows it.",
+        "Request authoritative live detail about one subject: self|civ|military|cities|economy|research|policies|victory|diplomacy|deals|events. Optional detail narrows it: research/policies accept a name or 'path:<name>' for the full prereq chain with costs and unlocks; military accepts 'zone:<city or zone>' or 'stats'; cities accepts a city name; diplomacy accepts a civilization name (majors and city-states).",
       inputSchema: {
         type: "object",
         properties: {
@@ -351,7 +392,7 @@ function toolDefs() {
     {
       name: "communicate",
       description:
-        "Send one diplomatic message: channel 'world' broadcasts publicly, channel 'private' (default) writes a private letter to the rival civilization, channel 'group:<id>' writes to a group you belong to (first send accepts an invite). At most ONE message per turn total across all channels. Keep it short and in character.",
+        "Send one diplomatic message: channel 'world' broadcasts publicly, 'private' (default) writes a private letter to the rival, 'dm:<seat>' writes a direct message to one seat, 'group:<id>' writes to a group you belong to (first send accepts an invite), 'group:create:<title>' opens a new group with your message. At most ONE message per turn total across all channels. Keep it short and in character.",
       inputSchema: {
         type: "object",
         properties: {
@@ -449,6 +490,48 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
     }
     try {
       const ch = String(args?.channel ?? "private");
+      if (ch.startsWith("dm:")) {
+        const seat = Number(ch.slice("dm:".length).trim());
+        if (!Number.isInteger(seat)) {
+          return { content: [{ type: "text", text: "dm channel needs a seat number, e.g. channel 'dm:0'" }], isError: true };
+        }
+        if (seat !== RIVAL_ID) {
+          return { content: [{ type: "text", text: "this game has two seats; your counterpart is seat " + RIVAL_ID }], isError: true };
+        }
+        const res = liveJson(
+          await liveCall("append-message", {
+            PlayerAID: Math.min(PLAYER_ID, RIVAL_ID),
+            PlayerBID: Math.max(PLAYER_ID, RIVAL_ID),
+            PlayerARole: "strategist",
+            PlayerBRole: "strategist",
+            SpeakerID: PLAYER_ID,
+            MessageType: "text",
+            Content: message.slice(0, 1000),
+          })
+        );
+        return { content: [{ type: "text", text: JSON.stringify({ ok: true, channel: ch, sent: true }) }] };
+      }
+      if (ch.startsWith("group:create:")) {
+        const title = ch.slice("group:create:".length).trim().slice(0, 60);
+        if (!title) {
+          return { content: [{ type: "text", text: "group:create needs a title, e.g. channel 'group:create:War Council'" }], isError: true };
+        }
+        let g = null;
+        try {
+          g = createGroup({ title, creator: PLAYER_ID, members: [PLAYER_ID] });
+        } catch (e) {
+          return { content: [{ type: "text", text: "group create failed: " + e.message }], isError: true };
+        }
+        const tagged = tagMessage(g.id, g.title, message).slice(0, 1000);
+        try {
+          const res = liveJson(
+            await liveCall("broadcast-message", { PlayerID: PLAYER_ID, Content: tagged })
+          );
+          return { content: [{ type: "text", text: JSON.stringify({ ok: true, channel: "group:" + g.id, id: res.ID ?? null }) }] };
+        } catch (e) {
+          return { content: [{ type: "text", text: "communicate failed: " + e.message }], isError: true };
+        }
+      }
       if (ch.startsWith("group:")) {
         const gid = ch.slice("group:".length).trim();
         let g = null;

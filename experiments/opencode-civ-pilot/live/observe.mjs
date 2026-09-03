@@ -40,21 +40,30 @@ function fmtUnits(units) {
   return parts.join(", ") || "no units listed";
 }
 
-// One stable line per military zone, original backend order.
+// One stable line per military zone, sorted for a stable order.
 // Skips the static "Unit Stats" block (available via inspect(military)).
 function condenseZones(report) {
   const lines = [];
-  for (const [name, z] of Object.entries(report ?? {})) {
+  const entries = Object.entries(report ?? {}).sort(([a], [b]) =>
+    a < b ? -1 : a > b ? 1 : 0
+  );
+  for (const [name, z] of entries) {
     if (name === "Unit Stats" || !z || typeof z !== "object") continue;
     const kind = name.includes("Sea") ? "Sea" : "Land";
     const city = z.City ? ` @${z.City}` : "";
-    const str = [
+    let str = [
       z.FriendlyStrength !== undefined ? `F${z.FriendlyStrength}` : null,
       z.EnemyStrength !== undefined ? `E${z.EnemyStrength}` : null,
       z.NeutralStrength !== undefined ? `N${z.NeutralStrength}` : null,
     ]
       .filter(Boolean)
       .join("/");
+    if (z.ZoneValue !== undefined || z.Posture) {
+      const bits = [];
+      if (z.ZoneValue !== undefined) bits.push(`value ${z.ZoneValue}`);
+      if (z.Posture) bits.push(`posture ${z.Posture}`);
+      str += ` [${bits.join(", ")}]`;
+    }
     lines.push(
       `- ${kind}${city}: ${z.Dominance ?? "?"}${
         str ? ` (${str})` : ""
@@ -150,6 +159,9 @@ export async function buildObservation({
         politicsLines.push(`- T${t}: ${String(e).slice(0, 200)}`);
       }
     }
+    politicsLines.sort(
+      (a, b) => Number(a.slice(3).split(":")[0]) - Number(b.slice(3).split(":")[0])
+    );
     politicsLines = politicsLines.slice(-8);
   } catch {
     /* politics optional; dashboard still usable */
@@ -246,8 +258,8 @@ export async function buildObservation({
     policyNames = [];
   try {
     const opt = liveText(await live("get-options", { PlayerID: playerID }));
-    techNames = Object.keys(opt?.Options?.Technologies ?? {});
-    policyNames = Object.keys(opt?.Options?.Policies ?? {});
+    techNames = Object.keys(opt?.Options?.Technologies ?? {}).sort();
+    policyNames = Object.keys(opt?.Options?.Policies ?? {}).sort();
   } catch {
     /* observation still usable without them */
   }
@@ -272,7 +284,9 @@ export async function buildObservation({
       all?.[civ] ??
       Object.values(all ?? {})[0] ??
       {};
-    cityLines = Object.entries(mine).map(([n, c]) => `- ${cityLine(n, c)}`);
+    cityLines = Object.entries(mine)
+      .map(([n, c]) => `- ${cityLine(n, c)}`)
+      .sort();
   } catch {
     /* dashboard still usable without city detail */
   }
@@ -288,7 +302,7 @@ ${cityLines.length ? cityLines.join("\n") : "- city builds unknown."}
 * Zones:
 ${zoneLines.length ? zoneLines.join("\n") : "- no zone data."}
 * Relationships: ${relLine}.
-* ${rivalCiv} visible: score ${rival.Score}, treasury ~${rival.Gold}, research ${rival.CurrentResearch}, ${rival.Cities} cities, military ${rival.MilitaryStrength}.
+* ${rivalCiv} visible: era ${rival.Era}, score ${rival.Score}, treasury ~${rival.Gold}, research ${rival.CurrentResearch}, ${rival.Cities} cities, military ${rival.MilitaryStrength}.
 
 Since your previous opportunity to act:
 ${eventLines.length ? eventLines.join("\n") : "- Nothing new recorded."}
