@@ -208,7 +208,9 @@ Shift ~02:06-02:09 (game still wedged at T207, services untouched):
 Shift ~02:08-02:11, watcher budget extended 100 -> 160 attempts:
 - Old watcher (PID 20152, 14 attempts all fail-closed) stopped in a wait
 - window with no turn in flight (only a conhost child); new watcher
-- (PID 19452) started on the 160 budget (~12.5h, covers past midday).
+- (PID 18092, verified by command line `node.exe watch-207.mjs` — the
+- sibling PID 19452 seen at launch was a transient launcher) started on
+- the 160 budget (~12.5h, covers past midday).
 - First new attempt failed closed in the normal ~40s shape; session
 - re-exported at 110 msgs. Fail-closed holds across the watcher restart.
 - Game services untouched throughout (watcher is file-polling only).
