@@ -62,6 +62,13 @@ ok(ch.groupInbox(1, warch, 189).lines.join(' ').includes('after close') === fals
 let threw4 = false;
 try { ch.markMemberActive(arch.id, 1); } catch (e) { threw4 = true; }
 ok(threw4, 'archived group rejects sends');
+const brk = ch.createGroup({ title: 'War [Council]\nRoom', creator: 0, members: [0, 1] });
+ok(brk.title === 'War Council Room', 'title sanitized at creation');
+const btag = ch.tagMessage(brk.id, brk.title, 'orders');
+const bparsed = ch.parseTag(btag);
+ok(bparsed !== null && bparsed.id === brk.id, 'sanitized title round-trips tag/parse');
+const wbrk = [{ ID: 31, Turn: 191, SpeakerID: 1, Content: btag }];
+ok(ch.groupInbox(0, wbrk, 190).lines.join(' ').includes('orders'), 'sanitized group message reaches inbox');
 console.log('All ' + pass + ' channel asserts passed.');
 
 // Pilot server routing checks (offline-safe: every case below is rejected

@@ -57,7 +57,11 @@ const shortId = () => crypto.randomBytes(4).toString("hex");
 // nobody sits pending in a 2-player duel). Human-driven invites use the
 // invited status; a first send from an invitee auto-accepts.
 export function createGroup({ title, creator, members = [] }) {
-  const clean = String(title ?? "").trim().slice(0, 60);
+  // Store invariant: titles never contain brackets or newlines, so a tagged
+  // line always round-trips through parseTag and renders as one inbox line.
+  // Without this, a title like "War [Council]" silently breaks groupInbox
+  // matching and the group's messages are lost.
+  const clean = String(title ?? "").trim().replace(/[\[\]\r\n]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 60);
   if (!clean) throw new Error("title is required");
   const s = loadStore();
   const seats = [...new Set([creator, ...members])];

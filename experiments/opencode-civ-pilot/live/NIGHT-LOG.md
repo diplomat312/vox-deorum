@@ -129,3 +129,12 @@ Shift ~01:50-01:55 (game still wedged at T207, services untouched):
 - ~7-8min idle TTL per session timestamps). wall_gap_sec wiring verified by
 - read: populates on the next banked turn. Live render of the membership
 - line verifies on T207 after the restart.
+-
+Shift ~01:53-01:56 (game still wedged at T207, services untouched):
+- Watcher attempt 11 failed closed; suite 33/33 green off-window
+- (24 channels + 9 routing), prefix guard green.
+- Social robustness: group titles are now sanitized at creation (brackets
+- and newlines collapsed) so a title like "War [Council]" can no longer
+- silently break tag/parse matching and lose the group's messages.
+- Store invariant, registry-only change: no model-visible prefix impact.
+- 3 new offline asserts (sanitize, tag/parse round-trip, inbox delivery).
