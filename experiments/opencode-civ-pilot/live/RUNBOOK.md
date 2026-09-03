@@ -38,3 +38,22 @@ Known quirks:
 - vox-civ_* tool calls and zero plugin/MCP/skill leakage into context.
 
 Watcher: node watch-207.mjs retries turn 207 up to 40 attempts, 4min apart (about 3h coverage), stops on first banked commit. Create runs-siam/STOP to stop it early.
+
+Recovery — wedged game lock (get-players hangs, cheap calls answer, Civ V
+alive and accruing CPU, dashboard shows the turn not advancing):
+1. Confirm the wedge: watch-207.log repeats exit=1 commit=false on ~40s
+   attempts; dashboard status reads running, unpaused, autoPlay on, stock
+   minds off.
+2. Capture before touching anything: tail of watch-207.log,
+   telemetry-live.jsonl, civ-state-siam.json, civ-state-portugal.json, and
+   the node/Civ PIDs with CPU (baseline 2026-09-03: node 41744/1884 hot
+   since 8:57pm — one may be spinning on the stuck lock).
+3. Restart services (morning call, never unattended): bridge-service (:5000,
+   starts first) then mcp-server (:4000). Leave Civ V rendered; never start
+   a second game under a watched game.
+4. Verify with ONE cheap call, then ONE get-players with a timeout — never
+   stack parallel lock probes. When it answers, the watcher banks turn 207
+   on its next attempt; do not run a manual turn in parallel.
+5. After the bank: record the fresh cache numbers (expect one ~120k cold
+   start after the idle plus the batched prefix re-cache), run the model
+   policy-walk end to end, refresh the Portugal seat file, then phase-4.
