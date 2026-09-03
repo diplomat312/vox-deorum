@@ -394,3 +394,25 @@ Shift ~03:40-04:00 (game still wedged at T207, services untouched):
 - - session re-exported at 110. Offline tracks now exhausted; every open
 - - item (T207 bank, sorted-list render, Portugal refresh, group lifecycle
 - - live paths, phase-4 runs) needs the user-attended service restart.
+
+- Shift ~08:05 local (relaunch after force-kill of wedged Civ PID 25100):
+- - Root cause of ALL relaunch failures found: OLED Care Screensaver.scr was
+- - ACTIVE (PID 11336) holding fullscreen. Civ (any exe, any automation incl.
+- - vanilla) inits Lua then quits silently before Database.log; Steam
+- - -applaunch 8930 also no-ops; sky input (activate/click/launch_app) fails
+- - with GetCursorPos Access Denied while screensaver desktop is active.
+- - Screenshots/Graphics.Capture keep working. Fix: taskkill /F the .scr
+- - (user-authorized "do whatever"); input recovered immediately (activate OK).
+- - Relaunch via authentic flow: generated vox-agents/scripts/LoadGame.temp.lua
+- - from LoadGame.template.lua (same 4 required mods + AI Observer disabled,
+- - LF endings via node fs) then launch-civ5.cmd LoadGame.temp.lua. Loads the
+- - most-recent modded save automatically = AutoSave_Post_0207 AD-1470.
+- - Civ window is DX9 (CivilizationV.exe; title says DX9) — same exe the
+- - launcher script always uses, so consistent with prior sessions.
+- - Dawn-of-man (Sweden intro) needed one Return keypress to dismiss (clicks
+- - on Continue did not take); map live at Turn 207 / 1470 AD, "Processing
+- - turn for Siam", observer mode. Bridge dll_connected:true; MCP
+- - KnowledgeStore re-initialized, GameSwitched turn 207 broadcast.
+- - Watcher: STOPped during relaunch (attempt 72 fail-closed mid-load, then
+- - clean exit), STOP removed, watcher restarted (~08:03, fresh 160 budget)
+- - to bank T207. Do NOT run manual turns in parallel.
