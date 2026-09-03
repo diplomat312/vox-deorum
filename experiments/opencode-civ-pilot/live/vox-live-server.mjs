@@ -159,6 +159,67 @@ async function techPath(target) {
   };
 }
 
+// Server-side policy-tree walk, mirroring techPath: one inspect answers "what
+// stands between me and X" for social policies. Adopted marks come from the
+// player's PolicyBranches (branch -> adopted names); availability from
+// get-options, same as the research action validates. SUFFIX-ONLY.
+async function policyPath(target) {
+  const p = liveJson(await liveCall("get-players", { playerIDs: [PLAYER_ID] }));
+  const me = p[String(PLAYER_ID)] ?? {};
+  const polName = (x) => String(typeof x === "string" ? x : (x?.Name ?? x?.name ?? x?.Type ?? ""));
+  let adopted = new Set();
+  try {
+    for (const v of Object.values(me.PolicyBranches ?? {})) {
+      if (Array.isArray(v)) for (const n of v) adopted.add(String(n).toLowerCase());
+    }
+  } catch { /* chain still useful without adopted marks */ }
+  let availableNow = new Set();
+  try {
+    const opt = liveJson(await liveCall("get-options", { PlayerID: PLAYER_ID }));
+    availableNow = new Set(Object.keys(opt?.Options?.Policies ?? {}).map((s) => s.toLowerCase()));
+  } catch { /* chain still useful without availability marks */ }
+  const seen = new Set();
+  const steps = [];
+  const queue = [target];
+  let calls = 0;
+  while (queue.length && calls < 10) {
+    const name = queue.shift();
+    const key = String(name).toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    let item = null;
+    try {
+      const r = liveJson(await liveCall("get-policy", { Search: name, MaxResults: 3 }));
+      calls++;
+      const items = r?.Items ?? [];
+      item = items.find((i) => polName(i).toLowerCase() === key) ?? items[0] ?? null;
+    } catch {
+      calls++;
+    }
+    if (!item) {
+      steps.push({ name, status: "unknown" });
+      continue;
+    }
+    const prereqs = item.PrereqPolicies ?? [];
+    const iname = polName(item);
+    steps.push({
+      name: item.Name, branch: item.Branch ?? null, level: item.Level ?? null, era: item.Era ?? null, prereqs,
+      status: adopted.has(iname.toLowerCase()) ? "adopted" : availableNow.has(iname.toLowerCase()) ? "available" : "chained",
+    });
+    for (const pre of prereqs) {
+      const pk = String(pre).toLowerCase();
+      if (!seen.has(pk)) queue.push(pre);
+    }
+  }
+  const needed = steps.filter((s) => s.status !== "unknown").reverse();
+  return {
+    target,
+    path: needed.map((s) => s.name),
+    detail: steps.reverse().slice(0, 12),
+    hint: "status available = pickable now (matches availablePolicies); adopted = already owned; chained = deeper in the cone (owned if behind an available policy). policy {policy} names ONE exact policy",
+  };
+}
+
 // detail enables one-hop graph walks without new schemas: research "<tech
 // name>" returns cost/prereqs/unlocks for that tech; policies "<policy>"
 // returns that policy's data; cities "<name>" narrows to one city.
@@ -191,6 +252,9 @@ async function inspectLive(subject, detail) {
       return { ...cur, availableTechnologies: available, hint: "inspect(research, \"<name>\") for one technology; inspect(research, \"path:<name>\") for the full prereq chain with costs" };
     }
     case "policies": {
+      if (detail && /^path:/i.test(detail)) {
+        return await policyPath(detail.replace(/^path:/i, "").trim());
+      }
       if (detail) return liveJson(await liveCall("get-policy", { Search: detail, MaxResults: 3 }));
       const p = liveJson(await liveCall("get-players", { playerIDs: [PLAYER_ID] }));
       const cur = pick(p[me] ?? {}, ["PolicyBranches", "NextPolicyTurns", "CulturePerTurn"]);
@@ -200,7 +264,7 @@ async function inspectLive(subject, detail) {
         const pols = opt?.Options?.Policies ?? {};
         available = Object.keys(pols);
       } catch { /* keep current-only on failure */ }
-      return { ...cur, availablePolicies: available, hint: "inspect(policies, \"<name>\") for detail on one policy" };
+      return { ...cur, availablePolicies: available, hint: "inspect(policies, \"<name>\") for detail on one policy; inspect(policies, \"path:<name>\") for the full prereq chain" };
     }
     case "diplomacy": {
       const p = liveJson(await liveCall("get-players", { playerIDs: [PLAYER_ID] }));
