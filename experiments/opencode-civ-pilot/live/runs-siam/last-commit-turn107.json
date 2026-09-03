@@ -1,0 +1,41 @@
+{
+  "committedAt": "2026-09-03T04:50:08.474Z",
+  "playerID": 1,
+  "actions": [
+    {
+      "params": {
+        "economic": [
+          "protect 2 routes, finish Market in Muang, Villages after Currency"
+        ],
+        "grandStrategy": "Finish Currency into Engineering, finish Progress",
+        "military": [
+          "hold Si Satchanalai 142v75 Counterattack",
+          "clear Lampang barb swordsman/horseman stack",
+          "avoid Braga 19v126"
+        ]
+      },
+      "type": "strategy"
+    },
+    {
+      "params": {
+        "technology": "Engineering"
+      },
+      "type": "research"
+    },
+    {
+      "params": {
+        "policy": "Fraternity"
+      },
+      "type": "policy"
+    },
+    {
+      "params": {
+        "private": -20,
+        "public": -20,
+        "targetID": "Portugal"
+      },
+      "type": "posture"
+    }
+  ],
+  "rationale": "Up 538-430 but trail mil 135-147 and -9gpt. Currency 7t then Engineering, Fraternity finishes Progress, Market+routes fix gold."
+}
