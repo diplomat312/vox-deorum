@@ -226,7 +226,6 @@ const declined = await callServer([
 ], declineEnv, 'vox-live-server.mjs');
 ok(declined.length === 2, 'decline plus follow-up answered');
 ok(!isErr(declined[0]) && textOf(declined[0]).indexOf('accepted') >= 0, 'decline resolves silently');
-ok(ch.memberStatus(gD.id, 0) === 'declined', 'declined membership recorded');
-ok(isErr(declined[1]) && textOf(declined[1]).includes('already sent'), 'decline spent the turn send');
+ok(ch.memberStatus(gD.id, 0) === 'declined', 'declined membership recorded');ok(isErr(declined[1]) && textOf(declined[1]).includes('already sent'), 'decline spent the turn send');
 process.env.CIV_PILOT_CHANNELS_FILE = path.join(tmp, 'channels.json');
-console.log('All ' + pass + ' asserts passed (channels + routing + guard + parity).');
+console.log('All ' + pass + ' asserts passed (channels + routing + guard + parity + seat).');

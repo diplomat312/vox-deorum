@@ -185,7 +185,7 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
       return { content: [{ type: "text", text: "message too long (1000 chars max); keep it short" }], isError: true };
     }
     try {
-      checkSend();
+      checkSend(ME);
     } catch (e) {
       return { content: [{ type: "text", text: e.message }], isError: true };
     }
@@ -203,7 +203,7 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
       fs.appendFileSync(commitFile() + ".messages.jsonl", JSON.stringify(rec) + "\n");
     } catch {}
     const done = (extra) => {
-      try { markSent(ch); } catch {}
+      try { markSent(ch, ME); } catch {}
       return { content: [{ type: "text", text: JSON.stringify({ ok: true, queued: true, channel: ch, ...extra }) }] };
     };
     if (form.kind === "dm") {

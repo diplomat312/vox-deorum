@@ -457,7 +457,7 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
     // visible message. Inert when CIV_PILOT_TURN is unset (offline routing
     // tests), enforced on live turns.
     try {
-      checkSend();
+      checkSend(PLAYER_ID);
     } catch (e) {
       return { content: [{ type: "text", text: e.message }], isError: true };
     }
@@ -482,7 +482,7 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
             Content: message.slice(0, 1000),
           })
         );
-        try { markSent(ch); } catch {}
+        try { markSent(ch, PLAYER_ID); } catch {}
         return { content: [{ type: "text", text: JSON.stringify({ ok: true, channel: ch, sent: true }) }] };
       }
       if (form.kind === "create") {
@@ -498,7 +498,7 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
           const res = liveJson(
             await liveCall("broadcast-message", { PlayerID: PLAYER_ID, Content: tagged })
           );
-          try { markSent(ch); } catch {}
+          try { markSent(ch, PLAYER_ID); } catch {}
           return { content: [{ type: "text", text: JSON.stringify({ ok: true, channel: "group:" + g.id, id: res.ID ?? null }) }] };
         } catch (e) {
           return { content: [{ type: "text", text: "communicate failed: " + e.message }], isError: true };
@@ -521,7 +521,7 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
           const res = liveJson(
             await liveCall("broadcast-message", { PlayerID: PLAYER_ID, Content: tagged })
           );
-          try { markSent(ch); } catch {}
+          try { markSent(ch, PLAYER_ID); } catch {}
           return { content: [{ type: "text", text: JSON.stringify({ ok: true, channel: "group:" + g.id, invited: seat, id: res.ID ?? null }) }] };
         } catch (e) {
           return { content: [{ type: "text", text: "communicate failed: " + e.message }], isError: true };
@@ -538,7 +538,7 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
         const taggedAccept = tagMessage(gAccept.id, gAccept.title, message).slice(0, 1000);
         try {
           const resAccept = liveJson(await liveCall("broadcast-message", { PlayerID: PLAYER_ID, Content: taggedAccept }));
-          try { markSent(ch); } catch {}
+          try { markSent(ch, PLAYER_ID); } catch {}
           return { content: [{ type: "text", text: JSON.stringify({ ok: true, channel: "group:" + gAccept.id, accepted: true, id: resAccept.ID ?? null }) }] };
         } catch (e) {
           return { content: [{ type: "text", text: "communicate failed: " + e.message }], isError: true };
@@ -553,7 +553,7 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
         }
         // Silent but not free: declining spends the turn send like any
         // other communicate call, so the budget cannot be bypassed.
-        try { markSent(ch); } catch {}
+        try { markSent(ch, PLAYER_ID); } catch {}
         return { content: [{ type: "text", text: JSON.stringify({ ok: true, channel: "group:" + gid, accepted: false }) }] };
       }
       if (form.kind === "leave") {
@@ -579,7 +579,7 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
           } catch (e) {
             return { content: [{ type: "text", text: "group leave failed: " + e.message }], isError: true };
           }
-          try { markSent(ch); } catch {}
+          try { markSent(ch, PLAYER_ID); } catch {}
           return { content: [{ type: "text", text: JSON.stringify({ ok: true, channel: "group:" + g.id, left: true, id: res.ID ?? null }) }] };
         } catch (e) {
           return { content: [{ type: "text", text: "communicate failed: " + e.message }], isError: true };
@@ -608,7 +608,7 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
           } catch (e) {
             return { content: [{ type: "text", text: "group archive failed: " + e.message }], isError: true };
           }
-          try { markSent(ch); } catch {}
+          try { markSent(ch, PLAYER_ID); } catch {}
           return { content: [{ type: "text", text: JSON.stringify({ ok: true, channel: "group:" + g.id, archived: true, id: res.ID ?? null }) }] };
         } catch (e) {
           return { content: [{ type: "text", text: "communicate failed: " + e.message }], isError: true };
@@ -633,7 +633,7 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
           const res = liveJson(
             await liveCall("broadcast-message", { PlayerID: PLAYER_ID, Content: tagged })
           );
-          try { markSent(ch); } catch {}
+          try { markSent(ch, PLAYER_ID); } catch {}
           return { content: [{ type: "text", text: JSON.stringify({ ok: true, channel: `group:${g.id}`, id: res.ID ?? null }) }] };
         } catch (e) {
           return { content: [{ type: "text", text: `communicate failed: ${e.message}` }], isError: true };
@@ -643,7 +643,7 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
         const res = liveJson(
           await liveCall("broadcast-message", { PlayerID: PLAYER_ID, Content: message.slice(0, 1000) })
         );
-        try { markSent(ch); } catch {}
+        try { markSent(ch, PLAYER_ID); } catch {}
         return { content: [{ type: "text", text: JSON.stringify({ ok: true, channel: "world", id: res.ID ?? null }) }] };
       }
       const res = liveJson(
@@ -657,7 +657,7 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
           Content: message.slice(0, 1000),
         })
       );
-      try { markSent("private"); } catch {}
+      try { markSent("private", PLAYER_ID); } catch {}
       return { content: [{ type: "text", text: JSON.stringify({ ok: true, channel: "private", sent: true }) }] };
     } catch (e) {
       return { content: [{ type: "text", text: `communicate failed: ${e.message}` }], isError: true };

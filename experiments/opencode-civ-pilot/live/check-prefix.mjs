@@ -20,6 +20,7 @@ import { fileURLToPath } from "node:url";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const fingerprintFile = path.join(here, "prefix-fingerprint.txt");
+const NL = String.fromCharCode(10);
 
 function sha(b) {
   return crypto.createHash("sha256").update(b).digest("hex").slice(0, 16);
@@ -89,7 +90,8 @@ try {
   console.error("no prefix fingerprint yet; run with --update to baseline.");
   process.exit(2);
 }
-if (expected !== fingerprint) {
+const core = (t) => t.split(NL).filter((l) => l.indexOf("updated=") !== 0 && l.indexOf("reason=") !== 0).join(NL);
+if (core(expected) !== core(fingerprint)) {
   console.error("MODEL-VISIBLE PREFIX DRIFTED (expect a one-time ~100k cache miss):");
   console.error("--- expected ---\n" + expected + "--- actual ---\n" + fingerprint);
   process.exit(1);

@@ -199,7 +199,8 @@ export function groupInbox(seat, worldMessages, lastSeenTurn) {
 // run-live-turn.mjs. Guard file: CIV_PILOT_SEND_FILE, or the sibling
 // send-guard.json next to CIV_PILOT_COMMIT_FILE. When TURN is unset
 // (offline routing tests, manual probes) the guard is inert, so existing
-// offline asserts stay green. File shape: { turn, channel, at }.
+// offline asserts stay green. File shape: { seat, turn, channel, at }. The seat key is explicit so
+// two seats sharing one file can never spend each other send.
 export function guardFile() {
   if (process.env.CIV_PILOT_SEND_FILE) return process.env.CIV_PILOT_SEND_FILE;
   const commit = process.env.CIV_PILOT_COMMIT_FILE;
@@ -220,22 +221,46 @@ export function lastSend() {
   } catch { /* missing/corrupt reads as no send yet; never block the game */ }
   return null;
 }
-export function checkSend() {
+// Explicit seat for this guard decision. Prefers an explicit argument at the
+// call site, then CIV_PILOT_GUARD_SEAT, then CIV_PILOT_PLAYER_ID (set by the
+// seat driver for both the server and follow-up runs). Null when unknown.
+export function guardSeat() {
+  for (const k of ["CIV_PILOT_GUARD_SEAT", "CIV_PILOT_PLAYER_ID"]) {
+    const v = process.env[k];
+    if (v !== undefined && v !== null && String(v).trim() !== "") {
+      const n = Number(String(v).trim());
+      if (Number.isInteger(n)) return n;
+    }
+  }
+  return null;
+}
+
+export function checkSend(seat) {
   const turn = guardTurn();
   if (turn === null) return false;
   const prev = lastSend();
-  if (prev && String(prev.turn) === String(turn)) {
-    throw new Error("already sent one message this turn (backpressure: at most ONE send per turn across all channels)");
-  }
+  if (!prev || String(prev.turn) !== String(turn)) return false;
+  const s = seat === undefined ? guardSeat() : seat;
+  // Unknown seat on either side fails closed on the turn alone: a send
+  // recorded for this turn blocks when we cannot prove another seat sent it.
+  if (s === null || s === undefined || prev.seat === null || prev.seat === undefined) return trueBlock();
+  if (Number(prev.seat) === Number(s)) return trueBlock();
   return false;
 }
-export function markSent(channel) {
+
+function trueBlock() {
+  throw new Error("already sent one message this turn (backpressure: at most ONE send per turn across all channels)");
+}
+
+export function markSent(channel, seat) {
   const turn = guardTurn();
   if (turn === null) return null;
-  const rec = { turn, channel: String(channel ?? ""), at: new Date().toISOString() };
+  const s = seat === undefined ? guardSeat() : seat;
+  const rec = { seat: s, turn, channel: String(channel ?? ""), at: new Date().toISOString() };
   try {
     fs.mkdirSync(path.dirname(guardFile()), { recursive: true });
     fs.writeFileSync(guardFile(), JSON.stringify(rec, null, 1));
-  } catch { /* the send already happened live; never fail it on guard write */ }
+  } catch {}
   return rec;
 }
+

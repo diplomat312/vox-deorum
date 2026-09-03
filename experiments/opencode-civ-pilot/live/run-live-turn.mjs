@@ -134,11 +134,11 @@ const observation = await buildObservation({
 const commitFile = path.join(rundir, process.env.CIV_PILOT_COMMIT_BASENAME ?? "last-commit-siam.json");
 process.env.CIV_PILOT_COMMIT_FILE = commitFile;
 process.env.CIV_PILOT_PLAYER_ID = String(PLAYER_ID);
-// Turn-aware backpressure: vox-live-server.mjs enforces one send per turn
-// via this guard file (prefix-safe: no tool-schema change). Same rundir the
-// watcher polls, so retries of an unbanked turn keep the same key.
+// Turn-aware backpressure: the servers enforce one send per seat per turn
+// via one shared guard file keyed (seat, turn). Retries of an unbanked turn
+// keep the same key, so a nudge follow-up cannot double-send.
 process.env.CIV_PILOT_TURN = String(turn);
-process.env.CIV_PILOT_SEND_FILE = path.join(rundir, "send-guard.json");
+process.env.CIV_PILOT_SEND_FILE = path.join(here, "send-guard.json");
 process.env.MCP_URL = MCP_URL;
 clearCommit(commitFile);
 
@@ -173,7 +173,7 @@ try {
   if (sent) {
     fs.mkdirSync(rundir, { recursive: true });
     const sentChannel = sent.input && sent.input.channel ? String(sent.input.channel) : String(sent.tool ?? "");
-    fs.writeFileSync(process.env.CIV_PILOT_SEND_FILE, JSON.stringify({ turn, channel: sentChannel, at: new Date().toISOString() }, null, 1));
+    fs.writeFileSync(process.env.CIV_PILOT_SEND_FILE, JSON.stringify({ seat: PLAYER_ID, turn, channel: sentChannel, at: new Date().toISOString() }, null, 1));
   }
 } catch { /* guard best-effort; telemetry still records the calls */ }
 
