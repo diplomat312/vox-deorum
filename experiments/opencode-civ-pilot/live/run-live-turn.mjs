@@ -192,13 +192,15 @@ if (commit && (commit.actions || commit.pass)) {
         break;
       }
       case "deal_accept": {
-        const id = p.proposalId ?? p.proposalID ?? p.id;
+        const rawA = p.proposalId ?? p.proposalID ?? p.id;
+        const id = typeof rawA === "string" && rawA.trim() !== "" ? Number(rawA) : rawA;
         if (!Number.isInteger(id)) { applied.push({ type: a.type, ok: false, note: "missing params.proposalId (deal-proposal message ID)" }); continue; }
         mapped = ["enact-agent-deal", { ProposalMessageID: id }];
         break;
       }
       case "deal_reject": {
-        const id = p.proposalId ?? p.proposalID ?? p.id;
+        const rawR = p.proposalId ?? p.proposalID ?? p.id;
+        const id = typeof rawR === "string" && rawR.trim() !== "" ? Number(rawR) : rawR;
         if (!Number.isInteger(id)) { applied.push({ type: a.type, ok: false, note: "missing params.proposalId (deal-proposal message ID)" }); continue; }
         mapped = ["reject-agent-deal", { PlayerAID: Math.min(PLAYER_ID, RIVAL_ID), PlayerBID: Math.max(PLAYER_ID, RIVAL_ID), ProposalMessageID: id, SpeakerID: PLAYER_ID, ...(typeof p.reason === "string" && p.reason.trim() ? { Content: p.reason } : {}) }];
         break;
