@@ -1,45 +1,39 @@
 {
-  "committedAt": "2026-09-03T06:40:42.437Z",
+  "committedAt": "2026-09-03T06:48:30.051Z",
   "playerID": 1,
   "actions": [
     {
       "params": {
         "economic": [
-          "finish University/Chancery/Theater, integrate Ragusa, trim over-supply 27/26"
+          "finish Pisa/Banks/Customs/College, keep +337gpt"
         ],
-        "grandStrategy": "White peace, Banking economy, Shadow Networks",
+        "grandStrategy": "Gunpowder into Metallurgy cannons, Exchange Markets",
         "military": [
-          "hold Ragusa/Si Satchanalai, avoid Lisbon/Braga, screen Knights"
+          "pull Pike from Braga, hold Si Satchanalai siege park, screen Porto knights"
         ]
       },
       "type": "strategy"
     },
     {
       "params": {
-        "technology": "Banking"
+        "technology": "Metallurgy"
       },
       "type": "research"
     },
     {
       "params": {
-        "policy": "Shadow Networks"
+        "policy": "Exchange Markets"
       },
       "type": "policy"
     },
     {
       "params": {
-        "proposalId": 12
-      },
-      "type": "deal_accept"
-    },
-    {
-      "params": {
-        "private": 20,
+        "private": 10,
         "public": 10,
         "targetID": "Portugal"
       },
       "type": "posture"
     }
   ],
-  "rationale": "Up 1535-966, 568-460, Ragusa taken. Accept white peace id12, Banking, Shadow Networks, hold lines."
+  "rationale": "Peace, lead 1773-1117 and 793-674, +337gpt. Metallurgy upgrades 4 Trebs to Cannon, Exchange Markets compounds trade."
 }

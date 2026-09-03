@@ -2654,3 +2654,168 @@ You may inspect anything else you need (inspect). When finished, commit your act
     "out": "{\n \"result\": {\n  \"content\": [\n   {\n    \"type\": \"text\",\n    \"text\": \"{\\n  \\\"Success\\\": true\\n}\"\n   }\n  ],\n  \"structuredContent\": {\n   \"Success\": true\n  }\n },\n \"jsonrpc\": \"2.0\",\n \"id\": 1788417648424\n}\n"
   }
 ]
+
+
+## Siam live turn 180 (session ses_f9a74a908ffeMXPkF3Y5Bh37Ba)
+
+### Observation sent
+
+TURN 180 (live game live-duel)
+
+You are Ramkhamhaeng, leader of Siam (seat 1). Portugal (Maria I, seat 0) is played by another mind.
+
+Current:
+* Treasury: 723 (+337/turn). Happiness: Happy (100%). Research: Gunpowder (Estimated in 6 turns). Research must name ONE exact technology from: Metallurgy, Printing Press, Astronomy. Next policy in 1 turns ({"Progress":["Progress","Organization","Liberty","Expertise","Equality","Fraternity"],"Statecraft":["Statecraft","Foreign Service","Shadow Networks","Trade Confederacy"]}). Policy must name ONE exact entry from: Exchange Markets (Continuing Statecraft Branch) (4/6); Consulates (Continuing Statecraft Branch) (4/6); Fealty (New Branch); Artistry (New Branch); Authority (New Branch); Tradition (New Branch).
+* Cities (8): population 93, territory 127, military strength 793, units 33 (supply 33), score 1773.
+- Sukhothai p16 -> Leaning Tower of Pisa (4t left)
+- Si Satchanalai p16 -> Bank (1t left)
+- Muang Saluang p13 -> Customs House (1t left)
+- Lampang p13 -> Envoy (3t left)
+- Phitsanulok p10 -> Imperial College (3t left)
+- Kamphaeng Phet p10 -> University (1t left)
+- Nakhon Chum p8 -> Bank (2t left)
+- Ragusa p7 -> Bank (3t left)
+* Zones:
+- Land @Lisbon: Friendly (F404/N34) — Portugal 1xCrossbowman
+- Land @Sukhothai: Friendly (F623) — Siam 1xSofa
+- Land @M'banza-Kongo: Friendly (F382/N37) — Siam 1xPikeman, City-State M'banza-Kongo 1xCaravel, Portugal 1xLongswordsman 1xHeavy Skirmisher
+- Land @Kabul: Friendly (F90/N39) — Barbarians 1xPikeman
+- Land @Hanoi: Friendly (F200/N40) — Barbarians 1xCrossbowman, City-State Hanoi 1xCaravel 1xPikeman
+- Land @Kyzyl: Friendly (F374/N39) — City-State Kyzyl 3xPikeman
+- Land @Lhasa: Friendly (F100/N22) — City-State Lhasa 1xPikeman
+- Land @Brussels: Friendly (F281/N40) — City-State Brussels 1xLongswordsman 2xPikeman
+- Land @Enns: Friendly (F63/N37) — City-State Enns 1xCaravel
+- Land @Huari: Friendly (F62/N29) — City-State Huari 1xCaravel 1xPikeman
+- Land @Porto: Friendly (F296/N28) — Portugal 1xTrebuchet 1xKnight 1xCrossbowman
+- Land @Braga: Friendly (F583/N32) — Siam 1xPikeman, Portugal 1xCrossbowman
+- Land @Si Satchanalai: Friendly (F943) — Siam 2xLongswordsman 4xTrebuchet 1xCrossbowman 1xPikeman
+- Land @Muang Saluang: Friendly (F282) — Siam 2xCrossbowman
+- Land @Lampang: Friendly (F767) — Siam 1xLongswordsman 1xPikeman 3xSofa, Barbarians 1xPikeman
+- Land @Phitsanulok: Friendly (F562) — Siam 1xCaravel 2xPikeman, Barbarians 1xPikeman
+- Land @Kamphaeng Phet: Friendly (F614) — Siam 1xCrossbowman
+- Land @Nakhon Chum: Friendly (F546) — Siam 1xLongswordsman 1xScout 1xGalleass
+- Land @Funchal: Friendly (F425/N28) — Portugal 1xCrossbowman
+- Land @Ragusa: Friendly (F593) — Siam 1xPikeman 1xGalleass 1xSofa
+- Sea @Enns: Friendly (F219/N37) — City-State Enns 1xCaravel
+- Sea @Huari: Friendly (F216/N29) — City-State Huari 1xCaravel
+- Sea @Hanoi: Friendly (F283/N40) — City-State Hanoi 1xCaravel
+- Sea @Brussels: Friendly (F185/N40) — City-State Brussels 2xCaravel
+- Sea @M'banza-Kongo: Friendly (F254/N37) — City-State M'banza-Kongo 1xCaravel
+- Sea: ? — Siam 1xCaravel, Barbarians 1xCrossbowman
+- Sea @Muang Saluang: Friendly (F303) — Siam 1xGalleass
+- Sea @Kyzyl: Friendly (F442/N39) — Siam 1xGalleass
+- Sea @Porto: Friendly (F371/N28) — Portugal 1xNau
+- Sea @Ragusa: Friendly (F259) — Siam 1xNaresuan's Elephant
+- Sea @Nakhon Chum: Friendly (F323) — Siam 1xGalleass
+* Relationships: Portugal: Distance: Neighbors; Denounced Them.
+* Portugal visible: score 1117, treasury ~283, research Gunpowder (Estimated in 9 turns), 6 cities, military 674.
+
+Since your previous opportunity to act:
+- Nothing new recorded.
+
+What happened to your last committed actions:
+- strategy applied.
+- research applied.
+- policy applied.
+- deal_accept applied.
+- posture applied.
+
+Politics since your last opportunity (war/peace, city-states, deals):
+- T189: **Siam** converted a unit from **Siam**
+- T189: **Siam** converted a unit from **Siam**
+- T189: **Siam** converted a unit from **Siam**
+- T189: **Hanoi** gifted a military unit to **Siam**
+- T190: **Siam** converted a unit from **Siam**
+- T190: **Siam** converted a unit from **Siam**
+- T190: **Siam** lost friendship with **Bucharest** (at -27 influence)
+- T190: **Siam** revoked protection of **Bucharest**
+
+Messages for you (reply with communicate if warranted, at most one message per turn):
+- None.
+
+Deal thread (deal_propose sends; deal_accept {proposalId} enacts; deal_reject {proposalId} declines; inspect(deals) shows what is tradable):
+- T176 Portugal (Maria I) deal-proposal (id 12): Maria proposes a formal white peace between Portugal and Siam. This war was ordered by neither of us; our Declaration of Friendship still stands on the books.
+- T178 Siam (you) deal-accept (id 15): The deal was accepted.
+- T178 Siam (you) deal-enacted (id 16): The deal was enacted.
+
+You may inspect anything else you need (inspect). When finished, commit your actions (commit_turn) or pass. Keep the rationale short.
+
+### Tool calls
+
+[
+  {
+    "tool": "vox-civ_commit_turn",
+    "input": null
+  }
+]
+
+### Commit
+
+{
+  "committedAt": "2026-09-03T06:48:30.051Z",
+  "playerID": 1,
+  "actions": [
+    {
+      "params": {
+        "economic": [
+          "finish Pisa/Banks/Customs/College, keep +337gpt"
+        ],
+        "grandStrategy": "Gunpowder into Metallurgy cannons, Exchange Markets",
+        "military": [
+          "pull Pike from Braga, hold Si Satchanalai siege park, screen Porto knights"
+        ]
+      },
+      "type": "strategy"
+    },
+    {
+      "params": {
+        "technology": "Metallurgy"
+      },
+      "type": "research"
+    },
+    {
+      "params": {
+        "policy": "Exchange Markets"
+      },
+      "type": "policy"
+    },
+    {
+      "params": {
+        "private": 10,
+        "public": 10,
+        "targetID": "Portugal"
+      },
+      "type": "posture"
+    }
+  ],
+  "rationale": "Peace, lead 1773-1117 and 793-674, +337gpt. Metallurgy upgrades 4 Trebs to Cannon, Exchange Markets compounds trade."
+}
+
+### Applied to live game
+
+[
+  {
+    "type": "strategy",
+    "tool": "set-strategy",
+    "ok": true,
+    "out": "{\n \"result\": {\n  \"content\": [\n   {\n    \"type\": \"text\",\n    \"text\": \"{\\n  \\\"Success\\\": true\\n}\"\n   }\n  ],\n  \"structuredContent\": {\n   \"Success\": true\n  }\n },\n \"jsonrpc\": \"2.0\",\n \"id\": 1788418112855\n}\n"
+  },
+  {
+    "type": "research",
+    "tool": "set-research",
+    "ok": true,
+    "out": "{\n \"result\": {\n  \"content\": [\n   {\n    \"type\": \"text\",\n    \"text\": \"{\\n  \\\"Success\\\": true\\n}\"\n   }\n  ],\n  \"structuredContent\": {\n   \"Success\": true\n  }\n },\n \"jsonrpc\": \"2.0\",\n \"id\": 1788418113774\n}\n"
+  },
+  {
+    "type": "policy",
+    "tool": "set-policy",
+    "ok": false,
+    "out": "{\n \"result\": {\n  \"content\": [\n   {\n    \"type\": \"text\",\n    \"text\": \"Error executing tool set-policy: Policy \\\"Exchange Markets\\\" has already been adopted. Please check your availability list.\"\n   }\n  ],\n  \"isError\": true\n },\n \"jsonrpc\": \"2.0\",\n \"id\": 1788418113985\n}\n"
+  },
+  {
+    "type": "posture",
+    "tool": "set-relationship",
+    "ok": true,
+    "out": "{\n \"result\": {\n  \"content\": [\n   {\n    \"type\": \"text\",\n    \"text\": \"{\\n  \\\"Success\\\": true\\n}\"\n   }\n  ],\n  \"structuredContent\": {\n   \"Success\": true\n  }\n },\n \"jsonrpc\": \"2.0\",\n \"id\": 1788418114151\n}\n"
+  }
+]

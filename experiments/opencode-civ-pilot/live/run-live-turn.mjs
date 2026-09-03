@@ -214,17 +214,24 @@ if (commit && (commit.actions || commit.pass)) {
 
 const usage = sessionId ? exportUsageDelta(sessionId, prevCount) : null;
 const tot = { uncached: 0, read: 0, write: 0, output: 0, reasoning: 0 };
+// Wall-clock gap since the previous cognition opportunity: cache TTL expires
+// after idle minutes (T177/T180 each cost ~120k fresh after 15-25min gaps vs
+// 2.6k at T165 minutes after the prior turn). File-only telemetry, never
+// model-visible.
+const nowMs = Date.now();
+const wallGapSec = state.lastTurnAt ? Math.round((nowMs - state.lastTurnAt) / 1000) : null;
 if (usage) {
   Object.assign(tot, { uncached: usage.uncached, read: usage.read, write: usage.write, output: usage.output, reasoning: usage.reasoning });
   fs.mkdirSync(here, { recursive: true });
-  fs.writeFileSync(stateFile, JSON.stringify({ sessionId, messageCount: usage.newCount, lastSeenTurn: turn, lastApplied: applied.map((a) => ({ type: a.type, ok: !!a.ok, note: a.note ?? null, out: (a.out ?? "").slice(0, 300) })) }));
+  fs.writeFileSync(stateFile, JSON.stringify({ sessionId, messageCount: usage.newCount, lastSeenTurn: turn, lastTurnAt: nowMs, lastApplied: applied.map((a) => ({ type: a.type, ok: !!a.ok, note: a.note ?? null, out: (a.out ?? "").slice(0, 300) })) }));
 }
 
 const tele = {
   game, civ: CIV, turn, seq: turn, model: MODEL, sessionId,
   uncached_input_tokens: tot.uncached, cache_read_input_tokens: tot.read,
   cache_write_input_tokens: tot.write, output_tokens: tot.output,
-  reasoning_tokens: tot.reasoning, latency_ms: Date.now() - t0,
+  reasoning_tokens: tot.reasoning, latency_ms: nowMs - t0,
+  wall_gap_sec: wallGapSec, session_messages: usage?.newCount ?? null,
   tool_calls: allCalls.map((t) => t.tool + (t.followup ? "+nudge" : "")),
   nudged, commit_ok: commitOk, applied, compaction: false,
   obs_chars: observation.length,
