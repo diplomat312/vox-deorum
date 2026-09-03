@@ -212,3 +212,10 @@ Shift ~02:08-02:11, watcher budget extended 100 -> 160 attempts:
 - First new attempt failed closed in the normal ~40s shape; session
 - re-exported at 110 msgs. Fail-closed holds across the watcher restart.
 - Game services untouched throughout (watcher is file-polling only).
+-
+Shift ~02:10-02:12 (game still wedged at T207, services untouched):
+- Seat-parity audit: run-live-turn.mjs (Siam) and observe-seat.mjs
+- (Portugal/Codex) both build observations through observe.mjs
+- buildObservation with their own seat IDs, so dashboard shape, channel
+- inbox, and the new membership line are identical for both seats by
+- construction. No divergence found; no changes needed.
