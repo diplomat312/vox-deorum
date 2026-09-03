@@ -78,3 +78,6 @@ attempts cause zero session pollution. Routing tests extended to 26 asserts
 with a createGroup -> tag -> inbox round-trip incl. invite isolation.
 Sample transcript deliverable: live/SAMPLE-TRANSCRIPT.md (T165 steady-state,
 T177 white-peace acceptance, T180 post-peace — verbatim, one session).
+Watcher budget extended 40 -> 100 attempts (~8h, full overnight) and the
+watcher restarted on the new budget during a sleep window (old PID 17716 out,
+attempt counter fresh, no turn in flight). Game services untouched.

@@ -37,7 +37,7 @@ Known quirks:
 - Session leanness is verified, not assumed: opencode export shows only
 - vox-civ_* tool calls and zero plugin/MCP/skill leakage into context.
 
-Watcher: node watch-207.mjs retries turn 207 up to 40 attempts, 4min apart (about 3h coverage), stops on first banked commit. Create runs-siam/STOP to stop it early.
+Watcher: node watch-207.mjs retries turn 207 up to 100 attempts, 4min apart (about 8h coverage, full overnight), stops on first banked commit. Create runs-siam/STOP to stop it early. The watcher is our own file-polling loop — restarting it never touches game services.
 
 Recovery — wedged game lock (get-players hangs, cheap calls answer, Civ V
 alive and accruing CPU, dashboard shows the turn not advancing):
