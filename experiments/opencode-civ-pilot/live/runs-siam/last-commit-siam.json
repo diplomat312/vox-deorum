@@ -1,15 +1,15 @@
 {
-  "committedAt": "2026-09-03T04:57:34.326Z",
+  "committedAt": "2026-09-03T04:58:28.807Z",
   "playerID": 1,
   "actions": [
     {
       "params": {
         "economic": [
-          "finish Lighthouse/Forge/Markets, keep +5gpt"
+          "finish Arena/Walls/Forge, keep +gpt"
         ],
-        "grandStrategy": "Metal Casting into Physics for Trebuchets, Authority for war",
+        "grandStrategy": "Metal Casting into Physics Trebs, Authority war branch",
         "military": [
-          "guard Great Wall build in Si Satchanalai, hold Lampang siege stack 249, clear Sukhothai barb"
+          "hold Lampang siege 241, Si Satchanalai 182v25, clear Sukhothai barb, avoid Kyzyl"
         ]
       },
       "type": "strategy"
@@ -35,5 +35,5 @@
       "type": "posture"
     }
   ],
-  "rationale": "Parity 182-184, up 659-503, +5gpt. Physics for Trebs, Authority for war, protect Great Wall and siege stack."
+  "rationale": "Lead 685-508, mil 183-175, war 4%. Finish Metal Casting into Physics Trebs, Authority, hold siege stacks."
 }
