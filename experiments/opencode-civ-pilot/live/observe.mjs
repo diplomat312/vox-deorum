@@ -119,7 +119,7 @@ export async function buildObservation({
   try {
     const gm = liveText(await callLive("get-global-messages", { Limit: 10 }));
     const fresh = (gm?.messages ?? []).filter(
-      (m) => (m?.Turn ?? 0) > lastSeenTurn
+      (m) => (m?.Turn ?? 0) > lastSeenTurn && m?.SpeakerID !== playerID
     );
     for (const m of fresh.slice(-3)) {
       messageLines.push(

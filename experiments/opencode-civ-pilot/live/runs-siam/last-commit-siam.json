@@ -1,15 +1,15 @@
 {
-  "committedAt": "2026-09-03T05:11:15.322Z",
+  "committedAt": "2026-09-03T05:13:15.987Z",
   "playerID": 1,
   "actions": [
     {
       "params": {
         "economic": [
-          "finish Armory/Circus/Colossus/Forge, grow Ragusa alliance"
+          "escort trade routes vs plunder, finish Machu Picchu/Liburna"
         ],
-        "grandStrategy": "Chemistry into Philosophy, Trade Confederacy for routes/ally",
+        "grandStrategy": "Chemistry into Philosophy, Trade Confederacy",
         "military": [
-          "keep Trebs home per message, clear Mbanza/Lampang pikes, guard Phitsanulok"
+          "withdraw Crossbowman from Lisbon, clear Muang 2xCrossbow+Pike siege, guard Phitsanulok"
         ]
       },
       "type": "strategy"
@@ -29,11 +29,11 @@
     {
       "params": {
         "private": 0,
-        "public": 0,
+        "public": 10,
         "targetID": "Portugal"
       },
       "type": "posture"
     }
   ],
-  "rationale": "Lead 1008-688, 323-241, Ragusa allied. Philosophy after Chemistry, Trade Confederacy continues Statecraft, honor peace."
+  "rationale": "Lead 1087-751, 342-225, peace holds. Philosophy after Chemistry, Trade Confederacy, pull back Lisbon scout and escort routes."
 }
