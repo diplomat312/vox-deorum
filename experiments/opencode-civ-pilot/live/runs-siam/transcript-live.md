@@ -1650,3 +1650,133 @@ You may inspect anything else you need (inspect). When finished, commit your act
     "out": "{\n \"result\": {\n  \"content\": [\n   {\n    \"type\": \"text\",\n    \"text\": \"{\\n  \\\"Success\\\": true\\n}\"\n   }\n  ],\n  \"structuredContent\": {\n   \"Success\": true\n  }\n },\n \"jsonrpc\": \"2.0\",\n \"id\": 1788412038119\n}\n"
   }
 ]
+
+
+## Siam live turn 140 (session ses_f9a74a908ffeMXPkF3Y5Bh37Ba)
+
+### Observation sent
+
+TURN 140 (live game live-duel)
+
+You are Ramkhamhaeng, leader of Siam (seat 1). Portugal (Maria I, seat 0) is played by another mind.
+
+Current:
+* Treasury: 236 (+69/turn). Happiness: Happy (100%). Research: Machinery (Estimated in 9 turns). Research must name ONE exact technology from: Philosophy, Drama and Poetry, Chemistry. Next policy in 2 turns ({"Progress":["Progress","Organization","Liberty","Expertise","Equality","Fraternity"]}). Policy must name ONE exact entry from: Statecraft (New Branch); Fealty (New Branch); Artistry (New Branch); Authority (New Branch); Tradition (New Branch).
+* Cities (5): population 34, territory 55, military strength 238, units 14 (supply 18), score 853.
+- Sukhothai p9 -> Temple of Artemis (2t left)
+- Si Satchanalai p9 -> Scrivener's Office (1t left)
+- Muang Saluang p8 -> Hagia Sophia (4t left)
+- Lampang p7 -> Herbalist (1t left)
+- Phitsanulok p1 -> Forge (15t left)
+* Zones:
+- Land: ? — Siam 1xSpearman
+- Land @Sukhothai: Friendly (F281) — Siam 1xTrebuchet 1xPikeman 1xSpearman 1xComposite Bowman, Barbarians 1xSwordsman
+- Land @M'banza-Kongo: Friendly (F159/N25) — Siam 1xTrebuchet 1xSpearman 1xArcher, Barbarians 1xPikeman 1xComposite Bowman, City-State M'banza-Kongo 1xTrireme
+- Land @Hanoi: Friendly (F115/N27) — Barbarians 1xComposite Bowman, City-State Hanoi 1xPikeman
+- Land @Ragusa: Friendly (F110/N23) — City-State Ragusa 1xTrireme 1xSpearman
+- Land @Brussels: Friendly (F140/N21) — Siam 1xHorseman, City-State Brussels 1xPikeman, Portugal 1xComposite Bowman
+- Land @Huari: Friendly (F53/N22) — City-State Huari 1xTrireme 1xPikeman, Barbarians 1xPikeman
+- Land @Si Satchanalai: Friendly (F215) — Siam 1xComposite Bowman
+- Land @Muang Saluang: Friendly (F240) — Siam 1xComposite Bowman
+- Land @Lampang: Friendly (F221) — Siam 1xTrebuchet
+- Land @Phitsanulok: Friendly (F187) — Siam 1xHorseman 1xSpearman
+- Sea @M'banza-Kongo: Friendly (F122/N25) — Barbarians 1xTrireme 1xLiburna
+- Sea @Muang Saluang: Friendly (F194) — City-State Hanoi 1xTrireme 1xChariot Archer
+- Sea @Phitsanulok: Friendly (F208) — Barbarians 1xTrireme
+- Sea @Hanoi: Friendly (F198/N27) — City-State Hanoi 1xTrireme, Portugal 1xGalley
+- Sea @Brussels: Friendly (F94/N21) — City-State Brussels 1xTrireme
+* Relationships: Portugal: Distance: Neighbors; Peace Treaty; Denounced Them.
+* Portugal visible: score 611, treasury ~104, research Physics (Estimated in 4 turns), 4 cities, military 208.
+
+Since your previous opportunity to act:
+- Nothing new recorded.
+
+What happened to your last committed actions:
+- strategy applied.
+- research applied.
+- policy applied.
+- posture applied.
+
+Outstanding requests/deals/messages: none tracked yet (phase 1 strategic test).
+
+You may inspect anything else you need (inspect). When finished, commit your actions (commit_turn) or pass. Keep the rationale short.
+
+### Tool calls
+
+[
+  {
+    "tool": "vox-civ_commit_turn",
+    "input": null
+  }
+]
+
+### Commit
+
+{
+  "committedAt": "2026-09-03T05:08:00.642Z",
+  "playerID": 1,
+  "actions": [
+    {
+      "params": {
+        "economic": [
+          "finish Scrivener/Herbalist/Artemis/Sophia"
+        ],
+        "grandStrategy": "Machinery into Chemistry, Statecraft",
+        "military": [
+          "hold Trebs, clear Sukhothai swordsman and Mbanza pikes, guard Phitsanulok"
+        ]
+      },
+      "type": "strategy"
+    },
+    {
+      "params": {
+        "technology": "Chemistry"
+      },
+      "type": "research"
+    },
+    {
+      "params": {
+        "policy": "Statecraft"
+      },
+      "type": "policy"
+    },
+    {
+      "params": {
+        "private": 0,
+        "public": 0,
+        "targetID": "Portugal"
+      },
+      "type": "posture"
+    }
+  ],
+  "rationale": "Lead 853-611, 238-208, +69gpt. Chemistry after Machinery, Statecraft, finish wonders and clear barbs."
+}
+
+### Applied to live game
+
+[
+  {
+    "type": "strategy",
+    "tool": "set-strategy",
+    "ok": true,
+    "out": "{\n \"result\": {\n  \"content\": [\n   {\n    \"type\": \"text\",\n    \"text\": \"{\\n  \\\"Success\\\": true\\n}\"\n   }\n  ],\n  \"structuredContent\": {\n   \"Success\": true\n  }\n },\n \"jsonrpc\": \"2.0\",\n \"id\": 1788412084098\n}\n"
+  },
+  {
+    "type": "research",
+    "tool": "set-research",
+    "ok": true,
+    "out": "{\n \"result\": {\n  \"content\": [\n   {\n    \"type\": \"text\",\n    \"text\": \"{\\n  \\\"Success\\\": true\\n}\"\n   }\n  ],\n  \"structuredContent\": {\n   \"Success\": true\n  }\n },\n \"jsonrpc\": \"2.0\",\n \"id\": 1788412086317\n}\n"
+  },
+  {
+    "type": "policy",
+    "tool": "set-policy",
+    "ok": false,
+    "out": "{\n \"result\": {\n  \"content\": [\n   {\n    \"type\": \"text\",\n    \"text\": \"Error executing tool set-policy: Policy \\\"Statecraft\\\" has already been adopted. Please check your availability list.\"\n   }\n  ],\n  \"isError\": true\n },\n \"jsonrpc\": \"2.0\",\n \"id\": 1788412086533\n}\n"
+  },
+  {
+    "type": "posture",
+    "tool": "set-relationship",
+    "ok": true,
+    "out": "{\n \"result\": {\n  \"content\": [\n   {\n    \"type\": \"text\",\n    \"text\": \"{\\n  \\\"Success\\\": true\\n}\"\n   }\n  ],\n  \"structuredContent\": {\n   \"Success\": true\n  }\n },\n \"jsonrpc\": \"2.0\",\n \"id\": 1788412088350\n}\n"
+  }
+]

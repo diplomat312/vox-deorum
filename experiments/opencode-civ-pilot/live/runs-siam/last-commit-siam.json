@@ -1,15 +1,15 @@
 {
-  "committedAt": "2026-09-03T05:07:10.536Z",
+  "committedAt": "2026-09-03T05:08:00.642Z",
   "playerID": 1,
   "actions": [
     {
       "params": {
         "economic": [
-          "finish Circus/Scrivener/Artemis/Sophia, connect Phitsanulok"
+          "finish Scrivener/Herbalist/Artemis/Sophia"
         ],
         "grandStrategy": "Machinery into Chemistry, Statecraft",
         "military": [
-          "defend Phitsanulok vs comp bows, hold Trebs, clear Lampang barb"
+          "hold Trebs, clear Sukhothai swordsman and Mbanza pikes, guard Phitsanulok"
         ]
       },
       "type": "strategy"
@@ -35,5 +35,5 @@
       "type": "posture"
     }
   ],
-  "rationale": "5 cities, lead 854-608 and 247-212, +54gpt. Chemistry after Machinery, Statecraft, defend new Phitsanulok."
+  "rationale": "Lead 853-611, 238-208, +69gpt. Chemistry after Machinery, Statecraft, finish wonders and clear barbs."
 }
