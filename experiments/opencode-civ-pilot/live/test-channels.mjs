@@ -228,4 +228,41 @@ ok(declined.length === 2, 'decline plus follow-up answered');
 ok(!isErr(declined[0]) && textOf(declined[0]).indexOf('accepted') >= 0, 'decline resolves silently');
 ok(ch.memberStatus(gD.id, 0) === 'declined', 'declined membership recorded');ok(isErr(declined[1]) && textOf(declined[1]).includes('already sent'), 'decline spent the turn send');
 process.env.CIV_PILOT_CHANNELS_FILE = path.join(tmp, 'channels.json');
+// Seat-keyed guard: one send per (seat, turn) in a shared file.
+process.env.CIV_PILOT_SEND_FILE = path.join(tmp, 'send-guard-seats.json');
+process.env.CIV_PILOT_TURN = '600';
+ch.markSent('world', 0);
+let seatBlocked = false;
+try { ch.checkSend(0); } catch (e) { seatBlocked = String(e.message).indexOf('already sent') >= 0; }
+ok(seatBlocked, 'same seat same turn blocked');
+ok(ch.checkSend(1) === false, 'other seat same turn allowed');
+ch.markSent('dm', 1);
+let seat1Blocked = false;
+try { ch.checkSend(1); } catch (e) { seat1Blocked = String(e.message).indexOf('already sent') >= 0; }
+ok(seat1Blocked, 'second seat send recorded');
+let unknownBlocked = false;
+try { ch.checkSend(); } catch (e) { unknownBlocked = String(e.message).indexOf('already sent') >= 0; }
+ok(unknownBlocked, 'unknown seat fails closed on turn');
+process.env.CIV_PILOT_TURN = '601';
+ok(ch.checkSend(0) === false, 'new turn opens both seats');
+delete process.env.CIV_PILOT_TURN;
+delete process.env.CIV_PILOT_SEND_FILE;
+// Visibility before transport: archived and declined group sends fail.
+const visFile = path.join(tmp, 'channels-vis.json');
+const visGuard = path.join(tmp, 'send-guard-vis.json');
+process.env.CIV_PILOT_CHANNELS_FILE = visFile;
+const gA = ch.createGroup({ title: 'Old Council', creator: 0, members: [0] });
+ch.archiveGroup(gA.id, 0);
+const gD2 = ch.createGroup({ title: 'Cold Shoulder', creator: 1, members: [1] });
+ch.inviteToGroup(gD2.id, 0, 1);
+ch.resolveInvite(gD2.id, 0, false);
+const visEnv = { CIV_PILOT_PLAYER_ID: '0', CIV_PILOT_TURN: '502', CIV_PILOT_SEND_FILE: visGuard, CIV_PILOT_CHANNELS_FILE: visFile };
+const vis = await callServer([
+  { name: 'communicate', arguments: { channel: 'group:' + gA.id, target: 'x', message: 'hello?' } },
+  { name: 'communicate', arguments: { channel: 'group:' + gD2.id, target: 'x', message: 'hello?' } },
+], visEnv, 'vox-live-server.mjs');
+ok(vis.length === 2, 'visibility probes answered');
+ok(isErr(vis[0]) && textOf(vis[0]).indexOf('unknown group') >= 0, 'archived group send rejected');
+ok(isErr(vis[1]) && textOf(vis[1]).indexOf('not a member') >= 0, 'declined group send rejected');
+process.env.CIV_PILOT_CHANNELS_FILE = path.join(tmp, 'channels.json');
 console.log('All ' + pass + ' asserts passed (channels + routing + guard + parity + seat).');
