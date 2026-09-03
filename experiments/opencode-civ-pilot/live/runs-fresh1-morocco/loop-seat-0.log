@@ -1,0 +1,119 @@
+2026-09-03T21:17:43.299Z loop start seat 0
+2026-09-03T21:17:43.359Z stream connected
+2026-09-03T21:17:43.378Z new game; watermark reset
+2026-09-03T21:17:43.378Z seat turn 15 pausing
+2026-09-03T21:18:43.868Z turn 15 exit 0
+2026-09-03T21:18:43.885Z seat turn 16 pausing
+2026-09-03T21:18:53.482Z trigger T16 arrived while busy
+2026-09-03T21:19:13.488Z turn 16 exit 0
+2026-09-03T21:19:13.686Z seat turn 17 pausing
+2026-09-03T21:19:18.698Z trigger T17 arrived while busy
+2026-09-03T21:19:32.506Z turn 17 exit 0
+2026-09-03T21:22:03.742Z seat turn 18 pausing
+2026-09-03T21:22:08.754Z trigger T18 arrived while busy
+2026-09-03T21:24:03.897Z trigger T19 arrived while busy
+2026-09-03T21:24:08.410Z turn 18 exit 0
+2026-09-03T21:24:08.901Z seat turn 19 pausing
+2026-09-03T21:24:13.903Z trigger T19 arrived while busy
+2026-09-03T21:25:44.053Z trigger T20 arrived while busy
+2026-09-03T21:26:11.082Z turn 19 exit 0
+2026-09-03T21:26:14.084Z seat turn 20 pausing
+2026-09-03T21:26:19.100Z trigger T20 arrived while busy
+2026-09-03T21:27:39.178Z trigger T21 arrived while busy
+2026-09-03T21:27:40.397Z turn 20 exit 0
+2026-09-03T21:27:44.181Z seat turn 21 pausing
+2026-09-03T21:27:49.199Z trigger T21 arrived while busy
+2026-09-03T21:29:40.924Z turn 21 exit 0
+2026-09-03T21:29:41.120Z seat turn 22 pausing
+2026-09-03T21:29:49.343Z trigger T22 arrived while busy
+2026-09-03T21:30:01.250Z turn 22 exit 0
+2026-09-03T21:32:29.587Z seat turn 23 pausing
+2026-09-03T21:32:34.599Z trigger T23 arrived while busy
+2026-09-03T21:34:19.789Z trigger T24 arrived while busy
+2026-09-03T21:34:20.186Z turn 23 exit 0
+2026-09-03T21:34:24.800Z seat turn 24 pausing
+2026-09-03T21:34:29.815Z trigger T24 arrived while busy
+2026-09-03T21:36:22.885Z turn 24 exit 0
+2026-09-03T21:36:24.992Z seat turn 25 pausing
+2026-09-03T21:36:30.010Z trigger T25 arrived while busy
+2026-09-03T21:38:37.813Z turn 25 exit 0
+2026-09-03T21:38:40.251Z seat turn 26 pausing
+2026-09-03T21:38:45.252Z trigger T26 arrived while busy
+2026-09-03T21:40:02.332Z turn 26 exit 0
+2026-09-03T21:40:08.983Z seat turn 27 pausing
+2026-09-03T21:40:15.393Z trigger T27 arrived while busy
+2026-09-03T21:41:00.604Z turn 27 exit 0
+2026-09-03T21:51:22.933Z stream error: terminated
+2026-09-03T21:51:23.939Z reconnecting; will catch up from the live turn
+2026-09-03T21:51:23.957Z stream error: fetch failed
+2026-09-03T21:51:24.965Z reconnecting; will catch up from the live turn
+2026-09-03T21:51:24.975Z stream error: fetch failed
+2026-09-03T21:51:25.976Z reconnecting; will catch up from the live turn
+2026-09-03T21:51:26.037Z stream error: fetch failed
+2026-09-03T21:51:27.043Z reconnecting; will catch up from the live turn
+2026-09-03T21:51:27.047Z stream error: fetch failed
+2026-09-03T21:51:28.057Z reconnecting; will catch up from the live turn
+2026-09-03T21:51:28.062Z stream error: fetch failed
+2026-09-03T21:51:29.072Z reconnecting; will catch up from the live turn
+2026-09-03T21:51:29.081Z stream error: fetch failed
+2026-09-03T21:51:30.088Z reconnecting; will catch up from the live turn
+2026-09-03T21:51:30.100Z stream error: fetch failed
+2026-09-03T21:51:31.115Z reconnecting; will catch up from the live turn
+2026-09-03T21:51:31.133Z stream error: fetch failed
+2026-09-03T21:51:32.143Z reconnecting; will catch up from the live turn
+2026-09-03T21:51:32.148Z stream error: fetch failed
+2026-09-03T21:51:33.153Z reconnecting; will catch up from the live turn
+2026-09-03T21:51:33.162Z stream error: fetch failed
+2026-09-03T21:51:34.163Z reconnecting; will catch up from the live turn
+2026-09-03T21:51:34.170Z stream error: fetch failed
+2026-09-03T21:51:35.177Z reconnecting; will catch up from the live turn
+2026-09-03T21:51:35.190Z stream error: fetch failed
+2026-09-03T21:51:36.204Z reconnecting; will catch up from the live turn
+2026-09-03T21:51:36.213Z stream error: fetch failed
+2026-09-03T21:51:37.217Z reconnecting; will catch up from the live turn
+2026-09-03T21:51:37.221Z stream error: fetch failed
+2026-09-03T21:51:38.227Z reconnecting; will catch up from the live turn
+2026-09-03T21:51:38.232Z stream error: fetch failed
+2026-09-03T21:51:39.237Z reconnecting; will catch up from the live turn
+2026-09-03T21:51:39.244Z stream error: fetch failed
+2026-09-03T21:51:40.259Z reconnecting; will catch up from the live turn
+2026-09-03T21:51:40.317Z stream connected
+2026-09-03T22:08:31.770Z seat turn 28 pausing
+2026-09-03T22:08:36.775Z trigger T28 arrived while busy
+2026-09-03T22:10:00.650Z turn 28 exit 0
+2026-09-03T22:10:51.977Z seat turn 29 pausing
+2026-09-03T22:10:56.993Z trigger T29 arrived while busy
+2026-09-03T22:11:38.740Z turn 29 exit 0
+2026-09-03T22:12:32.174Z seat turn 30 pausing
+2026-09-03T22:12:37.173Z trigger T30 arrived while busy
+2026-09-03T22:14:08.450Z turn 30 exit 0
+2026-09-03T22:15:12.398Z seat turn 31 pausing
+2026-09-03T22:15:17.401Z trigger T31 arrived while busy
+2026-09-03T22:17:02.568Z trigger T32 arrived while busy
+2026-09-03T22:17:15.861Z turn 31 exit 0
+2026-09-03T22:17:17.597Z seat turn 32 pausing
+2026-09-03T22:17:27.605Z trigger T32 arrived while busy
+2026-09-03T22:19:27.828Z trigger T33 arrived while busy
+2026-09-03T22:19:45.505Z turn 32 exit 0
+2026-09-03T22:19:47.903Z seat turn 33 pausing
+2026-09-03T22:19:52.885Z trigger T33 arrived while busy
+2026-09-03T22:20:49.470Z turn 33 exit 0
+2026-09-03T22:21:33.026Z seat turn 34 pausing
+2026-09-03T22:21:38.034Z trigger T34 arrived while busy
+2026-09-03T22:22:30.719Z turn 34 exit 0
+2026-09-03T22:23:38.239Z seat turn 35 pausing
+2026-09-03T22:23:48.202Z trigger T35 arrived while busy
+2026-09-03T22:25:13.007Z turn 35 exit 0
+2026-09-03T22:25:13.337Z seat turn 36 pausing
+2026-09-03T22:25:18.349Z trigger T36 arrived while busy
+2026-09-03T22:25:33.004Z turn 36 exit 0
+2026-09-03T22:27:38.545Z seat turn 37 pausing
+2026-09-03T22:27:43.557Z trigger T37 arrived while busy
+2026-09-03T22:29:22.372Z turn 37 exit 0
+2026-09-03T22:30:23.800Z seat turn 38 pausing
+2026-09-03T22:30:28.800Z trigger T38 arrived while busy
+2026-09-03T22:32:23.962Z trigger T39 arrived while busy
+2026-09-03T22:32:24.469Z turn 38 exit 0
+2026-09-03T22:32:28.968Z seat turn 39 pausing
+2026-09-03T22:32:33.974Z trigger T39 arrived while busy
+2026-09-03T22:33:34.044Z loop stopped
