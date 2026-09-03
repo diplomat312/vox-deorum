@@ -202,6 +202,13 @@ Shift ~02:07-02:10, pre-restart baseline snapshot (for before/after):
 Shift ~02:06-02:09 (game still wedged at T207, services untouched):
 - Invite-decline path had zero coverage; added 3 offline asserts
 - (declined status, hidden from visible groups, declined seat cannot
-- send). Registry-only test change: no model-visible impact.
 - send). Suite 36/36 green (27 channels + 9 routing). Registry-only
 - test change: no model-visible impact.
+-
+Shift ~02:08-02:11, watcher budget extended 100 -> 160 attempts:
+- Old watcher (PID 20152, 14 attempts all fail-closed) stopped in a wait
+- window with no turn in flight (only a conhost child); new watcher
+- (PID 19452) started on the 160 budget (~12.5h, covers past midday).
+- First new attempt failed closed in the normal ~40s shape; session
+- re-exported at 110 msgs. Fail-closed holds across the watcher restart.
+- Game services untouched throughout (watcher is file-polling only).

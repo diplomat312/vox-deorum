@@ -42,7 +42,7 @@ Known quirks:
 - holds opencode plus MCP children); retry in the ~3min quiet gap between
 - attempts. Contention, not breakage: suite green off-window (33/33).
 
-Watcher: node watch-207.mjs retries turn 207 up to 100 attempts, 4min apart (about 8h coverage, full overnight), stops on first banked commit. Create runs-siam/STOP to stop it early. The watcher is our own file-polling loop — restarting it never touches game services.
+Watcher: node watch-207.mjs retries turn 207 up to 160 attempts, 4min apart (about 12.5h coverage, past midday), stops on first banked commit. Create runs-siam/STOP to stop it early. The watcher is our own file-polling loop — restarting it never touches game services. (Budget extended 100 -> 160 at ~02:09 after 14 fail-closed attempts; old PID out, new watcher attempt counter fresh, no turn in flight during the swap.)
 
 Recovery — wedged game lock (get-players hangs, cheap calls answer, Civ V
 alive and accruing CPU, dashboard shows the turn not advancing):
