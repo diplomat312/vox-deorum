@@ -389,3 +389,8 @@ Shift ~03:40-04:00 (game still wedged at T207, services untouched):
 - - the inventory in CACHE-COMPARISON.md. No code touched.
 - - Also verified send-guard.json absent (no post-guard sends pending) and
 - - civ-state-siam.json steady (messageCount 110, lastSeenTurn 180).
+- - Follow-up re-verify in the next quiet gap (covers the docs-only
+- - commit too): prefix stable (41baad69/d0653cd0/47c9fb62), suite 49/49,
+- - session re-exported at 110. Offline tracks now exhausted; every open
+- - item (T207 bank, sorted-list render, Portugal refresh, group lifecycle
+- - live paths, phase-4 runs) needs the user-attended service restart.
