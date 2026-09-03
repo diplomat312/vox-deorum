@@ -1,15 +1,15 @@
 {
-  "committedAt": "2026-09-03T04:56:30.651Z",
+  "committedAt": "2026-09-03T04:57:34.326Z",
   "playerID": 1,
   "actions": [
     {
       "params": {
         "economic": [
-          "use free 4th route for gold, finish Caravan/Walls/Lighthouse"
+          "finish Lighthouse/Forge/Markets, keep +5gpt"
         ],
-        "grandStrategy": "Metal Casting into Physics for Trebuchets, open Authority for war",
+        "grandStrategy": "Metal Casting into Physics for Trebuchets, Authority for war",
         "military": [
-          "mass Catapult+CompBows at Lampang 240, hold Si Satchanalai, avoid Braga until Trebs"
+          "guard Great Wall build in Si Satchanalai, hold Lampang siege stack 249, clear Sukhothai barb"
         ]
       },
       "type": "strategy"
@@ -35,5 +35,5 @@
       "type": "posture"
     }
   ],
-  "rationale": "Up 656-503 but trail mil 169-182, weariness 31%. Physics for Trebuchets vs Braga/Lisbon walls, Authority opens war branch after finishing Progress."
+  "rationale": "Parity 182-184, up 659-503, +5gpt. Physics for Trebs, Authority for war, protect Great Wall and siege stack."
 }

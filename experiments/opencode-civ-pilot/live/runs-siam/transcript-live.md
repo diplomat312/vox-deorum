@@ -268,3 +268,125 @@ You may inspect anything else you need (inspect). When finished, commit your act
     "out": "{\n \"result\": {\n  \"content\": [\n   {\n    \"type\": \"text\",\n    \"text\": \"{\\n  \\\"Success\\\": true\\n}\"\n   }\n  ],\n  \"structuredContent\": {\n   \"Success\": true\n  }\n },\n \"jsonrpc\": \"2.0\",\n \"id\": 1788411395266\n}\n"
   }
 ]
+
+
+## Siam live turn 121 (session ses_f9a74a908ffeMXPkF3Y5Bh37Ba)
+
+### Observation sent
+
+TURN 121 (live game live-duel)
+
+You are Ramkhamhaeng, leader of Siam (seat 1). Portugal (Maria I, seat 0) is played by another mind.
+
+Current:
+* Treasury: 58 (+5/turn). Happiness: Happy (100%). Research: Metal Casting (Estimated in 5 turns). Research must name ONE exact technology from: Philosophy, Drama and Poetry, Physics, Steel. Next policy in 93 turns ({"Progress":["Progress","Organization","Liberty","Expertise","Equality","Fraternity"]}). Policy must name ONE exact entry from: Statecraft (New Branch); Fealty (New Branch); Artistry (New Branch); Authority (New Branch); Tradition (New Branch).
+* Cities (4): population 23, territory 44, military strength 182, units 13 (supply 13), score 659.
+- Sukhothai p6 -> Arena (4t left)
+- Si Satchanalai p8 -> Great Wall (17t left)
+- Muang Saluang p5 -> Lighthouse (1t left)
+- Lampang p5 -> Forge (5t left)
+* Zones:
+- Land @Sukhothai: Friendly (F209) — Siam 1xHorseman 2xSpearman 1xScout 1xComposite Bowman, Barbarians 1xSpearman
+- Land @M'banza-Kongo: Even (F28/E21/N39) — Siam 1xArcher, Barbarians 1xSpearman, City-State M'banza-Kongo 1xSpearman 1xGalley
+- Land @Hanoi: Friendly (F44/N27) — Barbarians 1xComposite Bowman, City-State Hanoi 1xSpearman 1xGalley
+- Land @Ragusa: Enemy (F29/E51/N30) — City-State Ragusa 1xGalley, Barbarians 1xArcher
+- Land @Si Satchanalai: Friendly (F191/E41/N5) — Siam 1xComposite Bowman
+- Land @Muang Saluang: Friendly (F150) — Siam 1xSpearman
+- Land @Lampang: Friendly (F249/E13) — Siam 1xCatapult 2xSpearman 1xComposite Bowman
+- Sea @Muang Saluang: Friendly (F127) — City-State Hanoi 1xGalley
+- Sea @Ragusa: Enemy (E67/N70) — Siam 1xHorseman, City-State Ragusa 1xGalley, Portugal 1xGalley
+* Relationships: Portugal: Distance: Neighbors; War (Our Score: 2%; Our War Weariness: 32%); Denounced Them.
+* Portugal visible: score 503, treasury ~121, research Philosophy (Estimated in 1 turns), 4 cities, military 184.
+
+Since your previous opportunity to act:
+- Nothing new recorded.
+
+What happened to your last committed actions:
+- strategy applied.
+- research applied.
+- policy applied.
+- posture applied.
+
+Outstanding requests/deals/messages: none tracked yet (phase 1 strategic test).
+
+You may inspect anything else you need (inspect). When finished, commit your actions (commit_turn) or pass. Keep the rationale short.
+
+### Tool calls
+
+[
+  {
+    "tool": "vox-civ_commit_turn",
+    "input": null
+  }
+]
+
+### Commit
+
+{
+  "committedAt": "2026-09-03T04:57:34.326Z",
+  "playerID": 1,
+  "actions": [
+    {
+      "params": {
+        "economic": [
+          "finish Lighthouse/Forge/Markets, keep +5gpt"
+        ],
+        "grandStrategy": "Metal Casting into Physics for Trebuchets, Authority for war",
+        "military": [
+          "guard Great Wall build in Si Satchanalai, hold Lampang siege stack 249, clear Sukhothai barb"
+        ]
+      },
+      "type": "strategy"
+    },
+    {
+      "params": {
+        "technology": "Physics"
+      },
+      "type": "research"
+    },
+    {
+      "params": {
+        "policy": "Authority"
+      },
+      "type": "policy"
+    },
+    {
+      "params": {
+        "private": -20,
+        "public": -20,
+        "targetID": "Portugal"
+      },
+      "type": "posture"
+    }
+  ],
+  "rationale": "Parity 182-184, up 659-503, +5gpt. Physics for Trebs, Authority for war, protect Great Wall and siege stack."
+}
+
+### Applied to live game
+
+[
+  {
+    "type": "strategy",
+    "tool": "set-strategy",
+    "ok": true,
+    "out": "{\n \"result\": {\n  \"content\": [\n   {\n    \"type\": \"text\",\n    \"text\": \"{\\n  \\\"Success\\\": true\\n}\"\n   }\n  ],\n  \"structuredContent\": {\n   \"Success\": true\n  }\n },\n \"jsonrpc\": \"2.0\",\n \"id\": 1788411458282\n}\n"
+  },
+  {
+    "type": "research",
+    "tool": "set-research",
+    "ok": true,
+    "out": "{\n \"result\": {\n  \"content\": [\n   {\n    \"type\": \"text\",\n    \"text\": \"{\\n  \\\"Success\\\": true\\n}\"\n   }\n  ],\n  \"structuredContent\": {\n   \"Success\": true\n  }\n },\n \"jsonrpc\": \"2.0\",\n \"id\": 1788411458885\n}\n"
+  },
+  {
+    "type": "policy",
+    "tool": "set-policy",
+    "ok": true,
+    "out": "{\n \"result\": {\n  \"content\": [\n   {\n    \"type\": \"text\",\n    \"text\": \"{\\n  \\\"Success\\\": true\\n}\"\n   }\n  ],\n  \"structuredContent\": {\n   \"Success\": true\n  }\n },\n \"jsonrpc\": \"2.0\",\n \"id\": 1788411459035\n}\n"
+  },
+  {
+    "type": "posture",
+    "tool": "set-relationship",
+    "ok": true,
+    "out": "{\n \"result\": {\n  \"content\": [\n   {\n    \"type\": \"text\",\n    \"text\": \"{\\n  \\\"Success\\\": true\\n}\"\n   }\n  ],\n  \"structuredContent\": {\n   \"Success\": true\n  }\n },\n \"jsonrpc\": \"2.0\",\n \"id\": 1788411461169\n}\n"
+  }
+]
