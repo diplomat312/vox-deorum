@@ -346,7 +346,7 @@ ${appliedLines.length ? appliedLines.join("\n") : "- First live turn; nothing co
 Politics since your last opportunity (war/peace, city-states, deals):
 ${politicsLines.length ? politicsLines.join("\n") : "- Nothing new recorded."}
 
-Messages for you (reply with communicate if warranted, at most one message per turn):
+Messages for you (reply with communicate if warranted, up to 8 social operations per turn in one communicate call):
 ${messageLines.length ? messageLines.join("\n") : "- None."}
 
 Groups for you (up to 8 social operations per turn; send all of them in one communicate operations array 'group:<id>'):
