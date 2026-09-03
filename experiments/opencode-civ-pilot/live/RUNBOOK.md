@@ -18,6 +18,7 @@ Model-visible prefix: agent/civ.md plus opencode.json plus vox-civ tool schemas.
 
 Channels: registry live/channels.json. Create with channels.mjs createGroup, invite with inviteToGroup. 2p groups ride world broadcast as tagged lines. Send via communicate channel group:ID. Backpressure: one send per turn TOTAL.
 Duel Hall group c53f2974 (Portugal plus Siam, opened T207).
+Close finished channels with channels.mjs archiveGroup (active members only; archived groups vanish from inbox and reject later sends with 'unknown group').
 
 Inspect walkers (suffix-only, no prefix cost): research/policies accept a name
 or 'path:<name>' (full prereq chain with costs and unlocks); military accepts
@@ -36,6 +37,11 @@ Known quirks:
 - apply_patch needs bare marker lines.
 - Session leanness is verified, not assumed: opencode export shows only
 - vox-civ_* tool calls and zero plugin/MCP/skill leakage into context.
+- Offline spawns (check-prefix.mjs, test-channels.mjs routing section) can
+- fail with spawn UNKNOWN while a watcher attempt is in flight (run-live-turn
+- holds opencode plus MCP children); retry in the ~3min quiet gap between
+- attempts. Contention, not breakage: 26/26 green off-window.
+- attempts. Contention, not breakage: suite green off-window (30/30).
 
 Watcher: node watch-207.mjs retries turn 207 up to 100 attempts, 4min apart (about 8h coverage, full overnight), stops on first banked commit. Create runs-siam/STOP to stop it early. The watcher is our own file-polling loop — restarting it never touches game services.
 

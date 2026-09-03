@@ -102,3 +102,18 @@ equivalent numbers exist in-tree, so after the lock clears, run the same
 count of cognition opportunities through the current Unified Mind path on
 Muse Spark 1.3 and capture per-request uncached / cache-read / output /
 latency / tool calls the same way before comparing.
+
+Shift ~01:25-01:35 (game still wedged at T207, services untouched):
+- Watcher attempts 5-6 failed closed (~40s each, exit=1 commit=false).
+- Siam session re-exported: still exactly 110 msgs, 61 inspect / 30 commit /
+- 3 communicate. Fail-closed holds across ~17 failed T207 attempts.
+- Prefix guard green (fingerprint unchanged); channels suite 26/26 green
+- off-window before the change, 30/30 after (21 channels + 9 routing).
+- Operational lesson: spawning node children (check-prefix, test-channels
+- routing) can fail with spawn UNKNOWN while a watcher attempt is in
+- flight; bare-node and execPath spawns succeed seconds later. Rule going
+- forward: run offline spawns in the ~3min quiet gaps. Noted in RUNBOOK.
+- Social lifecycle: added channels.mjs archiveGroup (active members only;
+- archived groups leave inbox/visible sets and reject later sends with
+- 'unknown group'; world-broadcast history is preserved) plus 5 offline
+- asserts. No model-visible change: prefix untouched, result-content only.

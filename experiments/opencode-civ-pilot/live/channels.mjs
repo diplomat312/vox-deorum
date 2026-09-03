@@ -136,6 +136,23 @@ export function visibleGroups(seat) {
   );
 }
 
+// Close a channel once its purpose is served (post-peace war council, dead
+// duel hall, etc). Archived groups vanish from visibleGroups and groupInbox;
+// getGroup/markMemberActive treat them as unknown, so a later send to the
+// same id fails closed with 'unknown group' instead of resurrecting it.
+// Only an active member may archive. History stays in the world broadcast.
+export function archiveGroup(id, by) {
+  const s = loadStore();
+  const g = s.groups.find((g) => g.id === id && !g.archived);
+  if (!g) throw new Error(`unknown group '${id}'`);
+  if (!g.members.some((m) => m.seat === by && m.status === "active")) {
+    throw new Error("only active members can archive");
+  }
+  g.archived = true;
+  saveStore(s);
+  return g;
+}
+
 export function memberStatus(id, seat) {
   const g = loadStore().groups.find((g) => g.id === id);
   return g?.members.find((m) => m.seat === seat)?.status ?? null;

@@ -51,6 +51,17 @@ ok(threw, 'non-member cannot activate');
 let threw2 = false;
 try { ch.markMemberActive('deadbeef', 1); } catch (e) { threw2 = true; }
 ok(threw2, 'unknown group rejects');
+const arch = ch.createGroup({ title: 'Ephemeral', creator: 0, members: [0, 1] });
+let threw3 = false;
+try { ch.archiveGroup(arch.id, 5); } catch (e) { threw3 = true; }
+ok(threw3, 'non-member cannot archive');
+ch.archiveGroup(arch.id, 0);
+ok(ch.visibleGroups(1).some((g) => g.id === arch.id) === false, 'archived group hidden');
+const warch = [{ ID: 30, Turn: 190, SpeakerID: 0, Content: ch.tagMessage(arch.id, arch.title, 'after close') }];
+ok(ch.groupInbox(1, warch, 189).lines.join(' ').includes('after close') === false, 'archived messages hidden');
+let threw4 = false;
+try { ch.markMemberActive(arch.id, 1); } catch (e) { threw4 = true; }
+ok(threw4, 'archived group rejects sends');
 console.log('All ' + pass + ' channel asserts passed.');
 
 // Pilot server routing checks (offline-safe: every case below is rejected
