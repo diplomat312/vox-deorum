@@ -1,15 +1,15 @@
 {
-  "committedAt": "2026-09-03T05:13:15.987Z",
+  "committedAt": "2026-09-03T06:30:14.649Z",
   "playerID": 1,
   "actions": [
     {
       "params": {
         "economic": [
-          "escort trade routes vs plunder, finish Machu Picchu/Liburna"
+          "finish Bath/Granary/Arena/Emissary, keep +76gpt"
         ],
-        "grandStrategy": "Chemistry into Philosophy, Trade Confederacy",
+        "grandStrategy": "Chemistry into Philosophy, Foreign Service for CS",
         "military": [
-          "withdraw Crossbowman from Lisbon, clear Muang 2xCrossbow+Pike siege, guard Phitsanulok"
+          "hold Trebs/Xbows, clear Mbanza/Hanoi crossbows, guard 7 cities"
         ]
       },
       "type": "strategy"
@@ -22,18 +22,16 @@
     },
     {
       "params": {
-        "policy": "Trade Confederacy"
+        "policy": "Foreign Service"
       },
       "type": "policy"
     },
     {
       "params": {
-        "private": 0,
-        "public": 10,
-        "targetID": "Portugal"
+        "proposalId": 9
       },
-      "type": "posture"
+      "type": "deal_accept"
     }
   ],
-  "rationale": "Lead 1087-751, 342-225, peace holds. Philosophy after Chemistry, Trade Confederacy, pull back Lisbon scout and escort routes."
+  "rationale": "Lead 1258-834, 443-278. Retry DoF id9, Philosophy after Chemistry, Foreign Service continues Statecraft."
 }

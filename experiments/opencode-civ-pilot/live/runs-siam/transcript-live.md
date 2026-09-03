@@ -2090,3 +2090,233 @@ You may inspect anything else you need (inspect). When finished, commit your act
     "out": "{\n \"result\": {\n  \"content\": [\n   {\n    \"type\": \"text\",\n    \"text\": \"{\\n  \\\"Success\\\": true\\n}\"\n   }\n  ],\n  \"structuredContent\": {\n   \"Success\": true\n  }\n },\n \"jsonrpc\": \"2.0\",\n \"id\": 1788412408598\n}\n"
   }
 ]
+
+
+## Siam live turn 154 (session ses_f9a74a908ffeMXPkF3Y5Bh37Ba)
+
+### Observation sent
+
+TURN 154 (live game live-duel)
+
+You are Ramkhamhaeng, leader of Siam (seat 1). Portugal (Maria I, seat 0) is played by another mind.
+
+Current:
+* Treasury: undefined (+undefined/turn). Happiness: undefined (undefined%). Research: undefined. Research must name ONE exact technology from: unknown, inspect research. Next policy in undefined turns (undefined). Policy must name ONE exact entry from: unknown, inspect policies.
+* Cities (undefined): population undefined, territory undefined, military strength undefined, units ? (supply ?), score undefined.
+- city builds unknown.
+* Zones:
+- zones unavailable: terminated
+* Relationships: none recorded.
+* Portugal visible: score undefined, treasury ~undefined, research undefined, undefined cities, military undefined.
+
+Since your previous opportunity to act:
+- Nothing new recorded.
+
+What happened to your last committed actions:
+- strategy applied.
+- research applied.
+- policy applied.
+- posture applied.
+
+Politics since your last opportunity (war/peace, city-states, deals):
+- Nothing new recorded.
+
+Messages for you (reply with communicate if warranted, at most one message per turn):
+- None.
+
+Deal thread (deal_propose sends; deal_accept {proposalId} enacts; deal_reject {proposalId} declines; inspect(deals) shows what is tradable):
+- T34 Siam (you) deal-proposal (id 5): Let us formalize what our shared words already promise — a Declaration of Friendship between Siam and Portugal, for the peace and prosperity of both our peoples.
+- T152 Portugal (Maria I) deal-proposal (id 9): Maria proposes a formal Declaration of Friendship between Portugal and Siam.
+
+You may inspect anything else you need (inspect). When finished, commit your actions (commit_turn) or pass. Keep the rationale short.
+
+### Tool calls
+
+[
+  {
+    "tool": "vox-civ_commit_turn",
+    "input": null
+  }
+]
+
+### Commit
+
+{
+  "committedAt": "2026-09-03T05:42:25.485Z",
+  "playerID": 1,
+  "actions": [
+    {
+      "params": {
+        "proposalId": 9
+      },
+      "type": "deal_accept"
+    }
+  ],
+  "rationale": "Mutual DoF: accept Portugal id9, matching our id5. Peace and trade continue."
+}
+
+### Applied to live game
+
+[
+  {
+    "type": "deal_accept",
+    "tool": "enact-agent-deal",
+    "ok": false,
+    "out": "{\n \"result\": {\n  \"content\": [\n   {\n    \"type\": \"text\",\n    \"text\": \"Error executing tool enact-agent-deal: Task timed out after 1000ms (queue has 1 running, 0 waiting)\"\n   }\n  ],\n  \"isError\": true\n },\n \"jsonrpc\": \"2.0\",\n \"id\": 1788414150109\n}\n"
+  }
+]
+
+
+## Siam live turn 156 (session ses_f9a74a908ffeMXPkF3Y5Bh37Ba)
+
+### Observation sent
+
+TURN 156 (live game live-duel)
+
+You are Ramkhamhaeng, leader of Siam (seat 1). Portugal (Maria I, seat 0) is played by another mind.
+
+Current:
+* Treasury: 246 (+76/turn). Happiness: Happy (79%). Research: Chemistry (Estimated in 2 turns). Research must name ONE exact technology from: Philosophy, Drama and Poetry. Next policy in 27 turns ({"Progress":["Progress","Organization","Liberty","Expertise","Equality","Fraternity"],"Statecraft":["Statecraft","Trade Confederacy"]}). Policy must name ONE exact entry from: Foreign Service (Continuing Statecraft Branch) (2/6); Fealty (New Branch); Artistry (New Branch); Authority (New Branch); Tradition (New Branch).
+* Cities (7): population 61, territory 87, military strength 443, units 24 (supply 25), score 1258.
+- Sukhothai p13 -> Notre Dame (11t left)
+- Si Satchanalai p11 -> Emissary (4t left)
+- Muang Saluang p10 -> Bath (1t left)
+- Lampang p10 -> Machu Picchu (6t left)
+- Phitsanulok p7 -> Council (2t left)
+- Kamphaeng Phet p5 -> Granary (1t left)
+- Nakhon Chum p5 -> Arena (2t left)
+* Zones:
+- Land @Lisbon: Friendly (F339/N32) — Portugal 1xComposite Bowman
+- Land @Sukhothai: Friendly (F579) — Siam 1xCrossbowman 1xPikeman 1xSpearman 1xHeavy Skirmisher 1xSofa
+- Land @M'banza-Kongo: Friendly (F207/N21) — Barbarians 2xCrossbowman, City-State M'banza-Kongo 1xTrireme, Portugal 1xHeavy Skirmisher
+- Land @Hanoi: Friendly (F162/N29) — Barbarians 1xCrossbowman, City-State Hanoi 1xTrireme 1xPikeman
+- Land @Kyzyl: Friendly (F215/N24) — City-State Kyzyl 1xPikeman
+- Land @Ragusa: Friendly (F460/N25) — City-State Ragusa 1xPikeman, Barbarians 1xCrossbowman 1xPikeman, Siam 1xLongswordsman 1xPikeman
+- Land @Lhasa: Friendly (F164/N21) — Barbarians 1xPikeman
+- Land @Bucharest: Friendly (F71/N25) — Barbarians 2xCrossbowman 1xPikeman 1xSpearman 1xComposite Bowman, City-State Bucharest 1xTrireme
+- Land @Huari: Friendly (F62/N29) — City-State Huari 1xTrireme 1xPikeman, Barbarians 1xPikeman
+- Land @Braga: Friendly (F311/N20) — Portugal 1xComposite Bowman
+- Land @Si Satchanalai: Friendly (F627) — Siam 2xTrebuchet 1xCrossbowman 1xScout
+- Land @Muang Saluang: Friendly (F370) — Siam 1xCrossbowman 1xLiburna
+- Land @Lampang: Friendly (F362) — Siam 1xTrebuchet, Barbarians 1xCrossbowman
+- Land @Phitsanulok: Friendly (F350) — Siam 1xPikeman 1xGalley, Barbarians 1xCrossbowman 1xPikeman
+- Land @Kamphaeng Phet: Friendly (F452) — Siam 1xCrossbowman 1xPikeman 1xHorseman
+- Land @Nakhon Chum: Friendly (F320) — Siam 1xHorseman
+- Sea @Huari: Friendly (F143/N29) — City-State Huari 1xTrireme, Portugal 1xGalley
+- Sea @Phitsanulok: Friendly (F256) — Siam 1xGalley
+- Sea @Muang Saluang: Friendly (F311) — City-State Hanoi 1xTrireme 1xChariot Archer
+- Sea @Kamphaeng Phet: Friendly (F328) — Siam 1xLiburna, Portugal 1xNau
+- Sea @Lhasa: Friendly (F83/N21) — Siam 1xScout
+- Sea @Ragusa: Friendly (F275/N25) — City-State Ragusa 2xTrireme
+- Sea @Bucharest: Friendly (F83/N25) — City-State Bucharest 1xTrireme
+- Sea: Friendly (F22) — Siam 1xGalley, Barbarians 1xCrossbowman 1xHand-Axe
+* Relationships: Portugal: Distance: Neighbors.
+* Portugal visible: score 834, treasury ~152, research undefined, 5 cities, military 278.
+
+Since your previous opportunity to act:
+- Nothing new recorded.
+
+What happened to your last committed actions:
+- deal_accept NOT applied: {
+ "result": {
+  "content": [
+   {
+    "type": "text",
+    "text": "Error executing tool enact-agent-deal: Task timed out after 1000ms (queue has 1 running, 0 waiting)"
+   }
+  ],
+  "isError": true
+ },
+
+Politics since your last opportunity (war/peace, city-states, deals):
+- T158: Trade route completed: **Siam** → **Siam**
+- T158: **Barbarians** converted a unit from **Barbarians**
+- T160: **Portugal** converted a unit from **Portugal**
+- T160: **Siam** became friend of **Kyzyl** (at 57 influence)
+
+Messages for you (reply with communicate if warranted, at most one message per turn):
+- None.
+
+Deal thread (deal_propose sends; deal_accept {proposalId} enacts; deal_reject {proposalId} declines; inspect(deals) shows what is tradable):
+- T34 Siam (you) deal-proposal (id 5): Let us formalize what our shared words already promise — a Declaration of Friendship between Siam and Portugal, for the peace and prosperity of both our peoples.
+- T152 Portugal (Maria I) deal-proposal (id 9): Maria proposes a formal Declaration of Friendship between Portugal and Siam.
+
+You may inspect anything else you need (inspect). When finished, commit your actions (commit_turn) or pass. Keep the rationale short.
+
+### Tool calls
+
+[
+  {
+    "tool": "vox-civ_commit_turn",
+    "input": null
+  }
+]
+
+### Commit
+
+{
+  "committedAt": "2026-09-03T06:30:14.649Z",
+  "playerID": 1,
+  "actions": [
+    {
+      "params": {
+        "economic": [
+          "finish Bath/Granary/Arena/Emissary, keep +76gpt"
+        ],
+        "grandStrategy": "Chemistry into Philosophy, Foreign Service for CS",
+        "military": [
+          "hold Trebs/Xbows, clear Mbanza/Hanoi crossbows, guard 7 cities"
+        ]
+      },
+      "type": "strategy"
+    },
+    {
+      "params": {
+        "technology": "Philosophy"
+      },
+      "type": "research"
+    },
+    {
+      "params": {
+        "policy": "Foreign Service"
+      },
+      "type": "policy"
+    },
+    {
+      "params": {
+        "proposalId": 9
+      },
+      "type": "deal_accept"
+    }
+  ],
+  "rationale": "Lead 1258-834, 443-278. Retry DoF id9, Philosophy after Chemistry, Foreign Service continues Statecraft."
+}
+
+### Applied to live game
+
+[
+  {
+    "type": "strategy",
+    "tool": "set-strategy",
+    "ok": true,
+    "out": "{\n \"result\": {\n  \"content\": [\n   {\n    \"type\": \"text\",\n    \"text\": \"{\\n  \\\"Success\\\": true\\n}\"\n   }\n  ],\n  \"structuredContent\": {\n   \"Success\": true\n  }\n },\n \"jsonrpc\": \"2.0\",\n \"id\": 1788417017507\n}\n"
+  },
+  {
+    "type": "research",
+    "tool": "set-research",
+    "ok": true,
+    "out": "{\n \"result\": {\n  \"content\": [\n   {\n    \"type\": \"text\",\n    \"text\": \"{\\n  \\\"Success\\\": true\\n}\"\n   }\n  ],\n  \"structuredContent\": {\n   \"Success\": true\n  }\n },\n \"jsonrpc\": \"2.0\",\n \"id\": 1788417017809\n}\n"
+  },
+  {
+    "type": "policy",
+    "tool": "set-policy",
+    "ok": true,
+    "out": "{\n \"result\": {\n  \"content\": [\n   {\n    \"type\": \"text\",\n    \"text\": \"{\\n  \\\"Success\\\": true\\n}\"\n   }\n  ],\n  \"structuredContent\": {\n   \"Success\": true\n  }\n },\n \"jsonrpc\": \"2.0\",\n \"id\": 1788417018023\n}\n"
+  },
+  {
+    "type": "deal_accept",
+    "tool": "enact-agent-deal",
+    "ok": true,
+    "out": "ole\": \"strategist\",\n    \"Player2Role\": \"strategist\",\n    \"SpeakerID\": 1,\n    \"MessageType\": \"deal-enacted\",\n    \"Content\": \"The deal was enacted.\",\n    \"Payload\": {\n     \"ProposalMessageID\": 9\n    },\n    \"Turn\": 161,\n    \"CreatedAt\": 1788417024\n   }\n  }\n },\n \"jsonrpc\": \"2.0\",\n \"id\": 1788417023596\n}\n"
+  }
+]
