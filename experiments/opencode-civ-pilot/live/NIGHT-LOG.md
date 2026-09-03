@@ -220,6 +220,15 @@ Shift ~02:10-02:12 (game still wedged at T207, services untouched):
 - inbox, and the new membership line are identical for both seats by
 - construction. No divergence found; no changes needed.
 -
+Shift ~02:13-02:16 (game still wedged at T207, services untouched):
+- Envoy source read (live-envoy.ts, envoy.ts): Unified Mind envoys persist
+- thread context AND use cache breakpoints (max 4, ephemeral), with briefer
+- sub-agent calls per run. Comparison doc sharpened honestly: the pilot's
+- edge is architectural (ONE prefix for all cognition vs N
+- breakpoint-managed prefixes + cross-agent re-grounding), not effort.
+- Refined hypothesis recorded (fewer prefixes, no re-grounding,
+- strategist-is-diplomat continuity).
+-
 Shift ~02:12-02:15 (game still wedged at T207, services untouched):
 - Phase-4 structural framing added to CACHE-COMPARISON.md: pilot side is
 - 1 session / 1 prefix / ~4.5 requests per turn all sharing it, vs

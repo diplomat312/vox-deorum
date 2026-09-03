@@ -106,3 +106,20 @@ numbers exist in-tree today.
   agents — not just per-request hit ratios. The hypothesis predicts the
   pilot wins on all three by roughly the agent-fanout factor times the
   prefix size (~200k+ tokens).
+-
+## Honest nuance (envoy source read 2026-09-03)
+
+- The Unified Mind side is NOT cache-naive: envoy threads persist
+  conversation context (EnvoyThread over a durable store) and use
+  provider cache breakpoints (MAX_CACHE_BREAKPOINTS = 4, ephemeral).
+- The difference is architectural, not effort: cognition is split across
+  SEVERAL prefixes (strategist, diplomat/envoy, negotiator,
+  resolve-negotiator, spokesperson, plus briefer sub-agent calls declared
+  via modelDependencies), each rebuilt per wake (buildGameContextMessages,
+  briefing tools). The pilot keeps ALL of it — strategy, diplomacy,
+  deals, grudges — in ONE prefix.
+- Refined hypothesis: one stable prefix beats N breakpoint-managed
+  prefixes via (a) fewer total prefixes paying uncached input, (b) no
+  cross-agent re-grounding (no briefings to re-explain game state to a
+  sibling agent), (c) political continuity (the strategist IS the
+  diplomat, so no coherence loss at handoffs).
