@@ -19,6 +19,7 @@ import {
 } from "../mcp-server/node_modules/@modelcontextprotocol/sdk/dist/esm/types.js";
 import fs from "node:fs";
 import path from "node:path";
+import { getGroup, markMemberActive, tagMessage } from "./channels.mjs";
 
 const PLAYER_ID = Number(process.env.CIV_PILOT_PLAYER_ID ?? 1);
 const MCP_URL = process.env.MCP_URL || "http://127.0.0.1:4000/mcp";
@@ -286,7 +287,7 @@ function toolDefs() {
     {
       name: "communicate",
       description:
-        "Send one diplomatic message: channel 'world' broadcasts publicly, channel 'private' (default) writes a private letter to the rival civilization. At most one message per turn. Keep it short and in character.",
+        "Send one diplomatic message: channel 'world' broadcasts publicly, channel 'private' (default) writes a private letter to the rival civilization, channel 'group:<id>' writes to a group you belong to (first send accepts an invite). At most ONE message per turn total across all channels. Keep it short and in character.",
       inputSchema: {
         type: "object",
         properties: {
@@ -383,6 +384,31 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
       return { content: [{ type: "text", text: "message too long (1000 chars max); keep it short" }], isError: true };
     }
     try {
+      const ch = String(args?.channel ?? "private");
+      if (ch.startsWith("group:")) {
+        const gid = ch.slice("group:".length).trim();
+        let g = null;
+        try {
+          g = getGroup(gid);
+        } catch (e) {
+          return { content: [{ type: "text", text: `unknown group '${gid}'` }], isError: true };
+        }
+        try {
+          markMemberActive(gid, PLAYER_ID);
+          g = getGroup(gid);
+        } catch (e) {
+          return { content: [{ type: "text", text: `not a member of group '${gid}': ${e.message}` }], isError: true };
+        }
+        const tagged = tagMessage(g.id, g.title, message).slice(0, 1000);
+        try {
+          const res = liveJson(
+            await liveCall("broadcast-message", { PlayerID: PLAYER_ID, Content: tagged })
+          );
+          return { content: [{ type: "text", text: JSON.stringify({ ok: true, channel: `group:${g.id}`, id: res.ID ?? null }) }] };
+        } catch (e) {
+          return { content: [{ type: "text", text: `communicate failed: ${e.message}` }], isError: true };
+        }
+      }
       if ((args?.channel ?? "private") === "world") {
         const res = liveJson(
           await liveCall("broadcast-message", { PlayerID: PLAYER_ID, Content: message.slice(0, 1000) })

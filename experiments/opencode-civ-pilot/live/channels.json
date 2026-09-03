@@ -1,0 +1,26 @@
+{
+ "version": 1,
+ "groups": [
+  {
+   "id": "c53f2974",
+   "title": "Duel Hall",
+   "createdBy": 0,
+   "createdAt": "2026-09-03T07:05:31.196Z",
+   "archived": false,
+   "members": [
+    {
+     "seat": 0,
+     "status": "active",
+     "visibleAfter": 0,
+     "leftAfter": null
+    },
+    {
+     "seat": 1,
+     "status": "active",
+     "visibleAfter": 0,
+     "leftAfter": null
+    }
+   ]
+  }
+ ]
+}

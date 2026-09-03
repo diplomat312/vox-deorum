@@ -6,6 +6,7 @@
 //   per-turn observation through buildObservation() here.
 // Game-state authority stays in Vox; this module only reads via MCP.
 import { callLive, liveText } from "./live-mcp.mjs";
+import { groupInbox } from "./channels.mjs";
 
 // Fail fast instead of hanging a turn forever: the live Vox backend can wedge
 // (ports open, Civ rendered, but a tool call never returns — seen 2026-09-02
@@ -84,9 +85,26 @@ export async function buildObservation({
   lastSeenTurn = 0,
   lastApplied = [],
 }) {
-  const players = liveText(
-    await live("get-players", { playerIDs: [playerID, rivalID] })
-  );
+  // The players read is the only unwrapped one: everything below keys off it.
+  // The backend occasionally wedges mid-turn-computation (ports open, game
+  // healthy); retry before failing the turn outright. Failing without an
+  // observation is deliberate: an "undefined"-filled dashboard would pollute
+  // the persistent session. Retry loop only, dashboard shape unchanged.
+  let players = null;
+  let playersErr = null;
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      players = liveText(
+        await live("get-players", { playerIDs: [playerID, rivalID] })
+      );
+      playersErr = null;
+      break;
+    } catch (e) {
+      playersErr = e;
+      if (attempt < 3) await new Promise((r) => setTimeout(r, 5000));
+    }
+  }
+  if (!players) throw playersErr;
   const me = players[String(playerID)] ?? {};
   const rival = players[String(rivalID)] ?? {};
   const rel = me.Relationships ?? {};
@@ -137,8 +155,10 @@ export async function buildObservation({
     /* politics optional; dashboard still usable */
   }
   let messageLines = [];
+  let worldMessages = [];
   try {
     const gm = liveText(await live("get-global-messages", { Limit: 10 }));
+    worldMessages = gm?.messages ?? [];
     const fresh = (gm?.messages ?? []).filter(
       (m) => (m?.Turn ?? 0) > lastSeenTurn && m?.SpeakerID !== playerID
     );
@@ -196,6 +216,18 @@ export async function buildObservation({
   } catch {
     /* transcript optional; inbox + deal thread stay empty */
     var dealLines = [];
+  }
+
+  // Group channels ride the world broadcast with [#<id8> title] tags in the
+  // 2-player duel (no N-party threads in Vox yet). Per-channel inbox over the
+  // ALREADY-FETCHED world messages: no extra MCP reads. Suffix-only.
+  let groupLines = [], groupInvites = [];
+  try {
+    const gi = groupInbox(playerID, worldMessages, lastSeenTurn);
+    groupLines = gi.lines ?? [];
+    groupInvites = gi.invites ?? [];
+  } catch {
+    /* groups optional; dashboard still usable */
   }
 
   const appliedLines = (lastApplied ?? []).map((a) => {
@@ -266,6 +298,9 @@ ${politicsLines.length ? politicsLines.join("\n") : "- Nothing new recorded."}
 
 Messages for you (reply with communicate if warranted, at most one message per turn):
 ${messageLines.length ? messageLines.join("\n") : "- None."}
+
+Groups for you (at most ONE message per turn TOTAL across world/private/groups; send with communicate channel 'group:<id>'):
+${[...groupInvites, ...groupLines].length ? [...groupInvites, ...groupLines].join("\n") : "- None."}
 
 Deal thread (deal_propose sends; deal_accept {proposalId} enacts; deal_reject {proposalId} declines; inspect(deals) shows what is tradable):
 ${dealLines.length ? dealLines.join("\n") : "- No deals on the table."}
