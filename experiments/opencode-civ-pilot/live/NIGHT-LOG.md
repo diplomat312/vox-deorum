@@ -14,6 +14,6 @@ Landed tonight:
 - Policy traversal inspect policies path:X mirroring techPath. Single-result DB shape verified live. Prefix stable throughout.
 - RUNBOOK.md with seat config, turn and watcher ops, prefix rules, lock quirks.
 
-Incident: get-players game lock wedged from about 00:05 while cheap calls answer in ms. Services left untouched. Two lingering probe processes killed. watch-207.mjs retries turn 207 up to 12 times, 4min apart, stops on first banked commit.
+Incident: get-players game lock wedged from about 00:05 while cheap calls answer in ms. Services left untouched. Two lingering probe processes killed. watch-207.mjs retries turn 207 up to 40 times, 4min apart (extended from 12 for full overnight coverage), stops on first banked commit.
 
 Open: turn-207 cognition with cache numbers, Unified-Mind phase-4 comparison, Portugal seat refresh, policy-walk end to end by the model.

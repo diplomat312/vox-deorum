@@ -26,4 +26,4 @@ Known quirks:
 - PowerShell echo writes CRLF; repo files are LF. Write files via node to keep patches matching.
 - apply_patch needs bare marker lines.
 
-Watcher: node watch-207.mjs retries turn 207 up to 12 attempts, 4min apart, stops on first banked commit. Create runs-siam/STOP to stop it early.
+Watcher: node watch-207.mjs retries turn 207 up to 40 attempts, 4min apart (about 3h coverage), stops on first banked commit. Create runs-siam/STOP to stop it early.
