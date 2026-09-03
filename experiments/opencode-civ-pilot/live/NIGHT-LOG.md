@@ -117,3 +117,15 @@ Shift ~01:25-01:35 (game still wedged at T207, services untouched):
 - archived groups leave inbox/visible sets and reject later sends with
 - 'unknown group'; world-broadcast history is preserved) plus 5 offline
 - asserts. No model-visible change: prefix untouched, result-content only.
+-
+Shift ~01:50-01:55 (game still wedged at T207, services untouched):
+- Watcher attempt 10 failed closed; session re-exported at 110 msgs.
+- Dashboard: stable group-membership line in observe.mjs (visibleGroups,
+- active-only). Quiet channels no longer drop out of the mind between
+- crises; line is stable across turns while membership is unchanged, so
+- steady-state cost is ~0 fresh tokens. Suffix-only: prefix guard green,
+- node --check clean on observe.mjs and run-live-turn.mjs.
+- run-live-turn.mjs: corrected the stale wall_gap_sec comment (15-25min ->
+- ~7-8min idle TTL per session timestamps). wall_gap_sec wiring verified by
+- read: populates on the next banked turn. Live render of the membership
+- line verifies on T207 after the restart.

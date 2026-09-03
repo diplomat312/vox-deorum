@@ -217,8 +217,8 @@ if (commit && (commit.actions || commit.pass)) {
 const usage = sessionId ? exportUsageDelta(sessionId, prevCount) : null;
 const tot = { uncached: 0, read: 0, write: 0, output: 0, reasoning: 0 };
 // Wall-clock gap since the previous cognition opportunity: cache TTL expires
-// after idle minutes (T177/T180 each cost ~120k fresh after 15-25min gaps vs
-// 2.6k at T165 minutes after the prior turn). File-only telemetry, never
+// after idle minutes (T177/T180 each cost ~120k fresh after ~7-8min idle vs
+// ~2.6k steady-state; gaps of 3.4min or less hold 0.99). File-only telemetry, never
 // model-visible.
 const nowMs = Date.now();
 const wallGapSec = state.lastTurnAt ? Math.round((nowMs - state.lastTurnAt) / 1000) : null;

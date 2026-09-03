@@ -6,7 +6,7 @@
 //   per-turn observation through buildObservation() here.
 // Game-state authority stays in Vox; this module only reads via MCP.
 import { callLive, liveText } from "./live-mcp.mjs";
-import { groupInbox } from "./channels.mjs";
+import { groupInbox, visibleGroups } from "./channels.mjs";
 
 // Fail fast instead of hanging a turn forever: the live Vox backend can wedge
 // (ports open, Civ rendered, but a tool call never returns — seen 2026-09-02
@@ -241,6 +241,14 @@ export async function buildObservation({
     const gi = groupInbox(playerID, worldMessages, lastSeenTurn);
     groupLines = gi.lines ?? [];
     groupInvites = gi.invites ?? [];
+    // Stable membership memory: groups with no new messages are otherwise
+    // invisible, so a quiet channel (e.g. Duel Hall between crises) would
+    // drop out of the mind entirely. This line is stable across turns while
+    // membership is unchanged, so it costs ~0 fresh tokens steady-state.
+    const mine = visibleGroups(playerID)
+      .filter((g) => (g.members ?? []).some((m) => m.seat === playerID && m.status === "active"))
+      .map((g) => "group:" + g.id + " (" + g.title + ")");
+    groupLines.push(mine.length ? "- Member of: " + mine.join(", ") : "- Member of no groups.");
   } catch {
     /* groups optional; dashboard still usable */
   }
