@@ -73,3 +73,12 @@ alive and accruing CPU, dashboard shows the turn not advancing):
 5. After the bank: record the fresh cache numbers (expect one ~120k cold
    start after the idle plus the batched prefix re-cache), run the model
    policy-walk end to end, refresh the Portugal seat file, then phase-4.
+6. If the wedge SURVIVES the restart (get-players still hangs while cheap
+   calls answer): the stuck computation is below the Node backend. Check
+   whether the dashboard turn counter advances — advancing means game
+   logic is alive and only the snapshot path is stuck (escalate to
+   bridge/DLL diagnosis, keep the watcher running); frozen with Civ
+   unresponsive means the game itself is stuck (save from inside Civ if
+   possible, then relaunch the game from that save — the ONLY case that
+   justifies touching Civ). Either way, do not start a second game under
+   the watched one, and do not touch the Siam session by hand.

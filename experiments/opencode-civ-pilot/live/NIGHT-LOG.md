@@ -264,3 +264,10 @@ Shift ~02:16-02:20 (game still wedged at T207, services untouched):
 - `node dist/index.js`; :5555=1884 dashboard, do-not-touch), package-dir
 - cwds, dist builds verified present, ports from config files. Morning
 - restart is now copy-paste.
+-
+Shift ~02:20-02:23 (game still wedged at T207, services untouched):
+- Recovery fallback added as RUNBOOK step 6: if the wedge survives the
+- restart, dashboard-turn-advancing vs frozen distinguishes a stuck
+- snapshot path (keep watcher, diagnose bridge/DLL) from a stuck game
+- (save + relaunch from save — the only case that touches Civ). Session
+- re-exported at 110.
