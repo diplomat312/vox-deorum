@@ -285,3 +285,7 @@ Shift ~02:23-02:25 (game still wedged at T207, services untouched):
 Shift ~02:24-02:26 (game still wedged at T207, services untouched):
 - Watcher attempt 4 failed closed; watcher (18092, sleeping) and Civ
 - (25100, CPU accruing) both healthy. Session re-exported at 110.
+-
+Shift ~02:24-02:26 (game still wedged at T207, services untouched):
+- Attempt 4 failed closed. Full triple fresh: suite 36/36, prefix
+- stable, session 110.
