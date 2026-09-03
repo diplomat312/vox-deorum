@@ -123,3 +123,24 @@ numbers exist in-tree today.
   cross-agent re-grounding (no briefings to re-explain game state to a
   sibling agent), (c) political continuity (the strategist IS the
   diplomat, so no coherence loss at handoffs).
+-
+## Fork evidence (diplomat312, read 2026-09-03, no code taken)
+
+- Transport convergence: the fork's recovered local-group-chat implements
+  group/world chat as broadcast-message + get-global-messages with tagged
+  lines — the same transport our 2p channels ride. Independent designs
+  converged; our registry/invite/archive layer sits cleanly on top.
+- The fork's own cache plan (05.2-cache-aware-envoy-prompt) states the
+  problem outright: envoy runs REBUILD the whole conversation into many
+  small messages every run, "neither compact nor cacheable", and fixes it
+  with a compaction boundary + breakpoint per prefix. The pilot answers
+  differently: ONE prefix that is never rebuilt, so there is nothing to
+  compact and no boundary to tune. The comparison runs will show which
+  answer costs less per turn.
+- Pacing (recovered world-chat.js): the fork wakes strategists on letters
+  and broadcasts (event-driven, "within a turn or two"). The duel pilot
+  stays turn-coupled deliberately: with sequential 2p autoPlay every
+  turn is already a cognition opportunity with inbox deltas, so
+  between-turn wakes would add requests without adding decisions.
+  Adopt later for 3+ civs or real-time tables: a world-beat for
+  unprompted speech and a private->WORLD promotion path.

@@ -246,3 +246,11 @@ Shift ~02:12-02:15 (game still wedged at T207, services untouched):
 - reconstructed prompts. Comparison runs must count distinct prefixes
 - and summed input per turn, not just hit ratios. Agent-file claims are
 - from source layout, flagged for confirmation by instrumented runs.
+-
+Shift ~02:15-02:19 (game still wedged at T207, services untouched):
+- Fork survey (read-only API reads, no code taken): transport convergence
+- confirmed (fork group-chat rides the same world-broadcast lines), the
+- fork's own cache plan states the rebuild-every-run problem our ONE
+- prefix design sidesteps, and pacing notes favor staying turn-coupled
+- for the duel (world-beat + WORLD-promotion deferred to 3+ civs).
+- Recorded as Fork evidence in CACHE-COMPARISON.md.
