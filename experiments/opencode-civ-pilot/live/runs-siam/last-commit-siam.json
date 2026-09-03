@@ -1,15 +1,15 @@
 {
-  "committedAt": "2026-09-03T04:59:27.056Z",
+  "committedAt": "2026-09-03T05:00:19.328Z",
   "playerID": 1,
   "actions": [
     {
       "params": {
         "economic": [
-          "finish Heroic Epic/Walls/Forge, keep +gpt"
+          "finish Caravansaries for route range/value"
         ],
-        "grandStrategy": "Physics into Steel Longswords, Authority war branch",
+        "grandStrategy": "Physics into Steel, Authority war branch",
         "military": [
-          "hold Si Satchanalai 221v29, clear Lampang/Ragusa barbs, protect Catapult, avoid Portugal navy"
+          "reinforce Si Satchanalai single CompBow, hold Lampang catapult, clear Sukhothai/Mbanza barbs, scout Lisbon"
         ]
       },
       "type": "strategy"
@@ -35,5 +35,5 @@
       "type": "posture"
     }
   ],
-  "rationale": "Lead 695-515, mil 182-164, Physics 12t. Queue Steel for Longswords/Armory, Authority, finish Heroic Epic/Wall."
+  "rationale": "Lead 728-532, mil 207-151, Physics 8t. Steel next for Longswords, Authority, reinforce thin Si Satchanalai."
 }

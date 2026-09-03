@@ -637,3 +637,132 @@ You may inspect anything else you need (inspect). When finished, commit your act
     "out": "{\n \"result\": {\n  \"content\": [\n   {\n    \"type\": \"text\",\n    \"text\": \"{\\n  \\\"Success\\\": true\\n}\"\n   }\n  ],\n  \"structuredContent\": {\n   \"Success\": true\n  }\n },\n \"jsonrpc\": \"2.0\",\n \"id\": 1788411575294\n}\n"
   }
 ]
+
+
+## Siam live turn 127 (session ses_f9a74a908ffeMXPkF3Y5Bh37Ba)
+
+### Observation sent
+
+TURN 127 (live game live-duel)
+
+You are Ramkhamhaeng, leader of Siam (seat 1). Portugal (Maria I, seat 0) is played by another mind.
+
+Current:
+* Treasury: 192 (+undefined/turn). Happiness: Happy (95%). Research: Physics (Estimated in 8 turns). Research must name ONE exact technology from: Philosophy, Drama and Poetry, Steel. Next policy in 52 turns ({"Progress":["Progress","Organization","Liberty","Expertise","Equality","Fraternity"]}). Policy must name ONE exact entry from: Statecraft (New Branch); Fealty (New Branch); Artistry (New Branch); Authority (New Branch); Tradition (New Branch).
+* Cities (4): population 27, territory 44, military strength 207, units 14 (supply 14), score 728.
+- Sukhothai p7 -> Caravansary (3t left)
+- Si Satchanalai p8 -> Great Wall (9t left)
+- Muang Saluang p6 -> Caravansary (3t left)
+- Lampang p6 -> Arena (5t left)
+* Zones:
+- Land: ? — City-State Kyzyl 2xSpearman
+- Land @Lisbon: Enemy (E153) — Portugal 1xSpearman
+- Land @Sukhothai: Friendly (F226) — Siam 1xHorseman 1xSpearman 2xComposite Bowman, Barbarians 2xSpearman
+- Land @M'banza-Kongo: Friendly (F26/N23) — Siam 1xArcher, Barbarians 1xArcher 3xSpearman, City-State M'banza-Kongo 1xGalley
+- Land @Hanoi: Friendly (F102/N27) — Barbarians 1xComposite Bowman, City-State Hanoi 1xTrireme 1xSpearman
+- Land @Kyzyl: Enemy (E50/N51) — Siam 1xScout, Barbarians 1xSpearman
+- Land @Ragusa: Friendly (F153/E43/N37) — City-State Ragusa 1xTrireme 1xSpearman, Barbarians 2xSpearman, Siam 1xHorseman 1xSpearman
+- Land @Si Satchanalai: Friendly (F189/E31/N11) — Siam 1xComposite Bowman
+- Land @Muang Saluang: Friendly (F188) — Siam 1xSpearman 1xLiburna, Barbarians 1xSpearman
+- Land @Lampang: Friendly (F148) — Siam 1xCatapult 1xSpearman
+- Sea @Ragusa: Even (F16/E39/N102) — City-State Ragusa 1xTrireme
+- Sea @Muang Saluang: Friendly (F133) — Siam 1xSpearman, City-State Hanoi 1xChariot Archer
+- Sea @Lisbon: Enemy (E175) — Portugal 1xLiburna
+- Sea @Hanoi: Friendly (F161/E23/N27) — City-State Hanoi 1xTrireme
+- Sea @M'banza-Kongo: Friendly (F41/N23) — Barbarians 1xLiburna
+- Sea @Huari: Even (F45/E23/N85) — Portugal 1xGalley
+* Relationships: Portugal: Distance: Neighbors; War (Our Score: 4%; Our War Weariness: 35%); Denounced Them.
+* Portugal visible: score 532, treasury ~83, research Currency (Estimated in 3 turns), 4 cities, military 151.
+
+Since your previous opportunity to act:
+- Nothing new recorded.
+
+What happened to your last committed actions:
+- strategy applied.
+- research applied.
+- policy applied.
+- posture applied.
+
+Outstanding requests/deals/messages: none tracked yet (phase 1 strategic test).
+
+You may inspect anything else you need (inspect). When finished, commit your actions (commit_turn) or pass. Keep the rationale short.
+
+### Tool calls
+
+[
+  {
+    "tool": "vox-civ_commit_turn",
+    "input": null
+  }
+]
+
+### Commit
+
+{
+  "committedAt": "2026-09-03T05:00:19.328Z",
+  "playerID": 1,
+  "actions": [
+    {
+      "params": {
+        "economic": [
+          "finish Caravansaries for route range/value"
+        ],
+        "grandStrategy": "Physics into Steel, Authority war branch",
+        "military": [
+          "reinforce Si Satchanalai single CompBow, hold Lampang catapult, clear Sukhothai/Mbanza barbs, scout Lisbon"
+        ]
+      },
+      "type": "strategy"
+    },
+    {
+      "params": {
+        "technology": "Steel"
+      },
+      "type": "research"
+    },
+    {
+      "params": {
+        "policy": "Authority"
+      },
+      "type": "policy"
+    },
+    {
+      "params": {
+        "private": -20,
+        "public": -20,
+        "targetID": "Portugal"
+      },
+      "type": "posture"
+    }
+  ],
+  "rationale": "Lead 728-532, mil 207-151, Physics 8t. Steel next for Longswords, Authority, reinforce thin Si Satchanalai."
+}
+
+### Applied to live game
+
+[
+  {
+    "type": "strategy",
+    "tool": "set-strategy",
+    "ok": true,
+    "out": "{\n \"result\": {\n  \"content\": [\n   {\n    \"type\": \"text\",\n    \"text\": \"{\\n  \\\"Success\\\": true\\n}\"\n   }\n  ],\n  \"structuredContent\": {\n   \"Success\": true\n  }\n },\n \"jsonrpc\": \"2.0\",\n \"id\": 1788411622324\n}\n"
+  },
+  {
+    "type": "research",
+    "tool": "set-research",
+    "ok": true,
+    "out": "{\n \"result\": {\n  \"content\": [\n   {\n    \"type\": \"text\",\n    \"text\": \"{\\n  \\\"Success\\\": true\\n}\"\n   }\n  ],\n  \"structuredContent\": {\n   \"Success\": true\n  }\n },\n \"jsonrpc\": \"2.0\",\n \"id\": 1788411623122\n}\n"
+  },
+  {
+    "type": "policy",
+    "tool": "set-policy",
+    "ok": true,
+    "out": "{\n \"result\": {\n  \"content\": [\n   {\n    \"type\": \"text\",\n    \"text\": \"{\\n  \\\"Success\\\": true\\n}\"\n   }\n  ],\n  \"structuredContent\": {\n   \"Success\": true\n  }\n },\n \"jsonrpc\": \"2.0\",\n \"id\": 1788411623331\n}\n"
+  },
+  {
+    "type": "posture",
+    "tool": "set-relationship",
+    "ok": true,
+    "out": "{\n \"result\": {\n  \"content\": [\n   {\n    \"type\": \"text\",\n    \"text\": \"{\\n  \\\"Success\\\": true\\n}\"\n   }\n  ],\n  \"structuredContent\": {\n   \"Success\": true\n  }\n },\n \"jsonrpc\": \"2.0\",\n \"id\": 1788411623502\n}\n"
+  }
+]
