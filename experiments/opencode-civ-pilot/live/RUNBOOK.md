@@ -56,6 +56,17 @@ alive and accruing CPU, dashboard shows the turn not advancing):
 3. Restart services (morning call, never unattended): bridge-service (:5000,
    starts first) then mcp-server (:4000). Leave Civ V rendered; never start
    a second game under a watched game.
+   Pinned 2026-09-03 (restart with IDENTICAL command lines; ports come from
+   config files, dist builds verified present):
+   - Bridge was PID 41824 `node dist/index.js` in work/vox-deorum/bridge-service.
+     Stop it, then from that dir: Start-Process node 'dist/index.js'.
+     Wait ~15s for :5000 to listen and the DLL pipe to reconnect.
+   - MCP was PID 41744 `node --inspect=0 dist/index.js` in
+     work/vox-deorum/mcp-server. Stop it, then from that dir:
+     Start-Process node '--inspect=0 dist/index.js'.
+   - Do NOT touch PID 1884 (dashboard :5555, vox-agents instrumentation
+     build) or Civ V PID 25100. If bridge/MCP fail to come back, do NOT
+     start a second game; stop and diagnose.
 4. Verify with ONE cheap call, then ONE get-players with a timeout — never
    stack parallel lock probes. When it answers, the watcher banks turn 207
    on its next attempt; do not run a manual turn in parallel.

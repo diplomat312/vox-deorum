@@ -254,3 +254,11 @@ Shift ~02:15-02:19 (game still wedged at T207, services untouched):
 - prefix design sidesteps, and pacing notes favor staying turn-coupled
 - for the duel (world-beat + WORLD-promotion deferred to 3+ civs).
 - Recorded as Fork evidence in CACHE-COMPARISON.md.
+-
+Shift ~02:16-02:20 (game still wedged at T207, services untouched):
+- Recovery step 3 was order-only ("bridge then MCP"); pinned the exact
+- restart commands in RUNBOOK from live process evidence: port->PID map
+- (:4000=41744 MCP `node --inspect=0 dist/index.js`; :5000=41824 bridge
+- `node dist/index.js`; :5555=1884 dashboard, do-not-touch), package-dir
+- cwds, dist builds verified present, ports from config files. Morning
+- restart is now copy-paste.
