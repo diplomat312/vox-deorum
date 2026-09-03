@@ -281,3 +281,7 @@ Shift ~02:23-02:25 (game still wedged at T207, services untouched):
 - Watcher attempt 4 failed closed. Syntax sweep: all 10 pilot JS files
 - (9 live + driver/session-manager) pass node --check. No code changes
 - since the 36/36 green; bank path parsed and ready.
+-
+Shift ~02:24-02:26 (game still wedged at T207, services untouched):
+- Watcher attempt 4 failed closed; watcher (18092, sleeping) and Civ
+- (25100, CPU accruing) both healthy. Session re-exported at 110.
