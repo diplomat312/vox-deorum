@@ -365,3 +365,14 @@ Shift ~03:40-04:00 (game still wedged at T207, services untouched):
 - - the watcher quiet gap. Live verify queued post-restart: sorted lists
 - - render on the next banked turn; victory/self condensers still deferred
 - - (no grounded shape, will condense from first observed shape).
+-
+- Shift ~03:20-03:30 UTC (game still wedged at T207, services untouched):
+- - Overnight track 1 (reliability): exportUsageDelta gains a 120s
+- - spawnSync timeout into the existing null path. Every other live-turn
+- - child call already had a ceiling (opencode run 300s/180s, MCP apply
+- - 90s, observe reads 10s x3); the session export was the only
+- - unbounded wait and could pin a turn until the watcher kills it at
+- - 10min. Behavior on success unchanged; on timeout the telemetry row
+- - records nulls and the state horizon is preserved, same as today.
+- - Verified: node --check green, prefix stable
+- - (41baad69/d0653cd0/47c9fb62), suite 49/49, session still 110.

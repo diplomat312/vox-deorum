@@ -15,7 +15,9 @@ function scrubEnv() {
 // tokens for messages appended since prevCount. Export works with stock env,
 // but scrubbed anyway for the `run`-adjacent code paths that share this env.
 export function exportUsageDelta(sessionId, prevCount) {
-  const r = spawnSync("opencode", ["export", sessionId], { encoding: "utf8", env: scrubEnv(), maxBuffer: 256 * 1024 * 1024 });
+  // Never hang a live turn on one stuck export: time out into the existing
+  // null path (telemetry row records nulls, state keeps its horizon).
+  const r = spawnSync("opencode", ["export", sessionId], { encoding: "utf8", env: scrubEnv(), maxBuffer: 256 * 1024 * 1024, timeout: 120000 });
   if (r.status !== 0) return null;
   let data;
   try { data = JSON.parse(r.stdout); } catch { return null; }
