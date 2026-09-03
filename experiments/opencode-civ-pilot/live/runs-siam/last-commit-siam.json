@@ -1,15 +1,15 @@
 {
-  "committedAt": "2026-09-03T05:04:16.132Z",
+  "committedAt": "2026-09-03T05:05:21.257Z",
   "playerID": 1,
   "actions": [
     {
       "params": {
         "economic": [
-          "finish Wall/Libraries/Mausoleum, keep +18gpt"
+          "finish StoneWorks/Arena/Mausoleum/Caravansary, use +29gpt"
         ],
-        "grandStrategy": "Steel into Machinery for crossbows, Authority",
+        "grandStrategy": "Peace dividend: Steel into Machinery, open Statecraft for trade/CS",
         "military": [
-          "kill Portugal Archer at Si Satchanalai 99v24, push Trebuchet from Lampang, clear Sukhothai barb"
+          "hold Trebs defensively at Lampang, clear Sukhothai barbs, keep Braga scout"
         ]
       },
       "type": "strategy"
@@ -22,18 +22,18 @@
     },
     {
       "params": {
-        "policy": "Authority"
+        "policy": "Statecraft"
       },
       "type": "policy"
     },
     {
       "params": {
-        "private": -20,
-        "public": -20,
+        "private": 0,
+        "public": 0,
         "targetID": "Portugal"
       },
       "type": "posture"
     }
   ],
-  "rationale": "Lead 722-593, mil 208-202, Trebs online. Machinery for crossbows after Steel, Authority, clear Archer at front."
+  "rationale": "Peace, lead 763-600 and 253-211, +29gpt. Machinery after Steel, Statecraft for routes/CS instead of Authority."
 }
