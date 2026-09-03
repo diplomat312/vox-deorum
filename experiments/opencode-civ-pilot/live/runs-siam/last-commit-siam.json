@@ -1,22 +1,22 @@
 {
-  "committedAt": "2026-09-03T05:06:13.864Z",
+  "committedAt": "2026-09-03T05:07:10.536Z",
   "playerID": 1,
   "actions": [
     {
       "params": {
         "economic": [
-          "finish Aqueducts/Caravansaries, grow 32pop"
+          "finish Circus/Scrivener/Artemis/Sophia, connect Phitsanulok"
         ],
-        "grandStrategy": "Steel into Machinery, Statecraft trade",
+        "grandStrategy": "Machinery into Chemistry, Statecraft",
         "military": [
-          "hold 2 Trebs Lampang, clear Sukhothai/Mbanza barbs, monitor Braga"
+          "defend Phitsanulok vs comp bows, hold Trebs, clear Lampang barb"
         ]
       },
       "type": "strategy"
     },
     {
       "params": {
-        "technology": "Machinery"
+        "technology": "Chemistry"
       },
       "type": "research"
     },
@@ -35,5 +35,5 @@
       "type": "posture"
     }
   ],
-  "rationale": "Peace lead 788-601, 255-231, +44gpt. Machinery after Steel, Statecraft, grow and hold."
+  "rationale": "5 cities, lead 854-608 and 247-212, +54gpt. Chemistry after Machinery, Statecraft, defend new Phitsanulok."
 }

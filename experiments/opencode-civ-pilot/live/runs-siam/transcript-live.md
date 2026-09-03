@@ -1521,3 +1521,132 @@ You may inspect anything else you need (inspect). When finished, commit your act
     "out": "{\n \"result\": {\n  \"content\": [\n   {\n    \"type\": \"text\",\n    \"text\": \"{\\n  \\\"Success\\\": true\\n}\"\n   }\n  ],\n  \"structuredContent\": {\n   \"Success\": true\n  }\n },\n \"jsonrpc\": \"2.0\",\n \"id\": 1788411979014\n}\n"
   }
 ]
+
+
+## Siam live turn 139 (session ses_f9a74a908ffeMXPkF3Y5Bh37Ba)
+
+### Observation sent
+
+TURN 139 (live game live-duel)
+
+You are Ramkhamhaeng, leader of Siam (seat 1). Portugal (Maria I, seat 0) is played by another mind.
+
+Current:
+* Treasury: 158 (+54/turn). Happiness: Happy (100%). Research: Machinery (Estimated in 10 turns). Research must name ONE exact technology from: Philosophy, Drama and Poetry, Chemistry. Next policy in 3 turns ({"Progress":["Progress","Organization","Liberty","Expertise","Equality","Fraternity"]}). Policy must name ONE exact entry from: Statecraft (New Branch); Fealty (New Branch); Artistry (New Branch); Authority (New Branch); Tradition (New Branch).
+* Cities (5): population 34, territory 55, military strength 247, units 15 (supply 18), score 854.
+- Sukhothai p9 -> Temple of Artemis (3t left)
+- Si Satchanalai p9 -> Scrivener's Office (2t left)
+- Muang Saluang p8 -> Hagia Sophia (5t left)
+- Lampang p7 -> Circus Maximus (1t left)
+- Phitsanulok p1 -> Forge (16t left)
+* Zones:
+- Land @Sukhothai: Friendly (F268) — Siam 1xTrebuchet 1xPikeman 1xSpearman 1xComposite Bowman, Barbarians 1xSpearman
+- Land @M'banza-Kongo: Friendly (F150/N20) — Siam 1xTrebuchet 1xSpearman 1xArcher, Barbarians 1xComposite Bowman, City-State M'banza-Kongo 1xTrireme
+- Land @Hanoi: Friendly (F115/N27) — Barbarians 1xComposite Bowman, City-State Hanoi 1xTrireme 1xSpearman
+- Land @Ragusa: Friendly (F188/N21) — City-State Ragusa 1xTrireme 1xSpearman, Barbarians 1xSpearman
+- Land @Brussels: Friendly (F118/N22) — Siam 1xHorseman, City-State Brussels 1xSpearman
+- Land @Braga: Friendly (F263/N19) — Portugal 1xArcher
+- Land @Si Satchanalai: Friendly (F293) — Siam 1xComposite Bowman
+- Land @Muang Saluang: Friendly (F234) — Siam 1xComposite Bowman
+- Land @Lampang: Friendly (F231) — Siam 1xTrebuchet, Barbarians 1xSpearman
+- Land @Phitsanulok: Friendly (F196) — Siam 1xSpearman, Barbarians 1xComposite Bowman, Portugal 1xComposite Bowman
+- Sea @Ragusa: Friendly (F147/N21) — Siam 1xHorseman 1xLiburna, Barbarians 1xTrireme
+- Sea @M'banza-Kongo: Friendly (F113/N20) — Barbarians 1xLiburna
+- Sea @Hanoi: Friendly (F182/N27) — Siam 1xSpearman
+- Sea @Muang Saluang: Friendly (F194) — City-State Hanoi 1xTrireme 1xChariot Archer
+- Sea @Brussels: Friendly (F106/N22) — City-State Brussels 2xTrireme, Barbarians 2xTrireme, Portugal 1xGalley
+* Relationships: Portugal: Distance: Neighbors; Peace Treaty; Denounced Them.
+* Portugal visible: score 608, treasury ~72, research Physics (Estimated in 6 turns), 4 cities, military 212.
+
+Since your previous opportunity to act:
+- Nothing new recorded.
+
+What happened to your last committed actions:
+- strategy applied.
+- research applied.
+- policy applied.
+- posture applied.
+
+Outstanding requests/deals/messages: none tracked yet (phase 1 strategic test).
+
+You may inspect anything else you need (inspect). When finished, commit your actions (commit_turn) or pass. Keep the rationale short.
+
+### Tool calls
+
+[
+  {
+    "tool": "vox-civ_commit_turn",
+    "input": null
+  }
+]
+
+### Commit
+
+{
+  "committedAt": "2026-09-03T05:07:10.536Z",
+  "playerID": 1,
+  "actions": [
+    {
+      "params": {
+        "economic": [
+          "finish Circus/Scrivener/Artemis/Sophia, connect Phitsanulok"
+        ],
+        "grandStrategy": "Machinery into Chemistry, Statecraft",
+        "military": [
+          "defend Phitsanulok vs comp bows, hold Trebs, clear Lampang barb"
+        ]
+      },
+      "type": "strategy"
+    },
+    {
+      "params": {
+        "technology": "Chemistry"
+      },
+      "type": "research"
+    },
+    {
+      "params": {
+        "policy": "Statecraft"
+      },
+      "type": "policy"
+    },
+    {
+      "params": {
+        "private": 0,
+        "public": 0,
+        "targetID": "Portugal"
+      },
+      "type": "posture"
+    }
+  ],
+  "rationale": "5 cities, lead 854-608 and 247-212, +54gpt. Chemistry after Machinery, Statecraft, defend new Phitsanulok."
+}
+
+### Applied to live game
+
+[
+  {
+    "type": "strategy",
+    "tool": "set-strategy",
+    "ok": true,
+    "out": "{\n \"result\": {\n  \"content\": [\n   {\n    \"type\": \"text\",\n    \"text\": \"{\\n  \\\"Success\\\": true\\n}\"\n   }\n  ],\n  \"structuredContent\": {\n   \"Success\": true\n  }\n },\n \"jsonrpc\": \"2.0\",\n \"id\": 1788412033629\n}\n"
+  },
+  {
+    "type": "research",
+    "tool": "set-research",
+    "ok": true,
+    "out": "{\n \"result\": {\n  \"content\": [\n   {\n    \"type\": \"text\",\n    \"text\": \"{\\n  \\\"Success\\\": true\\n}\"\n   }\n  ],\n  \"structuredContent\": {\n   \"Success\": true\n  }\n },\n \"jsonrpc\": \"2.0\",\n \"id\": 1788412037583\n}\n"
+  },
+  {
+    "type": "policy",
+    "tool": "set-policy",
+    "ok": true,
+    "out": "{\n \"result\": {\n  \"content\": [\n   {\n    \"type\": \"text\",\n    \"text\": \"{\\n  \\\"Success\\\": true\\n}\"\n   }\n  ],\n  \"structuredContent\": {\n   \"Success\": true\n  }\n },\n \"jsonrpc\": \"2.0\",\n \"id\": 1788412037896\n}\n"
+  },
+  {
+    "type": "posture",
+    "tool": "set-relationship",
+    "ok": true,
+    "out": "{\n \"result\": {\n  \"content\": [\n   {\n    \"type\": \"text\",\n    \"text\": \"{\\n  \\\"Success\\\": true\\n}\"\n   }\n  ],\n  \"structuredContent\": {\n   \"Success\": true\n  }\n },\n \"jsonrpc\": \"2.0\",\n \"id\": 1788412038119\n}\n"
+  }
+]
