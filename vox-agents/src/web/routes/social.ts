@@ -155,12 +155,12 @@ function seatName(seats: SocialSeat[], id: number): string {
 }
 
 /** Connect to the MCP server with a short deadline; throws a clean message when down. */
-async function prepMcp(): Promise<void> {
+async function prepMcp(timeoutMs = 6000): Promise<void> {
   if (mcpClient.connected) return;
   const result = await Promise.race([
     mcpClient.connect(),
     new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error('MCP not reachable; is the game stack running?')), 6000)
+      setTimeout(() => reject(new Error('MCP not reachable; is the game stack running?')), timeoutMs)
     ),
   ]);
   return result;
@@ -214,10 +214,11 @@ export function createSocialRoutes(): Router {
         for (const g of ch.loadStore().groups) groups.push(g);
       } catch (err) { groups = []; }
       let game: { gameID: string; turn: number; activePlayerId: number } | null = null;
-      if (mcpClient.connected) {
+      try {
+        await prepMcp(2000);
         const st = await tryCall('get-game-status', {});
         if (st) game = (st as any) as { gameID: string; turn: number; activePlayerId: number };
-      }
+      } catch { /* MCP down: game stays null, Social tab shows mcpDown */ }
       res.json({ socialDir: liveDir(), game, seats, groups });
     } catch (err) {
       logger.error('Failed social status', { error: err });
@@ -232,14 +233,17 @@ export function createSocialRoutes(): Router {
    */
   router.get('/messages', async (req: Request, res: Response<any | ErrorResponse>) => {
     try {
-      const seat = Number(req.query.seat ?? 0);
+      const raw = req.query.seat;
+      const seat = Number(Array.isArray(raw) ? raw[0] : raw ?? 0);
       if (!Number.isInteger(seat)) {
-        res.status(400).json({ error: 'seat must be an integer' }); return;
+        res.status(400).json({ error: `seat must be an integer (got ${JSON.stringify(raw)})` }); return;
       }
       const seats = await loadSeats();
       const seatCfg = seats.find((s) => s.seat === seat);
       const lastSeenTurn = Number(seatCfg?.lastSeenTurn ?? 0);
       const ch = await channelsModule();
+
+      try { await prepMcp(2000); } catch { res.json({ seat, lastSeenTurn, world: [], groups: [], dms: [], invites: [], mcpDown: true }); return; }
 
       const worldMsgs = await readWorldMessages(50);
       const world = worldMsgs.map((m) => ({ ...m, speaker: seatName(seats, m.SpeakerID) }));
@@ -433,4 +437,3 @@ export function createSocialRoutes(): Router {
 }
 
 export default createSocialRoutes();
-

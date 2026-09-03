@@ -1,1 +1,9 @@
-{"seat":0,"civ":"Portugal","leader":"Maria I","playedBy":"codex","lastSeenTurn":167,"lastApplied":[{"type":"posture","ok":true,"note":"public -10 / private 0 after unchosen war"},{"type":"strategy","ok":true,"note":"defensive Culture footing, hold city-state friends"},{"type":"message","ok":true,"note":"world id 4, friendship address T164"}]}
+{
+ "seat": 0,
+ "civ": "Portugal",
+ "leader": "Maria I",
+ "turn": 227,
+ "since": 207,
+ "observedAt": "2026-09-03T17:05:00.870Z",
+ "obs_chars": 5016
+}

@@ -87,6 +87,7 @@ export interface SocialDmMessage {
 export interface SocialMessagesResponse {
   seat: number;
   lastSeenTurn: number;
+  mcpDown?: boolean;
   world: SocialWorldMessage[];
   groups: Array<{
     id: string;

@@ -1,0 +1,47 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "model": "opencode-go/muse-spark-1.3-contributor",
+  "small_model": "opencode-go/muse-spark-1.3-contributor",
+  "permission": {
+    "bash": "deny",
+    "edit": "deny",
+    "glob": "deny",
+    "grep": "deny",
+    "list": "deny",
+    "task": "deny",
+    "webfetch": "deny",
+    "websearch": "deny",
+    "read": "deny",
+    "skill": "deny"
+  },
+  "mcp": {
+    "vox-civ": {
+      "type": "local",
+      "command": ["node", "mcp-server/index.mjs"],
+      "enabled": true
+    }
+  },
+  "agent": {
+    "civ": {
+      "description": "Civilization V civilization mind. Plays one civ via a tiny stable tool API.",
+      "mode": "primary",
+      "model": "opencode-go/muse-spark-1.3-contributor",
+      "permission": {
+        "bash": "deny",
+        "edit": "deny",
+        "glob": "deny",
+        "grep": "deny",
+        "list": "deny",
+        "task": "deny",
+        "webfetch": "deny",
+        "websearch": "deny",
+        "read": "deny",
+        "skill": "deny",
+        "vox-civ_inspect": "allow",
+        "vox-civ_communicate": "allow",
+        "vox-civ_commit_turn": "allow",
+        "vox-civ_pass": "allow"
+      }
+    }
+  }
+}

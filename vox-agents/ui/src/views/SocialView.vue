@@ -202,9 +202,9 @@ onUnmounted(() => {
       <!-- Left: control seat + channels -->
       <div class="social-side">
         <label class="field-label">Speak as seat</label>
-        <Select v-model="controlSeat" :options="seatOptions" option-label="label" style="width: 100%" @change="tick" />
+        <Select v-model="controlSeat" :options="seatOptions" option-label="label" option-value="value" style="width: 100%" @change="tick" />
         <label class="field-label" style="margin-top: 0.8rem">Channel</label>
-        <Select v-model="sendChannel" :options="channelOptions" option-label="label" style="width: 100%" />
+        <Select v-model="sendChannel" :options="channelOptions" option-label="label" option-value="value" style="width: 100%" />
         <label class="field-label" style="margin-top: 0.8rem">Message</label>
         <Textarea v-model="sendText" rows="3" style="width: 100%" placeholder="Letters to the world, a DM, or a group..." />
         <Button label="Send" icon="pi pi-send" :loading="sending" style="margin-top: 0.5rem" @click="send" />
@@ -217,7 +217,7 @@ onUnmounted(() => {
             <Button label="Create" icon="pi pi-plus" text @click="createGroup" />
           </div>
           <div class="group-invite" v-if="activeGroups.length">
-            <Select v-model="inviteGroupId" :options="activeGroups.map(g => ({ label: g.title, value: g.id }))" option-label="label" placeholder="Group" style="flex: 1" />
+            <Select v-model="inviteGroupId" :options="activeGroups.map(g => ({ label: g.title, value: g.id }))" option-label="label" option-value="value" placeholder="Group" style="flex: 1" />
             <InputText v-model.number="inviteSeat" type="number" placeholder="seat" style="width: 5rem" />
             <Button label="Invite" icon="pi pi-user-plus" text @click="invite(inviteGroupId)" />
           </div>

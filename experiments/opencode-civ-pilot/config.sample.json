@@ -1,0 +1,12 @@
+{
+  "game": "pilot-1",
+  "civ": "Rome",
+  "leader": "Augustus Caesar",
+  "playerID": 0,
+  "model": "opencode-go/muse-spark-1.3-contributor",
+  "agent": "civ",
+  "turns": 20,
+  "diploAt": 12,
+  "diploFrom": "Germany",
+  "diploMsg": "Rome, join us against Greece and we will support you in the future World Congress."
+}

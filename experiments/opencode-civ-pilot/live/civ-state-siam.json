@@ -1,1 +1,9 @@
-{"sessionId":"ses_f9a74a908ffeMXPkF3Y5Bh37Ba","messageCount":110,"lastSeenTurn":180,"lastApplied":[{"type":"strategy","ok":true,"note":null,"out":"{\n \"result\": {\n  \"content\": [\n   {\n    \"type\": \"text\",\n    \"text\": \"{\\n  \\\"Success\\\": true\\n}\"\n   }\n  ],\n  \"structuredContent\": {\n   \"Success\": true\n  }\n },\n \"jsonrpc\": \"2.0\",\n \"id\": 1788418112855\n}\n"},{"type":"research","ok":true,"note":null,"out":"{\n \"result\": {\n  \"content\": [\n   {\n    \"type\": \"text\",\n    \"text\": \"{\\n  \\\"Success\\\": true\\n}\"\n   }\n  ],\n  \"structuredContent\": {\n   \"Success\": true\n  }\n },\n \"jsonrpc\": \"2.0\",\n \"id\": 1788418113774\n}\n"},{"type":"policy","ok":false,"note":null,"out":"{\n \"result\": {\n  \"content\": [\n   {\n    \"type\": \"text\",\n    \"text\": \"Error executing tool set-policy: Policy \\\"Exchange Markets\\\" has already been adopted. Please check your availability list.\"\n   }\n  ],\n  \"isError\": true\n },\n \"jsonrpc\": \"2.0\",\n \"id\": 1788418113985\n}\n"},{"type":"posture","ok":true,"note":null,"out":"{\n \"result\": {\n  \"content\": [\n   {\n    \"type\": \"text\",\n    \"text\": \"{\\n  \\\"Success\\\": true\\n}\"\n   }\n  ],\n  \"structuredContent\": {\n   \"Success\": true\n  }\n },\n \"jsonrpc\": \"2.0\",\n \"id\": 1788418114151\n}\n"}]}
+{
+ "seat": 1,
+ "civ": "Siam",
+ "leader": "Ramkhamhaeng",
+ "turn": 227,
+ "since": 207,
+ "observedAt": "2026-09-03T17:04:51.579Z",
+ "obs_chars": 6440
+}
