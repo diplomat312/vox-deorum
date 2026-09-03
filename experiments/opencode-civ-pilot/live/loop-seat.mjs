@@ -110,6 +110,9 @@ async function handleTurn(turn, wake) {
     }
   } finally {
     try { await resume(); } catch (e) {}
+    if (!stopped()) {
+      try { await pause(); } catch (e) { log("re-arm failed: " + e.message); }
+    }
     epoch.exit = code;
     epoch.committedTurn = code === 0 ? turn : null;
     epoch.pausedMs = Date.now() - t0;
@@ -121,7 +124,8 @@ async function handleTurn(turn, wake) {
 }
 function recordMissed(missedTurn, liveTurn, reason) {
   appendEpoch({ ts: new Date().toISOString(), kind: "missed_epoch", seat, gameID, missedTurn, liveTurn, reason });
-  saveCogState({ gameId: gameID, lastSuccessfulDecisionTurn: doneTurn, pendingDecisionTurn: null, pendingStatus: "missed" });
+  const cs = loadCogState() || {};
+  saveCogState({ gameId: gameID, lastSuccessfulDecisionTurn: cs.lastSuccessfulDecisionTurn ?? doneTurn, pendingDecisionTurn: null, pendingStatus: "missed", lastMissedTurn: missedTurn });
   lastMissedRecorded = missedTurn;
   log("missed_epoch T" + missedTurn + " (live T" + liveTurn + "): " + reason);
 }
@@ -130,17 +134,7 @@ async function confirmAndRun(wake) {
   try { st = await status(); } catch (e) { log("status failed: " + e.message); return; }
   if (st.gameID !== gameID) {
     gameID = st.gameID;
-    const saved = loadCogState();
-    if (saved && saved.gameId === gameID && Number.isInteger(saved.lastSuccessfulDecisionTurn)) {
-      doneTurn = saved.lastSuccessfulDecisionTurn;
-      pending = [];
-      log("same game; watermark restored at T" + doneTurn);
-    } else {
-      doneTurn = -1;
-      pending = [];
-      saveCogState({ gameId: gameID, lastSuccessfulDecisionTurn: -1, pendingDecisionTurn: null, pendingStatus: null });
-      log("new game; watermark reset");
-    }
+    initWatermarks();
   }
   const cs = !running ? loadCogState() : null;
   if (cs && cs.gameId === gameID && cs.pendingDecisionTurn != null && cs.pendingStatus !== "completed" && cs.pendingStatus !== "missed") {
@@ -153,7 +147,6 @@ async function confirmAndRun(wake) {
   }
   if (st.turn > doneTurn + 1 && st.turn - 1 > lastMissedRecorded && doneTurn >= 0) {
     recordMissed(doneTurn + 1, st.turn, "turn completed with no cognition for this seat");
-    doneTurn = st.turn - 1;
   }
   if (running) {
     const cand = wake && Number.isFinite(wake.turn) ? wake.turn : st.turn;
@@ -273,6 +266,45 @@ function stopPoll() {
   if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
 }
 log("loop start seat " + seat);
+try { await pause(); log("pre-armed auto-pause for player " + MY_PLAYER); }
+catch (e) { log("pre-arm failed (retried per run): " + e.message); }
 startPoll();
 await watch();
 stopPoll();
+try { await resume(); log("disarmed auto-pause on exit"); }
+catch (e) { log("disarm failed: " + e.message); }
+function scanEpochs(pred) {
+  let best = -1;
+  try {
+    const lines = fs.readFileSync(path.join(rundir, "epochs.jsonl"), "utf8").split("\n");
+    for (const line of lines) {
+      if (!line.trim()) continue;
+      let e = null;
+      try { e = JSON.parse(line); } catch { continue; }
+      const v = pred(e);
+      if (Number.isInteger(v) && v > best) best = v;
+    }
+  } catch {}
+  return best;
+}
+const maxCommittedEpoch = () => scanEpochs((e) => e.committedTurn);
+const maxMissedEpoch = () => scanEpochs((e) => (e.kind === "missed_epoch" ? e.missedTurn : null));
+function initWatermarks() {
+  const saved = loadCogState();
+  if (saved && saved.gameId === gameID) {
+    doneTurn = Math.min(
+      Number.isInteger(saved.lastSuccessfulDecisionTurn) ? saved.lastSuccessfulDecisionTurn : -1,
+      maxCommittedEpoch());
+    lastMissedRecorded = Math.max(
+      Number.isInteger(saved.lastMissedTurn) ? saved.lastMissedTurn : -1,
+      maxMissedEpoch());
+    pending = [];
+    log("same game; watermark restored at T" + doneTurn);
+  } else {
+    doneTurn = -1;
+    pending = [];
+    lastMissedRecorded = maxMissedEpoch();
+    saveCogState({ gameId: gameID, lastSuccessfulDecisionTurn: -1, pendingDecisionTurn: null, pendingStatus: null, lastMissedTurn: lastMissedRecorded });
+    log("new game; watermark reset");
+  }
+}
