@@ -19,7 +19,7 @@ import {
 } from "../mcp-server/node_modules/@modelcontextprotocol/sdk/dist/esm/types.js";
 import fs from "node:fs";
 import path from "node:path";
-import { createGroup, getGroup, markMemberActive, tagMessage } from "./channels.mjs";
+import { createGroup, getGroup, markMemberActive, tagMessage, checkSend, markSent } from "./channels.mjs";
 
 const PLAYER_ID = Number(process.env.CIV_PILOT_PLAYER_ID ?? 1);
 const MCP_URL = process.env.MCP_URL || "http://127.0.0.1:4000/mcp";
@@ -146,6 +146,9 @@ async function techPath(target) {
         ...(item.WorldWondersUnlocked ?? []),
         ...(item.NationalWondersUnlocked ?? []),
       ].slice(0, 5),
+      // Forward edges: what this tech opens next, so the mind can traverse
+      // the tree in both directions from one inspect (suffix-only result).
+      leadsTo: [...(item.TechsUnlocked ?? [])].slice(0, 8),
       status: availableNow.has(key) ? "available" : key === researching ? "researching" : "chained",
     });
     for (const pre of prereqs) {
@@ -304,6 +307,24 @@ async function inspectLive(subject, detail) {
             const lines = shortOpinions(op).filter((l) => l.toLowerCase().indexOf(w) >= 0);
             if (lines.length) one.opinionLines = lines;
           } catch { /* opinions optional */ }
+          try {
+            // Static civilization traits: unique units/buildings, leader
+            // ability, preferred victory. Local-DB read (no game-lock risk),
+            // try/catch-optional like opinions. Suffix-only result content.
+            const cz = liveJson(await liveCall("get-civilization", { Search: detail, MaxResults: 3 }));
+            const item = (cz?.Items ?? [])[0];
+            if (item) {
+              const t = [];
+              if (item.Leader) t.push("leader: " + item.Leader);
+              if (item.PreferredVictory) t.push("preferred victory: " + item.PreferredVictory);
+              const abs = item.Abilities ?? item.Uniques ?? [];
+              for (const a of abs.slice(0, 4)) {
+                if (typeof a === "string") t.push(a.slice(0, 160));
+                else if (a && a.Name) t.push((a.Type ? a.Type + ": " : "") + a.Name + (a.Replacing ? " (replaces " + a.Replacing + ")" : "") + (a.PrereqTech ? " @" + a.PrereqTech : ""));
+              }
+              if (t.length) one.traits = t.slice(0, 6);
+            }
+          } catch { /* traits optional; mechanics still useful */ }
           return one;
         }
         return { note: "no civilization named '" + detail + "' visible" };
@@ -519,6 +540,16 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
     if (message.length > 1000) {
       return { content: [{ type: "text", text: "message too long (1000 chars max); keep it short" }], isError: true };
     }
+    // Backpressure enforcement (file-based, prefix-safe): at most ONE send
+    // per turn across all channels. Inert when CIV_PILOT_TURN is unset
+    // (offline routing tests), enforced on live turns. The driver marks the
+    // guard after each run, so a nudge follow-up in the same turn cannot
+    // double-send either.
+    try {
+      checkSend();
+    } catch (e) {
+      return { content: [{ type: "text", text: e.message }], isError: true };
+    }
     try {
       const ch = String(args?.channel ?? "private");
       if (ch.startsWith("dm:")) {
@@ -540,6 +571,7 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
             Content: message.slice(0, 1000),
           })
         );
+        try { markSent(ch); } catch {}
         return { content: [{ type: "text", text: JSON.stringify({ ok: true, channel: ch, sent: true }) }] };
       }
       if (ch.startsWith("group:create:")) {
@@ -558,6 +590,7 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
           const res = liveJson(
             await liveCall("broadcast-message", { PlayerID: PLAYER_ID, Content: tagged })
           );
+          try { markSent(ch); } catch {}
           return { content: [{ type: "text", text: JSON.stringify({ ok: true, channel: "group:" + g.id, id: res.ID ?? null }) }] };
         } catch (e) {
           return { content: [{ type: "text", text: "communicate failed: " + e.message }], isError: true };
@@ -582,6 +615,7 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
           const res = liveJson(
             await liveCall("broadcast-message", { PlayerID: PLAYER_ID, Content: tagged })
           );
+          try { markSent(ch); } catch {}
           return { content: [{ type: "text", text: JSON.stringify({ ok: true, channel: `group:${g.id}`, id: res.ID ?? null }) }] };
         } catch (e) {
           return { content: [{ type: "text", text: `communicate failed: ${e.message}` }], isError: true };
@@ -591,7 +625,8 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
         const res = liveJson(
           await liveCall("broadcast-message", { PlayerID: PLAYER_ID, Content: message.slice(0, 1000) })
         );
-        return { content: [{ type: "text", text: JSON.stringify({ ok: true, channel: "world", id: res.ID ?? null }) }] };
+          try { markSent(ch); } catch {}
+          return { content: [{ type: "text", text: JSON.stringify({ ok: true, channel: "world", id: res.ID ?? null }) }] };
       }
       const res = liveJson(
         await liveCall("append-message", {
@@ -604,6 +639,7 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
           Content: message.slice(0, 1000),
         })
       );
+      try { markSent("private"); } catch {}
       return { content: [{ type: "text", text: JSON.stringify({ ok: true, channel: "private", sent: true }) }] };
     } catch (e) {
       return { content: [{ type: "text", text: `communicate failed: ${e.message}` }], isError: true };

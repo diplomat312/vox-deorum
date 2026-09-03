@@ -190,3 +190,52 @@ export function groupInbox(seat, worldMessages, lastSeenTurn) {
   }
   return { lines, invites };
 }
+
+// One-send-per-turn backpressure guard (file-based, server-enforced).
+// Convention alone ("at most ONE message per turn" in civ.md) held so far,
+// but a second send in one turn would double speech costs and break inbox
+// accounting. No tool-schema change: descriptions untouched (prefix-safe).
+// Turn source: CIV_PILOT_TURN env, set per cognition opportunity by
+// run-live-turn.mjs. Guard file: CIV_PILOT_SEND_FILE, or the sibling
+// send-guard.json next to CIV_PILOT_COMMIT_FILE. When TURN is unset
+// (offline routing tests, manual probes) the guard is inert, so existing
+// offline asserts stay green. File shape: { turn, channel, at }.
+export function guardFile() {
+  if (process.env.CIV_PILOT_SEND_FILE) return process.env.CIV_PILOT_SEND_FILE;
+  const commit = process.env.CIV_PILOT_COMMIT_FILE;
+  if (commit) return path.join(path.dirname(commit), "send-guard.json");
+  return path.join(here, "send-guard.json");
+}
+export function guardTurn() {
+  const t = process.env.CIV_PILOT_TURN;
+  if (t === undefined || t === null || String(t).trim() === "") return null;
+  const n = Number(String(t).trim());
+  return Number.isFinite(n) ? n : String(t).trim();
+}
+export function lastSend() {
+  try {
+    const raw = fs.readFileSync(guardFile(), "utf8");
+    const o = JSON.parse(raw);
+    if (o && (typeof o.turn === "number" || typeof o.turn === "string")) return o;
+  } catch { /* missing/corrupt reads as no send yet; never block the game */ }
+  return null;
+}
+export function checkSend() {
+  const turn = guardTurn();
+  if (turn === null) return false;
+  const prev = lastSend();
+  if (prev && String(prev.turn) === String(turn)) {
+    throw new Error("already sent one message this turn (backpressure: at most ONE send per turn across all channels)");
+  }
+  return false;
+}
+export function markSent(channel) {
+  const turn = guardTurn();
+  if (turn === null) return null;
+  const rec = { turn, channel: String(channel ?? ""), at: new Date().toISOString() };
+  try {
+    fs.mkdirSync(path.dirname(guardFile()), { recursive: true });
+    fs.writeFileSync(guardFile(), JSON.stringify(rec, null, 1));
+  } catch { /* the send already happened live; never fail it on guard write */ }
+  return rec;
+}

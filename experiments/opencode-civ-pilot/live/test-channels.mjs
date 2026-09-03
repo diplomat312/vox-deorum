@@ -138,4 +138,25 @@ box4 = ch.groupInbox(0, w1.concat([{ ID: 21, Turn: 201, SpeakerID: 1, Content: c
 ok(box4.lines.join(' ').includes('second'), 'member sees messages after accepting');
 box4 = ch.groupInbox(1, w1, 199);
 ok(box4.lines.join(' ').includes('hello duel'), 'creator sees group messages');
-console.log('All ' + pass + ' asserts passed (channels + routing).');
+// Send-guard asserts (offline, file-only: no model, no live game). The guard
+// is inert without CIV_PILOT_TURN so all routing asserts above stay green.
+delete process.env.CIV_PILOT_TURN;
+delete process.env.CIV_PILOT_SEND_FILE;
+ok(ch.checkSend() === false, 'guard inert without TURN');
+process.env.CIV_PILOT_SEND_FILE = path.join(tmp, 'send-guard.json');
+process.env.CIV_PILOT_TURN = '207';
+ok(ch.lastSend() === null, 'no send recorded initially');
+ok(ch.checkSend() === false, 'first send of the turn allowed');
+ch.markSent('world');
+ok(ch.lastSend() !== null && String(ch.lastSend().turn) === '207', 'send recorded for turn 207');
+let blocked = false;
+try { ch.checkSend(); } catch (e) { blocked = String(e.message).indexOf('already sent') >= 0; }
+ok(blocked, 'second send of the same turn blocked');
+process.env.CIV_PILOT_TURN = '208';
+ok(ch.checkSend() === false, 'new turn allows sending again');
+fs.writeFileSync(path.join(tmp, 'send-guard.json'), 'not json');
+ok(ch.lastSend() === null, 'corrupt guard fails open');
+ok(ch.checkSend() === false, 'corrupt guard does not block');
+delete process.env.CIV_PILOT_TURN;
+delete process.env.CIV_PILOT_SEND_FILE;
+console.log('All ' + pass + ' asserts passed (channels + routing + guard).');

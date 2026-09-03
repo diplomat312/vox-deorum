@@ -289,3 +289,34 @@ Shift ~02:24-02:26 (game still wedged at T207, services untouched):
 Shift ~02:24-02:26 (game still wedged at T207, services untouched):
 - Attempt 4 failed closed. Full triple fresh: suite 36/36, prefix
 - stable, session 110.
+-
+Shift ~02:30-02:55 (game still wedged at T207, services untouched):
+- Overnight track 1 (lean harness): server-enforced one-send-per-turn
+- backpressure. Guard lives in channels.mjs (guardFile/guardTurn/lastSend/
+- checkSend/markSent, file live/runs-siam/send-guard.json keyed by
+- CIV_PILOT_TURN); vox-live-server.mjs checks before routing and marks on
+- all 5 send paths (dm/group:create/group/world/private); run-live-turn.mjs
+- sets CIV_PILOT_TURN + CIV_PILOT_SEND_FILE and re-marks post-run so nudge
+- follow-ups cannot double-send. Telemetry gains per-turn `communicates`.
+- Inert without TURN, so offline routing asserts unaffected.
+-
+Shift ~02:55-03:10 (game still wedged at T207, services untouched):
+- Overnight track 2 (cache-preserving interface): inspect(diplomacy,
+- "<civ>") now appends a static traits block (leader, preferred victory,
+- up to 4 uniques) via get-civilization local-DB read, try/catch-optional
+- like opinions, zero game-lock risk. Tech `path:` steps gain forward
+- edges (`leadsTo`, capped 8) so one inspect traverses both directions.
+- Both are suffix-only result content: no identity/schema/description
+- change, prefix guard stays green by construction (verified after).
+-
+Shift ~03:10-03:20 (game still wedged at T207, services untouched):
+- Overnight track 3 (telemetry/social): exportUsageDelta detects
+- compaction (message array shorter than prevCount aggregates the rewritten
+- history and flags compaction:true instead of silently undercounting to
+- zero; none observed through 110 msgs) and run-live-turn.mjs records it
+- instead of hardcoded false. Suite extended with 8 offline guard asserts.
+- Fresh verification in a watcher quiet gap: node --check all 10 pilot JS
+- files green, check-prefix stable (civ.md 859e8053/opencode.json
+- d0653cd0/tools 66780718), suite 44/44 (27 channel + 9 routing + 8
+- guard). Queued for post-restart live verify: traits block, leadsTo
+- walk, guard second-send rejection, compaction/communicates rows.

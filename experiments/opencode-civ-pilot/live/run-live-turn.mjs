@@ -120,6 +120,11 @@ const observation = await buildObservation({
 const commitFile = path.join(rundir, "last-commit-siam.json");
 process.env.CIV_PILOT_COMMIT_FILE = commitFile;
 process.env.CIV_PILOT_PLAYER_ID = String(PLAYER_ID);
+// Turn-aware backpressure: vox-live-server.mjs enforces one send per turn
+// via this guard file (prefix-safe: no tool-schema change). Same rundir the
+// watcher polls, so retries of an unbanked turn keep the same key.
+process.env.CIV_PILOT_TURN = String(turn);
+process.env.CIV_PILOT_SEND_FILE = path.join(rundir, "send-guard.json");
 process.env.MCP_URL = MCP_URL;
 delete process.env.ALLOW_DIPLOMACY;
 clearCommit(commitFile);
@@ -143,6 +148,17 @@ if (!commit || (!commit.actions && !commit.pass)) {
   for (const t of r2.toolCalls) allCalls.push({ ...t, followup: true });
   commit = readCommit(commitFile);
 }
+
+// Backpressure ledger (belt-and-braces behind the server-side guard): if the
+// mind sent anything this turn, record it so a nudge follow-up run (fresh
+// server process) enforces one-send-per-turn. File-only, never model-visible.
+try {
+  const sent = allCalls.find((t) => String(t.tool ?? "").indexOf("communicate") >= 0);
+  if (sent) {
+    fs.mkdirSync(rundir, { recursive: true });
+    fs.writeFileSync(process.env.CIV_PILOT_SEND_FILE, JSON.stringify({ turn, channel: sent.tool, at: new Date().toISOString() }, null, 1));
+  }
+} catch { /* guard best-effort; telemetry still records the calls */ }
 
 const applied = [];
 let commitOk = false;
@@ -235,7 +251,10 @@ const tele = {
   reasoning_tokens: tot.reasoning, latency_ms: nowMs - t0,
   wall_gap_sec: wallGapSec, session_messages: usage?.newCount ?? null,
   tool_calls: allCalls.map((t) => t.tool + (t.followup ? "+nudge" : "")),
-  nudged, commit_ok: commitOk, applied, compaction: false,
+  nudged, commit_ok: commitOk, applied, compaction: usage?.compaction ?? false,
+  // Backpressure observability: count of speech tool calls this turn (the
+  // guard allows at most one send; >1 here means the model tried twice).
+  communicates: allCalls.filter((t) => String(t.tool ?? "").indexOf("communicate") >= 0).length,
   obs_chars: observation.length,
 };
 appendTelemetry(path.join(rundir, "telemetry-live.jsonl"), tele);

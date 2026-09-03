@@ -16,7 +16,7 @@ Portugal observation: node observe-seat.mjs --player 0 --turn N --since M. Same 
 Prefix guard: node check-prefix.mjs (fail means a model-visible change). Re-baseline only after a deliberate batched change with --update.
 Model-visible prefix: agent/civ.md plus opencode.json plus vox-civ tool schemas. Dashboard text and inspect results are suffix and freely tunable.
 
-Channels: registry live/channels.json. Create with channels.mjs createGroup, invite with inviteToGroup. 2p groups ride world broadcast as tagged lines. Send via communicate channel group:ID. Backpressure: one send per turn TOTAL.
+Channels: registry live/channels.json. Create with channels.mjs createGroup, invite with inviteToGroup. 2p groups ride world broadcast as tagged lines. Send via communicate channel group:ID. Backpressure: one send per turn TOTAL, server-enforced (vox-live-server checkSend + per-turn guard file live/runs-siam/send-guard.json, marked by the server on every send and by run-live-turn.mjs after each run; inert without CIV_PILOT_TURN so offline tests stay green). Telemetry `communicates` counts speech calls per turn.
 Duel Hall group c53f2974 (Portugal plus Siam, opened T207).
 Close finished channels with channels.mjs archiveGroup (active members only; archived groups vanish from inbox and reject later sends with 'unknown group').
 

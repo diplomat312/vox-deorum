@@ -49,3 +49,7 @@ opencode.json; the agent identity is frozen in agent/civ.md.
 - Portugal seat refresh (civ-state-portugal.json, turn 167).
 - T207 cold-start cache row + wall_gap_sec population.
 - 21-opportunity Unified-Mind comparison runs (same model).
+- inspect(diplomacy, "<civ>") traits block (get-civilization static read).
+- Tech `path:` forward edges (`leadsTo`) in one live walk.
+- Backpressure: second send in one live turn must reject server-side.
+- Compaction flag + `communicates` count on the next telemetry rows.
