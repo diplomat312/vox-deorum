@@ -6,7 +6,11 @@ Peace id 12 enacted T178, postures warm both sides. Game reached T207 while Siam
 Cache findings:
 - Steady state near 99 percent read-hit. Normal turns 1k to 2.6k fresh vs 226k reused.
 - Model-visible changes cost one 100k miss each (T145, T156). Dashboard text and inspect results are suffix-safe.
-- T177 and T180 cost 120k fresh after 15 to 25min idle: suspected provider TTL expiry. wall_gap_sec now logged per turn.
+- T177 and T180 cost 120k fresh after ~7-8min idle (session timestamps: 7.0 and
+- 7.8min gaps; gaps of 3.4min or less hold 0.99): provider TTL expiry somewhere
+- in the ~4-7min range. wall_gap_sec is wired into telemetry but never
+- populated — it was added after T180 and no turn has banked since; it starts
+- working on the next bank.
 
 Landed tonight:
 - Social channels v1: channels.mjs registry, group inbox in observe, group send in communicate, one batched prefix re-cache, 17 asserts pass, Duel Hall c53f2974 verified live end to end.
@@ -46,7 +50,8 @@ Overnight shift (~01:00-02:00, game still wedged at T207, services untouched):
 Cache ledger, 21 banked Siam turns through T180 (telemetry-live.jsonl):
 steady state ~0.99 read-hit; model-visible prefix changes (T145 deal-social,
 T154, T156 deal-v1) each cost one ~100k+ miss; idle TTL expiry (T177/T180
-after 15-25min gaps) costs the same ~120k fresh. Cumulative 594967 uncached
+after 7.0/7.8min idle) costs the same ~120k fresh (T156 sat 49min idle but is
+confounded with the deal-v1 prefix change). Cumulative 594967 uncached
 vs 4286512 cache-read = 0.878.
 
 turn | uncached | cache_read | hit
