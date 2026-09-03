@@ -287,8 +287,8 @@ function scanEpochs(pred) {
   } catch {}
   return best;
 }
-const maxCommittedEpoch = () => scanEpochs((e) => e.committedTurn);
-const maxMissedEpoch = () => scanEpochs((e) => (e.kind === "missed_epoch" ? e.missedTurn : null));
+function maxCommittedEpoch() { return scanEpochs((e) => e.committedTurn); }
+function maxMissedEpoch() { return scanEpochs((e) => (e.kind === "missed_epoch" ? e.missedTurn : null)); }
 function initWatermarks() {
   const saved = loadCogState();
   if (saved && saved.gameId === gameID) {
