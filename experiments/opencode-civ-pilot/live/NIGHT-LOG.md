@@ -229,6 +229,15 @@ Shift ~02:13-02:16 (game still wedged at T207, services untouched):
 - Refined hypothesis recorded (fewer prefixes, no re-grounding,
 - strategist-is-diplomat continuity).
 -
+Shift ~02:14-02:17 (game still wedged at T207, services untouched):
+- Watcher attempt 2 (new budget) failed closed. Stale-commit re-audit at
+- source level for the morning bank: run-live-turn unlinks the commit
+- file BEFORE appending to the session; readCommit returns null on
+- missing/unparseable; applies run only on freshly written content; a
+- wedged observe exits before any session contact, so failed turns
+- cannot re-apply the on-disk T180 commit by construction (matches the
+- repeated empirical 110). No changes needed.
+-
 Shift ~02:12-02:15 (game still wedged at T207, services untouched):
 - Phase-4 structural framing added to CACHE-COMPARISON.md: pilot side is
 - 1 session / 1 prefix / ~4.5 requests per turn all sharing it, vs
