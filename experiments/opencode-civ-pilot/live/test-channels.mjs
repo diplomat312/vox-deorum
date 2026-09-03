@@ -69,6 +69,14 @@ const bparsed = ch.parseTag(btag);
 ok(bparsed !== null && bparsed.id === brk.id, 'sanitized title round-trips tag/parse');
 const wbrk = [{ ID: 31, Turn: 191, SpeakerID: 1, Content: btag }];
 ok(ch.groupInbox(0, wbrk, 190).lines.join(' ').includes('orders'), 'sanitized group message reaches inbox');
+const dec = ch.createGroup({ title: 'Opt Out', creator: 0, members: [0] });
+ch.inviteToGroup(dec.id, 1, 0);
+ch.resolveInvite(dec.id, 1, false);
+ok(ch.memberStatus(dec.id, 1) === 'declined', 'decline sets declined');
+ok(ch.visibleGroups(1).some((g) => g.id === dec.id) === false, 'declined group hidden');
+let threw5 = false;
+try { ch.markMemberActive(dec.id, 1); } catch (e) { threw5 = true; }
+ok(threw5, 'declined seat cannot send');
 console.log('All ' + pass + ' channel asserts passed.');
 
 // Pilot server routing checks (offline-safe: every case below is rejected

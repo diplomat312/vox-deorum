@@ -198,3 +198,10 @@ Shift ~02:07-02:10, pre-restart baseline snapshot (for before/after):
 - accruing: consistent with a worker spinning on the stuck game lock.
 - Watcher attempt 13 failed closed; Siam session 110 msgs; Portugal seat
 - file lastSeenTurn 167 (refresh queued post-restart). No STOP file.
+-
+Shift ~02:06-02:09 (game still wedged at T207, services untouched):
+- Invite-decline path had zero coverage; added 3 offline asserts
+- (declined status, hidden from visible groups, declined seat cannot
+- send). Registry-only test change: no model-visible impact.
+- send). Suite 36/36 green (27 channels + 9 routing). Registry-only
+- test change: no model-visible impact.
