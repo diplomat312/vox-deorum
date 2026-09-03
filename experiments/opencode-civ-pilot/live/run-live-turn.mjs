@@ -102,6 +102,9 @@ function mcpCallSync(tool, args) {
   const r = spawnSync("node", [path.join(pilotDir, "driver", "mcp-call.mjs"), tool, JSON.stringify(args)], {
     encoding: "utf8",
     maxBuffer: 64 * 1024 * 1024,
+    // Never hang a live turn forever on one stuck apply: fail fast and let
+    // the write-back loop report NOT applied next turn. Harness-only change.
+    timeout: Number(process.env.VOX_LIVE_APPLY_TIMEOUT_MS ?? 90000),
   });
   return { status: r.status, out: (r.stdout ?? "").slice(-1500), err: (r.stderr ?? "").slice(-500) };
 }
