@@ -2479,3 +2479,178 @@ You may inspect anything else you need (inspect). When finished, commit your act
     "out": "{\n \"result\": {\n  \"content\": [\n   {\n    \"type\": \"text\",\n    \"text\": \"{\\n  \\\"Success\\\": true\\n}\"\n   }\n  ],\n  \"structuredContent\": {\n   \"Success\": true\n  }\n },\n \"jsonrpc\": \"2.0\",\n \"id\": 1788417224026\n}\n"
   }
 ]
+
+
+## Siam live turn 177 (session ses_f9a74a908ffeMXPkF3Y5Bh37Ba)
+
+### Observation sent
+
+TURN 177 (live game live-duel)
+
+You are Ramkhamhaeng, leader of Siam (seat 1). Portugal (Maria I, seat 0) is played by another mind.
+
+Current:
+* Treasury: 862 (+47/turn). Happiness: Happy (63%). Research: undefined. Research must name ONE exact technology from: Compass, Guilds, Banking. Next policy in 6 turns ({"Progress":["Progress","Organization","Liberty","Expertise","Equality","Fraternity"],"Statecraft":["Statecraft","Foreign Service","Trade Confederacy"]}). Policy must name ONE exact entry from: Shadow Networks (Continuing Statecraft Branch) (3/6); Fealty (New Branch); Artistry (New Branch); Authority (New Branch); Tradition (New Branch).
+* Cities (8): population 83, territory 113, military strength 568, units 27 (supply 26), score 1535.
+- Sukhothai p14 -> University (2t left)
+- Si Satchanalai p14 -> Chancery (1t left)
+- Muang Saluang p12 -> Theater (1t left)
+- Lampang p11 -> Stable (2t left)
+- Phitsanulok p9 -> Barracks (2t left)
+- Kamphaeng Phet p9 -> Castle (2t left)
+- Nakhon Chum p7 -> Well (1t left)
+- Ragusa p7
+* Zones:
+- Land @Lisbon: Enemy (F78/E363) — Portugal 1xCrossbowman 1xComposite Bowman
+- Land @Sukhothai: Friendly (F439) — Siam 1xCrossbowman 1xSofa
+- Land @M'banza-Kongo: Friendly (F134/E61/N45) — Siam 1xSofa, Barbarians 1xCrossbowman, City-State M'banza-Kongo 1xCaravel
+- Land @Kabul: Friendly (F39/N119) — Barbarians 1xCrossbowman, City-State Kabul 2xPikeman
+- Land @Hanoi: Friendly (F134/N40) — Barbarians 1xCrossbowman, City-State Hanoi 1xCaravel 1xPikeman
+- Land @Kyzyl: Friendly (F251/E12/N29) — City-State Kyzyl 3xPikeman, Barbarians 1xPikeman
+- Land: Friendly (F574/E49) — Siam 2xLongswordsman 2xTrebuchet 1xPikeman, Barbarians 1xPikeman
+- Land @Brussels: Friendly (F46/E25/N135) — City-State Brussels 1xPikeman
+- Land @Huari: Friendly (F62/N29) — City-State Huari 1xCaravel 1xPikeman
+- Land @Braga: Enemy (F132/E339) — Portugal 1xKnight
+- Land @Si Satchanalai: Friendly (F617/E153) — Siam 1xTrebuchet 1xCrossbowman 1xPikeman
+- Land @Muang Saluang: Friendly (F236) — Siam 1xCrossbowman
+- Land @Lampang: Friendly (F239/E61) — Siam 1xLongswordsman 1xPikeman 1xSofa
+- Land @Phitsanulok: Friendly (F455/E31/N19) — Siam 1xTrireme, Barbarians 1xPikeman
+- Land @Kamphaeng Phet: Friendly (F512/E243) — Siam 1xCrossbowman
+- Land @Nakhon Chum: Friendly (F230/N66) — Siam 2xPikeman 1xLiburna
+- Land @Leiria: Even (F18/E50) — Portugal 1xPikeman
+- Sea @Huari: Friendly (F214/N29) — City-State Huari 1xCaravel
+- Sea @M'banza-Kongo: Friendly (F177/E84/N63) — City-State M'banza-Kongo 1xCaravel
+- Sea: Friendly (F335/E3) — Siam 1xLiburna
+- Sea @Kyzyl: Friendly (F153/E54/N29) — Siam 1xLiburna
+- Sea @Muang Saluang: Friendly (F247) — Siam 1xLiburna
+- Sea @Hanoi: Friendly (F229/N40) — City-State Hanoi 1xCaravel
+- Sea @Leiria: Enemy (E15/N29) — Siam 1xScout
+- Sea @Coimbra: Enemy (E151) — Barbarians 1xCaravel
+- Sea @Phitsanulok: Friendly (F271) — Siam 1xTrireme 1xLongswordsman 1xLiburna
+* Relationships: Portugal: Distance: Neighbors; War (Our Score: 0%; Our War Weariness: 6%); Denounced Them.
+* Portugal visible: score 966, treasury ~341, research Guilds (Estimated in 5 turns), 6 cities, military 460.
+
+Since your previous opportunity to act:
+- Nothing new recorded.
+
+What happened to your last committed actions:
+- strategy applied.
+- research applied.
+- policy applied.
+- posture applied.
+
+Politics since your last opportunity (war/peace, city-states, deals):
+- T172: **M'banza-Kongo**  declared war on **Lhasa**
+- T172: **Hanoi**  declared war on **Lhasa**
+- T172: **Kyzyl**  declared war on **Lhasa**
+- T172: **Huari**  declared war on **Lhasa**
+- T173: **Siam** pledged to protect **Kyzyl**
+- T176: Trade route completed: **Siam** → **Siam**
+- T177: **Portugal** converted a unit from **Portugal**
+- T177: **Siam** conquered **Ragusa** from **Ragusa** (pop 10)
+
+Messages for you (reply with communicate if warranted, at most one message per turn):
+- [PRIVATE] T177 Portugal (Maria I): Ramkhamhaeng, look at the books: our friendship was enacted three turns before the first shot, and both our peoples show zero war weariness because neither of us chose this. Your stack at Ragusa and my knights at Braga a
+
+Deal thread (deal_propose sends; deal_accept {proposalId} enacts; deal_reject {proposalId} declines; inspect(deals) shows what is tradable):
+- T161 Siam (you) deal-accept (id 10): The deal was accepted.
+- T161 Siam (you) deal-enacted (id 11): The deal was enacted.
+- T176 Portugal (Maria I) deal-proposal (id 12): Maria proposes a formal white peace between Portugal and Siam. This war was ordered by neither of us; our Declaration of Friendship still stands on the books.
+
+You may inspect anything else you need (inspect). When finished, commit your actions (commit_turn) or pass. Keep the rationale short.
+
+### Tool calls
+
+[
+  {
+    "tool": "vox-civ_communicate",
+    "input": null
+  },
+  {
+    "tool": "vox-civ_commit_turn",
+    "input": null
+  }
+]
+
+### Commit
+
+{
+  "committedAt": "2026-09-03T06:40:42.437Z",
+  "playerID": 1,
+  "actions": [
+    {
+      "params": {
+        "economic": [
+          "finish University/Chancery/Theater, integrate Ragusa, trim over-supply 27/26"
+        ],
+        "grandStrategy": "White peace, Banking economy, Shadow Networks",
+        "military": [
+          "hold Ragusa/Si Satchanalai, avoid Lisbon/Braga, screen Knights"
+        ]
+      },
+      "type": "strategy"
+    },
+    {
+      "params": {
+        "technology": "Banking"
+      },
+      "type": "research"
+    },
+    {
+      "params": {
+        "policy": "Shadow Networks"
+      },
+      "type": "policy"
+    },
+    {
+      "params": {
+        "proposalId": 12
+      },
+      "type": "deal_accept"
+    },
+    {
+      "params": {
+        "private": 20,
+        "public": 10,
+        "targetID": "Portugal"
+      },
+      "type": "posture"
+    }
+  ],
+  "rationale": "Up 1535-966, 568-460, Ragusa taken. Accept white peace id12, Banking, Shadow Networks, hold lines."
+}
+
+### Applied to live game
+
+[
+  {
+    "type": "strategy",
+    "tool": "set-strategy",
+    "ok": true,
+    "out": "{\n \"result\": {\n  \"content\": [\n   {\n    \"type\": \"text\",\n    \"text\": \"{\\n  \\\"Success\\\": true\\n}\"\n   }\n  ],\n  \"structuredContent\": {\n   \"Success\": true\n  }\n },\n \"jsonrpc\": \"2.0\",\n \"id\": 1788417645982\n}\n"
+  },
+  {
+    "type": "research",
+    "tool": "set-research",
+    "ok": true,
+    "out": "{\n \"result\": {\n  \"content\": [\n   {\n    \"type\": \"text\",\n    \"text\": \"{\\n  \\\"Success\\\": true\\n}\"\n   }\n  ],\n  \"structuredContent\": {\n   \"Success\": true\n  }\n },\n \"jsonrpc\": \"2.0\",\n \"id\": 1788417647737\n}\n"
+  },
+  {
+    "type": "policy",
+    "tool": "set-policy",
+    "ok": true,
+    "out": "{\n \"result\": {\n  \"content\": [\n   {\n    \"type\": \"text\",\n    \"text\": \"{\\n  \\\"Success\\\": true\\n}\"\n   }\n  ],\n  \"structuredContent\": {\n   \"Success\": true\n  }\n },\n \"jsonrpc\": \"2.0\",\n \"id\": 1788417647957\n}\n"
+  },
+  {
+    "type": "deal_accept",
+    "tool": "enact-agent-deal",
+    "ok": true,
+    "out": "le\": \"strategist\",\n    \"Player2Role\": \"strategist\",\n    \"SpeakerID\": 1,\n    \"MessageType\": \"deal-enacted\",\n    \"Content\": \"The deal was enacted.\",\n    \"Payload\": {\n     \"ProposalMessageID\": 12\n    },\n    \"Turn\": 178,\n    \"CreatedAt\": 1788417648\n   }\n  }\n },\n \"jsonrpc\": \"2.0\",\n \"id\": 1788417648186\n}\n"
+  },
+  {
+    "type": "posture",
+    "tool": "set-relationship",
+    "ok": true,
+    "out": "{\n \"result\": {\n  \"content\": [\n   {\n    \"type\": \"text\",\n    \"text\": \"{\\n  \\\"Success\\\": true\\n}\"\n   }\n  ],\n  \"structuredContent\": {\n   \"Success\": true\n  }\n },\n \"jsonrpc\": \"2.0\",\n \"id\": 1788417648424\n}\n"
+  }
+]

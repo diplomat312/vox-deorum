@@ -1,41 +1,45 @@
 {
-  "committedAt": "2026-09-03T06:33:39.842Z",
+  "committedAt": "2026-09-03T06:40:42.437Z",
   "playerID": 1,
   "actions": [
     {
       "params": {
         "economic": [
-          "finish Caravan/Temple/Grocer/StoneWorks, protect Ragusa route"
+          "finish University/Chancery/Theater, integrate Ragusa, trim over-supply 27/26"
         ],
-        "grandStrategy": "Fresh war after DoF: defend, Education for tech edge, Foreign Service",
+        "grandStrategy": "White peace, Banking economy, Shadow Networks",
         "military": [
-          "hold Si Satchanalai 595v105 and Ragusa 478v57",
-          "avoid Lisbon 132v309 and Braga 158v338",
-          "screen Nau with Liburna"
+          "hold Ragusa/Si Satchanalai, avoid Lisbon/Braga, screen Knights"
         ]
       },
       "type": "strategy"
     },
     {
       "params": {
-        "technology": "Education"
+        "technology": "Banking"
       },
       "type": "research"
     },
     {
       "params": {
-        "policy": "Foreign Service"
+        "policy": "Shadow Networks"
       },
       "type": "policy"
     },
     {
       "params": {
-        "private": -60,
-        "public": -40,
+        "proposalId": 12
+      },
+      "type": "deal_accept"
+    },
+    {
+      "params": {
+        "private": 20,
+        "public": 10,
         "targetID": "Portugal"
       },
       "type": "posture"
     }
   ],
-  "rationale": "Betrayed after DoF: war 0-0, lead 1362-856 and 486-360. Defend stacks, Education out-techs Machinery, Foreign Service holds CS."
+  "rationale": "Up 1535-966, 568-460, Ragusa taken. Accept white peace id12, Banking, Shadow Networks, hold lines."
 }
