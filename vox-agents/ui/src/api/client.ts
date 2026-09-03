@@ -417,34 +417,34 @@ class ApiClient {
   /**
    * Send a message as a seat ('world' | 'dm:<seat>' | 'group:<id>' | 'group:create:<title>' | 'group:invite:<id>:<seat>').
    */
-  async sendSocialMessage(seat: number, channel: string, message: string): Promise<{ ok: boolean; channel?: string; id?: number; invited?: number }> {
+  async sendSocialMessage(seat: number, channel: string, message: string, secret?: string): Promise<{ ok: boolean; channel?: string; id?: number; invited?: number }> {
     return this.fetchJson<{ ok: boolean; channel?: string; id?: number; invited?: number }>(
       `${this.baseUrl}/api/social/send`,
-      { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ seat, channel, message }) }
+      { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(secret === undefined ? { seat, channel, message } : { seat, channel, message, secret }) }
     );
   }
 
   /** Accept or decline a pending group invite. */
-  async resolveGroupInvite(groupId: string, seat: number, accept: boolean): Promise<{ ok: boolean; groupId: string; accepted: boolean; title: string }> {
+  async resolveGroupInvite(groupId: string, seat: number, accept: boolean, secret?: string): Promise<{ ok: boolean; groupId: string; accepted: boolean; title: string }> {
     return this.fetchJson<{ ok: boolean; groupId: string; accepted: boolean; title: string }>(
       `${this.baseUrl}/api/social/groups/resolve`,
-      { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ groupId, seat, accept }) }
+      { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(secret === undefined ? { groupId, seat, accept } : { groupId, seat, accept, secret }) }
     );
   }
 
   /** Leave a group as a seat. */
-  async socialLeaveGroup(groupId: string, seat: number): Promise<{ ok: boolean; groupId: string; title: string }> {
+  async socialLeaveGroup(groupId: string, seat: number, secret?: string): Promise<{ ok: boolean; groupId: string; title: string }> {
     return this.fetchJson<{ ok: boolean; groupId: string; title: string }>(
       `${this.baseUrl}/api/social/groups/leave`,
-      { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ groupId, seat }) }
+      { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(secret === undefined ? { groupId, seat } : { groupId, seat, secret }) }
     );
   }
 
   /** Archive a group (active members only). */
-  async socialArchiveGroup(groupId: string, seat: number): Promise<{ ok: boolean; groupId: string; title: string }> {
+  async socialArchiveGroup(groupId: string, seat: number, secret?: string): Promise<{ ok: boolean; groupId: string; title: string }> {
     return this.fetchJson<{ ok: boolean; groupId: string; title: string }>(
       `${this.baseUrl}/api/social/groups/archive`,
-      { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ groupId, seat }) }
+      { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(secret === undefined ? { groupId, seat } : { groupId, seat, secret }) }
     );
   }
 

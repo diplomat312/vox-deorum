@@ -1,5 +1,26 @@
 [
-  { "seat": 0, "civ": "Portugal", "leader": "Maria I", "playedBy": "opencode" },
-  { "seat": 1, "civ": "Siam", "leader": "Ramkhamhaeng", "playedBy": "opencode" }
+  {
+    "seat": 0,
+    "civ": "Portugal",
+    "leader": "Maria I",
+    "playedBy": "opencode"
+  },
+  {
+    "seat": 1,
+    "civ": "Siam",
+    "leader": "Ramkhamhaeng",
+    "playedBy": "opencode"
+  },
+  {
+    "seat": 2,
+    "civ": "TBD",
+    "leader": "TBD",
+    "playedBy": "opencode"
+  },
+  {
+    "seat": 3,
+    "civ": "TBD",
+    "leader": "TBD",
+    "playedBy": "opencode"
+  }
 ]
-

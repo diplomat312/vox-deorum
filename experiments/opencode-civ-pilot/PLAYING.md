@@ -3,53 +3,77 @@
 One persistent OpenCode session per civilization. That session is the mind:
 strategy, diplomacy, deals, and chatter all flow through the same continuity.
 
-## The two backends (one schema)
+## Seats
 
-Both MCP front doors expose the same four tools from driver/civ-tools.mjs:
-inspect, communicate, commit_turn, pass. They differ only behind the tools.
+Seats are stable harness ids in live/social-seats.json (seat, civ, leader,
+playedBy, playerID once the game assigns them). driver/seats.mjs is the one
+resolver everywhere: numbers, civ names, and leader names all resolve to a
+seat, and seatPlayer maps seats to Vox player ids. No RIVAL_ID semantics
+remain: every counterparty is explicit.
 
-- Mock (mcp-server/index.mjs): reads a world JSON file, answers inspect from
-  the snapshot, logs speech to the world inbox. Every inspect answer carries
-  backend "mock (no live game)" so test data is never mistaken for the game.
-  For offline drills and routing tests only.
-- Live (live/vox-live-server.mjs): reads the real game through the Vox MCP
-  and posts speech through Vox broadcast plus the channels registry. Game
-  state authority stays in Vox. This server never writes game state.
+## The two backends (one schema, one executor)
 
-The model cannot tell which backend it talks to from the schemas, and that
-is the point. Promotion from mock drills to the live game changes no prefix.
+Both MCP front doors expose the same four tools from driver/civ-tools.mjs.
+All communicate operations run through driver/social-exec.mjs on every
+backend and the dashboard: parsing, validation, membership, and budget are
+identical, only the delivery differs (Vox broadcast and pair threads live,
+world-file log and inbox in mock drills).
 
-## A turn
+Mock inspect answers carry an explicit mock flag plus the world-file path
+it tried, so test data is never mistaken for the game.
 
-1. The driver (live/run-live-seat.mjs picks the seat config, then
-   live/run-live-turn.mjs runs it) builds a small observation: dashboard,
-   changes since lastSeenTurn, outstanding messages and deals.
-2. It appends the observation to the civ session and waits for commit_turn
-   (or pass). One nudge follow-up fires when the session ends the turn
-   without committing.
-3. Committed actions apply through Vox MCP tools, each validated. The seat
-   state file advances lastSeenTurn only on a committed turn, so a failed
-   turn keeps its horizon and its events stay visible next opportunity.
-4. The process exit code is 0 only on commit_ok, so watchers can tell a
-   banked turn from a retry.
+## Talking: batched operations with a budget
 
-## Talking
+One communicate call carries operations:[{channel, target?, message}], up
+to 8 per seat per turn (CIV_PILOT_OPS_BUDGET). Validation failures are free;
+delivered operations spend, including silent ones like declining an invite.
+The legacy single form still works as one operation. Budget state lives in
+one shared ops-budget.json keyed (seat, turn), enforced identically on mock,
+live, and dashboard paths (humans post turn-free and never spend a seat budget).
 
-One send per turn total across all channels, enforced server side by
-checkSend plus a guard file keyed by turn (live/channels.mjs). The channel
-forms ride the stable communicate schema: world, private, dm, group id,
-group create, invite, accept, decline, leave, archive. Invites resolve through
-resolveInvite, so accepting or declining a group is explicit, never a side
-effect of sending.
+## Privacy model
+
+World posts broadcast publicly. DMs and private letters go to exactly one
+pair thread. Group traffic fans out to member pair threads only, never the
+world channel. Invites are explicit: an invited seat must accept before it
+can send, and fan-out includes invitees so a new member thread holds the
+room history from the invite onward. Reads are registry-gated (groupInbox),
+so even a leaked tag stays invisible to non-members.
 
 ## Deals
 
-Deal propose, accept, and reject are first class commit_turn actions, mapped
-onto the Vox deal tools (proposal message, enact, reject) with legality
-checked by Vox. Check inspect(deals) before proposing.
+Deal propose names its counterparty through the items (bilateral only; Vox
+validates legality). Accept enacts by proposal id. Reject finds the proposal
+thread by id across your pairs. inspect(deals) takes a counterparty seat,
+and inspect(diplomacy, correspondence:<seat>) returns the full pair history.
+
+## A turn
+
+1. The seat driver builds a small observation: dashboard, changes since
+   lastSeenTurn, outstanding messages and deals across all peers.
+2. It appends the observation to the civ session and waits for commit_turn
+   (or pass), with one nudge follow-up when the session ends without one.
+3. Committed actions apply through Vox MCP tools, each validated. Seat state
+   advances lastSeenTurn only on a committed turn. Exit code is 0 only on
+   commit_ok.
+
+## Humans
+
+The dashboard Social tab speaks through the same executor. Writes need the
+seat secret (live/seats-secrets.json, never committed); the observer seat
+(-1) posts world-only and is Vox-labeled natively. Human posts never spend
+harness budgets and land in harness observations on the next turn.
+
+## Telemetry
+
+Per-request cache counters land in each seat rundir as telemetry-live.jsonl.
+driver/rollup.mjs aggregates turns, commits, tokens, hit ratio, latency, and
+social operations per seat and total. Provider cost is not exposed, so cost
+stays an explicit gap.
 
 ## Live operations
 
-Live duel runbook, watcher usage, prefix guard, and lock contention notes:
-live/RUNBOOK.md. Telemetry lands in each seat rundir as telemetry-live.jsonl
-with per-request cache counters; transcripts append to transcript-live.md.
+Watchers, prefix guard, and lock notes: live/RUNBOOK.md. Offline suite:
+live/test-channels.mjs (channels, routing, budget, mock/live parity, seat
+keys, visibility) and live/test-fourway.mjs (batch budget, same-turn seats,
+DM and group privacy, next-turn views).

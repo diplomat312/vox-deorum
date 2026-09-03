@@ -201,6 +201,7 @@ export async function buildObservation({
   // loop over peers with per-pair fail-open so one wedged thread cannot blank
   // the whole inbox. Merged rows are turn-sorted, then rendered as before.
   // Suffix-only (dashboard text), prefix-safe.
+  let allPairRows = [];
   try {
     const get = (r, ...keys) => {
       for (const k of keys) if (r?.[k] !== undefined) return r[k];
@@ -209,7 +210,7 @@ export async function buildObservation({
     const mtype = (r) => String(get(r, "MessageType", "messageType") ?? "");
     const turnOf = (r) => Number(get(r, "Turn", "turn") ?? 0);
     const idOf = (r) => Number(get(r, "ID", "id") ?? 0);
-    const allRows = [];
+    allPairRows = [];
     for (const peer of peers) {
       if (peer === playerID) continue;
       try {
@@ -221,13 +222,13 @@ export async function buildObservation({
           })
         );
         const rows = Array.isArray(trd) ? trd : trd?.messages ?? trd?.rows ?? [];
-        for (const r of rows) allRows.push(r);
+        for (const r of rows) allPairRows.push(r);
       } catch {
         /* per-pair optional; other peers still render */
       }
     }
-    allRows.sort((a, b) => turnOf(a) - turnOf(b) || idOf(a) - idOf(b));
-    const rows = allRows;
+    allPairRows.sort((a, b) => turnOf(a) - turnOf(b) || idOf(a) - idOf(b));
+    const rows = allPairRows;
     const freshText = rows.filter(
       (r) => turnOf(r) > lastSeenTurn && mtype(r) === "text"
     );
@@ -262,7 +263,7 @@ export async function buildObservation({
   // ALREADY-FETCHED world messages: no extra MCP reads. Suffix-only.
   let groupLines = [], groupInvites = [];
   try {
-    const gi = groupInbox(playerID, worldMessages, lastSeenTurn);
+    const gi = groupInbox(playerID, [...worldMessages, ...allPairRows], lastSeenTurn);
     groupLines = gi.lines ?? [];
     groupInvites = gi.invites ?? [];
     // Stable membership memory: groups with no new messages are otherwise
@@ -325,7 +326,7 @@ export async function buildObservation({
 
   return `TURN ${turn} (live game ${players.gameID ?? game})
 
-You are ${leader}, leader of ${civ} (seat ${seat}). ${rivalCiv} (${rivalLeader}, seat ${rivalSeat}) is played by another mind.
+You are ${leader}, leader of ${civ} (seat ${seat}). ${rivalCiv} (${rivalLeader}, seat ${rivalSeat}) is played by another mind.${peers.length > 1 ? " Other minds at the table: " + peers.filter((p) => p !== rivalID).map((p) => speakerName(p)).join("; ") + "." : ""}
 
 Current:
 * Treasury: ${me.Gold} (+${me.GoldPerTurn}/turn). Happiness: ${me.HappinessSituation} (${me.HappinessPercentage}%). Research: ${me.CurrentResearch}. Research must name ONE exact technology from: ${techNames.join(", ") || "unknown, inspect research"}. Next policy in ${me.NextPolicyTurns} turns (${JSON.stringify(me.PolicyBranches)}). Policy must name ONE exact entry from: ${policyNames.join("; ") || "unknown, inspect policies"}.
@@ -348,7 +349,7 @@ ${politicsLines.length ? politicsLines.join("\n") : "- Nothing new recorded."}
 Messages for you (reply with communicate if warranted, at most one message per turn):
 ${messageLines.length ? messageLines.join("\n") : "- None."}
 
-Groups for you (at most ONE message per turn TOTAL across world/private/groups; send with communicate channel 'group:<id>'):
+Groups for you (up to 8 social operations per turn; send all of them in one communicate operations array 'group:<id>'):
 ${[...groupInvites, ...groupLines].length ? [...groupInvites, ...groupLines].join("\n") : "- None."}
 
 Deal thread (deal_propose sends; deal_accept {proposalId} enacts; deal_reject {proposalId} declines; inspect(deals) shows what is tradable):

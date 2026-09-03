@@ -12,6 +12,7 @@ import { fileURLToPath } from "node:url";
 import { appendToSession, readCommit, clearCommit } from "../driver/session-manager.mjs";
 import { appendTelemetry, exportUsageDelta } from "../driver/telemetry.mjs";
 import { buildObservation } from "./observe.mjs";
+import { loadSeats, peerSeats, resolveSeat, seatPlayer, seatName } from "../driver/seats.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const pilotDir = path.resolve(here, "..");
@@ -35,6 +36,36 @@ try {
   }
 } catch {}
 if (!Object.keys(SEAT_BY_NAME).length) SEAT_BY_NAME = { siam: PLAYER_ID, portugal: RIVAL_ID };
+const SEAT_ROWS = loadSeats();
+const ME_PLAYER = seatPlayer(PLAYER_ID, SEAT_ROWS);
+const PEER_SEATS = peerSeats(PLAYER_ID, SEAT_ROWS);
+const PEER_PLAYERS = PEER_SEATS.map((n) => seatPlayer(n, SEAT_ROWS));
+// Seat or name to Vox player id. Known seats map through the live seat
+// mapping; raw integers pass through for Vox to validate.
+function targetPlayer(v) {
+  if (typeof v === "string") {
+    const hit = SEAT_BY_NAME[v.trim().toLowerCase()];
+    if (hit !== undefined) return seatPlayer(hit, SEAT_ROWS);
+    return v;
+  }
+  if (typeof v === "number" && Number.isInteger(v)) {
+    if (SEAT_ROWS.some((r) => Number(r.seat) === v)) return seatPlayer(v, SEAT_ROWS);
+    return v;
+  }
+  return v;
+}
+// Find which peer thread holds a deal proposal id (N-seat reject needs
+// the counterparty pair; Vox resolves accepts by id alone).
+async function findProposalPeer(id) {
+  for (const pp of PEER_PLAYERS) {
+    try {
+      const trd = await callTool("read-transcript", { PlayerAID: Math.min(ME_PLAYER, pp), PlayerBID: Math.max(ME_PLAYER, pp), Limit: 30 });
+      const rows = Array.isArray(trd) ? trd : trd?.messages ?? trd?.rows ?? [];
+      if (rows.some((r) => Number(r?.ID ?? r?.id) === id)) return pp;
+    } catch {}
+  }
+  return null;
+}
 function coerceTargetID(v, dflt) {
   if (typeof v === "number" && Number.isInteger(v)) return v;
   if (typeof v === "string") {
@@ -128,6 +159,7 @@ function mcpCallSync(tool, args) {
 const observation = await buildObservation({
   playerID: PLAYER_ID, civ: CIV, leader: LEADER, seat: PLAYER_ID,
   rivalID: RIVAL_ID, rivalCiv: RIVAL_CIV, rivalLeader: RIVAL_LEADER, rivalSeat: RIVAL_ID,
+    peerIDs: PEER_PLAYERS, peerNames: Object.fromEntries(PEER_SEATS.map((n, k) => [PEER_PLAYERS[k], seatName(n, SEAT_ROWS)])),
   turn, game, lastSeenTurn, lastApplied,
 });
 
@@ -138,7 +170,6 @@ process.env.CIV_PILOT_PLAYER_ID = String(PLAYER_ID);
 // via one shared guard file keyed (seat, turn). Retries of an unbanked turn
 // keep the same key, so a nudge follow-up cannot double-send.
 process.env.CIV_PILOT_TURN = String(turn);
-process.env.CIV_PILOT_SEND_FILE = path.join(here, "send-guard.json");
 process.env.MCP_URL = MCP_URL;
 clearCommit(commitFile);
 
@@ -164,18 +195,6 @@ if (!commit || (!commit.actions && !commit.pass)) {
   timedOut = timedOut || r2.exitCode === 124;
   commit = readCommit(commitFile);
 }
-
-// Backpressure ledger (belt-and-braces behind the server-side guard): if the
-// mind sent anything this turn, record it so a nudge follow-up run (fresh
-// server process) enforces one-send-per-turn. File-only, never model-visible.
-try {
-  const sent = allCalls.find((t) => String(t.tool ?? "").indexOf("communicate") >= 0);
-  if (sent) {
-    fs.mkdirSync(rundir, { recursive: true });
-    const sentChannel = sent.input && sent.input.channel ? String(sent.input.channel) : String(sent.tool ?? "");
-    fs.writeFileSync(process.env.CIV_PILOT_SEND_FILE, JSON.stringify({ seat: PLAYER_ID, turn, channel: sentChannel, at: new Date().toISOString() }, null, 1));
-  }
-} catch { /* guard best-effort; telemetry still records the calls */ }
 
 const applied = [];
 let commitOk = false;
@@ -208,7 +227,10 @@ if (commit && (commit.actions || commit.pass)) {
         // tactical postures (e.g. {city, posture}) are VPAI's job: skip them
         // rather than inventing a diplomacy change.
         if (typeof p.public !== "number" && typeof p.private !== "number") { applied.push({ type: a.type, ok: false, note: "skipped: city-level posture, no civ stance given (not mapped to diplomacy)" }); continue; }
-        mapped = ["set-relationship", { PlayerID: PLAYER_ID, TargetID: coerceTargetID(p.targetID, RIVAL_ID), Public: p.public ?? 0, Private: p.private ?? 0, Rationale: rationale }];
+        mapped = null;
+        const tgt = coerceTargetID(p.targetID, null);
+          if (tgt === null || tgt === undefined || tgt === "") { applied.push({ type: a.type, ok: false, note: "posture needs params.targetID (a seat number)" }); continue; }
+          mapped = ["set-relationship", { PlayerID: ME_PLAYER, TargetID: targetPlayer(tgt), Public: p.public ?? 0, Private: p.private ?? 0, Rationale: rationale }];
         break;
       case "production_mode":
         // Only an explicit boolean toggles the global production mode. City
@@ -220,14 +242,18 @@ if (commit && (commit.actions || commit.pass)) {
         // Formal proposal: Vox validates legality; failures return with reasons.
         const items = p.items;
         if (!Array.isArray(items) || !items.length) { applied.push({ type: a.type, ok: false, note: "missing params.items[] (deal item list)" }); continue; }
-        const msg = typeof p.message === "string" && p.message.trim() ? p.message : `Proposal from ${CIV}.`;
-        mapped = ["append-message", { PlayerAID: Math.min(PLAYER_ID, RIVAL_ID), PlayerBID: Math.max(PLAYER_ID, RIVAL_ID), PlayerARole: "strategist", PlayerBRole: "strategist", SpeakerID: PLAYER_ID, MessageType: "deal-proposal", Content: msg, Payload: { Deal: { version: 1, items, promises: Array.isArray(p.promises) ? p.promises : [] }, message: msg } }];
+        const parties = [...new Set(items.flatMap((it) => [it?.fromPlayerID, it?.toPlayerID]).filter((n) => Number.isInteger(n) && n !== ME_PLAYER))];
+          if (parties.length !== 1) { applied.push({ type: a.type, ok: false, note: "deal items must name exactly one counterparty besides yourself (bilateral deals only)" }); continue; }
+          const msg = typeof p.message === "string" && p.message.trim() ? p.message : `Proposal from ${CIV}.`;
+        mapped = ["append-message", { PlayerAID: Math.min(ME_PLAYER, parties[0]), PlayerBID: Math.max(ME_PLAYER, parties[0]), PlayerARole: "strategist", PlayerBRole: "strategist", SpeakerID: ME_PLAYER, MessageType: "deal-proposal", Content: msg, Payload: { Deal: { version: 1, items, promises: Array.isArray(p.promises) ? p.promises : [] }, message: msg } }];
         break;
       }
       case "deal_accept": {
         const rawA = p.proposalId ?? p.proposalID ?? p.id;
         const id = typeof rawA === "string" && rawA.trim() !== "" ? Number(rawA) : rawA;
         if (!Number.isInteger(id)) { applied.push({ type: a.type, ok: false, note: "missing params.proposalId (deal-proposal message ID)" }); continue; }
+        const peerP = await findProposalPeer(id);
+        if (!peerP) { applied.push({ type: a.type, ok: false, note: "proposal not found in your threads; check inspect(deals) or correspondence" }); continue; }
         mapped = ["enact-agent-deal", { ProposalMessageID: id }];
         break;
       }
@@ -235,7 +261,9 @@ if (commit && (commit.actions || commit.pass)) {
         const rawR = p.proposalId ?? p.proposalID ?? p.id;
         const id = typeof rawR === "string" && rawR.trim() !== "" ? Number(rawR) : rawR;
         if (!Number.isInteger(id)) { applied.push({ type: a.type, ok: false, note: "missing params.proposalId (deal-proposal message ID)" }); continue; }
-        mapped = ["reject-agent-deal", { PlayerAID: Math.min(PLAYER_ID, RIVAL_ID), PlayerBID: Math.max(PLAYER_ID, RIVAL_ID), ProposalMessageID: id, SpeakerID: PLAYER_ID, ...(typeof p.reason === "string" && p.reason.trim() ? { Content: p.reason } : {}) }];
+        const peerP = await findProposalPeer(id);
+        if (!peerP) { applied.push({ type: a.type, ok: false, note: "proposal not found in your threads; check inspect(deals) or correspondence" }); continue; }
+        mapped = ["reject-agent-deal", { PlayerAID: Math.min(ME_PLAYER, peerP), PlayerBID: Math.max(ME_PLAYER, peerP), ProposalMessageID: id, SpeakerID: ME_PLAYER, ...(typeof p.reason === "string" && p.reason.trim() ? { Content: p.reason } : {}) }];
         break;
       }
       default:

@@ -224,43 +224,47 @@ export function lastSend() {
 // Explicit seat for this guard decision. Prefers an explicit argument at the
 // call site, then CIV_PILOT_GUARD_SEAT, then CIV_PILOT_PLAYER_ID (set by the
 // seat driver for both the server and follow-up runs). Null when unknown.
-export function guardSeat() {
-  for (const k of ["CIV_PILOT_GUARD_SEAT", "CIV_PILOT_PLAYER_ID"]) {
-    const v = process.env[k];
-    if (v !== undefined && v !== null && String(v).trim() !== "") {
-      const n = Number(String(v).trim());
-      if (Number.isInteger(n)) return n;
-    }
-  }
+// Per-seat per-turn social operation budget (replaces the old one-send
+// guard). Each executed communicate operation spends one unit; validation
+// failures are free. Bounded and shared: every backend and the dashboard
+// enforce the same file, so parallel seats never share a budget.
+export function opsBudgetLimit() {
+  const n = Number(process.env.CIV_PILOT_OPS_BUDGET ?? 8);
+  return Number.isInteger(n) && n > 0 ? n : 8;
+}
+
+export function opsBudgetFile() {
+  if (process.env.CIV_PILOT_OPS_FILE) return process.env.CIV_PILOT_OPS_FILE;
+  const commit = process.env.CIV_PILOT_COMMIT_FILE;
+  if (commit) return path.join(path.dirname(commit), 'ops-budget.json');
+  return path.join(here, 'ops-budget.json');
+}
+
+export function readBudget() {
+  try {
+    const o = JSON.parse(fs.readFileSync(opsBudgetFile(), 'utf8'));
+    if (o && (typeof o.turn === 'number' || typeof o.turn === 'string')) return o;
+  } catch {}
   return null;
 }
 
-export function checkSend(seat) {
-  const turn = guardTurn();
-  if (turn === null) return false;
-  const prev = lastSend();
-  if (!prev || String(prev.turn) !== String(turn)) return false;
-  const s = seat === undefined ? guardSeat() : seat;
-  // Unknown seat on either side fails closed on the turn alone: a send
-  // recorded for this turn blocks when we cannot prove another seat sent it.
-  if (s === null || s === undefined || prev.seat === null || prev.seat === undefined) return trueBlock();
-  if (Number(prev.seat) === Number(s)) return trueBlock();
-  return false;
+// How many of n requested operations this seat may execute this turn.
+// No turn (offline tests, manual probes) means no budget: allow all.
+export function budgetAllow(seat, turn, n) {
+  if (turn === null || turn === undefined) return n;
+  const prev = readBudget();
+  const used = prev && String(prev.turn) === String(turn) && Number(prev.seat) === Number(seat) ? Number(prev.used) || 0 : 0;
+  return Math.max(0, Math.min(n, opsBudgetLimit() - used));
 }
 
-function trueBlock() {
-  throw new Error("already sent one message this turn (backpressure: at most ONE send per turn across all channels)");
-}
-
-export function markSent(channel, seat) {
-  const turn = guardTurn();
-  if (turn === null) return null;
-  const s = seat === undefined ? guardSeat() : seat;
-  const rec = { seat: s, turn, channel: String(channel ?? ""), at: new Date().toISOString() };
+export function budgetSpend(seat, turn, n) {
+  if (turn === null || turn === undefined || !n) return null;
+  const prev = readBudget();
+  const used = prev && String(prev.turn) === String(turn) && Number(prev.seat) === Number(seat) ? Number(prev.used) || 0 : 0;
+  const rec = { seat, turn, used: used + n, at: new Date().toISOString() };
   try {
-    fs.mkdirSync(path.dirname(guardFile()), { recursive: true });
-    fs.writeFileSync(guardFile(), JSON.stringify(rec, null, 1));
+    fs.mkdirSync(path.dirname(opsBudgetFile()), { recursive: true });
+    fs.writeFileSync(opsBudgetFile(), JSON.stringify(rec, null, 1));
   } catch {}
   return rec;
 }
-

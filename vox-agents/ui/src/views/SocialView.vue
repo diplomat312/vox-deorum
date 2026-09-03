@@ -27,6 +27,7 @@ const activeTab = ref(0);
 const sendChannel = ref('world');
 const sendText = ref('');
 const sending = ref(false);
+const seatSecret = ref('');
 const sendNote = ref('');
 
 const createTitle = ref('');
@@ -105,7 +106,7 @@ async function send() {
   sending.value = true;
   sendNote.value = '';
   try {
-    const r = await api.sendSocialMessage(controlSeat.value, sendChannel.value, text);
+    const r = await api.sendSocialMessage(controlSeat.value, sendChannel.value, text, seatSecret.value || undefined);
     sendNote.value = r.ok ? `sent (${r.channel ?? 'ok'})` : `failed`;
     sendText.value = '';
     await tick();
@@ -120,7 +121,7 @@ async function createGroup() {
   const title = createTitle.value.trim();
   if (!title) return;
   try {
-    await api.sendSocialMessage(controlSeat.value, `group:create:${title}`, 'OPENS');
+    await api.sendSocialMessage(controlSeat.value, `group:create:${title}`, 'OPENS', seatSecret.value || undefined);
     createTitle.value = '';
     await tick();
   } catch (e: any) {
@@ -132,7 +133,7 @@ async function invite(gid: string) {
   const target = Number(inviteSeat.value.trim());
   if (!Number.isInteger(target)) { sendNote.value = 'invite seat must be an integer'; return; }
   try {
-    await api.sendSocialMessage(controlSeat.value, `group:invite:${gid}:${target}`, 'INVITED');
+    await api.sendSocialMessage(controlSeat.value, `group:invite:${gid}:${target}`, 'INVITED', seatSecret.value || undefined);
     await tick();
   } catch (e: any) {
     sendNote.value = `invite failed: ${e?.message ?? e}`;
@@ -141,7 +142,7 @@ async function invite(gid: string) {
 
 async function resolveInvite(gid: string, accept: boolean) {
   try {
-    await api.resolveGroupInvite(gid, controlSeat.value, accept);
+    await api.resolveGroupInvite(gid, controlSeat.value, accept, seatSecret.value || undefined);
     await tick();
   } catch (e: any) {
     sendNote.value = `invite resolve failed: ${e?.message ?? e}`;
@@ -150,7 +151,7 @@ async function resolveInvite(gid: string, accept: boolean) {
 
 async function leaveGroup(gid: string) {
   try {
-    await api.socialLeaveGroup(gid, controlSeat.value);
+    await api.socialLeaveGroup(gid, controlSeat.value, seatSecret.value || undefined);
     await tick();
   } catch (e: any) {
     sendNote.value = `leave failed: ${e?.message ?? e}`;
@@ -159,7 +160,7 @@ async function leaveGroup(gid: string) {
 
 async function archiveGroup(gid: string) {
   try {
-    await api.socialArchiveGroup(gid, controlSeat.value);
+    await api.socialArchiveGroup(gid, controlSeat.value, seatSecret.value || undefined);
     await tick();
   } catch (e: any) {
     sendNote.value = `archive failed: ${e?.message ?? e}`;
@@ -203,6 +204,8 @@ onUnmounted(() => {
       <div class="social-side">
         <label class="field-label">Speak as seat</label>
         <Select v-model="controlSeat" :options="seatOptions" option-label="label" option-value="value" style="width: 100%" @change="tick" />
+        <label class="field-label">Seat secret (optional)</label>
+        <input v-model="seatSecret" type="password" placeholder="seat secret for writes" style="width: 100%" />
         <label class="field-label" style="margin-top: 0.8rem">Channel</label>
         <Select v-model="sendChannel" :options="channelOptions" option-label="label" option-value="value" style="width: 100%" />
         <label class="field-label" style="margin-top: 0.8rem">Message</label>

@@ -31,15 +31,16 @@ export function toolDefs() {
     {
       name: "communicate",
       description:
-        "Send one diplomatic message: channel 'world' broadcasts publicly, 'private' (default) writes a private letter to the rival, 'dm:<seat>' writes a direct message to one seat, 'group:<id>' writes to a group you belong to (first send accepts an invite), 'group:create:<title>' opens a new group with your message. Manage memberships with 'group:invite:<id>:<seat>' (your message is the invite note), 'group:leave:<id>' (posts a farewell, then leaves), 'group:archive:<id>' (posts a closing line, then closes the group). group:accept:<id> accepts a pending invite (posts a join note), group:decline:<id> declines it silently (still counts as the turn send, like every communicate call). At most ONE message per turn total across all channels. Keep it short and in character.",
+        "Send diplomatic messages as one batched call with operations:[{channel, target?, message}]. Up to 8 operations per turn per seat; once the budget is spent further operations are rejected. Validation failures are free, delivered operations spend. Channels: 'world' broadcasts publicly; 'dm:<seat>' writes one seat; private needs a target seat; group traffic fans out privately to member pair threads only, never the world channel; 'group:create:<title>' opens a room without sending (follow with a group send); 'group:invite:<id>:<seat>' invites with your message as the private invite note; 'group:accept:<id>' accepts a pending invite and greets the room; 'group:decline:<id>' declines silently and still spends one operation; 'group:leave:<id>' posts a farewell then leaves; 'group:archive:<id>' posts a closing line then closes the room. Invites are explicit: an invited seat must accept before it can send to the room. Legacy single form {channel, target, message} still works as one operation. Keep messages short and in character.",
       inputSchema: {
         type: "object",
         properties: {
           target: { type: "string" },
           channel: { type: "string" },
           message: { type: "string" },
+          operations: { type: "array", items: { type: "object", properties: { channel: { type: "string" }, target: { type: "string" }, message: { type: "string" } }, additionalProperties: false } },
         },
-        required: ["target", "message"],
+        required: [],
         additionalProperties: false,
       },
     },

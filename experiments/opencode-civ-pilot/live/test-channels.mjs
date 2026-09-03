@@ -148,27 +148,21 @@ box4 = ch.groupInbox(0, w1.concat([{ ID: 21, Turn: 201, SpeakerID: 1, Content: c
 ok(box4.lines.join(' ').includes('second'), 'member sees messages after accepting');
 box4 = ch.groupInbox(1, w1, 199);
 ok(box4.lines.join(' ').includes('hello duel'), 'creator sees group messages');
-// Send-guard asserts (offline, file-only: no model, no live game). The guard
-// is inert without CIV_PILOT_TURN so all routing asserts above stay green.
+// Budget asserts: per-seat per-turn operation budget in one shared file.
+process.env.CIV_PILOT_OPS_FILE = path.join(tmp, 'ops-budget.json');
 delete process.env.CIV_PILOT_TURN;
-delete process.env.CIV_PILOT_SEND_FILE;
-ok(ch.checkSend() === false, 'guard inert without TURN');
-process.env.CIV_PILOT_SEND_FILE = path.join(tmp, 'send-guard.json');
+ok(ch.budgetAllow(0, null, 8) === 8, 'no turn means no budget');
 process.env.CIV_PILOT_TURN = '207';
-ok(ch.lastSend() === null, 'no send recorded initially');
-ok(ch.checkSend() === false, 'first send of the turn allowed');
-ch.markSent('world');
-ok(ch.lastSend() !== null && String(ch.lastSend().turn) === '207', 'send recorded for turn 207');
-let blocked = false;
-try { ch.checkSend(); } catch (e) { blocked = String(e.message).indexOf('already sent') >= 0; }
-ok(blocked, 'second send of the same turn blocked');
+ok(ch.budgetAllow(0, '207', 8) === 8, 'fresh turn allows full budget');
+ch.budgetSpend(0, '207', 3);
+ok(ch.budgetAllow(0, '207', 8) === 5, 'spend reduces allowance');
+ok(ch.budgetAllow(1, '207', 8) === 8, 'other seat unaffected');
+ch.budgetSpend(0, '207', 5);
+ok(ch.budgetAllow(0, '207', 1) === 0, 'exhausted budget blocks');
 process.env.CIV_PILOT_TURN = '208';
-ok(ch.checkSend() === false, 'new turn allows sending again');
-fs.writeFileSync(path.join(tmp, 'send-guard.json'), 'not json');
-ok(ch.lastSend() === null, 'corrupt guard fails open');
-ok(ch.checkSend() === false, 'corrupt guard does not block');
+ok(ch.budgetAllow(0, '208', 8) === 8, 'new turn resets');
 delete process.env.CIV_PILOT_TURN;
-delete process.env.CIV_PILOT_SEND_FILE;
+delete process.env.CIV_PILOT_OPS_FILE;
 // Mock/live parity: every validation accept and reject below is decided
 // before any transport, so both backends must answer identically. Transports
 // (Vox broadcast vs world-file log) stay backend-specific and untested here.
@@ -211,6 +205,7 @@ for (let k = 0; k < parityPayloads.length; k = k + 1) {
 // same turn is rejected by the backpressure guard.
 const declineFile = path.join(tmp, 'channels-decline.json');
 const declineGuard = path.join(tmp, 'send-guard-decline.json');
+const declineOps = path.join(tmp, 'ops-budget-decline.json');
 process.env.CIV_PILOT_CHANNELS_FILE = declineFile;
 const gD = ch.createGroup({ title: 'Peace Talks', creator: 1, members: [1] });
 ch.inviteToGroup(gD.id, 0, 1);
@@ -218,35 +213,29 @@ const declineEnv = {
   CIV_PILOT_PLAYER_ID: '0',
   CIV_PILOT_TURN: '500',
   CIV_PILOT_SEND_FILE: declineGuard,
+  CIV_PILOT_OPS_FILE: declineOps,
   CIV_PILOT_CHANNELS_FILE: declineFile,
-};
+  CIV_PILOT_OPS_BUDGET: '1'};
 const declined = await callServer([
   { name: 'communicate', arguments: { channel: 'group:decline:' + gD.id, target: 'x', message: 'not now' } },
   { name: 'communicate', arguments: { channel: 'world', target: 'x', message: 'hello' } },
 ], declineEnv, 'vox-live-server.mjs');
 ok(declined.length === 2, 'decline plus follow-up answered');
 ok(!isErr(declined[0]) && textOf(declined[0]).indexOf('accepted') >= 0, 'decline resolves silently');
-ok(ch.memberStatus(gD.id, 0) === 'declined', 'declined membership recorded');ok(isErr(declined[1]) && textOf(declined[1]).includes('already sent'), 'decline spent the turn send');
+ok(isErr(declined[1]) && textOf(declined[1]).indexOf('budget') >= 0, 'decline spent the turn budget');
 process.env.CIV_PILOT_CHANNELS_FILE = path.join(tmp, 'channels.json');
-// Seat-keyed guard: one send per (seat, turn) in a shared file.
-process.env.CIV_PILOT_SEND_FILE = path.join(tmp, 'send-guard-seats.json');
+// Seat budgets share one file across seats and turns.
+process.env.CIV_PILOT_OPS_FILE = path.join(tmp, 'ops-budget-seats.json');
 process.env.CIV_PILOT_TURN = '600';
-ch.markSent('world', 0);
-let seatBlocked = false;
-try { ch.checkSend(0); } catch (e) { seatBlocked = String(e.message).indexOf('already sent') >= 0; }
-ok(seatBlocked, 'same seat same turn blocked');
-ok(ch.checkSend(1) === false, 'other seat same turn allowed');
-ch.markSent('dm', 1);
-let seat1Blocked = false;
-try { ch.checkSend(1); } catch (e) { seat1Blocked = String(e.message).indexOf('already sent') >= 0; }
-ok(seat1Blocked, 'second seat send recorded');
-let unknownBlocked = false;
-try { ch.checkSend(); } catch (e) { unknownBlocked = String(e.message).indexOf('already sent') >= 0; }
-ok(unknownBlocked, 'unknown seat fails closed on turn');
+ch.budgetSpend(0, '600', 8);
+ok(ch.budgetAllow(0, '600', 1) === 0, 'same seat same turn blocked');
+ok(ch.budgetAllow(1, '600', 8) === 8, 'other seat same turn allowed');
+ch.budgetSpend(1, '600', 8);
+ok(ch.budgetAllow(1, '600', 1) === 0, 'second seat spend recorded');
 process.env.CIV_PILOT_TURN = '601';
-ok(ch.checkSend(0) === false, 'new turn opens both seats');
+ok(ch.budgetAllow(0, '601', 8) === 8, 'new turn opens both seats');
 delete process.env.CIV_PILOT_TURN;
-delete process.env.CIV_PILOT_SEND_FILE;
+delete process.env.CIV_PILOT_OPS_FILE;
 // Visibility before transport: archived and declined group sends fail.
 const visFile = path.join(tmp, 'channels-vis.json');
 const visGuard = path.join(tmp, 'send-guard-vis.json');

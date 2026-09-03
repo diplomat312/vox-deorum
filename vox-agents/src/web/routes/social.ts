@@ -85,6 +85,39 @@ function channelsModule(): Promise<any> {
   return channelsModulePromise;
 }
 
+let execModulePromise: Promise<any> | null = null;
+function execModule(): Promise<any> {
+  if (!execModulePromise) {
+    const mod = process.env.CIV_PILOT_EXEC_MODULE || path.join(liveDir(), "..", "driver", "social-exec.mjs");
+    execModulePromise = import(pathToFileURL(mod).href).catch((err) => {
+      execModulePromise = null;
+      throw new Error("social executor unavailable: " + (err as Error).message);
+    });
+  }
+  return execModulePromise;
+}
+
+// Seat secrets for dashboard writes (pilot live/seats-secrets.json). The
+// human holds their own seat secret; harness seats never post through the
+// dashboard. Missing file means dev mode: attribution unchecked.
+function readSecrets(): Record<string, string> {
+  try {
+    const f = process.env.CIV_PILOT_SECRETS_FILE || path.join(liveDir(), "seats-secrets.json");
+    return JSON.parse(fs.readFileSync(f, "utf8"));
+  } catch { return {}; }
+}
+
+// Null when the seat may post, otherwise the rejection reason. Observer
+// (-1) posts are Vox-labeled natively, so no secret impersonates anyone.
+function requireSeatSecret(seat: number, provided: unknown): string | null {
+  if (seat === OBSERVER_ID) return null;
+  const all = readSecrets();
+  if (!Object.keys(all).length) return null;
+  const want = (all as Record<string, string>)[String(seat)];
+  if (!want) return "unknown seat";
+  if (provided !== want) return "wrong seat secret";
+  return null;
+}
 /** Default names for the pilot duel, used only to label seats that lack state metadata. */
 const DEFAULT_NAMES: Record<number, { civ: string; leader: string }> = {
   0: { civ: 'Portugal', leader: 'Maria I' },
@@ -248,7 +281,26 @@ export function createSocialRoutes(): Router {
       const worldMsgs = await readWorldMessages(50);
       const world = worldMsgs.map((m) => ({ ...m, speaker: seatName(seats, m.SpeakerID) }));
 
-      // Groups: registry + tagged lines from the already-fetched world feed.
+      // Seats are stable harness ids; Vox threads use player ids recorded on
+      // the seat rows at game boot (defaulting to seat number).
+      const playerOf = (n: number): number => {
+        const hit = seats.find((x) => x.seat === n);
+        const p = Number((hit as any)?.playerID ?? n);
+        return Number.isInteger(p) ? p : n;
+      };
+      // Pair threads carry tagged group lines under fan-out delivery: fetch
+      // once per peer and share the rows between the group inbox and DMs.
+      const pairRows: any[] = [];
+      const pairBySeat = new Map<number, any[]>();
+      for (const other of seats) {
+        if (other.seat === seat) continue;
+        try {
+          const rows = await readTransfer(playerOf(seat), playerOf(other.seat), 30);
+          pairBySeat.set(other.seat, rows);
+          for (const r of rows) pairRows.push(r);
+        } catch { pairBySeat.set(other.seat, []); }
+      }
+      // Groups: registry + tagged lines from the world feed and pair threads.
       const groups: any[] = [];
       const invites: string[] = [];
       try {
@@ -257,7 +309,7 @@ export function createSocialRoutes(): Router {
           if (g.archived) continue;
           const me = (g.members ?? []).find((m: any) => m.seat === seat);
           if (!me) continue;
-          const tagged = worldMsgs.filter((m) => {
+          const tagged = [...worldMsgs, ...pairRows].filter((m) => {
             const t = ch.parseTag(m.Content);
             if (!t || t.id !== g.id) return false;
             if ((m.Turn ?? 0) <= lastSeenTurn) return false;
@@ -280,7 +332,7 @@ export function createSocialRoutes(): Router {
       for (const other of seats) {
         if (other.seat === seat) continue;
         try {
-          const rows = await readTransfer(seat, other.seat, 20);
+          const rows = pairBySeat.get(other.seat) ?? [];
           const messages = rows
             .filter((r) => (r.Turn ?? 0) > lastSeenTurn)
             .map((r) => ({ ...r, speaker: seatName(seats, r.SpeakerID) }));
@@ -300,90 +352,47 @@ export function createSocialRoutes(): Router {
    * Speak as a seat: world ('world'), DM ('dm:<seat>'), group ('group:<id>' /
    * 'group:create:<title>' / 'group:invite:<id>:<seat>').
    */
-  router.post('/send', async (req: Request, res: Response<any | ErrorResponse>) => {
+  router.post("/send", async (req: Request, res: Response<any | ErrorResponse>) => {
     try {
       const body = req.body ?? {};
       const seat = Number(body.seat ?? 0);
-      const channel = String(body.channel ?? '');
-      const message = String(body.message ?? '');
-      if (!Number.isInteger(seat)) { res.status(400).json({ error: 'seat must be an integer' }); return; }
-      if (!message.trim()) { res.status(400).json({ error: 'message is required' }); return; }
-      if (message.length > 1000) { res.status(400).json({ error: 'message too long (1000 chars max)' }); return; }
-
+      if (!Number.isInteger(seat)) { res.status(400).json({ error: "seat must be an integer" }); return; }
+      const secretErr = requireSeatSecret(seat, (body as any).secret);
+      if (secretErr) { res.status(403).json({ error: secretErr }); return; }
+      const rawOps = Array.isArray((body as any).operations) && (body as any).operations.length
+        ? (body as any).operations
+        : [{ channel: String(body.channel ?? ""), target: (body as any).target, message: String(body.message ?? "") }];
+      if (seat === OBSERVER_ID && rawOps.some((o: any) => String(o?.channel ?? "") !== "world")) {
+        res.status(400).json({ error: "observer posts are world-only" }); return;
+      }
       await prepMcp();
-      const ch = await channelsModule();
-
-      if (channel === 'world') {
-        const out = await tryCall('broadcast-message', { PlayerID: seat, Content: message });
-        if (!out) { res.status(502).json({ error: 'broadcast failed' }); return; }
-        res.json({ ok: true, channel: 'world', id: (out as any).ID });
-        return;
+      const exec = await execModule();
+      const seats = await loadSeats();
+      const transports = {
+        broadcast: async (text: string) => {
+          const r = await tryCall("broadcast-message", { PlayerID: seat, Content: text });
+          if (!r) throw new Error("broadcast failed");
+          return r;
+        },
+        pair: async (peer: number, text: string) => {
+          const r = await tryCall("append-message", {
+            PlayerAID: Math.min(seat, peer), PlayerBID: Math.max(seat, peer),
+            PlayerARole: "strategist", PlayerBRole: "strategist",
+            SpeakerID: seat, MessageType: "text", Content: text,
+          });
+          if (!r) throw new Error("send failed");
+          return r;
+        },
+      };
+      const out = await exec.executeOperations(rawOps, { me: seat, turn: null, seats, transports });
+      const single = !Array.isArray((body as any).operations) || !(body as any).operations.length;
+      if (single && out.results.length === 1 && (out.results[0] as any).error) {
+        res.status(400).json({ error: (out.results[0] as any).error }); return;
       }
-
-      if (channel.startsWith('dm:')) {
-        const target = Number(channel.slice(3).trim());
-        if (!Number.isInteger(target)) { res.status(400).json({ error: "dm channel needs a seat number, e.g. channel 'dm:0'" }); return; }
-        if (target === seat) { res.status(400).json({ error: 'cannot DM yourself; pick another seat' }); return; }
-        if (target < 0 || target > 63) { res.status(400).json({ error: 'dm seat out of range' }); return; }
-        const out = await tryCall('append-message', {
-          PlayerAID: Math.min(seat, target), PlayerBID: Math.max(seat, target),
-          PlayerARole: 'strategist', PlayerBRole: 'strategist',
-          SpeakerID: seat, MessageType: 'text', Content: message,
-        });
-        if (!out) { res.status(502).json({ error: 'dm send failed' }); return; }
-        res.json({ ok: true, channel: 'dm:' + target, id: (out as any).ID });
-        return;
-      }
-
-      if (channel.startsWith('group:')) {
-        const rest = channel.slice('group:'.length);
-        if (rest.startsWith('create:')) {
-          const title = rest.slice('create:'.length).trim().slice(0, 60);
-          if (!title) { res.status(400).json({ error: "group:create needs a title, e.g. channel 'group:create:War Council'" }); return; }
-          const g = ch.createGroup({ title, creator: seat, members: [seat] });
-          const tagged = ch.tagMessage(g.id, g.title, message);
-          const out = await tryCall('broadcast-message', { PlayerID: seat, Content: tagged });
-          if (!out) { res.status(502).json({ error: 'group create broadcast failed' }); return; }
-          res.json({ ok: true, channel: 'group:' + g.id, id: (out as any).ID });
-          return;
-        }
-        if (rest.startsWith('invite:')) {
-          const cut = rest.slice('invite:'.length);
-          const sep = cut.indexOf(':');
-          const gid = (sep >= 0 ? cut.slice(0, sep) : cut).trim();
-          const target = sep >= 0 ? Number(cut.slice(sep + 1).trim()) : NaN;
-          if (!gid || !Number.isInteger(target)) {
-            res.status(400).json({ error: "group:invite needs an id and seat, e.g. channel 'group:invite:ab12cd34:0'" }); return;
-          }
-          ch.inviteToGroup(gid, target, seat);
-          const g = ch.getGroup(gid);
-          const tagged = ch.tagMessage(g.id, g.title, message);
-          const out = await tryCall('broadcast-message', { PlayerID: seat, Content: tagged });
-          if (!out) { res.status(502).json({ error: 'group invite broadcast failed' }); return; }
-          res.json({ ok: true, channel: 'group:' + gid, invited: target, id: (out as any).ID });
-          return;
-        }
-        const gid = rest.trim();
-        if (!gid) { res.status(400).json({ error: "group channel needs an id, e.g. 'group:ab12cd34'" }); return; }
-        const status = ch.memberStatus(gid, seat);
-        if (status === 'invited') {
-          // First send accepts the invite, same as the harness path.
-          ch.markMemberActive(gid, seat);
-        } else if (status !== 'active') {
-          res.status(400).json({ error: `not a member of group '${gid}'` }); return;
-        }
-        const g = ch.getGroup(gid);
-        const tagged = ch.tagMessage(g.id, g.title, message);
-        const out = await tryCall('broadcast-message', { PlayerID: seat, Content: tagged });
-        if (!out) { res.status(502).json({ error: 'group send failed' }); return; }
-        res.json({ ok: true, channel: 'group:' + gid, id: (out as any).ID });
-        return;
-      }
-
-      res.status(400).json({ error: "unknown channel; use 'world', 'dm:<seat>', or 'group:<id>'" });
+      res.json({ ok: true, executed: out.executed, results: out.results });
     } catch (err) {
-      logger.error('Failed social send', { error: err });
-      res.status(400).json({ error: (err as Error).message });
+      logger.error("Failed social send", { error: err });
+      res.status(500).json({ error: "Failed social send: " + (err as Error).message });
     }
   });
 
@@ -395,6 +404,8 @@ export function createSocialRoutes(): Router {
       const seat = Number(body.seat ?? 0);
       const accept = body.accept !== false;
       if (!gid || !Number.isInteger(seat)) { res.status(400).json({ error: 'groupId and seat required' }); return; }
+      const secretErr = requireSeatSecret(seat, (body as any).secret);
+      if (secretErr) { res.status(403).json({ error: secretErr }); return; }
       const ch = await channelsModule();
       const g = ch.resolveInvite(gid, seat, !!accept);
       res.json({ ok: true, groupId: gid, accepted: !!accept, title: g.title });
@@ -410,6 +421,8 @@ export function createSocialRoutes(): Router {
       const gid = String(body.groupId ?? '');
       const seat = Number(body.seat ?? 0);
       if (!gid || !Number.isInteger(seat)) { res.status(400).json({ error: 'groupId and seat required' }); return; }
+      const secretErr = requireSeatSecret(seat, (body as any).secret);
+      if (secretErr) { res.status(403).json({ error: secretErr }); return; }
       const ch = await channelsModule();
       const g = ch.leaveGroup(gid, seat);
       res.json({ ok: true, groupId: gid, title: g.title });
@@ -425,6 +438,8 @@ export function createSocialRoutes(): Router {
       const gid = String(body.groupId ?? '');
       const seat = Number(body.seat ?? 0);
       if (!gid || !Number.isInteger(seat)) { res.status(400).json({ error: 'groupId and seat required' }); return; }
+      const secretErr = requireSeatSecret(seat, (body as any).secret);
+      if (secretErr) { res.status(403).json({ error: secretErr }); return; }
       const ch = await channelsModule();
       const g = ch.archiveGroup(gid, seat);
       res.json({ ok: true, groupId: gid, title: g.title });

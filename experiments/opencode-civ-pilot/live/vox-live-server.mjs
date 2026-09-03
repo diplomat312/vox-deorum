@@ -19,9 +19,9 @@ import {
 } from "../mcp-server/node_modules/@modelcontextprotocol/sdk/dist/esm/types.js";
 import fs from "node:fs";
 import { SUBJECTS, toolDefs, validateCommit } from "../driver/civ-tools.mjs";
-import { classifyChannel } from "../driver/communicate-forms.mjs";
 import path from "node:path";
-import { createGroup, getGroup, markMemberActive, tagMessage, checkSend, markSent, leaveGroup, archiveGroup, inviteToGroup, resolveInvite, memberStatus } from "./channels.mjs";
+import { executeOperations } from "../driver/social-exec.mjs";
+import { loadSeats, peerSeats, resolveSeat, seatPlayer, seatName } from "../driver/seats.mjs";
 
 const PLAYER_ID = Number(process.env.CIV_PILOT_PLAYER_ID ?? 1);
 const MCP_URL = process.env.MCP_URL || "http://127.0.0.1:4000/mcp";
@@ -290,6 +290,18 @@ async function inspectLive(subject, detail) {
       return { ...cur, availablePolicies: available, hint: "inspect(policies, \"<name>\") for detail on one policy; inspect(policies, \"path:<name>\") for the full prereq chain" };
     }
     case "diplomacy": {
+      // Full correspondence with one peer: every pair-thread row plus the
+      // tagged group lines carried in the same threads. Suffix-only detail
+      // walk, no schema change.
+      if (detail && /^correspondence:/i.test(detail)) {
+        const peer = resolveSeat(detail.replace(/^correspondence:/i, "").trim(), loadSeats());
+        if (peer === null || peer === PLAYER_ID) return { content: [{ type: "text", text: JSON.stringify({ note: "correspondence needs another seat, e.g. inspect(diplomacy, \"correspondence:2\")" }) }] };
+        const meP = seatPlayer(PLAYER_ID, loadSeats());
+        const peerP = seatPlayer(peer, loadSeats());
+        const trd = liveJson(await liveCall("read-transcript", { PlayerAID: Math.min(meP, peerP), PlayerBID: Math.max(meP, peerP), Limit: 100 }));
+        const rows = Array.isArray(trd) ? trd : trd?.messages ?? trd?.rows ?? [];
+        return { content: [{ type: "text", text: JSON.stringify({ peer: seatName(peer, loadSeats()), messages: rows.map((r) => ({ turn: r?.Turn ?? r?.turn ?? null, speaker: r?.SpeakerID ?? r?.speaker ?? null, type: r?.MessageType ?? r?.messageType ?? null, content: String(r?.Content ?? r?.content ?? "").slice(0, 500) })) }, null, 2).slice(0, 12000) }] };
+      }
       if (detail) {
         const all = liveJson(await liveCall("get-players", {}));
         const want = String(detail).toLowerCase();
@@ -385,13 +397,18 @@ async function inspectLive(subject, detail) {
     }
     case "deals": {
       // Live tradable range, condensed: legal terms plus short reasons.
-      const r = liveJson(
-        await liveCall("inspect-deal", { PlayerAID: PLAYER_ID, PlayerBID: RIVAL_ID })
+const dealSeats = peerSeats(PLAYER_ID, loadSeats());
+      const dealRef = typeof args?.detail === "string" && args.detail.trim() ? args.detail.trim() : null;
+      const dealSeat = dealRef === null ? dealSeats[0] : resolveSeat(dealRef, loadSeats());
+      if (dealSeat === null || dealSeat === undefined) return { content: [{ type: "text", text: JSON.stringify({ note: "deals need a counterparty seat", peers: dealSeats }) }] };
+      const dealMe = seatPlayer(PLAYER_ID, loadSeats());
+      const dealPeer = seatPlayer(dealSeat, loadSeats());
+      const r = liveJson(        await liveCall("inspect-deal", { PlayerAID: Math.min(dealMe, dealPeer), PlayerBID: Math.max(dealMe, dealPeer) })
       );
       const tr = r?.tradableRange ?? {};
       const keys = Object.keys(tr);
-      const side = tr[String(PLAYER_ID)] ?? tr[keys[0]] ?? {};
-      const out = { netGoldPerTurn: side.netGoldPerTurn };
+      const side = tr[String(dealMe)] ?? tr[keys[0]] ?? {};
+      const out = { peer: seatName(dealSeat, loadSeats()), netGoldPerTurn: side.netGoldPerTurn };
       for (const k of ["gold", "goldPerTurn", "maps", "openBorders", "defensivePact", "peaceTreaty", "allowEmbassy", "declarationOfFriendship", "vassalage"]) {
         const e = side[k];
         if (!e) continue;
@@ -430,7 +447,14 @@ const server = new Server(
 
 server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: toolDefs() }));
 
-server.setRequestHandler(CallToolRequestSchema, async (req) => {
+let toolChain = Promise.resolve();
+server.setRequestHandler(CallToolRequestSchema, (req) => {
+  const run = () => handleToolCall(req);
+  const p = toolChain.then(run, run);
+  toolChain = p.catch(() => {});
+  return p;
+});
+async function handleToolCall(req) {
   const { name, arguments: args } = req.params;
   if (name === "inspect") {
     const subject = args?.subject;
@@ -445,222 +469,24 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
     }
   }
   if (name === "communicate") {
-    const message = String(args?.message ?? "").trim();
-    if (!message) {
-      return { content: [{ type: "text", text: "message must be a non-empty string" }], isError: true };
-    }
-    if (message.length > 1000) {
-      return { content: [{ type: "text", text: "message too long (1000 chars max); keep it short" }], isError: true };
-    }
-    // Backpressure enforcement (file-based, prefix-safe): at most ONE send
-    // per turn across all channels, including membership decisions with no
-    // visible message. Inert when CIV_PILOT_TURN is unset (offline routing
-    // tests), enforced on live turns.
+    const single = !Array.isArray(args?.operations) || !args.operations.length;
+    const raw = Array.isArray(args?.operations) && args.operations.length ? args.operations : [{ channel: args?.channel, target: args?.target, message: args?.message }];
+    const t = Number(process.env.CIV_PILOT_TURN ?? NaN);
+    const turn = Number.isFinite(t) ? t : null;
     try {
-      checkSend(PLAYER_ID);
+      const out = await executeOperations(raw, {
+        me: PLAYER_ID,
+        turn,
+        seats: loadSeats(),
+        transports: {
+          broadcast: async (text) => liveJson(await liveCall("broadcast-message", { PlayerID: PLAYER_ID, Content: text })),
+          pair: async (peer, text) => { await liveCall("append-message", { PlayerAID: Math.min(PLAYER_ID, peer), PlayerBID: Math.max(PLAYER_ID, peer), PlayerARole: "strategist", PlayerBRole: "strategist", SpeakerID: PLAYER_ID, MessageType: "text", Content: text }); },
+        },
+      });
+      if (single && out.results.length === 1 && out.results[0].error) return { content: [{ type: "text", text: out.results[0].error }], isError: true };
+      return { content: [{ type: "text", text: JSON.stringify({ ok: true, executed: out.executed, results: out.results }) }] };
     } catch (e) {
-      return { content: [{ type: "text", text: e.message }], isError: true };
-    }
-    try {
-      const ch = String(args?.channel ?? "private");
-      // Single parser for both backends (driver/communicate-forms.mjs):
-      // validation accepts and rejects identically on mock and live.
-      const form = classifyChannel(ch, PLAYER_ID);
-      if (form.kind === "invalid") {
-        return { content: [{ type: "text", text: form.error }], isError: true };
-      }
-      if (form.kind === "dm") {
-        const seat = form.seat;
-        const res = liveJson(
-          await liveCall("append-message", {
-            PlayerAID: Math.min(PLAYER_ID, seat),
-            PlayerBID: Math.max(PLAYER_ID, seat),
-            PlayerARole: "strategist",
-            PlayerBRole: "strategist",
-            SpeakerID: PLAYER_ID,
-            MessageType: "text",
-            Content: message.slice(0, 1000),
-          })
-        );
-        try { markSent(ch, PLAYER_ID); } catch {}
-        return { content: [{ type: "text", text: JSON.stringify({ ok: true, channel: ch, sent: true }) }] };
-      }
-      if (form.kind === "create") {
-        const title = form.title;
-        let g = null;
-        try {
-          g = createGroup({ title, creator: PLAYER_ID, members: [PLAYER_ID] });
-        } catch (e) {
-          return { content: [{ type: "text", text: "group create failed: " + e.message }], isError: true };
-        }
-        const tagged = tagMessage(g.id, g.title, message).slice(0, 1000);
-        try {
-          const res = liveJson(
-            await liveCall("broadcast-message", { PlayerID: PLAYER_ID, Content: tagged })
-          );
-          try { markSent(ch, PLAYER_ID); } catch {}
-          return { content: [{ type: "text", text: JSON.stringify({ ok: true, channel: "group:" + g.id, id: res.ID ?? null }) }] };
-        } catch (e) {
-          return { content: [{ type: "text", text: "communicate failed: " + e.message }], isError: true };
-        }
-      }
-      if (form.kind === "invite") {
-        const gid = form.id;
-        const seat = form.seat;
-        // Invite first (validates the inviter is active), then post the
-        // invite note: a failed send leaves a benign pending invite, never
-        // a lost membership.
-        let g = null;
-        try {
-          g = inviteToGroup(gid, seat, PLAYER_ID);
-        } catch (e) {
-          return { content: [{ type: "text", text: "group invite failed: " + e.message }], isError: true };
-        }
-        const tagged = tagMessage(g.id, g.title, message).slice(0, 1000);
-        try {
-          const res = liveJson(
-            await liveCall("broadcast-message", { PlayerID: PLAYER_ID, Content: tagged })
-          );
-          try { markSent(ch, PLAYER_ID); } catch {}
-          return { content: [{ type: "text", text: JSON.stringify({ ok: true, channel: "group:" + g.id, invited: seat, id: res.ID ?? null }) }] };
-        } catch (e) {
-          return { content: [{ type: "text", text: "communicate failed: " + e.message }], isError: true };
-        }
-      }
-      if (form.kind === "accept") {
-        const gid = form.id;
-        let gAccept = null;
-        try {
-          gAccept = resolveInvite(gid, PLAYER_ID, true);
-        } catch (e) {
-          return { content: [{ type: "text", text: "group accept failed: " + e.message }], isError: true };
-        }
-        const taggedAccept = tagMessage(gAccept.id, gAccept.title, message).slice(0, 1000);
-        try {
-          const resAccept = liveJson(await liveCall("broadcast-message", { PlayerID: PLAYER_ID, Content: taggedAccept }));
-          try { markSent(ch, PLAYER_ID); } catch {}
-          return { content: [{ type: "text", text: JSON.stringify({ ok: true, channel: "group:" + gAccept.id, accepted: true, id: resAccept.ID ?? null }) }] };
-        } catch (e) {
-          return { content: [{ type: "text", text: "communicate failed: " + e.message }], isError: true };
-        }
-      }
-      if (form.kind === "decline") {
-        const gid = form.id;
-        try {
-          resolveInvite(gid, PLAYER_ID, false);
-        } catch (e) {
-          return { content: [{ type: "text", text: "group decline failed: " + e.message }], isError: true };
-        }
-        // Silent but not free: declining spends the turn send like any
-        // other communicate call, so the budget cannot be bypassed.
-        try { markSent(ch, PLAYER_ID); } catch {}
-        return { content: [{ type: "text", text: JSON.stringify({ ok: true, channel: "group:" + gid, accepted: false }) }] };
-      }
-      if (form.kind === "leave") {
-        const gid = form.id;
-        let g = null;
-        try {
-          g = getGroup(gid);
-        } catch (e) {
-          return { content: [{ type: "text", text: "unknown group '" + gid + "'" }], isError: true };
-        }
-        if (memberStatus(gid, PLAYER_ID) !== "active") {
-          return { content: [{ type: "text", text: "not a member of group '" + gid + "'" }], isError: true };
-        }
-        // Farewell first, membership change after: a failed send leaves the
-        // seat still a member (fail closed), never a silent departure.
-        const tagged = tagMessage(g.id, g.title, message).slice(0, 1000);
-        try {
-          const res = liveJson(
-            await liveCall("broadcast-message", { PlayerID: PLAYER_ID, Content: tagged })
-          );
-          try {
-            leaveGroup(gid, PLAYER_ID);
-          } catch (e) {
-            return { content: [{ type: "text", text: "group leave failed: " + e.message }], isError: true };
-          }
-          try { markSent(ch, PLAYER_ID); } catch {}
-          return { content: [{ type: "text", text: JSON.stringify({ ok: true, channel: "group:" + g.id, left: true, id: res.ID ?? null }) }] };
-        } catch (e) {
-          return { content: [{ type: "text", text: "communicate failed: " + e.message }], isError: true };
-        }
-      }
-      if (form.kind === "archive") {
-        const gid = form.id;
-        let g = null;
-        try {
-          g = getGroup(gid);
-        } catch (e) {
-          return { content: [{ type: "text", text: "unknown group '" + gid + "'" }], isError: true };
-        }
-        if (memberStatus(gid, PLAYER_ID) !== "active") {
-          return { content: [{ type: "text", text: "not a member of group '" + gid + "'" }], isError: true };
-        }
-        // Closing line first, archive after: a failed send keeps the group
-        // open (fail closed), never a silent close.
-        const tagged = tagMessage(g.id, g.title, message).slice(0, 1000);
-        try {
-          const res = liveJson(
-            await liveCall("broadcast-message", { PlayerID: PLAYER_ID, Content: tagged })
-          );
-          try {
-            archiveGroup(gid, PLAYER_ID);
-          } catch (e) {
-            return { content: [{ type: "text", text: "group archive failed: " + e.message }], isError: true };
-          }
-          try { markSent(ch, PLAYER_ID); } catch {}
-          return { content: [{ type: "text", text: JSON.stringify({ ok: true, channel: "group:" + g.id, archived: true, id: res.ID ?? null }) }] };
-        } catch (e) {
-          return { content: [{ type: "text", text: "communicate failed: " + e.message }], isError: true };
-        }
-      }
-      if (form.kind === "group") {
-        const gid = form.id;
-        let g = null;
-        try {
-          g = getGroup(gid);
-        } catch (e) {
-          return { content: [{ type: "text", text: `unknown group '${gid}'` }], isError: true };
-        }
-        try {
-          markMemberActive(gid, PLAYER_ID);
-          g = getGroup(gid);
-        } catch (e) {
-          return { content: [{ type: "text", text: `not a member of group '${gid}': ${e.message}` }], isError: true };
-        }
-        const tagged = tagMessage(g.id, g.title, message).slice(0, 1000);
-        try {
-          const res = liveJson(
-            await liveCall("broadcast-message", { PlayerID: PLAYER_ID, Content: tagged })
-          );
-          try { markSent(ch, PLAYER_ID); } catch {}
-          return { content: [{ type: "text", text: JSON.stringify({ ok: true, channel: `group:${g.id}`, id: res.ID ?? null }) }] };
-        } catch (e) {
-          return { content: [{ type: "text", text: `communicate failed: ${e.message}` }], isError: true };
-        }
-      }
-      if (form.kind === "world") {
-        const res = liveJson(
-          await liveCall("broadcast-message", { PlayerID: PLAYER_ID, Content: message.slice(0, 1000) })
-        );
-        try { markSent(ch, PLAYER_ID); } catch {}
-        return { content: [{ type: "text", text: JSON.stringify({ ok: true, channel: "world", id: res.ID ?? null }) }] };
-      }
-      const res = liveJson(
-        await liveCall("append-message", {
-          PlayerAID: Math.min(PLAYER_ID, RIVAL_ID),
-          PlayerBID: Math.max(PLAYER_ID, RIVAL_ID),
-          PlayerARole: "strategist",
-          PlayerBRole: "strategist",
-          SpeakerID: PLAYER_ID,
-          MessageType: "text",
-          Content: message.slice(0, 1000),
-        })
-      );
-      try { markSent("private", PLAYER_ID); } catch {}
-      return { content: [{ type: "text", text: JSON.stringify({ ok: true, channel: "private", sent: true }) }] };
-    } catch (e) {
-      return { content: [{ type: "text", text: `communicate failed: ${e.message}` }], isError: true };
+      return { content: [{ type: "text", text: "communicate failed: " + e.message }], isError: true };
     }
   }
   if (name === "commit_turn") {
@@ -684,7 +510,7 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
     return { content: [{ type: "text", text: JSON.stringify({ ok: true, pass: true }) }] };
   }
   return { content: [{ type: "text", text: `unknown tool '${name}'` }], isError: true };
-});
+}
 
 const transport = new StdioServerTransport();
 await server.connect(transport);

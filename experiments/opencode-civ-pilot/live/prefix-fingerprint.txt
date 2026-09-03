@@ -1,5 +1,5 @@
 civ.md=41baad69f73600e8
 opencode.json=d0653cd0f8978d3b
-tools=0be207f9693c69dc
-updated=2026-09-03T18:11:07.867Z
-reason=shared communicate classifier, decline spends send, mock form parity
+tools=fa92705df9bc809d
+updated=2026-09-03T19:04:36.104Z
+reason=batched communicate operations budget-8 fanout-privacy explicit-invites

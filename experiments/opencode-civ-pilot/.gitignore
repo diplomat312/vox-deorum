@@ -1,0 +1,14 @@
+# Local-only: seat secrets for dashboard writes (never commit).
+live/seats-secrets.json
+seats-secrets.json
+# OpenCode runtime state (may contain auth-adjacent material).
+.opencode/
+live/.opencode/
+# Per-run console captures and local guard/registry state.
+*-out.log
+*-err.log
+send-guard.json
+live/send-guard.json
+ops-budget.json
+live/ops-budget.json
+live/channels.json

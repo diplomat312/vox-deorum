@@ -13,8 +13,9 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { SUBJECTS, toolDefs, validateCommit } from "../driver/civ-tools.mjs";
-import { checkSend, markSent, createGroup, getGroup, inviteToGroup, resolveInvite, markMemberActive, leaveGroup, archiveGroup, memberStatus, tagMessage } from "../live/channels.mjs";
-import { classifyChannel } from "../driver/communicate-forms.mjs";
+import { executeOperations } from "../driver/social-exec.mjs";
+import { loadSeats } from "../driver/seats.mjs";
+
 const here = path.dirname(fileURLToPath(import.meta.url));
 const pilotRoot = path.resolve(here, "..");
 
@@ -76,13 +77,6 @@ function seatCiv(seat) {
   return null;
 }
 
-function rivalCiv() {
-  if (process.env.CIV_PILOT_RIVAL_CIV) return process.env.CIV_PILOT_RIVAL_CIV;
-  const w = loadWorldFile();
-  const me = process.env.CIV_PILOT_CIV;
-  const others = Object.keys(w?.civs ?? {}).filter((k) => k !== me);
-  return others[0] ?? null;
-}
 
 function commitFile() {
   return (
@@ -154,12 +148,30 @@ const server = new Server(
 
 server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: toolDefs() }));
 
-server.setRequestHandler(CallToolRequestSchema, async (req) => {
+let toolChain = Promise.resolve();
+server.setRequestHandler(CallToolRequestSchema, (req) => {
+  const run = () => handleToolCall(req);
+  const p = toolChain.then(run, run);
+  toolChain = p.catch(() => {});
+  return p;
+});
+async function handleToolCall(req) {
   const { name, arguments: args } = req.params;
   if (name === "inspect") {
     const subject = args?.subject;
     if (!SUBJECTS.includes(subject)) {
       return { content: [{ type: "text", text: `unknown subject '${subject}'` }], isError: true };
+    }
+    if (subject === "diplomacy" && typeof args?.detail === "string" && /^correspondence:/i.test(args.detail)) {
+      const w = loadWorldFile();
+      const me = process.env.CIV_PILOT_CIV ?? "unknown";
+      const want = args.detail.replace(/^correspondence:/i, "").trim().toLowerCase();
+      const names = Object.keys(w?.civs ?? {});
+      const hit = names.find((n) => n.toLowerCase() === want);
+      if (!w || !hit) return { content: [{ type: "text", text: JSON.stringify({ peer: want || null, messages: [], note: "no offline correspondence" }) }] };
+      const box = (w.inbox?.[me] ?? []).filter((m) => String(m.from ?? "").toLowerCase() === hit.toLowerCase());
+      const lines = (w.log ?? []).filter((l) => String(l).toLowerCase().includes(hit.toLowerCase()));
+      return { content: [{ type: "text", text: JSON.stringify({ peer: hit, messages: box, mentions: lines.slice(-20) }) }] };
     }
     const world = worldSnapshot();
     const state = world ?? mockState();
@@ -177,141 +189,27 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
   if (name === "communicate") {
     const ME = Number(process.env.CIV_PILOT_PLAYER_ID ?? 0);
     const FROM = process.env.CIV_PILOT_CIV ?? "unknown";
-    const message = String(args?.message ?? "").trim();
-    if (!message) {
-      return { content: [{ type: "text", text: "message must be a non-empty string" }], isError: true };
-    }
-    if (message.length > 1000) {
-      return { content: [{ type: "text", text: "message too long (1000 chars max); keep it short" }], isError: true };
-    }
-    try {
-      checkSend(ME);
-    } catch (e) {
-      return { content: [{ type: "text", text: e.message }], isError: true };
-    }
-    const ch = String(args?.channel ?? "private");
-    // Same parser as live (driver/communicate-forms.mjs): validation
-    // accepts and rejects identically; only the transports below differ
-    // (world-file log and inbox instead of Vox broadcast and threads).
-    const form = classifyChannel(ch, ME);
-    if (form.kind === "invalid") {
-      return { content: [{ type: "text", text: form.error }], isError: true };
-    }
+    const single = !Array.isArray(args?.operations) || !args.operations.length;
+    const raw = Array.isArray(args?.operations) && args.operations.length ? args.operations : [{ channel: args?.channel, target: args?.target, message: args?.message }];
+    const t = Number(process.env.CIV_PILOT_TURN ?? NaN);
+    const turn = Number.isFinite(t) ? t : null;
     const rec = { type: "message", at: new Date().toISOString(), ...args };
     try {
       fs.mkdirSync(path.dirname(commitFile()), { recursive: true });
       fs.appendFileSync(commitFile() + ".messages.jsonl", JSON.stringify(rec) + "\n");
     } catch {}
-    const done = (extra) => {
-      try { markSent(ch, ME); } catch {}
-      return { content: [{ type: "text", text: JSON.stringify({ ok: true, queued: true, channel: ch, ...extra }) }] };
-    };
-    if (form.kind === "dm") {
-      const civ = seatCiv(form.seat);
-      if (!civ) {
-        return { content: [{ type: "text", text: `unknown seat '${form.seat}' (no seats mapping offline)` }], isError: true };
-      }
-      worldInboxTo(civ, FROM, message);
-      return done({ to: civ });
-    }
-    if (form.kind === "create") {
-      let g = null;
-      try {
-        g = createGroup({ title: form.title, creator: ME, members: [ME] });
-      } catch (e) {
-        return { content: [{ type: "text", text: "group create failed: " + e.message }], isError: true };
-      }
-      worldLogLine(tagMessage(g.id, g.title, message).slice(0, 1000));
-      return done({ channel: "group:" + g.id });
-    }
-    if (form.kind === "invite") {
-      let g = null;
-      try {
-        g = inviteToGroup(form.id, form.seat, ME);
-      } catch (e) {
-        return { content: [{ type: "text", text: "group invite failed: " + e.message }], isError: true };
-      }
-      worldLogLine(tagMessage(g.id, g.title, message).slice(0, 1000));
-      return done({ channel: "group:" + g.id, invited: form.seat });
-    }
-    if (form.kind === "accept") {
-      let gAccept = null;
-      try {
-        gAccept = resolveInvite(form.id, ME, true);
-      } catch (e) {
-        return { content: [{ type: "text", text: "group accept failed: " + e.message }], isError: true };
-      }
-      worldLogLine(tagMessage(gAccept.id, gAccept.title, message).slice(0, 1000));
-      return done({ channel: "group:" + gAccept.id, accepted: true });
-    }
-    if (form.kind === "decline") {
-      try {
-        resolveInvite(form.id, ME, false);
-      } catch (e) {
-        return { content: [{ type: "text", text: "group decline failed: " + e.message }], isError: true };
-      }
-      return done({ accepted: false });
-    }
-    if (form.kind === "leave") {
-      let g = null;
-      try {
-        g = getGroup(form.id);
-      } catch (e) {
-        return { content: [{ type: "text", text: "unknown group '" + form.id + "'" }], isError: true };
-      }
-      if (memberStatus(form.id, ME) !== "active") {
-        return { content: [{ type: "text", text: "not a member of group '" + form.id + "'" }], isError: true };
-      }
-      worldLogLine(tagMessage(g.id, g.title, message).slice(0, 1000));
-      try {
-        leaveGroup(form.id, ME);
-      } catch (e) {
-        return { content: [{ type: "text", text: "group leave failed: " + e.message }], isError: true };
-      }
-      return done({ left: true });
-    }
-    if (form.kind === "archive") {
-      let g = null;
-      try {
-        g = getGroup(form.id);
-      } catch (e) {
-        return { content: [{ type: "text", text: "unknown group '" + form.id + "'" }], isError: true };
-      }
-      if (memberStatus(form.id, ME) !== "active") {
-        return { content: [{ type: "text", text: "not a member of group '" + form.id + "'" }], isError: true };
-      }
-      worldLogLine(tagMessage(g.id, g.title, message).slice(0, 1000));
-      try {
-        archiveGroup(form.id, ME);
-      } catch (e) {
-        return { content: [{ type: "text", text: "group archive failed: " + e.message }], isError: true };
-      }
-      return done({ archived: true });
-    }
-    if (form.kind === "group") {
-      let g = null;
-      try {
-        g = getGroup(form.id);
-      } catch (e) {
-        return { content: [{ type: "text", text: `unknown group '${form.id}'` }], isError: true };
-      }
-      try {
-        markMemberActive(form.id, ME);
-        g = getGroup(form.id);
-      } catch (e) {
-        return { content: [{ type: "text", text: `not a member of group '${form.id}': ${e.message}` }], isError: true };
-      }
-      worldLogLine(tagMessage(g.id, g.title, message).slice(0, 1000));
-      return done({ channel: `group:${g.id}` });
-    }
-    if (form.kind === "world") {
-      worldLogLine(message.slice(0, 1000));
-      return done({});
-    }
-    const rival = rivalCiv();
-    if (rival) worldInboxTo(rival, FROM, message);
-    else if (args?.target) routeWorldInbox(args.target, message);
-    return done({ to: rival ?? args?.target ?? null });
+    const out = await executeOperations(raw, {
+      me: ME,
+      turn,
+      seats: loadSeats(),
+      transports: {
+        broadcast: async (text) => { worldLogLine(text); return { ID: null }; },
+        pair: async (peer, text) => { const civ = seatCiv(peer); if (civ) worldInboxTo(civ, FROM, text); },
+        groupNote: async (tagged) => { worldLogLine(tagged); },
+      },
+    });
+    if (single && out.results.length === 1 && out.results[0].error) return { content: [{ type: "text", text: out.results[0].error }], isError: true };
+      return { content: [{ type: "text", text: JSON.stringify({ ok: true, executed: out.executed, results: out.results }) }] };
   }
   if (name === "commit_turn") {
     const err = validateCommit(args);
@@ -339,7 +237,7 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
     return { content: [{ type: "text", text: JSON.stringify({ ok: true, pass: true }) }] };
   }
   return { content: [{ type: "text", text: `unknown tool '${name}'` }], isError: true };
-});
+}
 
 const transport = new StdioServerTransport();
 await server.connect(transport);
