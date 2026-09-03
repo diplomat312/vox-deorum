@@ -1,0 +1,3 @@
+civ.md=83716bfcb3351c0e
+opencode.json=d0653cd0f8978d3b
+tools=411fc2fb63607557
