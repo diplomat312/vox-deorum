@@ -190,3 +190,11 @@ Shift ~02:04-02:07 (game still wedged at T207, services untouched):
 - membership is unchanged, and degrades to a stable fallback inside the
 - existing groups-optional catch. No bugs found; both stay queued for
 - post-restart live verification.
+-
+Shift ~02:07-02:10, pre-restart baseline snapshot (for before/after):
+- Civ V alive: PID 25100 (started 9:01pm), CPU accruing. Game is healthy;
+- the wedge is in the backend, so morning restart is services only.
+- Node 41744 CPU 542 / 1884 CPU 348, both hot since 8:57pm, still
+- accruing: consistent with a worker spinning on the stuck game lock.
+- Watcher attempt 13 failed closed; Siam session 110 msgs; Portugal seat
+- file lastSeenTurn 167 (refresh queued post-restart). No STOP file.
