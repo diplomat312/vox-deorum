@@ -1,29 +1,29 @@
 [
   {
     "seat": 0,
-    "civ": "The Aztecs",
-    "leader": "Montezuma",
+    "civ": "Spain",
+    "leader": "Isabella",
     "playedBy": "opencode",
     "playerID": 0
   },
   {
     "seat": 1,
-    "civ": "The Iroquois",
-    "leader": "Hiawatha",
+    "civ": "Germany",
+    "leader": "Bismarck",
     "playedBy": "opencode",
     "playerID": 1
   },
   {
     "seat": 2,
-    "civ": "Babylon",
-    "leader": "Nebuchadnezzar II",
+    "civ": "Ethiopia",
+    "leader": "Haile Selassie",
     "playedBy": "opencode",
     "playerID": 2
   },
   {
     "seat": 3,
-    "civ": "Russia",
-    "leader": "Catherine",
+    "civ": "Siam",
+    "leader": "Ramkhamhaeng",
     "playedBy": "opencode",
     "playerID": 3
   }
