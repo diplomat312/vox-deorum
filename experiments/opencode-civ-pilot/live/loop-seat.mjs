@@ -61,6 +61,7 @@ async function handleTurn(turn) {
   try {
     log("seat turn " + turn + " pausing");
     await pause();
+    if (!(await acquireLock(seat, turn))) return;
     if (stopped()) return;
     process.env.CIV_PILOT_TRIGGER_TURN = String(turn);
     const t1 = Date.now();
@@ -74,6 +75,7 @@ async function handleTurn(turn) {
     epoch.exit = code;
     epoch.committedTurn = code === 0 ? turn : null;
     epoch.pausedMs = Date.now() - t0;
+    releaseLock(seat);
     appendEpoch(epoch);
     running = false;
   }
@@ -89,6 +91,31 @@ async function confirmAndRun() {
   await handleTurn(st.turn);
 }
 function sleepMs(ms) { return new Promise((r) => setTimeout(r, ms)); }
+const lockFile = path.join(here, "run-lock.json");
+// Cooperative serial lock across seat loops: only one cognition run at a
+// time, so observations never stack game-lock probes. Stale claims expire.
+async function acquireLock(seat, turn) {
+  while (!stopped()) {
+    let held = null;
+    try { held = JSON.parse(fs.readFileSync(lockFile, "utf8")); } catch (e) {}
+    if (!held || Date.now() - new Date(held.at).getTime() > 15 * 60 * 1000) {
+      try {
+        fs.writeFileSync(lockFile, JSON.stringify({ seat, turn, at: new Date().toISOString() }));
+        await sleepMs(500);
+        const back = JSON.parse(fs.readFileSync(lockFile, "utf8"));
+        if (back.seat === seat) return true;
+      } catch (e) {}
+    }
+    await sleepMs(5000);
+  }
+  return false;
+}
+function releaseLock(seat) {
+  try {
+    const o = JSON.parse(fs.readFileSync(lockFile, "utf8"));
+    if (o.seat === seat) fs.unlinkSync(lockFile);
+  } catch (e) {}
+}
 async function watch() {
   let backoff = 1000;
   while (!stopped()) {
@@ -133,16 +160,20 @@ async function streamEvents() {
     }
   }
 }
+let lastCheck = 0;
 function onBlock(block) {
   const datas = block.split("\n").filter((l) => l.indexOf("data:") === 0).map((l) => l.slice(5).trim());
   if (!datas.length) return;
   let payload = null;
   try { payload = JSON.parse(datas.join("\n")); } catch (e) { return; }
   const items = Array.isArray(payload) ? payload : [payload];
+  let gameSeen = false;
   for (const it of items) {
     const p = it?.payload ?? it?.data ?? it;
     const t = Number(p?.Turn ?? p?.turn);
+    if (p && typeof p === "object") gameSeen = true;
     if (Number.isFinite(t)) confirmAndRun();
+  if (gameSeen) { const now = Date.now(); if (now - lastCheck > 5000) { lastCheck = now; confirmAndRun(); } }
   }
 }
 log("loop start seat " + seat);

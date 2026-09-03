@@ -68,7 +68,11 @@ harness budgets and land in harness observations on the next turn.
 
 Per-request cache counters land in each seat rundir as telemetry-live.jsonl.
 driver/rollup.mjs aggregates turns, commits, tokens, hit ratio, latency, and
-social operations per seat and total. Provider cost is not exposed, so cost
+social operations per seat and total.
+Each supervisor turn appends a decision-epoch record (runs-<civ>/epochs.jsonl):
+trigger turns, collapsed epochs, exit, committed turn, paused and cognition
+milliseconds. Telemetry carries trigger_turn and horizon before/after, so any
+collapsed decision epoch is provable, not inferred. Provider cost is not exposed, so cost
 stays an explicit gap.
 
 ## Booting a fresh game
