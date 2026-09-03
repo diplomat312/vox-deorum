@@ -1,22 +1,24 @@
 {
-  "committedAt": "2026-09-03T06:30:14.649Z",
+  "committedAt": "2026-09-03T06:33:39.842Z",
   "playerID": 1,
   "actions": [
     {
       "params": {
         "economic": [
-          "finish Bath/Granary/Arena/Emissary, keep +76gpt"
+          "finish Caravan/Temple/Grocer/StoneWorks, protect Ragusa route"
         ],
-        "grandStrategy": "Chemistry into Philosophy, Foreign Service for CS",
+        "grandStrategy": "Fresh war after DoF: defend, Education for tech edge, Foreign Service",
         "military": [
-          "hold Trebs/Xbows, clear Mbanza/Hanoi crossbows, guard 7 cities"
+          "hold Si Satchanalai 595v105 and Ragusa 478v57",
+          "avoid Lisbon 132v309 and Braga 158v338",
+          "screen Nau with Liburna"
         ]
       },
       "type": "strategy"
     },
     {
       "params": {
-        "technology": "Philosophy"
+        "technology": "Education"
       },
       "type": "research"
     },
@@ -28,10 +30,12 @@
     },
     {
       "params": {
-        "proposalId": 9
+        "private": -60,
+        "public": -40,
+        "targetID": "Portugal"
       },
-      "type": "deal_accept"
+      "type": "posture"
     }
   ],
-  "rationale": "Lead 1258-834, 443-278. Retry DoF id9, Philosophy after Chemistry, Foreign Service continues Statecraft."
+  "rationale": "Betrayed after DoF: war 0-0, lead 1362-856 and 486-360. Defend stacks, Education out-techs Machinery, Foreign Service holds CS."
 }

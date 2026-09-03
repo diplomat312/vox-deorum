@@ -2320,3 +2320,162 @@ You may inspect anything else you need (inspect). When finished, commit your act
     "out": "ole\": \"strategist\",\n    \"Player2Role\": \"strategist\",\n    \"SpeakerID\": 1,\n    \"MessageType\": \"deal-enacted\",\n    \"Content\": \"The deal was enacted.\",\n    \"Payload\": {\n     \"ProposalMessageID\": 9\n    },\n    \"Turn\": 161,\n    \"CreatedAt\": 1788417024\n   }\n  }\n },\n \"jsonrpc\": \"2.0\",\n \"id\": 1788417023596\n}\n"
   }
 ]
+
+
+## Siam live turn 165 (session ses_f9a74a908ffeMXPkF3Y5Bh37Ba)
+
+### Observation sent
+
+TURN 165 (live game live-duel)
+
+You are Ramkhamhaeng, leader of Siam (seat 1). Portugal (Maria I, seat 0) is played by another mind.
+
+Current:
+* Treasury: 356 (+72/turn). Happiness: Happy (100%). Research: Drama and Poetry (Estimated in 2 turns). Research must name ONE exact technology from: Theology, Compass, Education. Next policy in 3 turns ({"Progress":["Progress","Organization","Liberty","Expertise","Equality","Fraternity"],"Statecraft":["Statecraft","Trade Confederacy"]}). Policy must name ONE exact entry from: Foreign Service (Continuing Statecraft Branch) (2/6); Fealty (New Branch); Artistry (New Branch); Authority (New Branch); Tradition (New Branch).
+* Cities (7): population 66, territory 94, military strength 486, units 24 (supply 25), score 1362.
+- Sukhothai p13 -> Caravan (3t left)
+- Si Satchanalai p12 -> Temple (3t left)
+- Muang Saluang p10 -> Grocer (2t left)
+- Lampang p10 -> Stone Works (1t left)
+- Phitsanulok p8 -> Herbalist (2t left)
+- Kamphaeng Phet p7 -> Market (1t left)
+- Nakhon Chum p6 -> Liburna (3t left)
+* Zones:
+- Land @Lisbon: Enemy (F132/E309/N19) — Portugal 1xComposite Bowman
+- Land @Sukhothai: Friendly (F453) — Siam 1xCrossbowman 2xPikeman 1xSofa
+- Land @M'banza-Kongo: Even (F125/E126/N36) — Siam 1xScout 1xHeavy Skirmisher, Barbarians 1xCrossbowman, City-State M'banza-Kongo 1xCaravel, Portugal 1xHeavy Skirmisher
+- Land @Hanoi: Friendly (F137/N29) — Barbarians 1xCrossbowman, City-State Hanoi 1xCaravel 1xPikeman
+- Land @Kyzyl: Friendly (F59/E32/N110) — City-State Kyzyl 1xPikeman
+- Land @Ragusa: Friendly (F478/E57) — City-State Ragusa 1xCaravel, Barbarians 1xPikeman, Siam 1xLongswordsman 1xTrebuchet 2xPikeman 1xHorseman 1xSofa
+- Land @Lhasa: Even (E18/N114) — Barbarians 1xPikeman
+- Land @Brussels: Friendly (F29/N117) — City-State Brussels 1xLongswordsman
+- Land @Bucharest: ? (N73) — Barbarians 1xPikeman 1xSpearman 1xComposite Bowman, City-State Bucharest 1xCaravel
+- Land @Huari: Friendly (F62/N29) — City-State Huari 1xCaravel 1xPikeman, Barbarians 1xPikeman
+- Land @Braga: Enemy (F158/E338) — Portugal 1xLongswordsman 1xComposite Bowman
+- Land @Si Satchanalai: Friendly (F595/E105) — Siam 1xCrossbowman
+- Land @Muang Saluang: Friendly (F296) — Siam 1xCrossbowman
+- Land @Lampang: Friendly (F254/E71) — Siam 1xLongswordsman 1xTrebuchet
+- Land @Phitsanulok: Friendly (F301/E41/N68) — Siam 1xPikeman 1xGalley, Barbarians 1xPikeman
+- Land @Kamphaeng Phet: Friendly (F434/E115/N19) — Siam 1xTrebuchet 1xCrossbowman
+- Sea @Huari: Friendly (F216/E98/N29) — City-State Huari 1xCaravel, Portugal 1xNau
+- Sea @Bucharest: Friendly (F109/N27) — City-State Bucharest 1xCaravel
+- Sea @M'banza-Kongo: Even (F98/E71/N27) — City-State M'banza-Kongo 1xCaravel
+- Sea @Phitsanulok: Even (F163/E116) — Siam 1xTrireme 1xLiburna
+- Sea: ? — Siam 1xScout
+- Sea @Nakhon Chum: Friendly (F74/E43/N49) — Portugal 1xLiburna
+- Sea @Hanoi: Friendly (F281/N29) — Siam 1xLiburna
+- Sea @Ragusa: Friendly (F225/E112) — City-State Ragusa 1xCaravel, Barbarians 1xCaravel
+- Sea @Brussels: Enemy (E62/N133) — Portugal 1xGalley
+* Relationships: Portugal: Distance: Neighbors; War (Our Score: 0%; Our War Weariness: 0%).
+* Portugal visible: score 856, treasury ~124, research Machinery (Estimated in 8 turns), 5 cities, military 360.
+
+Since your previous opportunity to act:
+- Nothing new recorded.
+
+What happened to your last committed actions:
+- strategy applied.
+- research applied.
+- policy applied.
+- deal_accept applied.
+
+Politics since your last opportunity (war/peace, city-states, deals):
+- T163: **Siam** revoked protection of **Ragusa**
+- T163: **Siam** converted a unit from **Siam**
+- T163: **M'banza-Kongo** converted a unit from **M'banza-Kongo**
+- T163: **Hanoi** gifted a military unit to **Siam**
+- T163: **Hanoi** converted a unit from **Hanoi**
+- T164: **Bucharest** converted a unit from **Bucharest**
+- T165: **Ragusa** plundered trade route between **Siam** and **Ragusa** (+300 gold)
+- T166: Trade route completed: **Portugal** → **Portugal**
+
+Messages for you (reply with communicate if warranted, at most one message per turn):
+- [WORLD] T164 Portugal (Maria I): Portugal welcomes this friendship with Siam. May our ships pass each other as neighbors, not as strangers.
+
+Deal thread (deal_propose sends; deal_accept {proposalId} enacts; deal_reject {proposalId} declines; inspect(deals) shows what is tradable):
+- T152 Portugal (Maria I) deal-proposal (id 9): Maria proposes a formal Declaration of Friendship between Portugal and Siam.
+- T161 Siam (you) deal-accept (id 10): The deal was accepted.
+- T161 Siam (you) deal-enacted (id 11): The deal was enacted.
+
+You may inspect anything else you need (inspect). When finished, commit your actions (commit_turn) or pass. Keep the rationale short.
+
+### Tool calls
+
+[
+  {
+    "tool": "vox-civ_commit_turn",
+    "input": null
+  }
+]
+
+### Commit
+
+{
+  "committedAt": "2026-09-03T06:33:39.842Z",
+  "playerID": 1,
+  "actions": [
+    {
+      "params": {
+        "economic": [
+          "finish Caravan/Temple/Grocer/StoneWorks, protect Ragusa route"
+        ],
+        "grandStrategy": "Fresh war after DoF: defend, Education for tech edge, Foreign Service",
+        "military": [
+          "hold Si Satchanalai 595v105 and Ragusa 478v57",
+          "avoid Lisbon 132v309 and Braga 158v338",
+          "screen Nau with Liburna"
+        ]
+      },
+      "type": "strategy"
+    },
+    {
+      "params": {
+        "technology": "Education"
+      },
+      "type": "research"
+    },
+    {
+      "params": {
+        "policy": "Foreign Service"
+      },
+      "type": "policy"
+    },
+    {
+      "params": {
+        "private": -60,
+        "public": -40,
+        "targetID": "Portugal"
+      },
+      "type": "posture"
+    }
+  ],
+  "rationale": "Betrayed after DoF: war 0-0, lead 1362-856 and 486-360. Defend stacks, Education out-techs Machinery, Foreign Service holds CS."
+}
+
+### Applied to live game
+
+[
+  {
+    "type": "strategy",
+    "tool": "set-strategy",
+    "ok": true,
+    "out": "{\n \"result\": {\n  \"content\": [\n   {\n    \"type\": \"text\",\n    \"text\": \"{\\n  \\\"Success\\\": true\\n}\"\n   }\n  ],\n  \"structuredContent\": {\n   \"Success\": true\n  }\n },\n \"jsonrpc\": \"2.0\",\n \"id\": 1788417223338\n}\n"
+  },
+  {
+    "type": "research",
+    "tool": "set-research",
+    "ok": true,
+    "out": "{\n \"result\": {\n  \"content\": [\n   {\n    \"type\": \"text\",\n    \"text\": \"{\\n  \\\"Success\\\": true\\n}\"\n   }\n  ],\n  \"structuredContent\": {\n   \"Success\": true\n  }\n },\n \"jsonrpc\": \"2.0\",\n \"id\": 1788417223571\n}\n"
+  },
+  {
+    "type": "policy",
+    "tool": "set-policy",
+    "ok": true,
+    "out": "{\n \"result\": {\n  \"content\": [\n   {\n    \"type\": \"text\",\n    \"text\": \"{\\n  \\\"Success\\\": true\\n}\"\n   }\n  ],\n  \"structuredContent\": {\n   \"Success\": true\n  }\n },\n \"jsonrpc\": \"2.0\",\n \"id\": 1788417223814\n}\n"
+  },
+  {
+    "type": "posture",
+    "tool": "set-relationship",
+    "ok": true,
+    "out": "{\n \"result\": {\n  \"content\": [\n   {\n    \"type\": \"text\",\n    \"text\": \"{\\n  \\\"Success\\\": true\\n}\"\n   }\n  ],\n  \"structuredContent\": {\n   \"Success\": true\n  }\n },\n \"jsonrpc\": \"2.0\",\n \"id\": 1788417224026\n}\n"
+  }
+]
