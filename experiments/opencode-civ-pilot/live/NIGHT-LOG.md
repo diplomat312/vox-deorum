@@ -162,3 +162,14 @@ Shift ~01:56-02:01 (game still wedged at T207, services untouched):
 - live probes run tonight). Next walker candidate from the catalog:
 - get-civilization traits on the diplomacy zoom; skipped for now to keep
 - this change to one new live call per view.
+-
+Shift ~02:01-02:05 (game still wedged at T207, services untouched):
+- Watcher attempt 12 failed closed; session re-exported at 110 msgs.
+- Doc-consistency pass: RUNBOOK had a duplicated spawn-contention bullet
+- from overlapping edits (stale 26/26 + 30/30 lines); merged to one live
+- line (33/33). NIGHT-LOG history entries left intact.
+- Traits-walker spec confirmed from source: get-civilization is a static
+- local-DB read (civ/leader/trait, same DatabaseQueryTool shape as
+- get-technology), so the diplomacy zoom can append rival traits/UU/UB
+- with zero game-lock risk and stable-per-game cache behavior. Ships after
+- the opinion-lines enrichment validates live. No live probes run tonight.

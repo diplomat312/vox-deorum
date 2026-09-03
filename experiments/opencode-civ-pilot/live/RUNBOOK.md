@@ -40,8 +40,7 @@ Known quirks:
 - Offline spawns (check-prefix.mjs, test-channels.mjs routing section) can
 - fail with spawn UNKNOWN while a watcher attempt is in flight (run-live-turn
 - holds opencode plus MCP children); retry in the ~3min quiet gap between
-- attempts. Contention, not breakage: 26/26 green off-window.
-- attempts. Contention, not breakage: suite green off-window (30/30).
+- attempts. Contention, not breakage: suite green off-window (33/33).
 
 Watcher: node watch-207.mjs retries turn 207 up to 100 attempts, 4min apart (about 8h coverage, full overnight), stops on first banked commit. Create runs-siam/STOP to stop it early. The watcher is our own file-polling loop — restarting it never touches game services.
 
