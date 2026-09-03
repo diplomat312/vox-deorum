@@ -1,0 +1,8 @@
+{
+  "test": "multi-operation batch (spec 15), operator-driven as seat 0 at live turn 31",
+  "call": "one executeOperations with 4 ops: dm:1, dm:3, group:a149b4fe, world",
+  "result": {"executed": 4, "errors": 0, "worldId": 14},
+  "budget": {"seat": 0, "turn": 31, "used": 4},
+  "delivery": "pair thread 0-3 shows BATCH15-MOROCCO-SWEDEN and tagged group line",
+  "verdict": "pass"
+}

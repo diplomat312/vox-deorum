@@ -1,0 +1,10 @@
+{
+  "test": "supervisor restart, seat 3 (Sweden)",
+  "at": "2026-09-03T21:39-21:41Z",
+  "before": {"session": "ses_f96da7caaffe1AX7Ab5QT3Zf4q", "lastSeenTurn": 25, "committedTurn": 25},
+  "stop": "STOP file honored between phases; loop exited clean; aborted T26 epoch exit -1 committedTurn null",
+  "resume": "game kept advancing (25->26); serial lock passed to other seats",
+  "after": {"session": "ses_f96da7caaffe1AX7Ab5QT3Zf4q", "lastSeenTurn": 27, "replayed": false},
+  "verdict": "pass",
+  "nit": "aborted epoch lists already-committed T25 in collapsed triggers"
+}

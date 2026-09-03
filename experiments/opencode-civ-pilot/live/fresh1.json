@@ -1,0 +1,10 @@
+{
+  "game": "fresh1",
+  "gameId": "dbf55d59-9d9c-4cfc-b799-85489b409f34",
+  "bootedAt": "2026-09-03T21:07:23Z",
+  "bootNote": "scripted 4-AI start stalled turn 0 on human slot; armed SetAIAutoPlay(3000,-1); operator clicked begin-your-journey screen",
+  "seatsFile": "social-seats-fresh1.json",
+  "channelsFile": "channels-fresh1.json (created on first group op)",
+  "rundirs": ["runs-fresh1-morocco", "runs-fresh1-ethiopia", "runs-fresh1-polynesia", "runs-fresh1-sweden"],
+  "model": "opencode-go/muse-spark-1.3-contributor"
+}
