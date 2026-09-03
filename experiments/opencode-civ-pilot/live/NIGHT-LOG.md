@@ -179,3 +179,14 @@ Shift ~02:03-02:06 (game still wedged at T207, services untouched):
 - New live/README.md: pilot overview, doc index, operating rules, queued
 - live verifications. Fresh off-window evidence: suite 33/33, prefix
 - stable (fingerprint unchanged).
+-
+Shift ~02:04-02:07 (game still wedged at T207, services untouched):
+- Watcher attempt 13 failed closed; session re-exported at 110 msgs with
+- communicate calls still at 3 (no stray sends).
+- Pre-live review of the two queued changes (290bff29 opinions, 608a385d
+- membership): opinion labels verified against get-opinions source
+- (OurOpinionOfThem = requester's view of target; string/unmet entries
+- skipped; caps hold); membership line is active-only, stable while
+- membership is unchanged, and degrades to a stable fallback inside the
+- existing groups-optional catch. No bugs found; both stay queued for
+- post-restart live verification.
