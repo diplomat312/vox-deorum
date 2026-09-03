@@ -1,22 +1,22 @@
 {
-  "committedAt": "2026-09-03T05:03:18.693Z",
+  "committedAt": "2026-09-03T05:04:16.132Z",
   "playerID": 1,
   "actions": [
     {
       "params": {
         "economic": [
-          "finish Worker/Wall/Mausoleum, keep +13gpt"
+          "finish Wall/Libraries/Mausoleum, keep +18gpt"
         ],
-        "grandStrategy": "Physics into Steel, Authority",
+        "grandStrategy": "Steel into Machinery for crossbows, Authority",
         "military": [
-          "hold Si Satchanalai/Lampang, escort Worker, watch Portugal Berserkers in 3t"
+          "kill Portugal Archer at Si Satchanalai 99v24, push Trebuchet from Lampang, clear Sukhothai barb"
         ]
       },
       "type": "strategy"
     },
     {
       "params": {
-        "technology": "Steel"
+        "technology": "Machinery"
       },
       "type": "research"
     },
@@ -35,5 +35,5 @@
       "type": "posture"
     }
   ],
-  "rationale": "Up 714-589, parity 191-196, Physics 2t. Steel next for Longswords, Authority, finish Wall."
+  "rationale": "Lead 722-593, mil 208-202, Trebs online. Machinery for crossbows after Steel, Authority, clear Archer at front."
 }

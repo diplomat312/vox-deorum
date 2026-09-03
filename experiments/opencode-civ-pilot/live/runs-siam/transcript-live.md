@@ -1141,3 +1141,131 @@ You may inspect anything else you need (inspect). When finished, commit your act
     "out": "{\n \"result\": {\n  \"content\": [\n   {\n    \"type\": \"text\",\n    \"text\": \"{\\n  \\\"Success\\\": true\\n}\"\n   }\n  ],\n  \"structuredContent\": {\n   \"Success\": true\n  }\n },\n \"jsonrpc\": \"2.0\",\n \"id\": 1788411806221\n}\n"
   }
 ]
+
+
+## Siam live turn 134 (session ses_f9a74a908ffeMXPkF3Y5Bh37Ba)
+
+### Observation sent
+
+TURN 134 (live game live-duel)
+
+You are Ramkhamhaeng, leader of Siam (seat 1). Portugal (Maria I, seat 0) is played by another mind.
+
+Current:
+* Treasury: 136 (+18/turn). Happiness: Happy (100%). Research: Steel (Estimated in 10 turns). Research must name ONE exact technology from: Philosophy, Drama and Poetry, Machinery. Next policy in 29 turns ({"Progress":["Progress","Organization","Liberty","Expertise","Equality","Fraternity"]}). Policy must name ONE exact entry from: Statecraft (New Branch); Fealty (New Branch); Artistry (New Branch); Authority (New Branch); Tradition (New Branch).
+* Cities (4): population 30, territory 45, military strength 208, units 14 (supply 13), score 722.
+- Sukhothai p8 -> Library (2t left)
+- Si Satchanalai p9 -> Great Wall (1t left)
+- Muang Saluang p7 -> Mausoleum of Halicarnassus (3t left)
+- Lampang p6 -> Library (4t left)
+* Zones:
+- Land: ? — Barbarians 1xSpearman
+- Land @Sukhothai: Friendly (F191) — Siam 1xHorseman 2xSpearman 1xComposite Bowman, Barbarians 1xSpearman
+- Land @M'banza-Kongo: Even (F24/E22/N20) — Siam 1xArcher, City-State M'banza-Kongo 1xTrireme
+- Land @Hanoi: Friendly (F109/N27) — Barbarians 1xComposite Bowman, City-State Hanoi 1xTrireme 1xSpearman
+- Land @Ragusa: Even (F33/E36/N39) — City-State Ragusa 1xSpearman, Barbarians 1xSpearman, Siam 1xSpearman
+- Land @Brussels: Friendly (F57/N40) — Siam 1xHorseman, City-State Brussels 1xSpearman
+- Land @Bucharest: Friendly (F20/N20) — Siam 1xScout, City-State Bucharest 1xTrireme, Barbarians 1xSpearman
+- Land @Si Satchanalai: Friendly (F99/E24) — Siam 1xComposite Bowman, Portugal 1xArcher
+- Land @Muang Saluang: Friendly (F204) — Siam 1xSpearman 1xComposite Bowman
+- Land @Lampang: Friendly (F152) — Siam 1xTrebuchet 1xSpearman
+- Sea @Ragusa: Even (F34/E36/N82) — City-State Ragusa 1xTrireme
+- Sea @Bucharest: ? (N78) — Barbarians 1xSpearman, City-State Bucharest 1xTrireme
+- Sea @Sukhothai: Friendly (F56) — Siam 1xLiburna
+- Sea @Muang Saluang: Friendly (F161) — City-State Hanoi 1xTrireme 1xChariot Archer
+- Sea @Brussels: ? (N111) — City-State Brussels 2xTrireme
+* Relationships: Portugal: Distance: Neighbors; War (Our Score: 2%; Our War Weariness: 39%); Denounced Them.
+* Portugal visible: score 593, treasury ~20, research Metal Casting (Estimated in 1 turns), 4 cities, military 202.
+
+Since your previous opportunity to act:
+- Nothing new recorded.
+
+What happened to your last committed actions:
+- strategy applied.
+- research applied.
+- policy applied.
+- posture applied.
+
+Outstanding requests/deals/messages: none tracked yet (phase 1 strategic test).
+
+You may inspect anything else you need (inspect). When finished, commit your actions (commit_turn) or pass. Keep the rationale short.
+
+### Tool calls
+
+[
+  {
+    "tool": "vox-civ_commit_turn",
+    "input": null
+  }
+]
+
+### Commit
+
+{
+  "committedAt": "2026-09-03T05:04:16.132Z",
+  "playerID": 1,
+  "actions": [
+    {
+      "params": {
+        "economic": [
+          "finish Wall/Libraries/Mausoleum, keep +18gpt"
+        ],
+        "grandStrategy": "Steel into Machinery for crossbows, Authority",
+        "military": [
+          "kill Portugal Archer at Si Satchanalai 99v24, push Trebuchet from Lampang, clear Sukhothai barb"
+        ]
+      },
+      "type": "strategy"
+    },
+    {
+      "params": {
+        "technology": "Machinery"
+      },
+      "type": "research"
+    },
+    {
+      "params": {
+        "policy": "Authority"
+      },
+      "type": "policy"
+    },
+    {
+      "params": {
+        "private": -20,
+        "public": -20,
+        "targetID": "Portugal"
+      },
+      "type": "posture"
+    }
+  ],
+  "rationale": "Lead 722-593, mil 208-202, Trebs online. Machinery for crossbows after Steel, Authority, clear Archer at front."
+}
+
+### Applied to live game
+
+[
+  {
+    "type": "strategy",
+    "tool": "set-strategy",
+    "ok": true,
+    "out": "{\n \"result\": {\n  \"content\": [\n   {\n    \"type\": \"text\",\n    \"text\": \"{\\n  \\\"Success\\\": true\\n}\"\n   }\n  ],\n  \"structuredContent\": {\n   \"Success\": true\n  }\n },\n \"jsonrpc\": \"2.0\",\n \"id\": 1788411858736\n}\n"
+  },
+  {
+    "type": "research",
+    "tool": "set-research",
+    "ok": true,
+    "out": "{\n \"result\": {\n  \"content\": [\n   {\n    \"type\": \"text\",\n    \"text\": \"{\\n  \\\"Success\\\": true\\n}\"\n   }\n  ],\n  \"structuredContent\": {\n   \"Success\": true\n  }\n },\n \"jsonrpc\": \"2.0\",\n \"id\": 1788411859071\n}\n"
+  },
+  {
+    "type": "policy",
+    "tool": "set-policy",
+    "ok": true,
+    "out": "{\n \"result\": {\n  \"content\": [\n   {\n    \"type\": \"text\",\n    \"text\": \"{\\n  \\\"Success\\\": true\\n}\"\n   }\n  ],\n  \"structuredContent\": {\n   \"Success\": true\n  }\n },\n \"jsonrpc\": \"2.0\",\n \"id\": 1788411859281\n}\n"
+  },
+  {
+    "type": "posture",
+    "tool": "set-relationship",
+    "ok": true,
+    "out": "{\n \"result\": {\n  \"content\": [\n   {\n    \"type\": \"text\",\n    \"text\": \"{\\n  \\\"Success\\\": true\\n}\"\n   }\n  ],\n  \"structuredContent\": {\n   \"Success\": true\n  }\n },\n \"jsonrpc\": \"2.0\",\n \"id\": 1788411859592\n}\n"
+  }
+]
