@@ -1,22 +1,22 @@
 {
-  "committedAt": "2026-09-03T04:58:28.807Z",
+  "committedAt": "2026-09-03T04:59:27.056Z",
   "playerID": 1,
   "actions": [
     {
       "params": {
         "economic": [
-          "finish Arena/Walls/Forge, keep +gpt"
+          "finish Heroic Epic/Walls/Forge, keep +gpt"
         ],
-        "grandStrategy": "Metal Casting into Physics Trebs, Authority war branch",
+        "grandStrategy": "Physics into Steel Longswords, Authority war branch",
         "military": [
-          "hold Lampang siege 241, Si Satchanalai 182v25, clear Sukhothai barb, avoid Kyzyl"
+          "hold Si Satchanalai 221v29, clear Lampang/Ragusa barbs, protect Catapult, avoid Portugal navy"
         ]
       },
       "type": "strategy"
     },
     {
       "params": {
-        "technology": "Physics"
+        "technology": "Steel"
       },
       "type": "research"
     },
@@ -35,5 +35,5 @@
       "type": "posture"
     }
   ],
-  "rationale": "Lead 685-508, mil 183-175, war 4%. Finish Metal Casting into Physics Trebs, Authority, hold siege stacks."
+  "rationale": "Lead 695-515, mil 182-164, Physics 12t. Queue Steel for Longswords/Armory, Authority, finish Heroic Epic/Wall."
 }
