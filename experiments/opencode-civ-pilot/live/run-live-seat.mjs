@@ -55,6 +55,7 @@ const rival = seats.find((s) => Number(s.seat) !== seat) ?? { seat: 1 - seat };
 
 const env = {
   ...process.env,
+  CIV_PILOT_SEAT: String(seat),
   CIV_PILOT_CIV: cfg.civ,
   CIV_PILOT_LEADER: cfg.leader,
   CIV_PILOT_PLAYER_ID: String(seat),
@@ -75,4 +76,3 @@ child.on("close", (code) => {
   // run-live-turn.mjs exits 0 only when the turn is committed (commit_ok).
   process.exit(code === null ? 1 : code);
 });
-

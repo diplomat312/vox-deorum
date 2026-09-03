@@ -88,3 +88,21 @@ Watchers, prefix guard, and lock notes: live/RUNBOOK.md. Offline suite:
 live/test-channels.mjs (channels, routing, budget, mock/live parity, seat
 keys, visibility) and live/test-fourway.mjs (batch budget, same-turn seats,
 DM and group privacy, next-turn views).
+
+## Seat-turn gating and durable cognition state
+
+Each seat loop wakes only for its own native turn: an SSE event naming its
+player, or the cheap status poll showing it is the active player. After
+pausing it re-checks the active player and refuses (logged refused epoch)
+on mismatch. Epochs record gameTurn, expected/trigger/active player ids,
+and the wake source. While one cognition runs, only genuinely newer turns
+queue, deduplicated; collapsed means newer triggers coalesced, nothing else.
+
+Per-seat cognition-state.json survives supervisor restarts
+(lastSuccessfulDecisionTurn plus pending turn/status). A restart retries the
+pending turn when the game has not moved past it, otherwise records an
+explicit missed_epoch. No failed or interrupted decision is silently dropped.
+
+Every model-facing tool call lands in the seat rundir tool-calls.jsonl with
+timestamp, seat, turn, arguments, outcome, and duration, and the turn
+transcript Tool calls section carries the same arguments and results.

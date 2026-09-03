@@ -456,6 +456,29 @@ server.setRequestHandler(CallToolRequestSchema, (req) => {
 });
 async function handleToolCall(req) {
   const { name, arguments: args } = req.params;
+  const t0 = Date.now();
+  const logged = {
+    ts: new Date().toISOString(), seat: toolLogSeat(), playerID: PLAYER_ID,
+    turn: process.env.CIV_PILOT_TURN ?? null, tool: name,
+    args: capLogText(args, 2000),
+  };
+  try {
+    const res = await handleToolCallInner(req);
+    logged.ok = !(res && res.isError);
+    logged.durationMs = Date.now() - t0;
+    logged.result = capLogText(firstResultText(res), 2000);
+    logToolCall(logged);
+    return res;
+  } catch (e) {
+    logged.ok = false;
+    logged.durationMs = Date.now() - t0;
+    logged.error = capLogText(String(e?.message ?? e), 500);
+    logToolCall(logged);
+    throw e;
+  }
+}
+async function handleToolCallInner(req) {
+  const { name, arguments: args } = req.params;
   if (name === "inspect") {
     const subject = args?.subject;
     if (!SUBJECTS.includes(subject)) {
@@ -514,3 +537,35 @@ async function handleToolCall(req) {
 
 const transport = new StdioServerTransport();
 await server.connect(transport);
+// Independent tool-call log: every model-facing invocation with arguments,
+// outcome, and duration lands in the seat rundir as tool-calls.jsonl.
+// Ground truth for review; the turn transcript carries the same calls.
+function toolLogDir() {
+  try { return path.dirname(commitFile()); }
+  catch { return process.cwd(); }
+}
+function toolLogSeat() {
+  if (process.env.CIV_PILOT_SEAT) return process.env.CIV_PILOT_SEAT;
+  try {
+    const m = /last-commit-seat-(\d+)/.exec(commitFile());
+    if (m) return m[1];
+  } catch {}
+  return String(PLAYER_ID);
+}
+function capLogText(v, n) {
+  if (v === undefined || v === null) return null;
+  const s = typeof v === "string" ? v : JSON.stringify(v);
+  return s.length > n ? s.slice(0, n) + "...[trimmed " + (s.length - n) + " chars]" : s;
+}
+function logToolCall(rec) {
+  try {
+    fs.mkdirSync(toolLogDir(), { recursive: true });
+    fs.appendFileSync(path.join(toolLogDir(), "tool-calls.jsonl"), JSON.stringify(rec) + "\n");
+  } catch {}
+}
+function firstResultText(res) {
+  try {
+    const c = res?.content?.[0]?.text;
+    return typeof c === "string" ? c : JSON.stringify(c ?? null);
+  } catch { return null; }
+}

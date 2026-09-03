@@ -23,11 +23,12 @@ for (const { seat, c } of SEATS) {
   } catch {}
   const teleByTurn = new Map(teles.map((t) => [t.turn, t]));
   for (const e of epochs) {
-    const t = teleByTurn.get(e.observationTurn) ?? teleByTurn.get(e.committedTurn);
+    const turn = e.observationTurn ?? e.missedTurn ?? e.committedTurn ?? "-";
+    const t = teleByTurn.get(turn) ?? teleByTurn.get(e.committedTurn);
     rows.push({
-      ts: e.ts, civ: c,
-      turn: e.observationTurn ?? e.committedTurn,
-      exit: e.exit, committed: e.committedTurn,
+      ts: e.ts, civ: c, kind: e.kind ?? "cognition",
+      turn, exit: e.exit ?? "-", committed: e.committedTurn ?? (e.missedTurn != null ? ("missed " + e.missedTurn) : "-"),
+      trigger: e.triggerPlayerID ?? "-", active: e.activePlayerID ?? "-",
       collapsed: (e.collapsed ?? []).join(",") || "-",
       cogMs: e.cognitionMs ?? "-", pausedMs: e.pausedMs ?? "-",
       tools: t ? (t.tool_calls ?? []).filter((x, i, a) => a.indexOf(x) === i).join(",") : "-",
@@ -40,8 +41,8 @@ for (const { seat, c } of SEATS) {
 rows.sort((a, b) => String(a.ts).localeCompare(String(b.ts)));
 console.log("# Chronological trace index: " + game);
 console.log("");
-console.log("| when | civ | turn | exit | committed | collapsed | cogMs | pausedMs | tools | ops | uncached | cacheRead | out | reasoning |");
-console.log("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|");
+console.log("| when | civ | kind | turn | exit | committed | trigger | active | collapsed | cogMs | pausedMs | tools | ops | uncached | cacheRead | out | reasoning |");
+console.log("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|");
 for (const r of rows) {
-  console.log("| " + [r.ts, r.civ, r.turn, r.exit, r.committed, r.collapsed, r.cogMs, r.pausedMs, r.tools, r.ops, r.uncached, r.read, r.out, r.reason].join(" | ") + " |");
+  console.log("| " + [r.ts, r.civ, r.kind, r.turn, r.exit, r.committed, r.trigger, r.active, r.collapsed, r.cogMs, r.pausedMs, r.tools, r.ops, r.uncached, r.read, r.out, r.reason].join(" | ") + " |");
 }

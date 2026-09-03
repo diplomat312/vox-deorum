@@ -51,8 +51,16 @@ export async function appendToSession({
     if (!e) { continue; }
     walk(e, (o) => {
       const nm = o.tool ?? o.toolName ?? o.name;
-      if (o.type && /tool/i.test(String(o.type)) && typeof nm === "string" && /commit_turn|pass|inspect|communicate/.test(nm)) {
-        toolCalls.push({ tool: nm, input: o.input ?? o.arguments ?? o.args ?? null });
+      const st8 = o.state && typeof o.state === "object" ? o.state : {};
+      if ((o.type && /tool/i.test(String(o.type)) || o.callID) && typeof nm === "string" && /commit_turn|pass|inspect|communicate/.test(nm)) {
+        toolCalls.push({
+          tool: nm,
+          callID: o.callID ?? null,
+          status: st8.status ?? o.status ?? null,
+          input: st8.input ?? o.input ?? o.arguments ?? o.args ?? null,
+          output: capStr(st8.output ?? o.output ?? o.result ?? null, 1500),
+          error: capStr(o.error ?? st8.error ?? null, 500),
+        });
       }
       if (o.sessionID && !session) session = o.sessionID;
       if (o.session_id && !session) session = o.session_id;
@@ -90,4 +98,9 @@ export function readCommit(commitFile) {
 
 export function clearCommit(commitFile) {
   try { if (fs.existsSync(commitFile)) fs.unlinkSync(commitFile); } catch {}
+}
+function capStr(v, n) {
+  if (v === undefined || v === null) return null;
+  const s = typeof v === "string" ? v : JSON.stringify(v);
+  return s.length > n ? s.slice(0, n) + "...[trimmed " + (s.length - n) + " chars]" : s;
 }

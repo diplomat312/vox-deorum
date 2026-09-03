@@ -1,15 +1,16 @@
-// Event-driven turn-gated supervisor for one seat. Game events arrive over
-// the bridge SSE stream; each turn advance wakes the loop, which pauses the
-// game, runs one cognition opportunity on the seat persistent session, and
-// resumes on commit. Pause-upfront is deliberate: the world waits for the
-// mind, so observations never race the game and commits land at decision
-// time. Execution is serial per seat, STOP is honored between phases, and
-// reconnects use capped backoff with the gap logged and one catch-up run.
+// Seat-turn-gated supervisor for one civilization. The loop wakes only when
+// its own seat native turn begins (SSE PlayerDoTurn for its player, or the
+// cheap status poll showing it is the active player). It pauses, refuses
+// unless the active player is still its own, runs one cognition opportunity
+// on the seat persistent session, and resumes on commit. Execution is serial
+// per seat, STOP is honored between phases, and reconnects use capped
+// backoff with the gap logged and one catch-up run.
 import { spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { callLive } from "./live-mcp.mjs";
+import { loadSeats, seatPlayer } from "../driver/seats.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const NL = String.fromCharCode(10);
@@ -47,29 +48,66 @@ function runOnce(turn) {
 }
 let doneTurn = -1;
 let pending = [];
+let runningTurn = null;
+// The Vox player id for this seat (usually equals the seat number).
+const MY_PLAYER = (() => {
+  try {
+    const rows = loadSeats();
+    const p = seatPlayer(seat, rows);
+    return Number.isInteger(p) ? p : seat;
+  } catch { return seat; }
+})();
+// Durable cognition state: survives supervisor restarts so a failed or
+// interrupted decision is retried or recorded as missed, never dropped.
+const cogStateFile = path.join(rundir, "cognition-state.json");
+function loadCogState() {
+  try { return JSON.parse(fs.readFileSync(cogStateFile, "utf8")); }
+  catch { return null; }
+}
+function saveCogState(s) {
+  try { fs.writeFileSync(cogStateFile, JSON.stringify(s, null, 1)); }
+  catch (e) { log("cogstate write failed: " + e.message); }
+}
+let lastMissedRecorded = -1;
 function appendEpoch(e) { try { fs.appendFileSync(path.join(rundir, "epochs.jsonl"), JSON.stringify(e) + NL); } catch (err) { log("epoch write failed"); } }
 let gameID = null;
 let running = false;
-async function handleTurn(turn) {
+async function handleTurn(turn, wake) {
   if (running || stopped() || turn <= doneTurn) return;
   running = true;
+  runningTurn = turn;
   const triggers = pending.splice(0);
   if (!triggers.includes(turn)) triggers.push(turn);
-  const epoch = { ts: new Date().toISOString(), seat, gameID, observationTurn: turn, triggers, collapsed: triggers.filter((t) => t < turn) };
+  const epoch = { ts: new Date().toISOString(), kind: "cognition", seat, gameID, gameTurn: turn, observationTurn: turn, expectedPlayerID: MY_PLAYER, triggerPlayerID: wake?.playerID ?? null, wakeSource: wake?.source ?? "poll", activePlayerID: null, triggers, collapsed: triggers.filter((t) => t < turn) };
   const t0 = Date.now();
   let code = -1;
   try {
     log("seat turn " + turn + " pausing");
     await pause();
+    let stNow = null;
+    try { stNow = await status(); } catch (e) { log("post-pause status failed: " + e.message); }
+    epoch.activePlayerID = stNow ? stNow.activePlayerId ?? null : null;
+    if (stNow && Number(stNow.activePlayerId) !== Number(MY_PLAYER)) {
+      log("refusing T" + turn + ": active player " + stNow.activePlayerId + " is not mine " + MY_PLAYER);
+      epoch.kind = "refused";
+      code = 2;
+      return;
+    }
     if (!(await acquireLock(seat, turn))) return;
     if (stopped()) return;
+    saveCogState({ gameId: gameID, lastSuccessfulDecisionTurn: doneTurn, pendingDecisionTurn: turn, pendingStatus: "running" });
     process.env.CIV_PILOT_TRIGGER_TURN = String(turn);
     const t1 = Date.now();
     const res = await runOnce(turn);
     code = res.code;
     epoch.cognitionMs = Date.now() - t1;
     log("turn " + turn + " exit " + res.code);
-    if (res.code === 0) doneTurn = turn;
+    if (res.code === 0) {
+      doneTurn = turn;
+      saveCogState({ gameId: gameID, lastSuccessfulDecisionTurn: turn, pendingDecisionTurn: null, pendingStatus: "completed" });
+    } else {
+      saveCogState({ gameId: gameID, lastSuccessfulDecisionTurn: doneTurn, pendingDecisionTurn: turn, pendingStatus: "failed" });
+    }
   } finally {
     try { await resume(); } catch (e) {}
     epoch.exit = code;
@@ -78,17 +116,60 @@ async function handleTurn(turn) {
     releaseLock(seat);
     appendEpoch(epoch);
     running = false;
+    runningTurn = null;
   }
 }
-async function confirmAndRun() {
+function recordMissed(missedTurn, liveTurn, reason) {
+  appendEpoch({ ts: new Date().toISOString(), kind: "missed_epoch", seat, gameID, missedTurn, liveTurn, reason });
+  saveCogState({ gameId: gameID, lastSuccessfulDecisionTurn: doneTurn, pendingDecisionTurn: null, pendingStatus: "missed" });
+  lastMissedRecorded = missedTurn;
+  log("missed_epoch T" + missedTurn + " (live T" + liveTurn + "): " + reason);
+}
+async function confirmAndRun(wake) {
   let st = null;
   try { st = await status(); } catch (e) { log("status failed: " + e.message); return; }
-  if (st.gameID !== gameID) { gameID = st.gameID; doneTurn = -1; log("new game; watermark reset"); }
+  if (st.gameID !== gameID) {
+    gameID = st.gameID;
+    const saved = loadCogState();
+    if (saved && saved.gameId === gameID && Number.isInteger(saved.lastSuccessfulDecisionTurn)) {
+      doneTurn = saved.lastSuccessfulDecisionTurn;
+      pending = [];
+      log("same game; watermark restored at T" + doneTurn);
+    } else {
+      doneTurn = -1;
+      pending = [];
+      saveCogState({ gameId: gameID, lastSuccessfulDecisionTurn: -1, pendingDecisionTurn: null, pendingStatus: null });
+      log("new game; watermark reset");
+    }
+  }
+  const cs = loadCogState();
+  if (cs && cs.gameId === gameID && cs.pendingDecisionTurn != null && cs.pendingStatus !== "completed" && cs.pendingStatus !== "missed") {
+    if (st.turn <= cs.pendingDecisionTurn) {
+      log("retrying pending T" + cs.pendingDecisionTurn + " (status " + cs.pendingStatus + ")");
+      if (!running) await handleTurn(cs.pendingDecisionTurn, { source: "recovery", playerID: MY_PLAYER });
+      return;
+    }
+    recordMissed(cs.pendingDecisionTurn, st.turn, "game advanced past uncommitted decision");
+  }
+  if (st.turn > doneTurn + 1 && st.turn - 1 > lastMissedRecorded && doneTurn >= 0) {
+    recordMissed(doneTurn + 1, st.turn, "turn completed with no cognition for this seat");
+    doneTurn = st.turn - 1;
+  }
   if (running) {
-    if (st.turn > doneTurn && !pending.includes(st.turn)) { pending.push(st.turn); log("trigger T" + st.turn + " arrived while busy"); }
+    const cand = wake && Number.isFinite(wake.turn) ? wake.turn : st.turn;
+    if (cand > runningTurn && cand > doneTurn && !pending.includes(cand)) {
+      pending.push(cand);
+      log("trigger T" + cand + " queued while running T" + runningTurn);
+    }
     return;
   }
-  await handleTurn(st.turn);
+  if (wake && Number(wake.playerID) === Number(MY_PLAYER) && Number.isFinite(wake.turn) && wake.turn > doneTurn) {
+    await handleTurn(wake.turn, wake);
+    return;
+  }
+  if (Number(st.activePlayerId) === Number(MY_PLAYER) && st.turn > doneTurn) {
+    await handleTurn(st.turn, { source: "poll", playerID: st.activePlayerId });
+  }
 }
 function sleepMs(ms) { return new Promise((r) => setTimeout(r, ms)); }
 const lockFile = path.join(here, "run-lock.json");
@@ -160,21 +241,38 @@ async function streamEvents() {
     }
   }
 }
-let lastCheck = 0;
+// SSE envelopes vary (better-sse event lines, DLL game_event batches).
+// Only a payload naming this seat player wakes the loop; anything else is
+// left to the status poll below.
 function onBlock(block) {
-  const datas = block.split("\n").filter((l) => l.indexOf("data:") === 0).map((l) => l.slice(5).trim());
+  const lines = block.split("\n");
+  const eventName = (lines.find((l) => l.indexOf("event:") === 0) ?? "").slice(6).trim();
+  const datas = lines.filter((l) => l.indexOf("data:") === 0).map((l) => l.slice(5).trim());
   if (!datas.length) return;
   let payload = null;
   try { payload = JSON.parse(datas.join("\n")); } catch (e) { return; }
   const items = Array.isArray(payload) ? payload : [payload];
-  let gameSeen = false;
   for (const it of items) {
-    const p = it?.payload ?? it?.data ?? it;
-    const t = Number(p?.Turn ?? p?.turn);
-    if (p && typeof p === "object") gameSeen = true;
-    if (Number.isFinite(t)) confirmAndRun();
-  if (gameSeen) { const now = Date.now(); if (now - lastCheck > 5000) { lastCheck = now; confirmAndRun(); } }
+    const p = it?.payload ?? it?.data ?? it?.extraPayload ?? it;
+    if (!p || typeof p !== "object") continue;
+    const t = Number(p.Turn ?? p.turn);
+    const pid = p.PlayerID ?? p.playerID ?? p.playerId;
+    if (Number.isFinite(t) && pid !== undefined && Number(pid) === Number(MY_PLAYER)) {
+      confirmAndRun({ source: "event:" + (it?.type ?? it?.event ?? eventName ?? "turn"), playerID: Number(pid), turn: t });
+    }
   }
 }
+// Cheap status poll: wakes this seat when it is the active player even if
+// no seat-addressed SSE event arrives. Poll-safe (no game lock).
+let pollTimer = null;
+function startPoll() {
+  stopPoll();
+  pollTimer = setInterval(() => { if (!stopped()) confirmAndRun(null); }, 5000);
+}
+function stopPoll() {
+  if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+}
 log("loop start seat " + seat);
+startPoll();
 await watch();
+stopPoll();
