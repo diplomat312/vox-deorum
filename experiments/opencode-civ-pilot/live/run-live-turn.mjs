@@ -241,7 +241,12 @@ const wallGapSec = state.lastTurnAt ? Math.round((nowMs - state.lastTurnAt) / 10
 if (usage) {
   Object.assign(tot, { uncached: usage.uncached, read: usage.read, write: usage.write, output: usage.output, reasoning: usage.reasoning });
   fs.mkdirSync(here, { recursive: true });
-  fs.writeFileSync(stateFile, JSON.stringify({ sessionId, messageCount: usage.newCount, lastSeenTurn: turn, lastTurnAt: nowMs, lastApplied: applied.map((a) => ({ type: a.type, ok: !!a.ok, note: a.note ?? null, out: (a.out ?? "").slice(0, 300) })) }));
+  // Fail-closed state: messageCount always advances (usage deltas must not
+  // double-count), but lastSeenTurn advances ONLY on a committed turn. A
+  // turn that contacted the session yet produced no commit keeps the old
+  // horizon, so its events stay visible next opportunity instead of being
+  // silently skipped. No banked turn has hit this path (21/21 first-try).
+  fs.writeFileSync(stateFile, JSON.stringify({ sessionId, messageCount: usage.newCount, lastSeenTurn: commitOk ? turn : lastSeenTurn, lastTurnAt: nowMs, lastApplied: applied.map((a) => ({ type: a.type, ok: !!a.ok, note: a.note ?? null, out: (a.out ?? "").slice(0, 300) })) }));
 }
 
 const tele = {
