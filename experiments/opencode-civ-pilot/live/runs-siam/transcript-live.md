@@ -128,3 +128,143 @@ You may inspect anything else you need (inspect). When finished, commit your act
     "out": "{\n \"result\": {\n  \"content\": [\n   {\n    \"type\": \"text\",\n    \"text\": \"{\\n  \\\"Success\\\": true\\n}\"\n   }\n  ],\n  \"structuredContent\": {\n   \"Success\": true\n  }\n },\n \"jsonrpc\": \"2.0\",\n \"id\": 1788411306023\n}\n"
   }
 ]
+
+
+## Siam live turn 119 (session ses_f9a74a908ffeMXPkF3Y5Bh37Ba)
+
+### Observation sent
+
+TURN 119 (live game live-duel)
+
+You are Ramkhamhaeng, leader of Siam (seat 1). Portugal (Maria I, seat 0) is played by another mind.
+
+Current:
+* Treasury: 51 (+undefined/turn). Happiness: Happy (100%). Research: Metal Casting (Estimated in 6 turns). Research must name ONE exact technology from: Philosophy, Drama and Poetry, Physics, Steel. Next policy in 94 turns ({"Progress":["Progress","Organization","Liberty","Expertise","Equality","Fraternity"]}). Policy must name ONE exact entry from: Statecraft (New Branch); Fealty (New Branch); Artistry (New Branch); Authority (New Branch); Tradition (New Branch).
+* Cities (4): population 23, territory 43, military strength 169, units 12 (supply 13), score 656.
+- Sukhothai p6 -> Caravan (2t left)
+- Si Satchanalai p8 -> Walls (2t left)
+- Muang Saluang p5 -> Lighthouse (3t left)
+- Lampang p4 -> Granary (2t left)
+* Zones:
+- Land: ? — Barbarians 1xGalley 1xSpearman
+- Land @Sukhothai: Friendly (F157) — Siam 1xHorseman 2xSpearman, Barbarians 1xSpearman
+- Land @M'banza-Kongo: Even (F31/E15/N39) — Siam 1xArcher, City-State M'banza-Kongo 1xSpearman
+- Land @Hanoi: Friendly (F59/N27) — Barbarians 1xComposite Bowman, City-State Hanoi 1xSpearman 1xGalley
+- Land @Ragusa: Even (F34/E23/N35) — Barbarians 1xArcher, Portugal 1xArcher
+- Land @Si Satchanalai: Friendly (F186/E53) — Siam 1xScout 1xComposite Bowman
+- Land @Muang Saluang: Friendly (F162) — Siam 1xSpearman 1xComposite Bowman, Barbarians 2xSpearman
+- Land @Lampang: Friendly (F240/E15) — Siam 1xCatapult 2xSpearman 1xComposite Bowman
+- Sea @Ragusa: Enemy (E35/N68) — Barbarians 1xGalley
+- Sea @Muang Saluang: Friendly (F128) — City-State Hanoi 1xChariot Archer 1xGalley
+- Sea @Kyzyl: Even (E25/N22) — Siam 1xHorseman
+* Relationships: Portugal: Distance: Neighbors; War (Our Score: 2%; Our War Weariness: 31%); Denounced Them.
+* Portugal visible: score 503, treasury ~93, research Philosophy (Estimated in 3 turns), 4 cities, military 182.
+
+Since your previous opportunity to act:
+- Nothing new recorded.
+
+What happened to your last committed actions:
+- strategy applied.
+- research applied.
+- policy applied.
+- posture applied.
+
+Outstanding requests/deals/messages: none tracked yet (phase 1 strategic test).
+
+You may inspect anything else you need (inspect). When finished, commit your actions (commit_turn) or pass. Keep the rationale short.
+
+### Tool calls
+
+[
+  {
+    "tool": "vox-civ_inspect",
+    "input": null
+  },
+  {
+    "tool": "vox-civ_inspect",
+    "input": null
+  },
+  {
+    "tool": "vox-civ_inspect",
+    "input": null
+  },
+  {
+    "tool": "vox-civ_inspect",
+    "input": null
+  },
+  {
+    "tool": "vox-civ_commit_turn",
+    "input": null
+  }
+]
+
+### Commit
+
+{
+  "committedAt": "2026-09-03T04:56:30.651Z",
+  "playerID": 1,
+  "actions": [
+    {
+      "params": {
+        "economic": [
+          "use free 4th route for gold, finish Caravan/Walls/Lighthouse"
+        ],
+        "grandStrategy": "Metal Casting into Physics for Trebuchets, open Authority for war",
+        "military": [
+          "mass Catapult+CompBows at Lampang 240, hold Si Satchanalai, avoid Braga until Trebs"
+        ]
+      },
+      "type": "strategy"
+    },
+    {
+      "params": {
+        "technology": "Physics"
+      },
+      "type": "research"
+    },
+    {
+      "params": {
+        "policy": "Authority"
+      },
+      "type": "policy"
+    },
+    {
+      "params": {
+        "private": -20,
+        "public": -20,
+        "targetID": "Portugal"
+      },
+      "type": "posture"
+    }
+  ],
+  "rationale": "Up 656-503 but trail mil 169-182, weariness 31%. Physics for Trebuchets vs Braga/Lisbon walls, Authority opens war branch after finishing Progress."
+}
+
+### Applied to live game
+
+[
+  {
+    "type": "strategy",
+    "tool": "set-strategy",
+    "ok": true,
+    "out": "{\n \"result\": {\n  \"content\": [\n   {\n    \"type\": \"text\",\n    \"text\": \"{\\n  \\\"Success\\\": true\\n}\"\n   }\n  ],\n  \"structuredContent\": {\n   \"Success\": true\n  }\n },\n \"jsonrpc\": \"2.0\",\n \"id\": 1788411394530\n}\n"
+  },
+  {
+    "type": "research",
+    "tool": "set-research",
+    "ok": true,
+    "out": "{\n \"result\": {\n  \"content\": [\n   {\n    \"type\": \"text\",\n    \"text\": \"{\\n  \\\"Success\\\": true\\n}\"\n   }\n  ],\n  \"structuredContent\": {\n   \"Success\": true\n  }\n },\n \"jsonrpc\": \"2.0\",\n \"id\": 1788411394748\n}\n"
+  },
+  {
+    "type": "policy",
+    "tool": "set-policy",
+    "ok": true,
+    "out": "{\n \"result\": {\n  \"content\": [\n   {\n    \"type\": \"text\",\n    \"text\": \"{\\n  \\\"Success\\\": true\\n}\"\n   }\n  ],\n  \"structuredContent\": {\n   \"Success\": true\n  }\n },\n \"jsonrpc\": \"2.0\",\n \"id\": 1788411394994\n}\n"
+  },
+  {
+    "type": "posture",
+    "tool": "set-relationship",
+    "ok": true,
+    "out": "{\n \"result\": {\n  \"content\": [\n   {\n    \"type\": \"text\",\n    \"text\": \"{\\n  \\\"Success\\\": true\\n}\"\n   }\n  ],\n  \"structuredContent\": {\n   \"Success\": true\n  }\n },\n \"jsonrpc\": \"2.0\",\n \"id\": 1788411395266\n}\n"
+  }
+]

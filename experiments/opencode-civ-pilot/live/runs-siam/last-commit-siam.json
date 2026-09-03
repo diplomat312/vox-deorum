@@ -1,29 +1,28 @@
 {
-  "committedAt": "2026-09-03T04:54:58.704Z",
+  "committedAt": "2026-09-03T04:56:30.651Z",
   "playerID": 1,
   "actions": [
     {
       "params": {
         "economic": [
-          "finish Markets then army, keep 3 routes"
+          "use free 4th route for gold, finish Caravan/Walls/Lighthouse"
         ],
-        "grandStrategy": "Sailing into Metal Casting for Berserkers/Steel",
+        "grandStrategy": "Metal Casting into Physics for Trebuchets, open Authority for war",
         "military": [
-          "hold Si Satchanalai 225v112 Counterattack",
-          "clear Sukhothai barbs, avoid Braga 49v169"
+          "mass Catapult+CompBows at Lampang 240, hold Si Satchanalai, avoid Braga until Trebs"
         ]
       },
       "type": "strategy"
     },
     {
       "params": {
-        "technology": "Metal Casting"
+        "technology": "Physics"
       },
       "type": "research"
     },
     {
       "params": {
-        "policy": "Fraternity"
+        "policy": "Authority"
       },
       "type": "policy"
     },
@@ -36,5 +35,5 @@
       "type": "posture"
     }
   ],
-  "rationale": "Up 627-498 but trail mil 154-177, war 2% weariness 30%. Metal Casting for Berserkers/Steel, Fraternity finishes Progress."
+  "rationale": "Up 656-503 but trail mil 169-182, weariness 31%. Physics for Trebuchets vs Braga/Lisbon walls, Authority opens war branch after finishing Progress."
 }
