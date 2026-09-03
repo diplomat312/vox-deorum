@@ -149,3 +149,16 @@ Shift ~01:54-02:00 (game still wedged at T207, services untouched):
 - Unified-Mind side with the exact fill procedure, and next-rows checklist
 - (T207 cold start, policy-walk, Portugal refresh). Numbers verified
 - against source, not copied from prose.
+-
+Shift ~01:56-02:01 (game still wedged at T207, services untouched):
+- Watcher attempt 12 failed closed. Prefix stable, suite 33/33, --check
+- clean on the edited server.
+- Vox interface: inspect(diplomacy) now enriches BOTH views with opinion
+- prose from get-opinions (spec read in mcp-server source: per-major
+- OurOpinionOfThem / TheirOpinionOfUs / MyEvaluations). Default view gets
+- short per-civ lines; the single-civ zoom gets only that civ's line.
+- Suffix-only (result content), try/catch-optional, no schema or identity
+- change. Live verification queued for post-restart (backend wedged; no
+- live probes run tonight). Next walker candidate from the catalog:
+- get-civilization traits on the diplomacy zoom; skipped for now to keep
+- this change to one new live call per view.

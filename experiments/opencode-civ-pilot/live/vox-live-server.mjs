@@ -229,6 +229,23 @@ async function policyPath(target) {
 // detail enables one-hop graph walks without new schemas: research "<tech
 // name>" returns cost/prereqs/unlocks for that tech; policies "<policy>"
 // returns that policy's data; cities "<name>" narrows to one city.
+// Diplomatic opinion prose (get-opinions) condensed to short lines.
+// SUFFIX-ONLY: result content, never identity or tool schemas.
+function shortOpinions(op) {
+  const lines = [];
+  const entries = Object.values(op ?? {});
+  for (const entry of entries) {
+    if (!entry || typeof entry !== "object") continue;
+    const name = String(entry.Civilization ?? entry.Leader ?? "?");
+    const bits = [];
+    const we = Array.isArray(entry.OurOpinionOfThem) ? entry.OurOpinionOfThem.filter(Boolean).slice(0, 2).join(" ") : "";
+    const they = Array.isArray(entry.TheirOpinionOfUs) ? entry.TheirOpinionOfUs.filter(Boolean).slice(0, 2).join(" ") : "";
+    if (we) bits.push("we think: " + String(we).slice(0, 200));
+    if (they) bits.push("they think: " + String(they).slice(0, 200));
+    if (bits.length) lines.push("- " + name + ": " + bits.join(" / "));
+  }
+  return lines.slice(0, 8);
+}
 async function inspectLive(subject, detail) {
   const me = String(PLAYER_ID);
   switch (subject) {
@@ -279,7 +296,16 @@ async function inspectLive(subject, detail) {
         const hit = Object.entries(all ?? {}).find(
           ([id, v]) => v && typeof v === "object" && String(v.Civilization ?? "").toLowerCase() === want
         );
-        if (hit) return { [hit[0]]: hit[1] };
+        if (hit) {
+          const one = { [hit[0]]: hit[1] };
+          try {
+            const op = liveJson(await liveCall("get-opinions", { PlayerID: PLAYER_ID }));
+            const w = String(detail).toLowerCase();
+            const lines = shortOpinions(op).filter((l) => l.toLowerCase().indexOf(w) >= 0);
+            if (lines.length) one.opinionLines = lines;
+          } catch { /* opinions optional */ }
+          return one;
+        }
         return { note: "no civilization named '" + detail + "' visible" };
       }
       const p = liveJson(await liveCall("get-players", { playerIDs: [PLAYER_ID] }));
@@ -297,6 +323,11 @@ async function inspectLive(subject, detail) {
         }
         out.cityStates = minors.slice(0, 16);
       } catch { /* majors-only on failure */ }
+      try {
+        const op = liveJson(await liveCall("get-opinions", { PlayerID: PLAYER_ID }));
+        const lines = shortOpinions(op);
+        if (lines.length) out.opinionLines = lines;
+      } catch { /* opinions optional; mechanics still useful */ }
       out.hint = "inspect(diplomacy, \"<civilization>\") for one entry (majors and city-states alike)";
       return out;
     }
