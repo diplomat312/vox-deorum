@@ -247,6 +247,7 @@ function shortOpinions(op) {
     if (they) bits.push("they think: " + String(they).slice(0, 200));
     if (bits.length) lines.push("- " + name + ": " + bits.join(" / "));
   }
+  lines.sort();
   return lines.slice(0, 8);
 }
 async function inspectLive(subject, detail) {
@@ -273,7 +274,7 @@ async function inspectLive(subject, detail) {
       try {
         const opt = liveJson(await liveCall("get-options", { PlayerID: PLAYER_ID }));
         const techs = opt?.Options?.Technologies ?? {};
-        available = Object.keys(techs);
+        available = Object.keys(techs).sort();
       } catch { /* keep current-only on failure */ }
       return { ...cur, availableTechnologies: available, hint: "inspect(research, \"<name>\") for one technology; inspect(research, \"path:<name>\") for the full prereq chain with costs" };
     }
@@ -288,7 +289,7 @@ async function inspectLive(subject, detail) {
       try {
         const opt = liveJson(await liveCall("get-options", { PlayerID: PLAYER_ID }));
         const pols = opt?.Options?.Policies ?? {};
-        available = Object.keys(pols);
+        available = Object.keys(pols).sort();
       } catch { /* keep current-only on failure */ }
       return { ...cur, availablePolicies: available, hint: "inspect(policies, \"<name>\") for detail on one policy; inspect(policies, \"path:<name>\") for the full prereq chain" };
     }
@@ -342,6 +343,7 @@ async function inspectLive(subject, detail) {
           const q = v.Quests?.["Player" + PLAYER_ID] ?? [];
           minors.push({ civ: v.Civilization, status: mine ?? null, quests: Array.isArray(q) ? q.length : 0 });
         }
+        minors.sort((a, b) => String(a.civ) < String(b.civ) ? -1 : 1);
         out.cityStates = minors.slice(0, 16);
       } catch { /* majors-only on failure */ }
       try {

@@ -57,3 +57,6 @@ opencode.json; the agent identity is frozen in agent/civ.md.
 - Model group lifecycle live: invite/leave/archive forms end to end
 - (logic + offline rejects green; prefix re-baselined once for the
 - batched description update, one deliberate re-cache while cold).
+- Sorted inspect lists (availableTechnologies/Policies, cityStates,
+- opinion lines) render stable on the next banked turn (suffix-only,
+- no re-baseline needed).

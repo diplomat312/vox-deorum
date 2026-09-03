@@ -350,3 +350,18 @@ Shift ~03:40-04:00 (game still wedged at T207, services untouched):
 - counts, 21-opportunity rerun procedure with honest moved-state caveat).
 - Fresh verification: node --check green, prefix stable on the new
 - baseline (41baad69/d0653cd0/47c9fb62), suite 49/49 re-confirmed.
+-
+- Shift ~03:10-03:20 UTC (game still wedged at T207, services untouched):
+- - Overnight track 2 (suffix-only ordering stabilization, prefix-safe by
+- - construction: no identity/schema/description change): inspect research
+- - availableTechnologies and policies availablePolicies now sorted (match
+- - observe.mjs sorted techNames/policyNames); diplomacy cityStates sorted
+- - by civ; opinion lines sorted alphabetically. Stable order across turns
+- - so quiet turns cost ~0 fresh tokens on repeat inspects.
+- - Driver file-only fix: send-guard re-mark records the communicate
+- - channel from tool input when present (was tool name); guard check
+- - compares turn only, so enforcement unchanged.
+- - Session re-exported at 110, prefix stable, suite 49/49 re-verified in
+- - the watcher quiet gap. Live verify queued post-restart: sorted lists
+- - render on the next banked turn; victory/self condensers still deferred
+- - (no grounded shape, will condense from first observed shape).

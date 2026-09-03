@@ -156,7 +156,8 @@ try {
   const sent = allCalls.find((t) => String(t.tool ?? "").indexOf("communicate") >= 0);
   if (sent) {
     fs.mkdirSync(rundir, { recursive: true });
-    fs.writeFileSync(process.env.CIV_PILOT_SEND_FILE, JSON.stringify({ turn, channel: sent.tool, at: new Date().toISOString() }, null, 1));
+    const sentChannel = sent.input && sent.input.channel ? String(sent.input.channel) : String(sent.tool ?? "");
+    fs.writeFileSync(process.env.CIV_PILOT_SEND_FILE, JSON.stringify({ turn, channel: sentChannel, at: new Date().toISOString() }, null, 1));
   }
 } catch { /* guard best-effort; telemetry still records the calls */ }
 
