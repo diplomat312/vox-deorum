@@ -81,3 +81,6 @@ T177 white-peace acceptance, T180 post-peace — verbatim, one session).
 Watcher budget extended 40 -> 100 attempts (~8h, full overnight) and the
 watcher restarted on the new budget during a sleep window (old PID 17716 out,
 attempt counter fresh, no turn in flight). Game services untouched.
+Driver audit: run-live-turn clears the commit file before appending to the
+session, so a silent turn can never re-apply a stale commit; telemetry shows
+all 21 banked turns committed first-try (zero nudges, zero commit_ok=false).
