@@ -1,15 +1,15 @@
 {
-  "committedAt": "2026-09-03T05:02:16.477Z",
+  "committedAt": "2026-09-03T05:03:18.693Z",
   "playerID": 1,
   "actions": [
     {
       "params": {
         "economic": [
-          "finish Caravan/Arena, Mausoleum for gold"
+          "finish Worker/Wall/Mausoleum, keep +13gpt"
         ],
         "grandStrategy": "Physics into Steel, Authority",
         "military": [
-          "reinforce lone CompBow at Si Satchanalai, hold Lampang catapult, clear Sukhothai barb, watch Portugal Metal Casting"
+          "hold Si Satchanalai/Lampang, escort Worker, watch Portugal Berserkers in 3t"
         ]
       },
       "type": "strategy"
@@ -35,5 +35,5 @@
       "type": "posture"
     }
   ],
-  "rationale": "Up 710-571 but parity 192-196, Physics 5t. Steel for Longswords vs Portugal Berserkers, Authority."
+  "rationale": "Up 714-589, parity 191-196, Physics 2t. Steel next for Longswords, Authority, finish Wall."
 }
