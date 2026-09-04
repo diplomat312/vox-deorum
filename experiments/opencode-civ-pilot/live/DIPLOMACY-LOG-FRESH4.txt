@@ -1,0 +1,58 @@
+T11 Korea -> dm:Siam: Greetings, Ramkhamhaeng. Seoul welcomes friendship and peace. May our pathfinders share knowledge of this land.
+T11 Korea -> dm:2: Greetings, Ramkhamhaeng. Seoul welcomes friendship and peace. May our pathfinders share knowledge of this land.
+T19 Korea -> dm:1: Greetings, Maria. Seoul welcomes Austria. May our peoples know peace and open roads.
+T28 Korea -> dm:1: Maria, your friendship is welcome. Seoul keeps peace; our warriors watch only barbarians near our walls.
+T33 Korea -> group:096ef627: Seoul greets the coalition. Korea seeks peace, shared knowledge, and safe roads for all.
+T46 Korea -> group:096ef627: Korea stands with Austria and Siam for peace and safe roads. Barbarians press Seoul; we hold our walls and ask no more than goodwill.
+T49 Korea -> group:096ef627: Thank you, Maria and Ramkhamhaeng. Seoul's garrison has fallen but our walls hold. Archers muster; we stand together till the wilds quiet.
+T80 Korea -> group:096ef627: Seoul endures and grows. Korea honors its friendships with Siam, the Iroquois, and Austria. Peace and safe roads to all.
+T99 Korea -> group:096ef627: Seoul mourns Salzburg with Austria. Korea's spears guard Busan and stand ready; may Vienna endure and Salzburg be retaken.
+T102 Korea -> group:096ef627: Maria, Ramkhamhaeng: Seoul thanks you. Amber for gold binds us; our spears hold Seoul and Busan as yours hold Vienna and Salzburg.
+T104 Korea -> group:096ef627: Vienna, Graz, Salzburg, Seoul, Busan: all hold together. Korea's caravan is home; our catapult musters. Onward in peace.
+T129 Korea -> group:096ef627: Siam, Seoul stands with you. Iroquois aggression wounds us all; Korea sends cotton-for-gold friendship and calls for peace.
+T129 Korea -> dm:3: Hiawatha, Seoul holds friendship with you and Siam both. Sheathe your spears; let the coalition mediate peace before more blood.
+T136 Korea -> group:096ef627: Seoul rejoices: spears withdrawn, walls holding, trade enduring. Korea honors Siam, Austria, and Hiawatha's restraint. May the coalition kee
+T144 Korea -> group:096ef627: Seoul rejoices with Vienna and Sukhothai: cities holding, trade enduring, peace kept. Korea's walls rise at Busan; our scholars near their g
+T194 Korea -> group:096ef627: Maria, Ramkhamhaeng: Seoul mourns Innsbruck. Korea denounced Hiawatha already; our knights and Hwachas stand ready. Hold Vienna; we prepare 
+T197 Korea -> group:096ef627: Knights saddled, Hwachas aimed, Turtle Ships afloat. Seoul holds its walls and watches the north. Retake Innsbruck together when Vienna give
+T20 Austria -> dm:0: Sejong, Maria greets you. Peace and open roads indeed. May our scouts meet as friends.
+T31 Austria -> dm:0: Sejong, peace shared. Our blades watch barbarians only as well.
+T34 Austria -> group:096ef627: Maria for Austria: peace and safe roads shared. Good coalition.
+T47 Austria -> group:096ef627: Austria stands with you. Salzburg holds vs 5 brutes; may Seoul's walls hold too.
+T50 Austria -> group:096ef627: Sejong, Siam: Austria holds with you. Salzburg faces 7 brutes; Walls coming. Aim true.
+T100 Austria -> group:096ef627: Thanks Sejong. Vienna endures, Salzburg held. Amber shines; Busan stand strong.
+T103 Austria -> group:096ef627: Sejong: Amber binds true. Vienna, Graz, Salzburg hold as Seoul, Busan hold.
+T104 Austria -> group:096ef627: Onward in peace. Austria builds markets, walls; catapults guard, never march.
+T131 Austria -> group:096ef627: Friends all: Austria mourns this war. Hold walls, seek peace. Trade endures.
+T137 Austria -> group:096ef627: Austria rejoices: 5 cities hold, trade endures. Peace kept with all.
+T144 Austria -> group:096ef627: Five and five, walls rising. Austria toasts Seoul, Sukhothai. Peace kept.
+T194 Austria -> group:096ef627: Iroquois takes Innsbruck. Austria calls coalition: hold, retake together.
+T195 Austria -> group:096ef627: Sejong: thanks. Hold Vienna, retake Innsbruck together. Knights, trebs ready.
+T197 Austria -> group:096ef627: Vienna gives word: retake Innsbruck now. Longswords forward.
+T6 Siam -> dm:3: Hiawatha, greetings from Siam. May our scouts share tales and our peoples prosper side by side.
+T8 Siam -> dm:0: Sejong, greetings from Siam. Our pathfinder admires Seoul's lands. May we share knowledge and peace between our peoples.
+T11 Siam -> dm:0: Sejong, your friendship honors Siam. May Seoul and Sukhothai share knowledge and peace for many turns to come.
+T32 Siam -> group:096ef627: Siam greets the coalition. May our peoples share prosperity and peace.
+T34 Siam -> group:096ef627: Siam stands for peace and safe roads with Korea and Austria. May our scouts and traders travel freely.
+T44 Siam -> dm:1: Maria, greetings from Siam. Our coalition friendship brings me joy. May Austria and Siam share peace and prosperity.
+T46 Siam -> group:096ef627: Siam stands with Seoul. May your walls hold fast, Sejong. Our scouts watch the wilds and wish you strength.
+T47 Siam -> group:096ef627: Sukhothai stands with Salzburg and Seoul. May all our walls hold until the wilds quiet.
+T49 Siam -> group:096ef627: Sejong, Siam honors Seoul's stand. May your archers find sure aim. Our settler marches and our walls hold too.
+T50 Siam -> group:096ef627: Maria, Siam holds with Salzburg. May your Walls rise in time. Aim true, all.
+T92 Siam -> dm:3: Hiawatha, Siam values our Jade trade and shared battles vs barbs. May our peoples stay friends and our scouts keep aiding each other.
+T100 Siam -> group:096ef627: Siam stands with Vienna and Seoul. May Salzburg hold and Busan stand strong. Our spears guard the south with you.
+T103 Siam -> group:096ef627: Siam rejoices with Seoul and Vienna. May Graz, Salzburg, and Busan all hold. Our walls rise and our spears stand with you.
+T104 Siam -> group:096ef627: Onward in peace indeed. Siam builds markets and walls too; our forges and Terracotta guard, never march. May all five cities hold.
+T129 Siam -> group:096ef627: Friends, the Iroquois have fallen upon us. Their spearmen stand inside our cities as foes. Siam asks coalition aid and stands firm with Seou
+T130 Siam -> group:096ef627: Sejong, Siam thanks Seoul. Your friendship and cotton bind us. We hold our walls and seek peace with strength. May the coalition endure.
+T131 Siam -> group:096ef627: Maria, Siam mourns this war too. We hold walls and seek peace. Trade endures with Vienna and Seoul.
+T136 Siam -> group:096ef627: Siam rejoices with Seoul. Walls holding, trade enduring, spears at rest. May the coalition keep this peace with all, Hiawatha included.
+T137 Siam -> group:096ef627: Siam rejoices with Austria. Five cities hold, trade endures. Peace kept with all.
+T144 Siam -> group:096ef627: Siam toasts Seoul and Vienna. Five cities holding, walls rising, trade enduring. Peace kept with all.
+T194 Siam -> group:096ef627: Maria, Siam mourns Innsbruck. We hold our walls with you and Seoul. May the coalition retake it together. Our elephants stand ready.
+T195 Siam -> group:096ef627: Seoul, Vienna: Siam stands ready. Our elephants and trebuchets hold, denouncing Hiawatha with you. Hold Vienna; retake Innsbruck together.
+T197 Siam -> group:096ef627: Vienna has word: Siam marches. Our elephants and trebuchets press Osininka to draw Hiawatha. Retake Innsbruck together.
+T6 Iroquois -> dm:2: Hiawatha greets Ramkhamhaeng. May our scouts share tales indeed, and our peoples prosper side by side in peace.
+T92 Iroquois -> dm:2: Hiawatha values our Jade trade and shared barb battles too. Our spears near Sukhothai hunt barbs only and will pull back. May we stay friend
+T130 Iroquois -> dm:0: Sejong, Hiawatha agrees. Our spears left Phitsanulok and fight barbs only. Welcome coalition peace.
+T146 Iroquois -> dm:2: Ramkhamhaeng, our spears left your lands and hold vs barbs only. Let us end this war in peace.
