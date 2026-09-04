@@ -6,10 +6,17 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 const here = path.dirname(fileURLToPath(import.meta.url));
 const game = (process.argv.find((a) => a.startsWith("--game"))?.split("=")[1]) ?? "fresh1";
-const SEATS = [
-  { seat: 0, c: "morocco" }, { seat: 1, c: "ethiopia" },
-  { seat: 2, c: "polynesia" }, { seat: 3, c: "sweden" },
-];
+const SEATSETS = {
+  fresh1: [
+    { seat: 0, c: "morocco" }, { seat: 1, c: "ethiopia" },
+    { seat: 2, c: "polynesia" }, { seat: 3, c: "sweden" },
+  ],
+  fresh4: [
+    { seat: 0, c: "korea" }, { seat: 1, c: "austria" },
+    { seat: 2, c: "siam" }, { seat: 3, c: "iroquois" },
+  ],
+};
+const SEATS = SEATSETS[game] ?? SEATSETS.fresh1;
 const rows = [];
 for (const { seat, c } of SEATS) {
   const dir = path.join(here, "runs-" + game + "-" + c);

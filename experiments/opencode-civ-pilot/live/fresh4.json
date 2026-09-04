@@ -1,0 +1,10 @@
+{
+  "game": "fresh4",
+  "gameId": "e6fb3412-b2c3-401b-bded-cebd9757ddfb",
+  "purpose": "turn-capture acceptance test for central TurnRouter",
+  "seatsFile": "social-seats-fresh4.json",
+  "channelsFile": "channels-fresh4.json (created on first group op)",
+  "rundirs": ["runs-fresh4-korea", "runs-fresh4-austria", "runs-fresh4-siam", "runs-fresh4-iroquois"],
+  "model": "opencode-go/muse-spark-1.3-contributor",
+  "sessions": "fresh per civ (no reuse across games)"
+}
