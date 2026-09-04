@@ -102,6 +102,9 @@ Per-seat cognition-state.json survives supervisor restarts
 (lastSuccessfulDecisionTurn plus pending turn/status). A restart retries the
 pending turn when the game has not moved past it, otherwise records an
 explicit missed_epoch. No failed or interrupted decision is silently dropped.
+Pause holds are per cognition only: pre-arming auto-pause at loop boot was
+tried and reverted after it froze a fresh game start. Holds do not reliably
+gate mid-game turns, so missed turns stay possible and explicitly recorded.
 
 Every model-facing tool call lands in the seat rundir tool-calls.jsonl with
 timestamp, seat, turn, arguments, outcome, and duration, and the turn

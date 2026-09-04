@@ -110,9 +110,6 @@ async function handleTurn(turn, wake) {
     }
   } finally {
     try { await resume(); } catch (e) {}
-    if (!stopped()) {
-      try { await pause(); } catch (e) { log("re-arm failed: " + e.message); }
-    }
     epoch.exit = code;
     epoch.committedTurn = code === 0 ? turn : null;
     epoch.pausedMs = Date.now() - t0;
@@ -145,7 +142,7 @@ async function confirmAndRun(wake) {
     }
     recordMissed(cs.pendingDecisionTurn, st.turn, "game advanced past uncommitted decision");
   }
-  if (st.turn > doneTurn + 1 && st.turn - 1 > lastMissedRecorded && doneTurn >= 0) {
+  if (st.turn > doneTurn + 1 && doneTurn + 1 > lastMissedRecorded && doneTurn >= 0) {
     recordMissed(doneTurn + 1, st.turn, "turn completed with no cognition for this seat");
   }
   if (running) {
@@ -266,8 +263,6 @@ function stopPoll() {
   if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
 }
 log("loop start seat " + seat);
-try { await pause(); log("pre-armed auto-pause for player " + MY_PLAYER); }
-catch (e) { log("pre-arm failed (retried per run): " + e.message); }
 startPoll();
 await watch();
 stopPoll();
