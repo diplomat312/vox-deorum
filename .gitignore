@@ -18,6 +18,12 @@ nul
 /telemetry/
 
 # DLL cache directory
+
+# Pilot runtime control files: process coordination, never source.
+/experiments/opencode-civ-pilot/live/STOP-ROUTER
+/experiments/opencode-civ-pilot/live/*/STOP
+/experiments/opencode-civ-pilot/live/router-*.lock
+/experiments/opencode-civ-pilot/live/*.tmp
 scripts/.dll-cache
 /*.bat
 

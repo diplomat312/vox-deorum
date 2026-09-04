@@ -137,8 +137,22 @@ async function bridgePost(p, body) {
 }
 async function pauseNow() { const t0 = Date.now(); const r = await bridgePost("/external/pause"); return { ok: !!r?.success, ms: Date.now() - t0 }; }
 async function resumeNow() { const t0 = Date.now(); const r = await bridgePost("/external/resume"); return { ok: !!r?.success, ms: Date.now() - t0 }; }
-process.on("SIGINT", () => { resumeNow().finally(() => { releaseLock(); process.exit(0); }); });
-process.on("SIGTERM", () => { resumeNow().finally(() => { releaseLock(); process.exit(0); }); });
+// Graceful drain: a SIGTERM during a 40 s+ cognition must not orphan it
+// silently. Wait for the in-flight dispatch up to a cap, then exit loudly
+// either way; an abandoned epoch is reconciled as interrupted on reboot.
+const SHUTDOWN_DRAIN_MS = Number(arg("shutdown-drain-ms", 30000));
+let inflightKey = null;
+async function shutdown(sig) {
+  log("shutdown on " + sig + (inflightKey ? " with in-flight " + inflightKey : " idle"));
+  const t0 = Date.now();
+  while (inflightKey && Date.now() - t0 < SHUTDOWN_DRAIN_MS) await sleep(500);
+  if (inflightKey) log("drain cap hit; abandoning " + inflightKey + " (reconciled as interrupted on reboot)");
+  try { await resumeTracked(); } catch {}
+  releaseLock();
+  process.exit(0);
+}
+process.on("SIGINT", () => { void shutdown("SIGINT"); });
+process.on("SIGTERM", () => { void shutdown("SIGTERM"); });
 // Released on natural drain (including in-flight cognition) so a successor
 // never overlaps a live dispatch. Crashes leave a stale lock, which the
 // next startup takes over after a liveness check.
@@ -276,7 +290,9 @@ async function dispatch(entry, turn, trig, alreadyPaused) {
   }
   const t1 = Date.now();
   ep.cognitionStartedAt = new Date().toISOString();
+  inflightKey = key;
   const res = await runSeat(entry, turn);
+  inflightKey = null;
   ep.cognitionFinishedAt = new Date().toISOString();
   ep.cognitionMs = Date.now() - t1;
   log(key + " exit " + res.code);
@@ -305,6 +321,7 @@ async function handleCandidate(turn, player, trig) {
   if (seatStopped(entry.civ)) { log("seat stopped, skipping " + turn + ":" + player); return; }
   const key = epochKey(S.gameId, turn, player);
   if (S.claimed[key]) { S.counters.duplicates++; S.counters.dupClaimed = (S.counters.dupClaimed ?? 0) + 1; saveState(); log("duplicate " + key); return; }
+  if (key === runningKey || key === inflightKey) { S.counters.duplicates++; S.counters.dupRunning = (S.counters.dupRunning ?? 0) + 1; saveState(); log("duplicate(running) " + key); return; }
   trig.detectedAtMs = trig.detectedAtMs ?? Date.now();
   if (!Array.isArray(trig.collapsed)) trig.collapsed = [];
   if (busy) {
@@ -451,11 +468,35 @@ async function streamEvents() {
     }
   }
 }
+// Boot reconciliation: a previous process may have died (or been capped)
+// with a cognition in flight. Its claim survives in the state file, so it
+// can never redispatch; close the books explicitly instead of leaving a
+// permanent "running" behind. Never invents a decision: an orphan that
+// finished before the reboot is recorded as recovered (telemetry holds
+// the timings), anything else as interrupted with the watermark untouched.
+function reconcileInterrupted() {
+  for (const entry of seats) {
+    let cs = null;
+    try { cs = loadCogState(entry.civ); } catch { cs = null; }
+    if (!cs || cs.pendingStatus !== "running" || !Number.isInteger(cs.pendingDecisionTurn)) continue;
+    const done = Math.max(cs.lastSuccessfulDecisionTurn ?? -1, maxCommitted(entry.civ));
+    if (done >= cs.pendingDecisionTurn) {
+      appendSeatEpoch(entry.civ, { ts: new Date().toISOString(), kind: "recovered", seat: entry.seat, gameID: cs.gameId ?? S.gameId, recoveredTurn: cs.pendingDecisionTurn, note: "orphan completed before reboot; see telemetry-live.jsonl for timings" });
+      saveCogState(entry.civ, { gameId: cs.gameId ?? S.gameId, lastSuccessfulDecisionTurn: done, pendingDecisionTurn: null, pendingStatus: "completed" });
+      log("reconciled recovered T" + cs.pendingDecisionTurn + " seat " + entry.seat);
+    } else {
+      appendSeatEpoch(entry.civ, { ts: new Date().toISOString(), kind: "interrupted", seat: entry.seat, gameID: cs.gameId ?? S.gameId, missedTurn: cs.pendingDecisionTurn, reason: "router_restart_before_completion" });
+      saveCogState(entry.civ, { gameId: cs.gameId ?? S.gameId, lastSuccessfulDecisionTurn: cs.lastSuccessfulDecisionTurn ?? done, pendingDecisionTurn: null, pendingStatus: "interrupted" });
+      log("reconciled interrupted T" + cs.pendingDecisionTurn + " seat " + entry.seat);
+    }
+  }
+}
 async function watch() {
   try { fs.unlinkSync(path.join(here, "run-lock.json")); log("retired run-lock.json"); }
   catch {}
   loadState();
   acquireLock();
+  reconcileInterrupted();
   let backoff = 1000;
   const pollTimer = setInterval(() => { if (!stopped()) pollOnce().catch((e) => log("poll failed: " + e.message)); }, pollMs);
   log("router start game=" + game + " pollMs=" + pollMs + (NO_SSE ? " SSE-DISABLED" : ""));
