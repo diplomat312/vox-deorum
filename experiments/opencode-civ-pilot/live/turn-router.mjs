@@ -34,6 +34,26 @@ const stopf = path.join(here, "STOP-ROUTER");
 const stateFile = path.join(here, "router-state-" + game + ".json");
 const logf = path.join(here, "turn-router-" + game + ".log");
 function log(m) { fs.appendFileSync(logf, new Date().toISOString() + " " + m + NL); }
+// Singleton enforcement: two routers must never dispatch against one game.
+// In-memory claim/queue sets cannot dedupe across processes; a stale lock
+// from a dead process is taken over, a live holder refuses startup.
+const lockf = path.join(here, "router-" + game + ".lock");
+function holderAlive(pid) {
+  if (!Number.isInteger(pid) || pid <= 0) return false;
+  try { process.kill(pid, 0); return true; } catch (e) { return e && e.code === "EPERM"; }
+}
+function acquireLock() {
+  try {
+    const prev = JSON.parse(fs.readFileSync(lockf, "utf8"));
+    if (prev && holderAlive(Number(prev.pid)) && Number(prev.pid) !== process.pid) {
+      console.error("another router holds " + lockf + " (pid " + prev.pid + "); refusing startup");
+      process.exit(3);
+    }
+  } catch { /* missing or unreadable lock: fall through and claim it */ }
+  try { fs.writeFileSync(lockf, JSON.stringify({ pid: process.pid, startedAt: new Date().toISOString() })); }
+  catch (e) { console.error("lock write failed; refusing startup"); process.exit(3); }
+}
+function releaseLock() { try { fs.unlinkSync(lockf); } catch {} }
 const stopped = () => fs.existsSync(stopf);
 const seatStopped = (civ) => fs.existsSync(path.join(rundirFor(civ), "STOP"));
 function epochKey(gameId, turn, player) { return gameId + ":" + turn + ":" + player; }
@@ -61,11 +81,15 @@ async function bridgePost(p, body) {
 }
 async function pauseNow() { const t0 = Date.now(); const r = await bridgePost("/external/pause"); return { ok: !!r?.success, ms: Date.now() - t0 }; }
 async function resumeNow() { const t0 = Date.now(); const r = await bridgePost("/external/resume"); return { ok: !!r?.success, ms: Date.now() - t0 }; }
-process.on("SIGINT", () => { resumeNow().finally(() => process.exit(0)); });
-process.on("SIGTERM", () => { resumeNow().finally(() => process.exit(0)); });
+process.on("SIGINT", () => { resumeNow().finally(() => { releaseLock(); process.exit(0); }); });
+process.on("SIGTERM", () => { resumeNow().finally(() => { releaseLock(); process.exit(0); }); });
+// Released on natural drain (including in-flight cognition) so a successor
+// never overlaps a live dispatch. Crashes leave a stale lock, which the
+// next startup takes over after a liveness check.
+process.on("beforeExit", () => { releaseLock(); });
 function playerSeat(player) { return seats.find((s) => Number(s.player) === Number(player)) ?? null; }
 function claim(key, source) {
-  if (S.claimed[key]) { S.counters.duplicates++; saveState(); return false; }
+  if (S.claimed[key]) { S.counters.duplicates++; S.counters.dupClaimed = (S.counters.dupClaimed ?? 0) + 1; saveState(); return false; }
   S.claimed[key] = { ts: new Date().toISOString(), source };
   S.counters[source === "event" ? "eventWins" : source === "poll" ? "pollWins" : "recoveryWins"]++;
   saveState();
@@ -224,11 +248,11 @@ async function handleCandidate(turn, player, trig) {
   if (!entry) return;
   if (seatStopped(entry.civ)) { log("seat stopped, skipping " + turn + ":" + player); return; }
   const key = epochKey(S.gameId, turn, player);
-  if (S.claimed[key]) { S.counters.duplicates++; saveState(); log("duplicate " + key); return; }
+  if (S.claimed[key]) { S.counters.duplicates++; S.counters.dupClaimed = (S.counters.dupClaimed ?? 0) + 1; saveState(); log("duplicate " + key); return; }
   trig.detectedAtMs = trig.detectedAtMs ?? Date.now();
   if (!Array.isArray(trig.collapsed)) trig.collapsed = [];
   if (busy) {
-    if (queuedKeys.has(key)) { S.counters.duplicates++; saveState(); log("duplicate(queued) " + key); return; }
+    if (queuedKeys.has(key)) { S.counters.duplicates++; S.counters.dupQueued = (S.counters.dupQueued ?? 0) + 1; saveState(); log("duplicate(queued) " + key); return; }
     for (let i = queue.length - 1; i >= 0; i--) {
       const q = queue[i];
       if (q.entry.seat !== entry.seat) continue;
@@ -372,6 +396,7 @@ async function watch() {
   try { fs.unlinkSync(path.join(here, "run-lock.json")); log("retired run-lock.json"); }
   catch {}
   loadState();
+  acquireLock();
   let backoff = 1000;
   const pollTimer = setInterval(() => { if (!stopped()) pollOnce().catch((e) => log("poll failed: " + e.message)); }, pollMs);
   log("router start game=" + game + " pollMs=" + pollMs + (NO_SSE ? " SSE-DISABLED" : ""));
