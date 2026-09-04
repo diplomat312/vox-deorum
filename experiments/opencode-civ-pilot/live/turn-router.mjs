@@ -38,10 +38,36 @@ function log(m) { fs.appendFileSync(logf, new Date().toISOString() + " " + m + N
 // In-memory claim/queue sets cannot dedupe across processes; a stale lock
 // from a dead process is taken over, a live holder refuses startup.
 const lockf = path.join(here, "router-" + game + ".lock");
+const LOCK_BEAT_MS = 5000;
+const LOCK_STALE_MS = 30000;
+const GENERATION = process.pid + "-" + Date.now().toString(36);
+let lockTimer = null;
 function holderAlive(pid) {
   if (!Number.isInteger(pid) || pid <= 0) return false;
   try { process.kill(pid, 0); return true; } catch (e) { return e && e.code === "EPERM"; }
 }
+function lockPayload() {
+  return { pid: process.pid, generation: GENERATION, startedAt: new Date().toISOString(), heartbeat: Date.now() };
+}
+function writeLockAtomic(obj) {
+  const tmp = lockf + "." + process.pid + ".tmp";
+  fs.writeFileSync(tmp, JSON.stringify(obj));
+  fs.renameSync(tmp, lockf);
+}
+function startHeartbeat() {
+  stopHeartbeat();
+  try {
+    lockTimer = setInterval(() => {
+      try {
+        const cur = JSON.parse(fs.readFileSync(lockf, "utf8"));
+        if (cur && cur.generation === GENERATION) writeLockAtomic(lockPayload());
+        else stopHeartbeat();
+      } catch { stopHeartbeat(); }
+    }, LOCK_BEAT_MS);
+    if (lockTimer.unref) lockTimer.unref();
+  } catch {}
+}
+function stopHeartbeat() { try { if (lockTimer) clearInterval(lockTimer); } catch {} lockTimer = null; }
 function acquireLock() {
   try {
     const prev = JSON.parse(fs.readFileSync(lockf, "utf8"));
@@ -49,11 +75,41 @@ function acquireLock() {
       console.error("another router holds " + lockf + " (pid " + prev.pid + "); refusing startup");
       process.exit(3);
     }
-  } catch { /* missing or unreadable lock: fall through and claim it */ }
-  try { fs.writeFileSync(lockf, JSON.stringify({ pid: process.pid, startedAt: new Date().toISOString() })); }
-  catch (e) { console.error("lock write failed; refusing startup"); process.exit(3); }
+  } catch { /* missing lock: fall through to the atomic claim below */ }
+  // Atomic claim: O_EXCL fails if the file exists, so two starters cannot
+  // both believe they won. Falls through to takeover when claimed.
+  try {
+    const fd = fs.openSync(lockf, "wx");
+    fs.writeFileSync(fd, JSON.stringify(lockPayload()));
+    fs.closeSync(fd);
+    log("lock claimed fresh generation=" + GENERATION);
+    startHeartbeat();
+    return;
+  } catch (e) { if (!e || (e.code !== "EEXIST" && e.code !== "ENOENT")) throw e; }
+  // Takeover path: live holder (pid alive AND heartbeat fresh) refuses
+  // startup; anything else is stale and taken over loudly.
+  let prev = null;
+  try { prev = JSON.parse(fs.readFileSync(lockf, "utf8")); } catch { prev = null; }
+  const beat = prev ? Number(prev.heartbeat ?? 0) : 0;
+  const fresh = prev && holderAlive(Number(prev.pid)) && (Date.now() - beat) < LOCK_STALE_MS;
+  if (fresh && Number(prev.pid) !== process.pid) {
+    console.error("another router holds " + lockf + " (pid " + prev.pid + " gen " + prev.generation + "); refusing startup");
+    process.exit(3);
+  }
+  if (prev) log("TAKEOVER stale lock pid=" + prev.pid + " gen=" + prev.generation + " beatAgeMs=" + (Date.now() - beat));
+  else log("lock file unreadable; claiming");
+  writeLockAtomic(lockPayload());
+  log("lock claimed via takeover generation=" + GENERATION);
+  startHeartbeat();
 }
-function releaseLock() { try { fs.unlinkSync(lockf); } catch {} }
+function releaseLock() {
+  stopHeartbeat();
+  try {
+    const cur = JSON.parse(fs.readFileSync(lockf, "utf8"));
+    if (cur && cur.generation === GENERATION) fs.unlinkSync(lockf);
+    else log("lock not ours at release; leaving it");
+  } catch {}
+}
 const stopped = () => fs.existsSync(stopf);
 const seatStopped = (civ) => fs.existsSync(path.join(rundirFor(civ), "STOP"));
 function epochKey(gameId, turn, player) { return gameId + ":" + turn + ":" + player; }
@@ -320,6 +376,9 @@ function onEventEnvelope(ev, data, nowMs) {
 async function pollOnce() {
   let st = null;
   try { st = await status(); } catch (e) { return; }
+  // No game attached (backend up, Civ down): hold position. Never reset
+  // claims on an empty ID and never dispatch into the void.
+  if (!st.gameID) return;
   if (!S.gameId || st.gameID !== S.gameId) {
     S.gameId = st.gameID;
     S.claimed = {};
