@@ -39,7 +39,7 @@ node dist/analysis/watch-run.js <run-id>           # tails a run while it plays
 node dist/analysis/roundup-run.js <run-id>         # what each seat was thinking across the game
 ```
 
-The report answers five questions. How much did the seats talk, and who stayed silent. What did each message do, read from its wording, rather than only how many there were. Whether the talking changed anything in the world, counted from the actions the seats actually committed, including the posture changes that record a relationship. What the world recorded, meaning the deals carried out, the promises kept and broken, and the regard the seats actually hold by the end. And what it cost, including the cache hit ratio and the cost per social operation. The comparison puts several runs side by side and lists what changed against the baseline.
+The report answers six questions. How much did the seats talk, and who stayed silent. What did each message do, read from its wording, rather than only how many there were. Whether the talking changed anything in the world, counted from the actions the seats actually committed, including the posture changes that record a relationship. What the world recorded, meaning the deals carried out, the promises kept and broken, and the regard the seats actually hold by the end. Whether any relationship lasted, read from how many turns a pair were in contact, how far apart their first and last contact were, and whether the channel was still in use at the end. And what it cost, including the cache hit ratio and the cost per social operation. The comparison puts several runs side by side and lists what changed against the baseline.
 
 ## Recorded corpus
 
