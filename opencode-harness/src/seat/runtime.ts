@@ -27,6 +27,14 @@ export interface SeatRuntimeOptions {
   socialDirectory: string;
   // Where the run's record is written.
   store: TraceStore;
+  // Who actually answers the seat's tool calls.
+  //
+  // With "serve", the runtime answers them itself, which is what tests use
+  // because it needs no processes at all. With "observe", a live tool server
+  // has already answered them, and the runtime reads the results out of the
+  // session instead of answering them a second time. Answering twice would
+  // apply every social message twice, so the distinction matters.
+  toolServing?: "serve" | "observe";
 }
 
 // Plays turns for the seats of one run.
@@ -43,12 +51,16 @@ export class SeatRuntime {
   // Where the run's record is written.
   private readonly store: TraceStore;
 
+  // Who answers the seat's tool calls.
+  private readonly toolServing: "serve" | "observe";
+
   // Build a runtime for one run.
   constructor(options: SeatRuntimeOptions) {
     this.client = options.client;
     this.world = options.world;
     this.socialDirectory = options.socialDirectory;
     this.store = options.store;
+    this.toolServing = options.toolServing ?? "serve";
   }
 
   // Play one turn for one seat and record it. A turn that produces no terminal
@@ -74,10 +86,17 @@ export class SeatRuntime {
 
     try {
       result = await this.client.sendObservation(seat, observation);
-      const servedCalls = await this.serveCalls(context, result);
-      gaps = servedCalls.gaps;
-      if (servedCalls.outcome) outcome = servedCalls.outcome;
-      actions = servedCalls.actions;
+      if (this.toolServing === "serve") {
+        const servedCalls = await this.serveCalls(context, result);
+        gaps = servedCalls.gaps;
+        if (servedCalls.outcome) outcome = servedCalls.outcome;
+        actions = servedCalls.actions;
+      } else {
+        const observed = readServedCalls(result);
+        gaps = observed.gaps;
+        if (observed.outcome) outcome = observed.outcome;
+        actions = observed.actions;
+      }
     } catch (failure) {
       outcome = "failed";
       error = failure instanceof Error ? failure.message : String(failure);
@@ -131,6 +150,42 @@ export class SeatRuntime {
     }
     return { outcome, gaps, actions };
   }
+}
+
+// Read what a tool server already did, from the results in the session.
+// The runtime only classifies here: it decides how the turn ended, which
+// actions were committed, and which inspects came back empty. It never
+// re-applies anything, because the tool server has already applied it.
+function readServedCalls(result: SeatTurnResult): {
+  outcome?: "committed" | "passed";
+  gaps: Array<{ subject: string; detail?: string }>;
+  actions: CommitAction[];
+} {
+  const gaps: Array<{ subject: string; detail?: string }> = [];
+  let outcome: "committed" | "passed" | undefined;
+  let actions: CommitAction[] = [];
+  for (const call of result.toolCalls) {
+    const tool = call.tool.replace(/^vox-civ_/, "");
+    const input = (call.input ?? {}) as Record<string, unknown>;
+    if (tool === "commit_turn") {
+      outcome = "committed";
+      if (Array.isArray(input.actions)) actions = input.actions as CommitAction[];
+    } else if (tool === "pass") {
+      outcome = "passed";
+    } else if (tool === "inspect" && typeof input.subject === "string" && isGapAnswer(call.output)) {
+      gaps.push(
+        typeof input.detail === "string"
+          ? { subject: input.subject, detail: input.detail }
+          : { subject: input.subject }
+      );
+    }
+  }
+  return { outcome, gaps, actions };
+}
+
+// Whether a tool answer was the simulation saying it holds no such state.
+function isGapAnswer(output: string | null): boolean {
+  return typeof output === "string" && output.includes("does not hold recorded state");
 }
 
 // The usage numbers for a turn that never got a response.

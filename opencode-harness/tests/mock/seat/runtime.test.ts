@@ -199,4 +199,46 @@ describe("a seat playing a turn", () => {
 
     await expect(runtime.playTurn("korea", 99)).rejects.toThrowError(/No recorded turn/);
   });
+
+  it("should read a decision a live tool server already served", async () => {
+    const store = new TraceStore(directory, "run-1");
+    const runtime = new SeatRuntime({
+      client: driverReturning({
+        toolCalls: [
+          {
+            tool: "vox-civ_inspect",
+            callID: "call_1",
+            status: "completed",
+            input: { subject: "cities" },
+            output: "The simulation does not hold recorded state for inspect(cities) on this turn.",
+            error: null
+          },
+          call("commit_turn", { rationale: "Expand.", actions: [{ type: "strategy", grand: "tall" }] })
+        ]
+      }),
+      world: new RecordedWorld([recordedTurn()]),
+      socialDirectory,
+      store,
+      toolServing: "observe"
+    });
+
+    const record = await runtime.playTurn("korea", 7);
+
+    expect(record.outcome).toBe("committed");
+    expect(record.applied).toContain("committed strategy");
+    expect(record.applied).toContain("information gaps: cities");
+  });
+
+  it("should read a pass a live tool server already served", async () => {
+    const store = new TraceStore(directory, "run-1");
+    const runtime = new SeatRuntime({
+      client: driverReturning({ toolCalls: [call("pass", { rationale: "Nothing." })] }),
+      world: new RecordedWorld([recordedTurn()]),
+      socialDirectory,
+      store,
+      toolServing: "observe"
+    });
+
+    expect((await runtime.playTurn("korea", 7)).outcome).toBe("passed");
+  });
 });
