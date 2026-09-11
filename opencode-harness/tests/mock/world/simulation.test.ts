@@ -196,6 +196,59 @@ describe("the generated environment", () => {
     expect(other).not.toContain("Only for you.");
   });
 
+  it("should carry a council from its founding through membership to private business", async () => {
+    const state = createSimState({ seats, seed: 5, game: "sim" });
+    const world = new SimulatedWorld({ state, socialDirectory: directory });
+
+    // Austria founds a council and invites the table.
+    const created = await applyOperations(
+      directory,
+      "austria",
+      [
+        { kind: "group-create", name: "Four Courts Council" },
+        { kind: "invite", group: "e-1", to: "korea" },
+        { kind: "invite", group: "e-1", to: "siam" }
+      ],
+      { seats }
+    );
+    const groupId = created[0].id;
+
+    // The founder sees who has been asked.
+    await world.beginTurn("austria", 1);
+    expect(world.observation("austria", 1)).toContain("Four Courts Council");
+    expect(world.observation("austria", 1)).toContain("invited: korea, siam");
+
+    // The invitee sees the council and is given the id an accept has to name.
+    await world.beginTurn("korea", 1);
+    const inviteeView = world.observation("korea", 1);
+    expect(inviteeView).toContain("Four Courts Council");
+    expect(inviteeView).toContain("invited");
+    expect(inviteeView).toContain("id " + groupId);
+
+    // A seat that was never invited is not told the council exists.
+    await world.beginTurn("iroquois", 1);
+    expect(world.observation("iroquois", 1)).toContain("Member of no groups.");
+
+    // Korea accepts, and only then does the council become a place to talk.
+    await applyOperations(directory, "korea", [{ kind: "accept", group: groupId }], { seats });
+    await applyOperations(
+      directory,
+      "austria",
+      [{ kind: "group-msg", group: groupId, message: "Let us speak freely here." }],
+      { seats }
+    );
+    await world.beginTurn("korea", 2);
+    const member = world.observation("korea", 2);
+    await world.beginTurn("siam", 2);
+    const invitedOnly = world.observation("siam", 2);
+
+    expect(member).toContain("Let us speak freely here.");
+    expect(member).toContain("member");
+    // Siam was invited but never accepted, so the council business is not its
+    // to read. This is the privacy rule the feature exists for.
+    expect(invitedOnly).not.toContain("Let us speak freely here.");
+  });
+
   it("should show a seat the invitation it has been sent, and keep showing it", async () => {
     const state = createSimState({ seats, seed: 5, game: "sim" });
     const world = new SimulatedWorld({ state, socialDirectory: directory });
