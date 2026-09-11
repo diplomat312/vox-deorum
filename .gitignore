@@ -38,3 +38,6 @@ scripts/.dll-cache
 # Local agent handoffs and standalone social sandbox databases.
 .codex-handoff/
 /vox-agents/social-data/
+
+# Social sandbox runtime state (sessions, messages, cascades).
+/social-data/
