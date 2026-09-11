@@ -2,7 +2,7 @@
 
 What the simulated runs have shown about getting model seats to engage in diplomacy, and what each result implies for the next change.
 
-Every run plays the same four seats (Korea, Austria, Siam, Iroquois) on a generated world. A variant is played on three seeds and a difference is only called a result when the ranges separate, or, for a mechanic that mostly does not happen, when it happens in most runs of one variant and never in the other. Twenty-seven runs have now been played across seven variants.
+Every run plays the same four seats (Korea, Austria, Siam, Iroquois) on a generated world. A variant is played on three seeds and a difference is only called a result when the ranges separate, or, for a mechanic that mostly does not happen, when it happens in most runs of one variant and never in the other. Over thirty runs have now been played across eleven variants.
 
 ## The pattern behind every result so far
 
@@ -13,6 +13,20 @@ An intervention works when it names what a mechanic is for, and fails when it do
 **Naming councils does not work.** The same experiment on a different mechanic gave a negative result. Across three control runs, seats founded a council in one run unprompted. Across three runs that were told what a council is for, they founded one in one run. **The rate did not move.** A third arm then tested whether a crisis, which is what makes a table busy, does what the instruction could not. It did not either: one council in three runs, exactly the same rate. Across twelve replicated runs, a council is founded in roughly one in three whatever is done to encourage it.
 
 So the rule is narrower than "tell the seats what exists". A posture is a small, immediate action a seat can take the moment it feels something. A council is a social undertaking that needs a whole table to want a private room at the same time, and being told what one is does not create that want.
+
+## Coaching, checked again on the fixed world
+
+The line this page rests on is that closing an observation by saying what dialogue is for makes seats talk. It was first measured on a world where the first policy could never be adopted, and that world has since been fixed, so it was replayed: fifteen turns against ten to fifteen before, three seeds each, and the same four seats.
+
+| Measure | plain | coached |
+| --- | --- | --- |
+| Social operations | 2.67 (0 to 4), in 2 of 3 runs | 12.67 (4 to 30) |
+| Open messages | 2.67 (0 to 4) | 7 (4 to 13) |
+| Proposals | 0 | 1.67 (0 to 5), in 1 of 3 runs |
+| Seats silent | 1.33 (0 to 4) | 0 |
+| Cost | 0.0438 | 0.0566 (0.0502 to 0.0694) |
+
+**The direction holds and it is weaker than it first looked.** Every coached run produced at least four social operations, where the plain runs averaged 2.67 and only one reached four. The least talkative coached run landed exactly on the plain maximum, though, so the ranges touch and the strict test separates only the cost, which is higher for the coached variant in all three runs. Three seeds cannot rank two variants whose spread runs from four to thirty, and the effect is also bought with a longer prompt and more spend per run. That is the honest price, and it is why the later experiments use fifteen turns rather than ten.
 
 ## What a council is worth when it happens
 
@@ -29,7 +43,18 @@ The other working council, in a control run that was told nothing about councils
 
 **A claim I made here and then disproved.** Having seen councils in the runs where the table was busiest, I wrote that council formation follows a busy table. The test refuted it: adding a crisis to the council instruction produced one council in three runs, against one in three without the crisis. Two data points that agreed with each other were a coincidence, and the honest reading is that council formation is not under the control of anything I have tried. It happens about a third of the time, and what decides it is not the instruction, not the crisis, and not the volume of talk.
 
-## The finding that still matters most: talking rarely becomes an action
+## Talking rarely becomes an action
+
+Across twelve replicated runs the seats set no postures at all, and across nineteen hundred seat turns they committed two strategy actions. Talking happens; the actions that give a position a cost mostly do not.
+
+Postures are the only mechanic that makes a diplomatic position cost something the game will honour, and nine of every ten replicated runs still produce none. Naming it moved the rate, which is progress, but a table that promises peace, warns of an army and apologises with gold still usually records none of it where the game can see.
+
+Most of that is reasonable: a greeting needs no posture. What is not reasonable is a seat that reasons its way to the exact action and then does not take it. From one run's private thinking:
+
+> Setting a private posture toward Iroquois, wary, while public remains friendly could be smart.
+
+It did not set one. The gap is not understanding, and it is not capability, which is why a line naming the mechanic is the intervention that worked.
+
 ## A mechanic was dead across every run, and the observation invited it anyway
 
 Found by making refusals visible, then asking why one appeared on turn one of a fresh game.
@@ -53,9 +78,12 @@ It was proven end to end: a person and a model played three turns of the same ga
 
 **The harness can drive a real game.** A live world reads state and writes decisions through Vox Deorum's MCP server, so the seats reach the game the same way every other caller does and action legality stays with the game. The seat runtime is untouched, which is what the world seam was for: the same four tools, the same trace and the same report against a real game as against a generated one. A turn's reads are fetched up front, a read that fails says so rather than losing the turn, and an action with no live equivalent is reported rather than dropped.
 
-It is verified against a fake connection, which is what allowed it to be written without launching a game. What it has not had is a real game, so three things are deliberately unbuilt: the pacing policy, the game's own deal system, and backend supervision against a live stack.
+It is verified against a fake connection, which is what allowed it to be written without launching a game. What it has not had is a real game: the pacing policy, the game's own deal system and supervision of the live stack are written and covered against a fake connection, and none of them has met a running game.
+
+**A live deal now happens in the game.** The bench settles a deal in the run's own social log, which is enough to see whether seats want to trade. A real game has a better place for one: the game already checks the terms against live legality and moves the goods in a single action, so a proposal written beside it would be a second, weaker truth about the same trade. A live deal therefore goes to the game's own deal system, the offer is read back out of the game's transcript where it was written, and a settled offer stops asking to be answered. A term this harness cannot express honestly, such as a resource named by a word rather than by the game's own identifier, is refused with a reason the seat can act on rather than sent as a malformed deal.
 
 The one thing this batch did not settle is whether a person playing against model seats behaves differently from the model seats themselves. One three turn game with a stand-in player is a wiring proof, not evidence about people.
+
 ## Durability: a crisis is what makes a contact a relationship
 
 Counting messages cannot tell a conversation from a standing channel. The durability reading uses turn numbers instead, and it produces the second clean replicated result of this batch.
@@ -76,15 +104,6 @@ The shape of the contact explains why. Across the twenty-seven runs played, a pr
 A crisis changes that. The crisis runs are the only ones whose channels keep coming back across a wide span with gaps between the messages, which is what a working relationship looks like in this data rather than a single exchange.
 
 So of the five qualities worth improving, durability is the one where a crisis, and not an instruction, is the lever. Nothing I have tried by naming a mechanic has made a relationship last.
-
-
-Postures are the only mechanic that makes a diplomatic position cost something the game will honour, and nine of every ten replicated runs still produce none. Naming it moved the rate, which is progress, but a table that promises peace, warns of an army and apologises with gold still usually records none of it where the game can see.
-
-Most of that is reasonable: a greeting needs no posture. What is not reasonable is a seat that reasons its way to the exact action and then does not take it. From one run's private thinking:
-
-> Setting a private posture toward Iroquois, wary, while public remains friendly could be smart.
-
-It did not set one. The gap is not understanding, and it is not capability, which is why a line naming the mechanic is the intervention that worked.
 
 ## Counterweights, so nobody over-reads this
 
@@ -113,7 +132,9 @@ An earlier version of this page claimed a crisis turns conversation into substan
 
 ## Stability
 
-Seven matrices and twenty-seven runs have now completed with no lost turn from a stall and no session replaced. Two runs had a seat lose a turn to a model call that ran long, and both recovered by clearing the stalled work without losing the session.
+Nine matrices and over thirty runs have now completed with no session replaced and no OpenCode server lost. A seat has never been dropped because a server died: the harness's own log across six hours of running holds no server that exited early and none that failed to become ready.
+
+The turns that did not finish came in two shapes. One was a model call that ran long, which recovered by clearing the stalled work without losing the session. The other was worse to read and better to fix: a request that came back with no text, no thinking, no tool calls and zero tokens after twenty-five seconds, which the record could not tell apart from a seat that chose silence. Silence with no tokens is not a decision, so an empty answer is now asked again once, with a line saying what is missing rather than the whole observation again, and the record carries how many times a turn had to be asked again. That is what a dropped request looks like from the outside, and it is the only failure shape this bench has produced that was mistaken for a model's choice.
 
 CI on the fork now passes. It had been failing at the install step on every push, because npm 11 writes a lockfile that the npm 10 on the CI runner rejects, which is recorded in the testing page along with the command that regenerates it the way CI expects.
 
