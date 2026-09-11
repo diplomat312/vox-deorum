@@ -112,6 +112,51 @@ describe("a seat playing a turn", () => {
     expect((await runtime.playTurn("korea", 7)).outcome).toBe("passed");
   });
 
+  it("should record what the world refused, not only what the seat asked", async () => {
+    const store = new TraceStore(directory, "run-1");
+    const world = new RecordedWorld([recordedTurn()]);
+    // A world that refuses the second of two actions, which is what a live game
+    // does when an action is illegal.
+    world.applyDecision = () => [
+      { type: "research", taken: true },
+      { type: "policy", taken: false, reason: "Policy refused: none was ready" }
+    ];
+    const runtime = new SeatRuntime({
+      client: driverReturning({
+        toolCalls: [
+          call("commit_turn", {
+            rationale: "Expand.",
+            actions: [{ type: "research", technology: "Pottery" }, { type: "policy", policy: "Tradition Opener" }]
+          })
+        ]
+      }),
+      world,
+      socialDirectory,
+      store
+    });
+
+    const record = await runtime.playTurn("korea", 7);
+
+    // The seat is recorded as having committed both, because that is what it
+    // asked for, and the record separately says the world did not take one.
+    expect(record.applied).toContain("committed research, policy");
+    expect(record.refused).toEqual([{ type: "policy", reason: "Policy refused: none was ready" }]);
+  });
+
+  it("should record no refusals when the world took everything", async () => {
+    const store = new TraceStore(directory, "run-1");
+    const runtime = new SeatRuntime({
+      client: driverReturning({
+        toolCalls: [call("commit_turn", { rationale: "Growth.", actions: [{ type: "research", technology: "Pottery" }] })]
+      }),
+      world: new RecordedWorld([recordedTurn()]),
+      socialDirectory,
+      store
+    });
+
+    expect((await runtime.playTurn("korea", 7)).refused).toEqual([]);
+  });
+
   it("should record a turn whose seat never decided", async () => {
     const store = new TraceStore(directory, "run-1");
     const runtime = new SeatRuntime({

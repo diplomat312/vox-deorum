@@ -117,6 +117,7 @@ export class SeatRuntime {
     let gaps: Array<{ subject: string; detail?: string }> = [];
     let error: string | null = null;
     let contextReset = false;
+    let refused: Array<{ type: string; reason: string }> = [];
 
     try {
       result = await this.client.sendObservation(seat, observation, turn);
@@ -137,7 +138,12 @@ export class SeatRuntime {
       // calls. A tool server validates and records the actions; the world they
       // change is the harness's own, so applying them is the harness's job.
       if (outcome === "committed" && actions.length > 0) {
-        await this.world.applyDecision(seat, actions as unknown as Array<Record<string, unknown>>);
+        const outcomes = await this.world.applyDecision(seat, actions as unknown as Array<Record<string, unknown>>);
+        // What the world did is kept as well as what the seat asked for, so a
+        // record never reports an action the world refused as though it happened.
+        refused = outcomes
+          .filter((entry) => !entry.taken)
+          .map((entry) => ({ type: entry.type, reason: entry.reason ?? "no reason given" }));
       }
     } catch (failure) {
       outcome = "failed";
@@ -172,6 +178,7 @@ export class SeatRuntime {
       unknownParts: result?.unknownParts ?? [],
       outcome,
       applied: appliedSummary(actions, gaps),
+      refused,
       error,
       contextReset,
       latencyMs: result?.latencyMs ?? 0

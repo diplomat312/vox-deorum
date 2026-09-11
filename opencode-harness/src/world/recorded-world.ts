@@ -5,7 +5,7 @@
 // their turns came from.
 
 import { loadCorpusDirectory } from "./corpus.js";
-import type { InspectAnswer, SeatInfo, World, WorldTurn } from "./types.js";
+import type { DecisionOutcome, InspectAnswer, SeatInfo, World, WorldTurn } from "./types.js";
 
 // Serves a fixed set of recorded turns, indexed by seat and turn number.
 export class RecordedWorld implements World {
@@ -98,8 +98,9 @@ export class RecordedWorld implements World {
   }
 
   // A recorded game has already happened, so a decision has nowhere to land.
-  applyDecision(): void {
-    return;
+  // Nothing was taken, and the empty list says exactly that.
+  applyDecision(): DecisionOutcome[] {
+    return [];
   }
 
   // A recording only knows its seat names.

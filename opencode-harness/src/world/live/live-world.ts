@@ -11,6 +11,7 @@
 // and a real one, which is the point of having a seam at all.
 
 import type { InspectAnswer, SeatInfo, World } from "../types.js";
+import type { DecisionOutcome } from "../types.js";
 import type { VoxConnector } from "./vox-connector.js";
 import { logger } from "../../utils/logger.js";
 
@@ -35,6 +36,25 @@ export interface LiveWorldOptions {
   names?: Record<string, { civ: string; leader: string }>;
 }
 
+// The reason a tool gave for refusing, kept short enough for a record.
+//
+// A refusal may carry a structured error, as the game's own actions do, or
+// only prose. Both are reduced to one line so a run's report can say why an
+// action was not taken without carrying a whole payload.
+export function refusalReason(text: string): string {
+  try {
+    const parsed = JSON.parse(text) as { Error?: { Message?: unknown }; message?: unknown };
+    if (parsed !== null && typeof parsed === "object") {
+      const message = parsed.Error?.Message ?? parsed.message;
+      if (typeof message === "string" && message.length > 0) return message.slice(0, 160);
+    }
+  } catch {
+    // Not JSON, so the text itself is the reason.
+  }
+  return text.replace(/\s+/g, " ").trim().slice(0, 160);
+}
+
+// Whether a tool's answer was the game refusing what it was asked to do.
 // Whether a tool's answer was the game refusing what it was asked to do.
 //
 // A refusal reaches the harness in two shapes, and only one of them looks like
@@ -176,13 +196,19 @@ export class LiveWorld implements World {
   // Every action is sent as the tool that owns it, so the game validates it and
   // the refusal comes back as the tool's own answer rather than as an error
   // invented here.
-  async applyDecision(seat: string, actions: Array<Record<string, unknown>>): Promise<void> {
+  async applyDecision(seat: string, actions: Array<Record<string, unknown>>): Promise<DecisionOutcome[]> {
     const held = this.seatList.find((entry) => entry.seat === seat);
-    if (!held) return;
+    if (!held) return [];
+    const outcomes: DecisionOutcome[] = [];
     for (const action of actions) {
       const call = writeCall(held.playerID, action);
       if (!call) {
         logger.warn("Seat " + seat + " asked for an action with no live equivalent: " + JSON.stringify(action.type));
+        outcomes.push({
+          type: String(action.type ?? "unknown"),
+          taken: false,
+          reason: "this action has no live equivalent, so it was not sent to the game"
+        });
         continue;
       }
       const result = await this.connector.call(call.tool, call.args);
@@ -191,10 +217,17 @@ export class LiveWorld implements World {
       // rather than reporting an action the game rejected as applied.
       if (refusedByGame(result)) {
         logger.warn("The game did not take " + call.tool + " for seat " + seat + ": " + result.text.slice(0, 200));
+        outcomes.push({
+          type: String(action.type ?? "unknown"),
+          taken: false,
+          reason: refusalReason(result.text)
+        });
       } else {
         logger.info("Applied " + call.tool + " for seat " + seat);
+        outcomes.push({ type: String(action.type ?? "unknown"), taken: true });
       }
     }
+    return outcomes;
   }
 
   // Read a subject for the turn, recording it so an inspect can reuse it.

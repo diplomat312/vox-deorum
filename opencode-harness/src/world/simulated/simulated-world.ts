@@ -24,7 +24,7 @@ function termsOf(deal: { gold?: number; goldPerTurn?: number; resource?: string 
   if (deal.resource) terms.push("a supply of " + deal.resource);
   return terms.length === 0 ? "no terms" : terms.join(", ");
 }
-import type { InspectAnswer, SeatInfo, World } from "../types.js";
+import type { DecisionOutcome, InspectAnswer, SeatInfo, World } from "../types.js";
 import { availablePolicies, availableTechs, buildOptions, eraForTechCount } from "./content.js";
 import {
   advanceTurn,
@@ -170,8 +170,18 @@ export class SimulatedWorld implements World {
 
   // Carry out what a seat committed, so its choices land in the world the other
   // seats will read next turn.
-  applyDecision(seat: string, actions: Array<Record<string, unknown>>): void {
-    applyCommit(this.state, seat, actions as unknown as SimCommitAction[]);
+  // A generated world takes everything it is asked for, because the engine
+  // accepts each action or records that it refused it. The outcomes it reports
+  // are therefore the engine's own refusals, such as a policy that was not ready.
+  applyDecision(seat: string, actions: Array<Record<string, unknown>>): DecisionOutcome[] {
+    const applied = applyCommit(this.state, seat, actions as unknown as SimCommitAction[]);
+    return applied.map((line, index) => {
+      const type = String((actions[index] as { type?: unknown } | undefined)?.type ?? "unknown");
+      // A refusal is an applied line that says so rather than one that reports
+      // the change it made.
+      const refused = /refused/i.test(line);
+      return refused ? { type, taken: false, reason: line } : { type, taken: true };
+    });
   }
 
   // Every name a seat answers to: its seat name, its civilization and its

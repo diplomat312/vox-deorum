@@ -1,6 +1,6 @@
 // The shapes a seat reads from, and the seam every state source implements.
-// A recorded game and a live game both have to satisfy this interface, so the
-// seat runtime never learns where its situation came from.
+// A recorded game, a generated game and a live game all satisfy this interface,
+// so the seat runtime never learns where its situation came from.
 
 // One seat of a game, as the world knows it.
 export interface SeatInfo {
@@ -62,16 +62,30 @@ export interface InspectAnswer {
   gap?: boolean;
 }
 
-// The state source a seat reads from. A simulated game, a recorded-game replay
-// and, later, a live game all implement this, which keeps the seat runtime
-// independent of where its situation came from.
+// What a world did with one action a seat committed.
+export interface DecisionOutcome {
+  // The kind of action, as the seat named it.
+  type: string;
+  // Whether the world took it.
+  taken: boolean;
+  // Why not, when it was not taken.
+  reason?: string;
+}
+
+// The state source a seat reads from. A generated game, a recorded game and a
+// live game all implement this, which keeps the seat runtime independent of
+// where its situation came from.
 export interface World {
   // The game label every turn in this world shares.
   readonly game: string;
   // Every seat this world can play, in a stable order.
   seats(): SeatInfo[];
-  // Prepare a seat to be shown its turn. A simulated world advances to the
-  // turn here and delivers whatever arrived for that seat, so rendering the
+  // Names a seat may be addressed by besides its seat name, mapped to the seat
+  // they mean. A model naturally writes "Austria", so refusing that because the
+  // seat is called "austria" wastes a turn and teaches it nothing.
+  aliases(): Record<string, string>;
+  // Prepare a seat to be shown its turn. A generated world advances to the turn
+  // here and delivers whatever arrived for that seat, so rendering the
   // observation afterwards can be a plain read.
   beginTurn(seat: string, turn: number): Promise<void>;
   // Whether a seat has a turn to play at this number.
@@ -79,21 +93,25 @@ export interface World {
   // The observation for a seat at a turn. Throws when the world cannot produce
   // it, because a seat must never silently play against missing state.
   //
-  // A live or simulated world may advance that seat's diplomacy cursor as a
+  // A live or generated world may advance that seat's diplomacy cursor as a
   // side effect, because rendering the observation is how messages are
   // delivered to a seat.
   observation(seat: string, turn: number): string;
   // Answer one inspect. A world that does not hold the answer says so rather
   // than inventing state.
   inspect(seat: string, turn: number, subject: string, detail?: string): Promise<InspectAnswer>;
-  // Carry out the actions a seat committed. A recording has nothing to do
-  // here, because its world already happened. A generated world must apply
-  // them, or a seat's choices would never change what the others see. A live
-  // world sends them to the game, which is why this may be asynchronous even
-  // though the generated one answers at once.
-  applyDecision(seat: string, actions: Array<Record<string, unknown>>): void | Promise<void>;
-  // Names a seat may be addressed by besides its seat name, mapped to the seat
-  // they mean. A model naturally writes "Austria", so refusing that because the
-  // seat is called "austria" wastes a turn and teaches it nothing.
-  aliases(): Record<string, string>;
+  // Carry out the actions a seat committed, and say what became of each.
+  //
+  // A recorded game has nothing to do here, because its world already happened.
+  // A generated world must apply them, or a seat's choices would never change
+  // what the others see, and a live world sends them to the game.
+  //
+  // The world is asked what it did rather than assumed to have agreed, because a
+  // game can refuse an action and a run's record should say so instead of
+  // reporting the seat's intent as though it had happened.
+  applyDecision(
+    seat: string,
+    actions: Array<Record<string, unknown>>
+  ): DecisionOutcome[] | Promise<DecisionOutcome[]>;
 }
+

@@ -222,10 +222,42 @@ describe("sending a decision to the game", () => {
     const connector = new FakeConnector(answers, ["set-research"]);
     const world = new LiveWorld({ connector, seats: [{ seat: "korea", playerID: 0 }] });
 
-    // A refusal is the game's answer, not a crash: the run carries on.
-    await expect(
-      world.applyDecision("korea", [{ type: "research", technology: "Writing", rationale: "science" }])
-    ).resolves.toBeUndefined();
+    // A refusal is the game's answer, not a crash: the run carries on, and the
+    // record says the action was not taken rather than reporting it as applied.
+    const outcomes = await world.applyDecision("korea", [
+      { type: "research", technology: "Writing", rationale: "science" }
+    ]);
+
+    expect(outcomes).toEqual([{ type: "research", taken: false, reason: "the game refused" }]);
+  });
+
+  it("should report a refusal the game wraps in a successful call", async () => {
+    // The shape the real server returns for an action the game will not take.
+    const connector = new FakeConnector({
+      "set-research": JSON.stringify({
+        Success: false,
+        Error: { Code: "FUNCTION_NOT_FOUND", Message: "Function 'default-func-set-research' is not available" }
+      })
+    });
+    const world = new LiveWorld({ connector, seats: [{ seat: "korea", playerID: 0 }] });
+
+    const outcomes = await world.applyDecision("korea", [
+      { type: "research", technology: "Writing", rationale: "science" }
+    ]);
+
+    expect(outcomes[0].taken).toBe(false);
+    expect(outcomes[0].reason).toContain("not available");
+  });
+
+  it("should report an action it never sent, rather than dropping it", async () => {
+    const connector = new FakeConnector(answers);
+    const world = new LiveWorld({ connector, seats: [{ seat: "korea", playerID: 0 }] });
+
+    const outcomes = await world.applyDecision("korea", [{ type: "conquest", rationale: "ambitious" }]);
+
+    expect(outcomes[0].taken).toBe(false);
+    expect(outcomes[0].reason).toContain("no live equivalent");
+    expect(connector.calls).toHaveLength(0);
   });
 
   it("should name the reads a turn makes and the reads an inspect makes", () => {

@@ -128,6 +128,10 @@ export interface RunReport {
   world: WorldSummary | null;
   // Whether any relationship lasted rather than merely happened.
   durability: DurabilityMetrics;
+  // Actions the world did not take, with the reason it gave. Empty for a
+  // generated world that took everything, and not for a live game, where
+  // legality is the game's to decide.
+  refusals: Array<{ seat: string; turn: number; type: string; reason: string }>;
 }
 
 // Pull the information gaps back out of a turn's applied line.
@@ -352,6 +356,14 @@ export async function buildReport(runDirectory: string): Promise<RunReport> {
     effectiveness: effectivenessMetrics(turns, seats),
     world: await readWorldSummary(runDirectory),
     durability: durabilityMetrics(turns, data.social),
+    refusals: turns.flatMap((record) =>
+      (record.refused ?? []).map((entry) => ({
+        seat: record.seat,
+        turn: record.turn,
+        type: entry.type,
+        reason: entry.reason
+      }))
+    ),
     roundup: turns.map((record) => ({
       seat: record.seat,
       turn: record.turn,
@@ -481,6 +493,14 @@ export function renderReport(report: RunReport, toolCalls: RunToolCall[]): strin
   lines.push("| Share of seat turns that changed something lasting | " + Math.round(report.effectiveness.actionRate * 100) + "% |");
   lines.push("");
   lines.push("Actions committed: " + (actionKinds || "none") + ".");
+  lines.push(
+    "Actions the world did not take: " +
+      (report.refusals.length === 0
+        ? "none"
+        : report.refusals
+            .map((entry) => entry.seat + " turn " + entry.turn + " " + entry.type + " (" + entry.reason + ")")
+            .join("; "))
+  );
   lines.push("");
   lines.push("## What the messages did");
   lines.push("");

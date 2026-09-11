@@ -46,6 +46,10 @@ export interface TraceRecord {
   outcome: TraceOutcome;
   // What the world did with the decision, when there was one.
   applied: string | null;
+  // Actions the world did not take, with the reason it gave. Empty when it took
+  // everything the seat asked for, which is the usual case for a generated world
+  // and not for a live game, where legality is the game's to decide.
+  refused: Array<{ type: string; reason: string }>;
   // The error that ended the turn, when it failed.
   error: string | null;
   // True when the seat's session was replaced before this turn, so its history
