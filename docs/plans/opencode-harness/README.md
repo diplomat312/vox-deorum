@@ -1,81 +1,60 @@
 # OpenCode Harness: Build Order
 
-This folder holds the feature that makes OpenCode the harness that pilots a Civilization V seat. The requirements live in [specs.md](specs.md); this page fixes the stages, their order, and what is true at the end of each one.
+This folder holds the feature that makes OpenCode the harness that pilots a Civilization V seat. The requirements live in [specs.md](specs.md); this page fixes the stages, their order, and what is true at the end of each one. What the runs have actually shown is recorded in [FINDINGS.md](../../../opencode-harness/FINDINGS.md).
 
-Each stage is independently verifiable and ships on its own. Simulation before live play, and measurement before optimization: the tuning loop in Stage 5 has nothing to tune until Stages 1 through 4 produce a run and a trace store.
+Each stage is independently verifiable and ships on its own. Simulation before live play, and measurement before optimization.
 
-| # | Stage | What is true at the end |
-| --- | --- | --- |
-| 1 | Corpus and replay world | A recorded game replays deterministically, and the harness can ask for the observation and world facts at any turn and seat. |
-| 2 | OpenCode session client | The harness can hold one persistent OpenCode session per seat, send it an observation, and capture reasoning, tool calls, usage and cost. |
-| 3 | Seat runtime and trace store | A seat runs a turn end to end against the simulation, with its four tools wired, and every step lands in the trace store. |
-| 4 | First simulated benchmark | Several seats play a recorded window together against a live diplomacy layer, and the run produces metrics and artifacts. |
-| 5 | Analysis, roundup and tuning | Reasoning can be read back per seat and turn, roundups reconstruct intentions, and variants are compared on the richness, stability and cost frontier. |
-| 6 | Live path | The same seat runtime drives a real game through Vox MCP and the bridge, with the pacing policy and backend supervision. |
-| 7 | Human seat and interface | A person plays one seat in the same game, and a usable interface shows the seats, the politics and the traces. |
+| # | Stage | State | What is true at the end |
+| --- | --- | --- | --- |
+| 1 | Corpus and world seam | Done | A recorded game can be replayed, a generated game can be played, and a seat cannot tell which it is reading. |
+| 2 | Session client | Done | The harness holds one persistent OpenCode session per seat, sends it an observation, and captures reasoning, calls, usage and cost. |
+| 3 | Seat runtime and trace store | Done | A seat plays a turn end to end with its four tools, and every step lands in the trace store. |
+| 4 | Simulated benchmark | Done | Several seats play a generated game together with a live diplomacy layer, and the run produces metrics and artifacts. |
+| 5 | Analysis, roundup and tuning | In progress | Reasoning reads back per seat and turn, roundups reconstruct intentions, and variants are compared on the richness, stability and cost frontier. |
+| 6 | Live path | Not started | The same seat runtime drives a real game through Vox MCP and the bridge, with the pacing policy and backend supervision. |
+| 7 | Human seat and interface | Not started | A person plays one seat in the same game, and a usable interface shows the seats, the politics and the traces. |
 
-## Stage 1: Corpus and replay world
+## Stage 1: Corpus and world seam
 
-Turn the recorded game into a fixture and build the loader that serves it.
+A recorded four seat game was harvested into one JSONL fixture per seat, one record per turn, holding the exact observation the seat was sent and the calls that followed it. The harvester reads the recording straight from the git object store, so the working tree is left alone and the output is reproducible.
 
-The recording is a four-seat game captured on another branch: per-turn observations, every tool call with its result, epoch records, and per-request telemetry. Extraction produces one file per seat, one record per turn, holding the observation exactly as it was sent and the calls that followed it. The extraction script reads from the git object store rather than a checkout, is deterministic, and reports coverage per seat so gaps are visible.
+The world seam is deliberately small: give me the seats, tell me whether a seat has a turn, give me the observation, answer an inspect, and carry out a decision. A recorded game and a generated game both satisfy it, which is what let the state source change without the seat runtime changing.
 
-The world interface is deliberately small, because it is what a later live implementation must also satisfy: give me the seats in a game, give me the observation for a seat at a turn, and give me the world facts behind it. The replay implementation answers from the fixture. A synthetic implementation answers from a hand-written scenario, which is what the unit tests use so they never depend on the recording.
+## Stage 2: Session client
 
-Done when a test can replay a chosen window and read back an observation identical to the one the recording holds, and the extraction reports clean coverage.
+The client talks to the OpenCode server rather than the run command, for the reasons in the specification. It creates one session per seat and keeps it, sends an observation as a message, and reads the turn back from every message the turn produced. Reasoning, visible text and tool calls are separated and each is preserved, and the usage attached to each message is summed across the turn.
 
-## Stage 2: OpenCode session client
-
-Own the conversation with the model.
-
-The client talks to the OpenCode server rather than the run command, for the reasons in the specification. It starts or attaches to a server, creates one session per seat and keeps it for the game, and sends an observation as a message. It reads back the response as parts, so reasoning, visible text and tool calls are separated and each is preserved. It records the usage attached to each message, which includes cache reads and writes, reasoning tokens, latency and cost.
-
-The seat's runtime environment is part of this stage, because a seat must not be able to touch the repository or the shell: the session runs under a configuration that denies every tool except the four civ tools, in a per-seat working directory.
-
-Done when a mock server exercises the client in tests, and one live smoke call against a real session returns a reasoning part and a cost figure.
+Each seat runs in its own working directory under its own configuration, denied every tool except the four civ tools, so an autonomous seat cannot reach the shell or the repository.
 
 ## Stage 3: Seat runtime and trace store
 
-Make one seat run one turn.
+A seat's turn is one function: prepare the world, publish the snapshot a tool server in another process will read, render the observation, send it, serve or observe the tool calls that come back, apply the decision to the world, and record everything.
 
-This is where the four tools stop being abstractions. Reading goes to the world. Speaking and dealing go to the diplomacy layer and have real consequences inside the run. Committing and passing end the turn and record the decision. The observation is assembled the same way it was in the recording, so the same information reaches the model, and the assembly is a single function that later stages can vary on purpose.
+The four tools are inspect, communicate, commit_turn and pass. Reading goes to the world. Talking and trading go to the diplomacy log and have consequences inside the run. Committing and passing end the turn. A seat that never decides is recorded as unfinished rather than retried, because a seat that failed to decide is a fact about the run.
 
-Everything the turn touched is written to the trace store in one place: the observation, the reasoning, the calls, the decision, the outcome, and the usage numbers. The store is the interface for every later question and for the benchmark metrics, so it is designed before it is needed rather than after.
+A gap is recorded when a seat asks for information the world does not hold. What seats keep asking for and not getting is the sharpest signal about what the observation should carry.
 
-Done when a single seat can play a stretch of recorded turns through the simulation and a reader can reconstruct any one of those turns from the store alone.
+## Stage 4: Simulated benchmark
 
-## Stage 4: First simulated benchmark
+A run holds several seats in one session set, all playing one generated world with a shared diplomacy layer, so messages arrive, groups form and deals are proposed and answered. Seats cannot see each other's private reasoning, only what they say and do.
 
-Put several seats in one run.
-
-A run holds several seats in one session set, all playing the same replayed world with a shared diplomacy layer, so messages arrive, groups form, and deals are proposed and answered. The seats cannot see each other's private reasoning, only what they say and do.
-
-The run emits metrics that match the two goals: richness, measured through message volume and depth, who initiates contact, group formation, deal attempts and outcomes, and how relationships move; and cost and stability, measured through tokens, cache reuse, latency, spend, failures and refusals. Artifacts are published with the run so a result can be inspected without replaying it.
-
-Done when a recorded window plays to its end with more than two seats, and the run produces both a comparison against the recording and a metrics report.
+The world is calibrated against the recorded game rather than guessed, and circumstances can be injected on chosen turns so a run can study a reaction rather than only an undisturbed game.
 
 ## Stage 5: Analysis, roundup and tuning
 
-Turn the trace store into the two products it exists for.
+The report measures how much the seats talked, who stayed silent, how long the quiet stretches ran, whether direct messages were answered in kind, and what it all cost, including the cache hit ratio and the cost per social operation. The comparison puts several runs side by side and lists what changed against the baseline. The watcher tails a run while it plays.
 
-The inspector answers what one seat knew, reasoned and did at one turn. The roundup reads a whole game and reconstructs a seat's intentions over time, which is what makes a finished game worth writing up.
+The tuning loop is the reason a simulation exists: define a variant, which is a change to what is presented, how it is worded or how a prompt is framed, run it against the same seed, and compare it on the richness, stability and cost frontier.
 
-The tuning loop is the reason a simulation exists at all: define a variant, which is a change to what is presented, how it is worded, or how a prompt is framed, run it against the same recorded window, and compare it on the richness, stability and cost frontier. The output is evidence about which presentation of information produces better diplomacy per unit of cost, and it feeds back into the observation builder and the tool descriptions.
-
-Done when two variants have been run and compared, and the comparison is good enough to justify a change.
+Two variants have been run and compared so far, and a third is in flight. The results are in FINDINGS.md. What remains is breadth: more variants, longer runs, and a settled answer to which lever moves diplomacy rather than which lever moves message counts.
 
 ## Stage 6: Live path
 
-Point the same runtime at a real game.
+The seat runtime does not change. What changes is the world implementation, which now reads live state through Vox MCP and the bridge, and the pacing policy, which becomes the overlap window with revalidated commits. This is also where the deal layer stops being the harness's own log and becomes the game's deal system, through the existing inspect-deal and deal action tools.
 
-The seat runtime does not change. What changes is the world implementation, which now reads live state through Vox MCP and the bridge, and the pacing policy, which becomes the overlap window with revalidated commits. Backend supervision, health checks and outage handling move from desirable to required, because a live game keeps running whether the backend is healthy or not.
-
-Done when seats play a live game unattended for a long stretch, recover from a backend restart, and publish a trace.
+Backend supervision, health checks and outage handling move from desirable to required, because a live game keeps running whether the backend is healthy or not.
 
 ## Stage 7: Human seat and interface
 
-Let a person play.
+One seat in the same game belongs to a person, who sees the same information a model seat sees and acts through the same tools. The interface shows the table, the politics as they happen, and the reasoning behind a decision, which is the same trace store read through a different lens.
 
-One seat in the same game belongs to a human, who sees the same information a model seat sees and acts through the same tools. The interface shows the table, the politics as they happen, and the reasoning behind a decision, which is the same trace store read through a different lens.
-
-Done when a person can take a seat, negotiate with the model seats, and finish a session.
