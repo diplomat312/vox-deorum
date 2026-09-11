@@ -30,6 +30,19 @@ The other working council, in a control run that was told nothing about councils
 **A claim I made here and then disproved.** Having seen councils in the runs where the table was busiest, I wrote that council formation follows a busy table. The test refuted it: adding a crisis to the council instruction produced one council in three runs, against one in three without the crisis. Two data points that agreed with each other were a coincidence, and the honest reading is that council formation is not under the control of anything I have tried. It happens about a third of the time, and what decides it is not the instruction, not the crisis, and not the volume of talk.
 
 ## The finding that still matters most: talking rarely becomes an action
+## A mechanic was dead across every run, and the observation invited it anyway
+
+Found by making refusals visible, then asking why one appeared on turn one of a fresh game.
+
+The simulated world's first social policy became available on **turn forty-three**, because the cost was fifty culture against one culture per turn. Every run played was ten to thirty turns. So **every policy action ever committed in every run was refused by the world**, and the social policy tree was never exercised once.
+
+The observation made it worse by contradicting itself. It told a seat the next policy was fifty turns away and then, in the next sentence, demanded that it name one exact policy to adopt. A seat that took the invitation lost the action to a silent no-op, and nothing in the record showed it.
+
+Both are fixed. The first policy now costs twelve culture and arrives around turn thirteen, inside a normal run, and the observation only invites a policy when one can actually be adopted, saying plainly when none can. A fifteen turn game now has both seats adopt Tradition Opener on turn thirteen, which is the first policy adopted in any run.
+
+**This corrects a number I reported earlier.** The effectiveness measure counted a turn as having changed something lasting when it carried a policy, a strategy, a posture or a research choice. Every policy action counted that way changed nothing, so the earlier effectiveness rates were overstated by roughly one turn in ten. The measure is right and the world was wrong; the world is now right.
+
+The lesson generalizes past this bug: **a mechanic that cannot be exercised within the length of a run is not being measured, it is being assumed.** The refusals field, which only exists because the live path turned out to need it, is what exposed this.
 ## The harness can now be played by a person, and pointed at a real game
 
 Two capabilities landed this batch, both verifiable without Civilization V running.

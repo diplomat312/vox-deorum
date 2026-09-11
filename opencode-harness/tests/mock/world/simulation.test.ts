@@ -368,6 +368,58 @@ describe("the generated environment", () => {
     expect(state.settledDeals).toHaveLength(1);
   });
 
+  it("should not invite a policy that cannot be adopted yet", async () => {
+    const state = createSimState({ seats, seed: 5, game: "sim" });
+    const world = new SimulatedWorld({ state, socialDirectory: directory });
+    await world.beginTurn("korea", 1);
+
+    const observation = world.observation("korea", 1);
+
+    // Asking for a policy while saying the next arrives in fifty turns invited an
+    // action the world refused, and a seat that took the invitation lost the turn's
+    // action to a silent no-op.
+    expect(observation).toContain("No policy can be adopted yet");
+    expect(observation).not.toContain("Policy must name ONE exact entry");
+  });
+
+  it("should invite a policy once one is ready", async () => {
+    const state = createSimState({ seats, seed: 5, game: "sim" });
+    state.seats.korea.policyAvailable = true;
+    const world = new SimulatedWorld({ state, socialDirectory: directory });
+    await world.beginTurn("korea", 1);
+
+    const observation = world.observation("korea", 1);
+
+    expect(observation).toContain("A policy is ready now");
+    expect(observation).toContain("Tradition Tradition Opener");
+  });
+
+  it("should let a policy be adopted inside a normal run", () => {
+    // A mechanic that cannot be used in any run is not being tested. At the
+    // original cost the first policy arrived on turn forty-three, past the end of
+    // every run played, so the policy tree went unexercised across every result.
+    const state = createSimState({ seats, seed: 5, game: "sim" });
+    let firstReady: number | null = null;
+    for (let turn = 1; turn <= 20; turn += 1) {
+      if (state.seats.korea.policyAvailable && firstReady === null) firstReady = turn;
+      advanceTurn(state, defaultSimConfig);
+    }
+
+    expect(firstReady).not.toBeNull();
+    expect(firstReady as number).toBeLessThanOrEqual(15);
+  });
+
+  it("should adopt a policy a seat asks for once one is ready", () => {
+    const state = createSimState({ seats, seed: 5, game: "sim" });
+    state.seats.korea.policyAvailable = true;
+
+    const applied = applyCommit(state, "korea", [{ type: "policy", policy: "Tradition Tradition Opener" }]);
+
+    expect(state.seats.korea.policies).toContain("Tradition Tradition Opener");
+    expect(state.seats.korea.policyAvailable).toBe(false);
+    expect(applied.join(" ")).toContain("Adopted Tradition Tradition Opener");
+  });
+
   it("should carry a committed action into the world and the next observation", async () => {
     const state = createSimState({ seats, seed: 5, game: "sim" });
     const world = new SimulatedWorld({ state, socialDirectory: directory });

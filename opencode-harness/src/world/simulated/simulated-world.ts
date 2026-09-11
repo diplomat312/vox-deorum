@@ -471,13 +471,15 @@ export class SimulatedWorld implements World {
       (player.currentResearch ? " (Estimated in " + researchTurns + " turns)" : "") +
       ". Research must name ONE exact technology from: " +
       techs.join(", ") +
-      ". Next policy in " +
-      policyTurns +
-      " turns" +
-      (player.policyAvailable ? " (READY NOW)" : "") +
-      ". Policy must name ONE exact entry from: " +
-      policies.join("; ") +
-      "."
+      ". " +
+      // A policy is only invited when one can actually be adopted. Asking for a
+      // policy while saying the next arrives in fifty turns invited an action the
+      // world refused, and a seat that took the invitation lost the action.
+      (player.policyAvailable
+        ? "A policy is ready now, and must name ONE exact entry from: " + policies.join("; ") + "."
+        : "No policy can be adopted yet: the next arrives in " +
+          policyTurns +
+          " turns, and one committed before then is refused.")
     );
   }
 

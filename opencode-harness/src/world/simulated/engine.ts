@@ -27,7 +27,11 @@ export const defaultSimConfig: SimConfig = {
   startFaithPerTurn: 0,
   firstTechCost: 25,
   techCostGrowth: 1.16,
-  firstPolicyCost: 50,
+  // The first policy must arrive inside a normal run, because a mechanic that
+  // cannot be used is not being tested. At fifty it arrived on turn forty-three,
+  // which is past the end of every run played, so every policy action ever
+  // committed was silently refused and the social policy tree went unexercised.
+  firstPolicyCost: 12,
   policyCostGrowth: 1.22,
   firstGrowthNeeded: 15,
   growthNeededPerPopulation: 6,
