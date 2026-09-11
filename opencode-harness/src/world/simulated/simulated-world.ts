@@ -72,6 +72,11 @@ export interface SimulatedWorldOptions {
   // formed one since the invitation path was fixed, so this tests whether the
   // feature is unused because its purpose is unstated.
   councilCoaching?: boolean;
+  // Whether the closing instruction names the grand strategy as the way a seat
+  // declares what it is about to the table. Two strategy actions have been
+  // committed in nearly two thousand seat turns, which is the same shape posture
+  // had before it was named, so this asks whether the same lever works twice.
+  strategyCoaching?: boolean;
 }
 
 // How a seat regards another, trimmed to what a seat is allowed to know.
@@ -145,6 +150,9 @@ export class SimulatedWorld implements World {
   private readonly postureCoaching: boolean;
   private readonly councilCoaching: boolean;
 
+  // Whether the closing instruction names the grand strategy.
+  private readonly strategyCoaching: boolean;
+
   // Build a world over the given state.
   constructor(options: SimulatedWorldOptions) {
     this.state = options.state;
@@ -157,6 +165,7 @@ export class SimulatedWorld implements World {
     this.diplomacyCoaching = options.diplomacyCoaching ?? false;
     this.postureCoaching = options.postureCoaching ?? false;
     this.councilCoaching = options.councilCoaching ?? false;
+    this.strategyCoaching = options.strategyCoaching ?? false;
   }
 
   // Build a read-only view of a world that another process has already
@@ -346,7 +355,8 @@ export class SimulatedWorld implements World {
       this.diplomacyCoaching
         ? coachedInstruction({
             posture: this.postureCoaching,
-            council: this.councilCoaching
+            council: this.councilCoaching,
+            strategy: this.strategyCoaching
           })
         : plainInstruction()
     );
@@ -754,7 +764,7 @@ function plainInstruction(): string {
 // It states what talking does rather than asking a seat to talk. A seat told to
 // be talkative produces noise, while a seat that knows what a message is for
 // can decide for itself whether this turn needs one.
-function coachedInstruction(more: { posture: boolean; council: boolean }): string {
+function coachedInstruction(more: { posture: boolean; council: boolean; strategy: boolean }): string {
   const lines = [
     "You may inspect anything else you need (inspect). When finished, commit your actions (commit_turn) or pass. Keep the rationale short.",
     "",
@@ -773,6 +783,11 @@ function coachedInstruction(more: { posture: boolean; council: boolean }): strin
   if (more.council) {
     lines.push(
       "- A council is a private room for part of the table: seats you invite and which accept can speak there without the others hearing, which is how a smaller group agrees something before it is said in the open."
+    );
+  }
+  if (more.strategy) {
+    lines.push(
+      "- A strategy action is how you declare what you are about to the whole table, and the other seats read it as your intention rather than as a private plan. Set one when your course changes, because a table that cannot tell what you are doing will assume the worst."
     );
   }
   return lines.join("\n");

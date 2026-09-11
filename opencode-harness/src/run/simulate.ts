@@ -60,6 +60,8 @@ export interface SimulationOptions {
   postureCoaching?: boolean;
   // Whether to say what a council is for.
   councilCoaching?: boolean;
+  // Whether to name the grand strategy as the way a seat declares its intent.
+  strategyCoaching?: boolean;
   // How long one seat turn may take before the harness gives up on it. Kept
   // below the five minutes a socket layer will otherwise wait, so the harness
   // notices a stall first and can clear the work it started.
@@ -116,6 +118,8 @@ export async function simulate(options: SimulationOptions): Promise<SimulationRe
     ,
     postureCoaching: options.postureCoaching ?? false,
     councilCoaching: options.councilCoaching ?? false
+    ,
+    strategyCoaching: options.strategyCoaching ?? false
   });
 
   // One OpenCode server per seat, because each seat needs its own tool server
@@ -390,6 +394,7 @@ async function main(): Promise<void> {
     .filter(Boolean);
   const postureCoaching = (value("posture-coaching", "off") as string) === "on";
   const councilCoaching = (value("council-coaching", "off") as string) === "on";
+  const strategyCoaching = (value("strategy-coaching", "off") as string) === "on";
   const turnTimeoutMs = Number(value("turn-timeout", "150000"));
   const shocks = scenarioFile ? await readScenario(repositoryRoot, scenarioFile) : [];
 
@@ -411,6 +416,8 @@ async function main(): Promise<void> {
     ,
     postureCoaching,
     councilCoaching
+    ,
+    strategyCoaching
     ,
     humanSeats,
     humanTurnTimeoutMs: Number(value("human-timeout", "1800000"))

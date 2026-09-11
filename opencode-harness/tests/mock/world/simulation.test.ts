@@ -461,6 +461,26 @@ describe("the generated environment", () => {
     expect(observation).toContain("Iroquois: has not been in touch");
   });
 
+  it("should name the grand strategy only when asked to", async () => {
+    const state = createSimState({ seats, seed: 5, game: "sim" });
+    const plain = new SimulatedWorld({ state, socialDirectory: directory, diplomacyCoaching: true });
+    const named = new SimulatedWorld({
+      state: createSimState({ seats, seed: 5, game: "sim" }),
+      socialDirectory: directory,
+      diplomacyCoaching: true,
+      strategyCoaching: true
+    });
+    await plain.beginTurn("korea", 1);
+    await named.beginTurn("korea", 1);
+
+    // Two strategy actions were committed in nearly two thousand seat turns, so
+    // the question is whether naming the declaration is the same lever that
+    // worked for posture.
+    expect(plain.observation("korea", 1)).not.toContain("A strategy action is how you declare");
+    expect(named.observation("korea", 1)).toContain("A strategy action is how you declare what you are about");
+    expect(named.observation("korea", 1)).toContain("assume the worst");
+  });
+
   it("should name posture and councils only when asked to", async () => {
     const state = createSimState({ seats, seed: 5, game: "sim" });
     const plain = new SimulatedWorld({ state, socialDirectory: directory, diplomacyCoaching: true });
