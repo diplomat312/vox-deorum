@@ -30,6 +30,27 @@ The other working council, in a control run that was told nothing about councils
 The correlation is worth stating plainly: the runs that formed councils are the runs where the table was talking most. Council formation follows a busy table rather than causing one.
 
 ## The finding that still matters most: talking rarely becomes an action
+## Durability: a crisis is what makes a contact a relationship
+
+Counting messages cannot tell a conversation from a standing channel. The durability reading uses turn numbers instead, and it produces the second clean replicated result of this batch.
+
+Fifteen turns, three seeds, crisis against none:
+
+| Measure | no crisis | with a crisis |
+| --- | --- | --- |
+| Pairs still in contact at the end | 0 (0 to 0), in 0 of 3 runs | 4.7 (4 to 5), in 3 of 3 runs |
+| Pairs that spoke on more than one turn | 1.3 (0 to 3) | 4.7 (4 to 5) |
+| Median span of a private channel, in turns | 0.7 (0 to 1) | 4.8 (1 to 12) |
+| Median turn coverage of a channel | 0.67 | 0.79 |
+
+**Both of the first two measures separate cleanly.** The plainest reading is this: without a crisis, not one pair of seats is still in contact by the end of the game, in any of the three runs. With one, nearly every pair is, in all three.
+
+The shape of the contact explains why. Across the twenty-seven runs played, a private channel is almost always a burst: the median coverage of a channel is 1.0 in most runs, meaning every message between two seats landed on consecutive turns and then the channel was never used again. A seat opens a line, says its piece, and leaves.
+
+A crisis changes that. The crisis runs are the only ones whose channels keep coming back across a wide span with gaps between the messages, which is what a working relationship looks like in this data rather than a single exchange.
+
+So of the five qualities worth improving, durability is the one where a crisis, and not an instruction, is the lever. Nothing I have tried by naming a mechanic has made a relationship last.
+
 
 Postures are the only mechanic that makes a diplomatic position cost something the game will honour, and nine of every ten replicated runs still produce none. Naming it moved the rate, which is progress, but a table that promises peace, warns of an army and apologises with gold still usually records none of it where the game can see.
 
@@ -83,4 +104,3 @@ CI on the fork now passes. It had been failing at the install step on every push
 - Three seeds shows that something works and is not enough to rank two things that are close. Sparse mechanics get a frequency test rather than a range test, and a variant that changes a rare outcome needs more seeds than three.
 - Councils are too rare to attribute. Two working instances is an anecdote with a mechanism behind it.
 - Seats ran on deepseek-v4.1-flash throughout, so nothing here says how another model would behave.
-
