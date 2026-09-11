@@ -8,6 +8,7 @@ import path from "node:path";
 import { logger } from "../utils/logger.js";
 import { listRuns } from "./read-run.js";
 import { writeReport } from "./report.js";
+import { resolveRunsDirectory, resolveRunDirectory, defaultRunsDirectory } from "./run-path.js";
 
 // Report every run directory it is given, or every run under the runs
 // directory when it is given none.
@@ -17,11 +18,11 @@ async function main(): Promise<void> {
     const at = args.indexOf("--" + name);
     return at === -1 ? undefined : args[at + 1];
   };
-  const runsDirectory = path.resolve(value("runs-dir") ?? path.join("opencode-harness", "runs"));
+  const runsDirectory = resolveRunsDirectory(value("runs-dir") ?? defaultRunsDirectory);
   const named = args.filter((arg) => !arg.startsWith("--") && arg !== value("runs-dir"));
   const targets =
     named.length > 0
-      ? named.map((name) => (path.isAbsolute(name) ? name : path.join(runsDirectory, name)))
+      ? named.map((name) => resolveRunDirectory(name, runsDirectory))
       : (await listRuns(runsDirectory)).map((name) => path.join(runsDirectory, name));
   if (targets.length === 0) {
     logger.warn("No runs found under " + runsDirectory);

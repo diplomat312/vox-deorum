@@ -6,6 +6,7 @@ import { logger } from "../utils/logger.js";
 import { civDefinitions } from "../world/simulated/content.js";
 import { buildDivergence, renderDivergence } from "./divergence.js";
 import { allTurns, readRun } from "./read-run.js";
+import { resolveRunDirectory } from "./run-path.js";
 
 // Build the reading for one run directory.
 async function main(): Promise<void> {
@@ -15,7 +16,7 @@ async function main(): Promise<void> {
     logger.error("Name a run directory to read");
     process.exit(1);
   }
-  const runDirectory = path.isAbsolute(named) ? named : path.join("opencode-harness", "runs", named);
+  const runDirectory = resolveRunDirectory(named);
   const data = await readRun(runDirectory);
   const seats = [...data.trace.keys()].sort();
   const titles: Record<string, string> = {};
@@ -48,4 +49,3 @@ if (process.argv[1] && process.argv[1].endsWith("divergence-run.js")) {
     process.exit(1);
   });
 }
-

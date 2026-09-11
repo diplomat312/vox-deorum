@@ -5,6 +5,7 @@ import path from "node:path";
 import { logger } from "../utils/logger.js";
 import { renderTurn, pickTurn } from "./inspect-turn.js";
 import { allTurns, readRun } from "./read-run.js";
+import { resolveRunDirectory } from "./run-path.js";
 
 // Write the turn the command line names.
 async function main(): Promise<void> {
@@ -15,7 +16,7 @@ async function main(): Promise<void> {
     logger.error("Name a run, and optionally a seat and a turn");
     process.exit(1);
   }
-  const runDirectory = path.isAbsolute(run) ? run : path.join("opencode-harness", "runs", run);
+  const runDirectory = resolveRunDirectory(run);
   const data = await readRun(runDirectory);
   const records = allTurns(data);
   if (records.length === 0) {
@@ -44,4 +45,3 @@ if (process.argv[1] && process.argv[1].endsWith("inspect-turn-run.js")) {
     process.exit(1);
   });
 }
-

@@ -6,6 +6,7 @@ import { logger } from "../utils/logger.js";
 import { civDefinitions } from "../world/simulated/content.js";
 import { allTurns, readRun } from "./read-run.js";
 import { buildRoundup, renderRoundup } from "./roundup.js";
+import { resolveRunDirectory } from "./run-path.js";
 
 // Build the roundup for one run directory.
 async function main(): Promise<void> {
@@ -15,7 +16,7 @@ async function main(): Promise<void> {
     logger.error("Name a run directory to summarise");
     process.exit(1);
   }
-  const runDirectory = path.isAbsolute(named) ? named : path.join("opencode-harness", "runs", named);
+  const runDirectory = resolveRunDirectory(named);
   const data = await readRun(runDirectory);
   const seats = [...data.trace.keys()].sort();
   const civ = civDefinitions.filter((entry) => seats.includes(entry.seat));
