@@ -17,6 +17,9 @@ nul
 # in case a run writes it at the repo root)
 /telemetry/
 
+# Harness run logs (its logger writes logs/ beside whatever directory it runs from).
+/opencode-harness/logs/
+
 # DLL cache directory
 scripts/.dll-cache
 /*.bat
