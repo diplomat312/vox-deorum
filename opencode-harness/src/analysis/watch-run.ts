@@ -48,11 +48,27 @@ export async function readNewLines(file: string, position: TailPosition): Promis
   }
 }
 
+// Turn a scope key into something a reader understands.
+//
+// The log stores a direct message as "dm:austria:siam" because that is how both
+// seats find the same channel, but a person watching wants to see who was
+// speaking to whom, not the key.
+export function readableScope(scope: string | undefined, from: string): string {
+  if (!scope || scope === "world") return "to everyone";
+  if (scope.startsWith("dm:")) {
+    const parties = scope.slice(3).split(":");
+    const other = parties.find((party) => party !== from);
+    return other ? "to " + other : "to a private channel";
+  }
+  if (scope.startsWith("group:")) return "to the council";
+  return "to " + scope;
+}
+
 // Print one thing a seat said.
 function showMessage(line: string): void {
   try {
     const entry = JSON.parse(line) as { from?: string; kind?: string; to?: string; text?: string };
-    const scope = entry.to === "world" || entry.to === undefined ? "to everyone" : "to " + entry.to;
+    const scope = readableScope(entry.to, String(entry.from));
     logger.info("[say] " + String(entry.from) + " " + scope + ": " + String(entry.text ?? ""));
   } catch {
     // A damaged line is skipped: watching must never stop on one bad line.

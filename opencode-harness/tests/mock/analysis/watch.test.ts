@@ -5,7 +5,7 @@ import { appendFile, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { readNewLines, type TailPosition } from "../../../src/analysis/watch-run.js";
+import { readableScope, readNewLines, type TailPosition } from "../../../src/analysis/watch-run.js";
 
 describe("watching a run", () => {
   let directory = "";
@@ -57,5 +57,20 @@ describe("watching a run", () => {
     const position: TailPosition = { offset: 0, remainder: "" };
 
     expect(await readNewLines(file, position)).toEqual(["one", "two"]);
+  });
+});
+
+describe("reading a scope while watching", () => {
+  it("should say who a private message went to rather than showing the key", () => {
+    // The log stores a direct message as a key both seats can find, but a
+    // person watching wants to see who was speaking to whom.
+    expect(readableScope("dm:austria:siam", "siam")).toBe("to austria");
+    expect(readableScope("dm:austria:siam", "austria")).toBe("to siam");
+  });
+
+  it("should name the room and the council", () => {
+    expect(readableScope("world", "korea")).toBe("to everyone");
+    expect(readableScope(undefined, "korea")).toBe("to everyone");
+    expect(readableScope("group:e-3", "korea")).toBe("to the council");
   });
 });
