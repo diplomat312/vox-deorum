@@ -543,3 +543,20 @@ export interface DiplomaticMessage extends TimedKnowledge {
   MessageType: string; // 'text' | 'close' | 'deal-proposal' | 'deal-counter' | 'deal-accept' | 'deal-reject' | 'deal-enacted'
   Content: string; // Free-text message body
 }
+
+/**
+ * One public message in the world channel.
+ *
+ * The world channel is the single broadcast feed shared by every civilization and
+ * the human observer: durable, append-ordered by ID, visible to all. The speaker is
+ * normally a major civilization's seat; the observer sentinel (-1) is allowed so a
+ * human watching from outside the game can speak into the feed too. ReplyToID points
+ * at the global message this replies to (null on a fresh post). Turn is metadata from
+ * the posting moment; transcript order is the append ID.
+ */
+export interface GlobalMessage extends TimedKnowledge {
+  SpeakerID: number; // The civilization seat that authored the message, or -1 for the observer
+  SpeakerRole: string | null; // 'observer' for the -1 sentinel, null for a major civ
+  Content: string; // The message text (tagged lines are the group transport in the pilot)
+  ReplyToID: number | null; // Optional global message ID this replies to
+}

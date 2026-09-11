@@ -1,6 +1,6 @@
 # MCP Server Tool Reference
 
-Concise reference for all 43 tools exposed by the MCP Server. Tools are organized by category and registered in `src/tools/index.ts`.
+Concise reference for all 46 tools exposed by the MCP Server. Tools are organized by category and registered in `src/tools/index.ts`.
 
 ## Architecture
 
@@ -40,6 +40,8 @@ All extend `DatabaseQueryTool`. Common input: `Search?`: string (fuzzy match), `
 | `get-events` | Recent game events, consolidated by turn with smart grouping | `Turn?`, `Type?`, `After?`, `Before?`, `PlayerID?`, `Original?` |
 | `get-diplomatic-events` | Diplomatic events (wars, peace, deals, city-state, espionage, world congress) grouped by turn | `PlayerID`, `OtherPlayerID?`, `FromTurn?`, `ToTurn?`, `Formatted?` |
 | `read-transcript` | Read the durable, append-ID-ordered conversation between two endpoints, optionally filtered by message type or speaker role, with optional older-page cursors | `PlayerAID`, `PlayerBID`, `MessageType?`, `Role?`, `BeforeID?`, `Limit?` |
+| `get-global-messages` | Read recent public messages from the durable world channel (broadcasts by any civilization or the observer), newest first | `Limit?`, `BeforeID?` |
+| `get-game-status` | Read the cached game context (game ID, current turn, active player) without a snapshot lock; cheap and poll-safe | (none) |
 | `inspect-deal` | Inspect a draft deal against live game state: per-item and per-promise legality with reasons, advisory values, advisory promise agreeability factors, and each side's tradable range | `PlayerAID`, `PlayerBID`, `ProposedDeal?` |
 | `get-players` | Player summary with scores, era, resources, military, and diplomatic opinions | `PlayerID?` (0-21) |
 | `get-opinions` | Diplomatic opinions to/from a player with all alive major civilizations | `PlayerID` (0-21), `RevealAll?` |
@@ -68,6 +70,7 @@ For paged `read-transcript` calls, `hasMore` and `NextBeforeID` describe the raw
 | `keep-status-quo` | Maintain current strategy/flavors with documented rationale | `PlayerID`, `Mode?`: "Flavor" or "Strategy", `Rationale` |
 | `relay-message` | Relay diplomatic or intelligence message as a game event; `Importance` 7+ interrupts important-event pacing | `PlayerID`, `FromPlayerID`, `Message`: "Diplomatic"/"Intelligence", `Content`, `Confidence` (0-9), `Importance` (0-9), `Categories`, `Memo`, `VisibleTo?` |
 | `append-message` | Append an archival message to a durable diplomatic transcript; returns the stored message's canonical fields. Refuses the three terminal deal answers (`deal-accept`, `deal-enacted`, `deal-reject`), which belong to the transactional routes below | `PlayerAID`, `PlayerBID`, `PlayerARole?`, `PlayerBRole?`, `SpeakerID`, `MessageType`, `Content`, `Payload?`, `Turn?`, `ExpectedGameID?` |
+| `broadcast-message` | Post a public message to the durable world channel (visible to every civilization; the observer sentinel -1 may speak too) | `PlayerID`, `Content`, `ReplyToID?`, `Turn?`, `ExpectedGameID?` |
 | `enact-agent-deal` | Enact the deal stored on a proposal, then record acceptance and enactment; returns record IDs, the full `AcceptRow`/`EnactedRow` projections, and `AlreadyEnacted`/`Enacted` status — or a structured `Conflict` (`superseded`, `answered`, `wrong-recipient`) when proposal state moved on | `ProposalMessageID`, `Deal?`, `AccepterID?`, `Content?` |
 | `reject-agent-deal` | Reject or retract an open proposal transactionally and record the `deal-reject`; returns `rejected` / `already-rejected` (with the exact durable `Row` either way, never a second row) or a structured `conflict` (`not-found`, `not-a-proposal`, `superseded`, `rejected-by-other`, `answered`) | `PlayerAID`, `PlayerBID`, `ProposalMessageID`, `SpeakerID`, `Content?`, `ExpectedGameID?` |
 | `post-notification` | Post a native notification to a human player; returns `true` only when Civ V creates it and `false` when Civ V rejects it. The summary uses the game's highlighted headline style, and messages longer than 400 characters are truncated with `...`. A notification addressed to a seat that a pinned observer is currently playing is redirected to that observer, since Civ V only displays notifications for the active player | `PlayerID` (0-63, observer slots included), `CounterpartID?` (a major civ, different from `PlayerID`), nonblank `Summary` (1-200 characters), nonblank `Message` (1-2000 characters) |

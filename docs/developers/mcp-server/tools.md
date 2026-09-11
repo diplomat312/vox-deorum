@@ -6,7 +6,7 @@ This page explains how the tools are organized and how the framework behind them
 
 ## The categories
 
-The registry in `mcp-server/src/tools/index.ts` holds 43 tools. The reference groups them into five categories by what they touch, because each group answers a different kind of question and reaches a different subsystem.
+The registry in `mcp-server/src/tools/index.ts` holds 46 tools. The reference groups them into five categories by what they touch, because each group answers a different kind of question and reaches a different subsystem.
 
 | Category | Count | Answers | Reaches |
 | --- | --- | --- | --- |
@@ -41,7 +41,7 @@ Every tool extends the abstract class `ToolBase` (`mcp-server/src/tools/base.ts`
 
 The schemas are written with [Zod](https://zod.dev), so they serve double duty. They validate inputs and outputs at runtime, *and* they generate the TypeScript types and the MCP protocol documentation the agent reads. Every schema field carries a `.describe()` string for exactly this reason.
 
-Extending `ToolBase` directly is the common case: 23 of the 43 tools do it, mostly the knowledge-query tools and the one-off actions whose work has no shared shape. The other 20 use one of four abstract bases in `mcp-server/src/tools/abstract/`, each capturing a recurring pattern:
+Extending `ToolBase` directly is the common case: 26 of the 46 tools do it, mostly the knowledge-query tools and the one-off actions whose work has no shared shape. The other 20 use one of four abstract bases in `mcp-server/src/tools/abstract/`, each capturing a recurring pattern:
 
 | Base class | Tools | What it provides |
 | --- | --- | --- |
