@@ -33,6 +33,9 @@ export interface SeatConfigOptions {
   socialDirectory: string;
   // The built tool server entry point.
   serverEntry: string;
+  // The identity the seat plays under, which becomes its whole system prompt.
+  // Written once and never changed between turns, so the prompt cache holds.
+  identity: string;
 }
 
 // The permissions a seat is denied. Everything denied here is a capability the
@@ -78,6 +81,11 @@ export function seatConfig(options: SeatConfigOptions): Record<string, unknown> 
     agent: {
       [seatAgent]: {
         description: "A Civilization seat, which may only reach the game.",
+        // The identity is the entire standing context a seat gets. It is set
+        // here rather than sent with each turn so that it is byte identical from
+        // turn to turn, which is what keeps the provider prompt cache warm.
+        mode: "primary",
+        prompt: options.identity,
         tools: {
           "*": false,
           [seatToolServer + "_*"]: true

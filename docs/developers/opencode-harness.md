@@ -51,6 +51,16 @@ The check is one read of the session's server list, so it costs nothing and catc
 
 Confinement needs two mechanisms, because they cover different things. Denied permissions remove every tool the harness can name, which is verified by asking a seat to run a shell command, read a file outside its directory and fetch a page: it does none of them. Denied permissions cannot touch a plugin, so a session on the default agent is still offered a browser. The written configuration therefore defines one agent, named on every turn, which switches every tool off and switches the seat's own back on. A confined seat is offered exactly four tools.
 
+## What a seat is told it is
+
+A seat's standing instructions are two separate things, and only one of them is a setting.
+
+The identity is the whole system prompt. It is set on the seat's agent, either as an inline prompt in the written configuration or as a markdown file at `.opencode/agent/<name>.md`, and it is written once per run so it stays byte identical from turn to turn and the prompt cache holds. A run can play under an identity of its own with `--identity <file>`; one that names none gets the default, so two runs stay comparable unless one deliberately changed it.
+
+Instruction files are not a setting. OpenCode gathers them by walking up from the working directory, and a configuration key named `instructions` does not switch that off. A seat working directory inside a repository therefore receives that repository's `AGENTS.md`, which is written for people writing software. Seat working directories live outside every repository, at `~/.vox-deorum/harness-seats/<run>/<seat>`, and hold only the identity, the configuration and the session state. A run directory stays inside the repository, where the records belong, because records are read by tools and instructions are read by seats.
+
+Every run checks the arrangement before playing: it walks up from each seat directory looking for instruction files and refuses to start if it finds one. The check is a directory walk, so it costs nothing and catches the failure that otherwise only shows up in what a seat says.
+
 ## Reading a run
 
 ```

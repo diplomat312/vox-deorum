@@ -15,7 +15,8 @@ function config(): Record<string, unknown> {
     corpusDirectory: "",
     worldStateFile: "state.json",
     socialDirectory: "social",
-    serverEntry: "seat-mcp.js"
+    serverEntry: "seat-mcp.js",
+    identity: "You are the mind of one civilization in a game of Civilization V."
   });
 }
 
@@ -26,6 +27,15 @@ describe("a seat's configuration", () => {
     // A project configuration cannot disable an inherited plugin, so the agent
     // is the only thing that closes what the machine has installed.
     expect(agent.tools).toEqual({ "*": false, [seatToolServer + "_*"]: true });
+  });
+
+  it("should give the seat its identity as the whole standing context", () => {
+    const agent = (config().agent as Record<string, { prompt: string; mode: string }>)[seatAgent];
+
+    // The identity is set once in the configuration rather than sent with each
+    // turn, so it is byte identical from turn to turn and the prompt cache holds.
+    expect(agent.prompt).toContain("Civilization V");
+    expect(agent.mode).toBe("primary");
   });
 
   it("should switch off the servers a seat must not inherit", () => {
@@ -55,7 +65,8 @@ describe("a seat's configuration", () => {
       corpusDirectory: "",
       liveSeats: "korea:0,austria:1",
       socialDirectory: "social",
-      serverEntry: "seat-mcp.js"
+      serverEntry: "seat-mcp.js",
+      identity: "You are the mind of one civilization in a game of Civilization V."
     });
     const liveMcp = live.mcp as Record<string, { environment: Record<string, string> }>;
 
@@ -63,4 +74,3 @@ describe("a seat's configuration", () => {
     expect(liveMcp[seatToolServer].environment.PLAYERS).toBe("korea:0,austria:1");
   });
 });
-

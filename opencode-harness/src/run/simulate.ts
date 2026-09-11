@@ -23,7 +23,9 @@ import type { ScenarioShock } from "../world/simulated/scenario.js";
 import type { SimConfig } from "../world/simulated/types.js";
 import { writeSeatConfig } from "./seat-config.js";
 import { harnessBuild } from "./build-id.js";
-import { agentProblem, inheritedServers, surfaceProblem } from "../session/seat-surface.js";
+import { agentProblem, contextProblem, inheritedServers, surfaceProblem } from "../session/seat-surface.js";
+import { seatWorkspaceDirectory } from "../session/seat-workspace.js";
+import { defaultSeatIdentity, readSeatIdentity } from "../session/seat-identity.js";
 import { writeTurnState } from "./turn-state.js";
 
 // Everything a simulated run needs.
@@ -70,6 +72,10 @@ export interface SimulationOptions {
   turnTimeoutMs?: number;
   // Where the repository is, so the run can record which commit played it.
   repositoryRoot?: string;
+  // The identity each seat plays under, which becomes its whole system prompt.
+  // A run that says nothing gets the default, so two runs are comparable unless
+  // one of them deliberately changed it.
+  identity?: string;
   // Seats played by a person rather than a model. A human seat is offered the
   // same briefing a model seat reads and answers through the same four tools,
   // so a game with someone in it is measured the same way as one without.
@@ -148,13 +154,18 @@ export async function simulate(options: SimulationOptions): Promise<SimulationRe
         continue;
       }
       try {
-        const seatDirectory = path.join(options.runDirectory, "seats", seat);
+        // A seat works outside the repository, so the only standing instruction
+        // it is given is the identity. Inside the repository it would be handed
+        // this repository's own guidance files, which are written for people
+        // writing software rather than for a civilization.
+        const seatDirectory = seatWorkspaceDirectory(options.runId, seat);
         const playerID = world.seats().find((entry) => entry.seat === seat)?.playerID ?? null;
         await writeSeatConfig({
           seat,
           playerID,
           model: options.modelOverrides?.[seat] ?? options.model,
           seatDirectory,
+          identity: options.identity ?? defaultSeatIdentity,
           corpusDirectory: "",
           worldStateFile,
           socialDirectory,
@@ -178,6 +189,18 @@ export async function simulate(options: SimulationOptions): Promise<SimulationRe
         if (problem) throw new Error(problem);
         const confined = agentProblem(await client.agents().catch(() => []));
         if (confined) throw new Error(confined);
+        // A seat inside a repository is handed that repository's guidance files,
+        // which are written for people writing software. The arrangement is
+        // checked rather than trusted, because nothing a seat says reveals it.
+        const leaked = contextProblem(seatDirectory);
+        if (leaked.length > 0) {
+          throw new Error(
+            "the seat directory " +
+              seatDirectory +
+              " sits inside a repository, so these instruction files would be given to the seat: " +
+              leaked.join(", ")
+          );
+        }
         const inherited = inheritedServers(surface);
         if (inherited.length > 0) {
           logger.warn("Seat " + seat + " can also reach servers it has no business using: " + inherited.join(", "));
@@ -203,7 +226,9 @@ export async function simulate(options: SimulationOptions): Promise<SimulationRe
       // answers the calls, so their messages reach the table and their committed
       // actions reach the world exactly as a model's do.
       if (humans.includes(seat)) {
-        const seatDirectory = path.join(options.runDirectory, "seats", seat);
+        // A person plays in the same workspace a model does, so the briefing
+        // they read and answer sits beside the seat they are playing.
+        const seatDirectory = seatWorkspaceDirectory(options.runId, seat);
         const driver = new HumanSeatDriver({
           seat,
           directory: seatDirectory,
@@ -303,7 +328,7 @@ export async function simulate(options: SimulationOptions): Promise<SimulationRe
     for (let turn = options.fromTurn; turn <= options.toTurn; turn += 1) {
       currentTurn = turn;
       for (const seat of playing) {
-        const seatDirectory = path.join(options.runDirectory, "seats", seat);
+        const seatDirectory = seatWorkspaceDirectory(options.runId, seat);
         await writeTurnState(seatDirectory, { turn, seat });
         const runtime = runtimes.get(seat) as SeatRuntime;
         const record = await runtime.playTurn(seat, turn);
@@ -418,6 +443,10 @@ async function main(): Promise<void> {
   const strategyCoaching = (value("strategy-coaching", "off") as string) === "on";
   const turnTimeoutMs = Number(value("turn-timeout", "150000"));
   const shocks = scenarioFile ? await readScenario(repositoryRoot, scenarioFile) : [];
+  // A run may play under an identity of its own, which is the largest single
+  // thing a seat is told and therefore worth being able to vary.
+  const identityFile = value("identity", undefined) as string | undefined;
+  const identity = identityFile === undefined ? undefined : await readSeatIdentity(identityFile);
 
   const result = await simulate({
     runDirectory,
@@ -442,7 +471,8 @@ async function main(): Promise<void> {
     strategyCoaching
     ,
     humanSeats,
-    humanTurnTimeoutMs: Number(value("human-timeout", "1800000"))
+    humanTurnTimeoutMs: Number(value("human-timeout", "1800000")),
+    ...(identity === undefined ? {} : { identity })
   });
   logger.info(
     "Run " +

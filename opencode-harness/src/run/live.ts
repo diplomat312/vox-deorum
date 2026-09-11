@@ -13,8 +13,10 @@ import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { SeatRuntime, type PendingDecision } from "../seat/runtime.js";
 import { SeatPacer } from "../seat/pacing.js";
-import { agentProblem, inheritedServers, surfaceProblem } from "../session/seat-surface.js";
+import { agentProblem, contextProblem, inheritedServers, surfaceProblem } from "../session/seat-surface.js";
 import { harnessBuild } from "./build-id.js";
+import { seatWorkspaceDirectory } from "../session/seat-workspace.js";
+import { defaultSeatIdentity, readSeatIdentity } from "../session/seat-identity.js";
 import { OpenCodeServer } from "../session/opencode-server.js";
 import { SessionClient } from "../session/session-client.js";
 import type { SeatModel } from "../session/types.js";
@@ -58,6 +60,8 @@ export interface LiveRunOptions {
   names?: Record<string, { civ: string; leader: string }>;
   // Where the repository is, so the run can record which commit played it.
   repositoryRoot?: string;
+  // The identity each seat plays under, which becomes its whole system prompt.
+  identity?: string;
   // The model every seat runs on.
   model: SeatModel;
   // Per-seat model overrides.
@@ -188,12 +192,15 @@ export async function runLive(options: LiveRunOptions): Promise<LiveRunResult> {
     for (let index = 0; index < options.seats.length; index += 1) {
       const seat = options.seats[index].seat;
       try {
-        const seatDirectory = path.join(options.runDirectory, "seats", seat);
+        // A seat works outside the repository, so its only standing instruction
+        // is the identity rather than this repository's guidance files.
+        const seatDirectory = seatWorkspaceDirectory(options.runId, seat);
         await writeSeatConfig({
           seat,
           playerID: options.seats[index].playerID,
           model: options.modelOverrides?.[seat] ?? options.model,
           seatDirectory,
+          identity: options.identity ?? defaultSeatIdentity,
           corpusDirectory: "",
           // A live seat needs its table and the game's address, because the
           // world it reads through its own tools is the game itself.
@@ -219,6 +226,17 @@ export async function runLive(options: LiveRunOptions): Promise<LiveRunResult> {
         if (problem) throw new Error(problem);
         const confined = agentProblem(await client.agents().catch(() => []));
         if (confined) throw new Error(confined);
+        // A seat inside a repository is handed that repository's guidance files,
+        // which are written for people writing software.
+        const leaked = contextProblem(seatDirectory);
+        if (leaked.length > 0) {
+          throw new Error(
+            "the seat directory " +
+              seatDirectory +
+              " sits inside a repository, so these instruction files would be given to the seat: " +
+              leaked.join(", ")
+          );
+        }
         const inherited = inheritedServers(surface);
         if (inherited.length > 0) {
           logger.warn("Seat " + seat + " can also reach servers it has no business using: " + inherited.join(", "));
@@ -292,7 +310,7 @@ export async function runLive(options: LiveRunOptions): Promise<LiveRunResult> {
     const pacer = new SeatPacer({ clock, policy: pacing });
     for (let turn = 1; turn <= options.turns; turn += 1) {
       for (const seat of playing) {
-        const seatDirectory = path.join(options.runDirectory, "seats", seat.seat);
+        const seatDirectory = seatWorkspaceDirectory(options.runId, seat.seat);
         await writeTurnState(seatDirectory, { turn, seat: seat.seat });
         const runtime = runtimes.get(seat.seat) as SeatRuntime;
         let recorded: TraceRecord | null = null;
@@ -396,6 +414,10 @@ async function main(): Promise<void> {
     throw new Error("Every seat needs a player index, written as name:playerIndex");
   }
   const modelSetting = (value("model", "opencode-go/deepseek-v4.1-flash") as string).split("/");
+  // A live run may also play under an identity of its own, so a seat can be
+  // tuned the same way whether it is playing a bench game or a real one.
+  const identityFile = value("identity", undefined) as string | undefined;
+  const identity = identityFile === undefined ? undefined : await readSeatIdentity(identityFile);
   const result = await runLive({
     runDirectory,
     runId,
@@ -411,6 +433,8 @@ async function main(): Promise<void> {
     pacing: paceFrom(value("pacing", "freeze") as string)
     ,
     maxDriftTurns: Number(value("max-drift", "1"))
+    ,
+    ...(identity === undefined ? {} : { identity })
   });
   logger.info(
     "Live run " +

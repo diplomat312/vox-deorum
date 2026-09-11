@@ -7,6 +7,9 @@
 // The session is asked instead, and its answer is the difference between a seat
 // that stayed quiet and a seat that had nothing to reach for.
 
+import { existsSync } from "node:fs";
+import path from "node:path";
+
 // The name a seat's own game tools are served under.
 export const seatToolServer = "vox-civ";
 
@@ -62,4 +65,32 @@ export function agentProblem(names: string[]): string | null {
     seatAgent +
     "', so its turns would run under the default agent with everything the machine has installed behind them"
   );
+}
+
+// Whether a seat directory sits inside a repository, and which instruction files
+// that would put in front of the seat.
+//
+// A seat's standing instructions are collected by walking up from its working
+// directory, so a seat inside a repository is handed that repository's guidance.
+// Measured on a real seat, two AGENTS.md files arrived this way and told a
+// Civilization V diplomat how to write TypeScript. There is no setting that turns
+// that off, so this checks the arrangement instead of trusting it, and it is a
+// directory walk rather than a model call.
+export function contextProblem(seatDirectory: string): string[] {
+  const found: string[] = [];
+  let here = path.resolve(seatDirectory);
+  for (;;) {
+    for (const name of ["AGENTS.md", "CLAUDE.md"]) {
+      const candidate = path.join(here, name);
+      if (existsSync(candidate)) found.push(candidate);
+    }
+    // A repository root is where collected instructions stop, so the root itself
+    // is examined and then the walk ends. Stopping before examining it would miss
+    // the very file this exists to catch.
+    if (existsSync(path.join(here, ".git"))) break;
+    const above = path.dirname(here);
+    if (above === here) break;
+    here = above;
+  }
+  return found;
 }

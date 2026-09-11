@@ -169,6 +169,64 @@ Every defect above was found by reading code. The fix was to stop reading and pl
 
 ## Confinement, and how it was measured
 
+### A seat was being introduced to itself as a software engineer
+
+Confinement closed what a seat could *do*. It said nothing about what a seat was
+*told*, and asking a seat that question is how this was found. Before any of the
+identity work below, a seat with no game running, asked what standing instructions
+it had been given, answered:
+
+> Standing guidance came from two AGENTS.md files: the harness rules (no launching
+> Civ V, all game reads/writes via Vox MCP tools, record reasoning/usage, never
+> commit secrets or artifacts) and the repo-wide rules (ESM with `.js`, winston
+> only, comment everywhere, no em-dashes).
+
+That is accurate. Both files exist, and every seat's working directory sat inside
+this repository, three levels below the root. OpenCode collects standing
+instructions by walking up from the working directory, so a Civilization V
+diplomat was handed the repository's coding rules and nothing else at all: no
+identity, no statement of what it was, no mention of the game except what the
+turn observation happened to say.
+
+This is a confound in everything measured before it. It does not obviously
+invalidate any earlier result, and it is exactly the kind of thing that quietly
+shapes behaviour, so it is recorded here rather than fixed quietly.
+
+**A setting to switch it off does not exist.** The configuration has an
+`instructions` key, which reads as though it governs this. Setting it to an empty
+array changes nothing; the files still arrive. That is worth stating plainly
+because the key looks like the answer and is not.
+
+**Two mechanisms set what a seat is, and both work.** A named agent can carry an
+inline `prompt` in the configuration, or the same thing can live in a markdown
+file at `.opencode/agent/<name>.md`. Either way the agent is then offered by name
+and selected per turn, and either way the identity arrives. Neither suppresses the
+AGENTS.md files, which is why the fix below is structural rather than a setting.
+
+**The fix is where a seat works.** Seat working directories now live outside every
+repository, at `~/.vox-deorum/harness-seats/<run>/<seat>`, and hold nothing but
+the identity, the seat configuration and the session state. A run directory stays
+inside the repository where the records belong, because records are read by tools
+and instructions are read by seats.
+
+Three measurements, in rising order of how much they prove. The same seat
+configuration inside the repository reports two guidance files. Copied outside the
+repository, the same configuration reports: "No, I was not given any repository or
+project guidance files such as AGENTS.md." And a seat in a real live run against
+the stand-in game now reports that its instructions mention Civilization V and
+that it was given no guidance files at all.
+
+The harness checks the arrangement rather than trusting it. Before a run plays, it
+walks up from each seat directory looking for instruction files and refuses to
+start if it finds one, which costs a directory walk rather than a model call.
+
+**This makes identity an experiment axis.** The identity is the largest single
+thing a seat is told, and it is now a file a run can name: `--identity <file>`.
+A run that names none gets the default, so two runs stay comparable unless one of
+them deliberately changed it. Whether a seat that knows it is playing a
+long game, or that has been told what betrayal costs, plays differently from one
+that has not, is now a question the bench can ask.
+
 Two mechanisms were needed and neither alone was enough, which is only knowable by trying both.
 
 **A permission deny removes a tool the harness can name.** With every capability the harness knows denied, a seat told to run a shell command, read a file outside its directory and fetch a web page did none of them. It wrote the three calls out as text, which is what a model does when it believes it should reach for something it does not have. The same session, asked to call its own inspection tool, made a real call that completed and returned the game's state. So the denies confine the seat to its own tools without breaking them.
