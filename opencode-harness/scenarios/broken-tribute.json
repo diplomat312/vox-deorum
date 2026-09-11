@@ -1,0 +1,14 @@
+[
+  {
+    "turn": 14,
+    "kind": "bankruptcy",
+    "seat": "austria",
+    "detail": "Austria's treasury is empty and its promised payments cannot be met"
+  },
+  {
+    "turn": 20,
+    "kind": "military-surge",
+    "seat": "iroquois",
+    "magnitude": 2
+  }
+]

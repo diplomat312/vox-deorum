@@ -131,6 +131,30 @@ describe("the generated environment", () => {
     expect(state.seats.iroquois.relationships.siam.atWar).toBe(false);
   });
 
+  it("should empty a treasury so a promised payment can genuinely fail", () => {
+    const state = createSimState({ seats, seed: 5, game: "sim" });
+    state.seats.austria.gold = 180;
+
+    const applied = applyShocks(state, [{ turn: 1, kind: "bankruptcy", seat: "austria" }]);
+
+    expect(state.seats.austria.gold).toBe(0);
+    expect(applied.join(" ")).toContain("drained 180 gold");
+    expect(state.events.some((event) => event.kind === "bankruptcy")).toBe(true);
+  });
+
+  it("should end a tribute the payer can no longer meet", () => {
+    const state = createSimState({ seats, seed: 5, game: "sim" });
+    state.seats.austria.gold = 0;
+    state.transfers.push({ deal: "e-1", from: "austria", to: "korea", goldPerTurn: 10, remaining: 5 });
+
+    // A turn passes with an empty treasury, so the promised payment fails and
+    // the promise ends rather than going into debt.
+    advanceTurn(state, defaultSimConfig);
+
+    expect(state.transfers).toHaveLength(0);
+    expect(state.events.some((event) => event.kind === "deal" && event.detail.includes("missed payment"))).toBe(true);
+  });
+
   it("should render an observation with the sections a seat expects", async () => {
     const state = createSimState({ seats, seed: 5, game: "sim" });
     const world = new SimulatedWorld({ state, socialDirectory: directory });

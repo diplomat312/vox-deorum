@@ -21,7 +21,8 @@ export interface ScenarioShock {
     | "war"
     | "peace"
     | "city-founded"
-    | "plague";
+    | "plague"
+    | "bankruptcy";
   // The seat it happens to.
   seat: string;
   // The other seat involved, for betrayals, wars and peaces.
@@ -148,6 +149,16 @@ function applyShock(state: SimState, player: SimSeat, shock: ScenarioShock): str
     const detail = shock.detail ?? "Famine and disease have emptied " + player.civ + "'s granaries";
     pushEvent(state, player.seat, "plague", detail);
     return detail;
+  }
+  if (shock.kind === "bankruptcy") {
+    // Empty a treasury on purpose. This exists to make a promise that was
+    // genuinely made go unpaid, so the broken word a seat reacts to is real
+    // rather than narrated: the tribute simply cannot be paid.
+    const emptied = player.gold;
+    player.gold = 0;
+    const detail = shock.detail ?? player.civ + "'s treasury is empty and its promised payments cannot be met";
+    pushEvent(state, player.seat, "bankruptcy", detail);
+    return detail + " (drained " + emptied + " gold)";
   }
   return "An unknown shock of kind '" + shock.kind + "' was ignored";
 }
