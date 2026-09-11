@@ -187,6 +187,9 @@ export async function runLive(options: LiveRunOptions): Promise<LiveRunResult> {
           model: options.modelOverrides?.[seat] ?? options.model,
           seatDirectory,
           corpusDirectory: "",
+          // A live seat needs its table and the game's address, because the
+          // world it reads through its own tools is the game itself.
+          liveSeats: options.seats.map((entry) => entry.seat + ":" + entry.playerID).join(","),
           socialDirectory,
           serverEntry: options.serverEntry
         });

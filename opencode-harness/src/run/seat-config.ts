@@ -24,6 +24,10 @@ export interface SeatConfigOptions {
   // Path of the snapshot of a generated game, when the seat plays one instead
   // of a recorded game.
   worldStateFile?: string;
+  // The seats of a live game as "seat:playerID" pairs, when the seat is playing
+  // a real game. A live seat reads the game itself rather than a snapshot, so
+  // this is what tells its tool server where the world is.
+  liveSeats?: string;
   // Where the run keeps its social log.
   socialDirectory: string;
   // The built tool server entry point.
@@ -61,9 +65,13 @@ export function seatConfig(options: SeatConfigOptions): Record<string, unknown> 
           SEAT: options.seat,
           CORPUS_DIR: options.corpusDirectory,
           WORLD_STATE_FILE: options.worldStateFile ?? "",
+          PLAYERS: options.liveSeats ?? "",
           SOCIAL_DIR: options.socialDirectory,
           STATE_FILE: path.join(options.seatDirectory, "current-turn.json"),
-          ...(options.playerID === null ? {} : { PLAYER_ID: String(options.playerID) })
+          ...(options.playerID === null ? {} : { PLAYER_ID: String(options.playerID) }),
+          // The seat reaches the game at the same address the harness does, so
+          // a run pointed at another server does not split the table in two.
+          ...(process.env.VOX_MCP_ENDPOINT ? { VOX_MCP_ENDPOINT: process.env.VOX_MCP_ENDPOINT } : {})
         },
         enabled: true
       }

@@ -17,6 +17,8 @@ import { createSeatServer, toolCallLogName, type SeatServerOptions } from "../..
 import { seatToolDefinitions } from "../../../src/seat/tools.js";
 import { readInbox } from "../../../src/social/social-store.js";
 import { RecordedWorld } from "../../../src/world/recorded-world.js";
+import { LiveWorld } from "../../../src/world/live/live-world.js";
+import type { VoxConnector } from "../../../src/world/live/vox-connector.js";
 
 // A recorded output long enough to be truncated in the log.
 const longOutput = "E".repeat(5000);
@@ -234,5 +236,73 @@ describe("the seat MCP server", () => {
 
     expect(answered).toHaveLength(longOutput.length);
     expect(entries[0].result).toHaveLength(4000);
+  });
+});
+
+// A connection to a game that records what it was asked, so a test can prove
+// that a live seat's social operation reached the game rather than the log.
+class RecordingGame implements VoxConnector {
+  // Every call the seat's tool server made.
+  readonly calls: Array<{ name: string; args: Record<string, unknown> }> = [];
+
+  async call(name: string, args: Record<string, unknown> = {}): Promise<{ text: string; isError: boolean }> {
+    this.calls.push({ name, args });
+    // The row an appended proposal returns, whose id both sides answer.
+    return { text: '{"ID":91,"MessageType":"deal-proposal"}', isError: false };
+  }
+
+  async listTools(): Promise<string[]> {
+    return [];
+  }
+
+  async close(): Promise<void> {
+    return;
+  }
+}
+
+describe("a live seat's tools", () => {
+  // A live seat's tool server is built directly, because the point under test is
+  // that its world is the game: no recorded corpus is involved at all.
+  let liveDirectory = "";
+
+  beforeEach(async () => {
+    liveDirectory = await mkdtemp(path.join(tmpdir(), "harness-mcp-live-"));
+    socialDirectory = path.join(liveDirectory, "social");
+    stateFile = path.join(liveDirectory, "current-turn.json");
+    await mkdir(socialDirectory, { recursive: true });
+  });
+
+  afterEach(async () => {
+    if (liveDirectory) await rm(liveDirectory, { recursive: true, force: true });
+  });
+
+  it("should settle a deal in the game's own deal system", async () => {
+    const game = new RecordingGame();
+    const world = new LiveWorld({
+      connector: game,
+      seats: [
+        { seat: "korea", playerID: 0 },
+        { seat: "austria", playerID: 1 }
+      ],
+      game: "live-1"
+    });
+    // The world the seat's own tools are given is the game, which is the whole
+    // point: the seat reaches it rather than a snapshot of it.
+    const server = createSeatServer({ seat: "korea", world, socialDirectory, stateFile });
+    const pair = InMemoryTransport.createLinkedPair();
+    const client = new Client({ name: "seat-test-client", version: "1.0.0" });
+    await Promise.all([server.connect(pair[0]), client.connect(pair[1])]);
+    await writeState(4);
+
+    const answered = await callTool(client, "communicate", {
+      operations: [{ kind: "deal-propose", to: "austria", gold: 50, message: "peace" }]
+    });
+
+    // The offer went to the game, and the id it came back with is what the seat
+    // is told, because that is the id the other seat answers.
+    expect(game.calls).toHaveLength(1);
+    expect(game.calls[0].name).toBe("append-message");
+    expect(game.calls[0].args).toMatchObject({ PlayerAID: 0, PlayerBID: 1, MessageType: "deal-proposal" });
+    expect(answered).toContain("91");
   });
 });
