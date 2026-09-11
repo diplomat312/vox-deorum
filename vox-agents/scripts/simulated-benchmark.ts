@@ -16,11 +16,12 @@
 //   [{ "turn": 2, "order": "mass_troops", "seat": "austria",
 //      "args": { "facing": "korea", "committed": 0.85 } }]
 
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { SocialRuntime } from "../src/social/runtime/social-runtime.js";
 import { SocialStore } from "../src/social/store/social-store.js";
 import { attachSimulatedCiv } from "../src/social/environments/simulated/attach-simulated-civ.js";
+import { OpenCodeMindRunner } from "../src/social/runtime/opencode-mind-runner.js";
 import { measureSession, renderMeasures } from "../src/social/environments/simulated/session-measures.js";
 import type { SimulatedCivEnvironmentOptions } from "../src/social/environments/simulated/simulated-civ-environment.js";
 import type { SocialMessage } from "../src/social/types.js";
@@ -68,11 +69,32 @@ async function main(): Promise<void> {
   const script = await readScript(value("script", ""));
   const tickMs = Number(value("tick-ms", "3000"));
   await mkdir(dataDirectory, { recursive: true });
+  // A seed is replayed rather than resumed, so the output directory starts empty.
+  // This is the run's own directory, named by the caller, and re-running a seed
+  // should replace what that seed produced.
+  for (const held of await readdir(dataDirectory)) {
+    if (held.includes(".sqlite")) await rm(path.join(dataDirectory, held), { force: true });
+  }
 
   const runtime = new SocialRuntime();
-  const humanId = "observer";
-  // The sandbox requires exactly one person's seat, so one is seated. It is never
-  // woken, which is what keeps this a bench for the model seats.
+  // The sandbox requires exactly one person's seat, and the world needs that seat
+  // to be a real civilization, so the person takes one of the world's own. It is
+  // never woken, which keeps this a bench for the model seats, and it is a real
+  // neighbour with real cities, which is what a quiet seat in a dangerous world is.
+  const humanId = value("human-seat", "morocco");
+  // The session id is read before the run starts, because stopping the session
+  // clears it and the artifacts still need to be found by name afterwards.
+  const sessionId = "seed-" + seed;
+  // The seats think through OpenCode, named here rather than inferred from the
+  // environment, because a benchmark that quietly used a different cognition
+  // layer would report numbers about something nobody asked for.
+  const [providerID, ...rest] = modelRef.split("/");
+  const mind = new OpenCodeMindRunner({
+    runId: sessionId,
+    serverEntry: path.join(import.meta.dirname, "..", "dist", "social", "runtime", "opencode-social-seat.js"),
+    providerID,
+    modelID: rest.join("/")
+  });
   await runtime.start({
     actors: [
       ...benchSeats.map((id, index) => ({ id, ordinal: index, control: "model" as const, displayName: id, modelRef })),
@@ -80,9 +102,13 @@ async function main(): Promise<void> {
     ],
     humanActorId: humanId,
     dataDirectory,
-    pacingProfile: "lively",
-    sessionId: "seed-" + seed,
-    title: "generated world, seed " + seed
+    // Deliberate, because a seat here is a model session that takes tens of
+    // seconds to answer. A livelier profile expires the round while the later
+    // seats are still thinking, and the table then looks quieter than it is.
+    pacingProfile: "deliberate",
+    sessionId,
+    title: "generated world, seed " + seed,
+    modelExecutor: mind
   });
   const attached = await attachSimulatedCiv(runtime, [...benchSeats, humanId], humanId, {
     seed,
@@ -101,8 +127,7 @@ async function main(): Promise<void> {
   await runtime.stop();
 
   // Read the session back and reduce it.
-  const store = new SocialStore(path.join(dataDirectory, "seed-" + seed + ".sqlite"));
-  const sessionId = runtime.getSessionId();
+  const store = new SocialStore(path.join(dataDirectory, sessionId + ".sqlite"));
   const channels = await store.listChannels(sessionId, humanId, true);
   const messages = await everyMessage(
     store,
@@ -140,4 +165,3 @@ main().catch((error: unknown) => {
   console.error("The benchmark could not continue: " + (error instanceof Error ? error.message : String(error)));
   process.exit(1);
 });
-

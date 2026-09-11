@@ -22,7 +22,7 @@ function queryFlag(value: unknown): boolean { return value === true || value ===
 /** Return a safe route error message. */
 function errorMessage(error: unknown): string { return error instanceof Error ? error.message : 'Unexpected social runtime error'; }
 /** Accept only the centralized pacing profiles exposed by the sandbox. */
-function pacingProfile(value: unknown): SocialPacingProfile { return value === 'quiet' || value === 'lively' ? value : 'balanced'; }
+function pacingProfile(value: unknown): SocialPacingProfile { return value === 'quiet' || value === 'lively' || value === 'deliberate' ? value : 'balanced'; }
 /** Validate the actor list accepted by the standalone social session endpoint. */
 function actorDefinitions(value: unknown): SocialActorDefinition[] | undefined { if (!Array.isArray(value)) return undefined; if (value.length < 2 || value.length > 8) return undefined; const actors: SocialActorDefinition[] = []; for (const item of value) { const record = bodyRecord(item); if (!record || typeof record.id !== 'string' || typeof record.ordinal !== 'number' || (record.control !== 'human' && record.control !== 'model') || typeof record.displayName !== 'string') return undefined; actors.push({ id: record.id, ordinal: record.ordinal, control: record.control, displayName: record.displayName, ...(typeof record.modelRef === 'string' ? { modelRef: record.modelRef } : {}), ...(typeof record.profile === 'string' ? { profile: record.profile } : {}) }); } return actors; }
 

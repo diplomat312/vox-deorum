@@ -14,4 +14,20 @@ describe('social pacing profiles', () => {
     expect(quiet.maxWallClockMs).toBeLessThan(balanced.maxWallClockMs);
     expect(balanced.maxWallClockMs).toBeLessThan(lively.maxWallClockMs);
   });
+
+  it("should allow a table whose seats think for tens of seconds", () => {
+    // A cognition layer whose turns take most of a minute cannot answer inside a
+    // budget that expires while it is still thinking, and the effect of a budget
+    // that is too short is that the later seats of a round are dropped and the
+    // table looks quieter than it is.
+    const lively = getSocialPacingBudget('lively', 4);
+    const deliberate = getSocialPacingBudget('deliberate', 4);
+
+    // Four seats thinking for up to a minute each need minutes, not 90 seconds.
+    expect(deliberate.maxWallClockMs).toBeGreaterThanOrEqual(4 * 60_000);
+    expect(deliberate.maxWallClockMs).toBeGreaterThan(lively.maxWallClockMs);
+    // And enough runs that a round can turn into a conversation.
+    expect(deliberate.maxModelRuns).toBeGreaterThan(lively.maxModelRuns);
+    expect(deliberate.maxRepliesPerActor).toBeGreaterThan(lively.maxRepliesPerActor);
+  });
 });
