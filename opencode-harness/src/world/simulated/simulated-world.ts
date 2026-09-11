@@ -476,7 +476,20 @@ export class SimulatedWorld implements World {
     if (groups.length === 0) return header + "\n- Member of no groups.";
     const lines = groups.map((group) => {
       const membership = group.members.includes(seat) ? "member" : "invited";
-      return "- " + group.name + " (" + membership + ", members: " + group.members.join(", ") + ")";
+      // The id is named because accepting or leaving has to name it, and a seat
+      // that cannot see the id cannot answer an invitation.
+      return (
+        "- " +
+        group.name +
+        " (id " +
+        group.id +
+        ", " +
+        membership +
+        ", members: " +
+        (group.members.length === 0 ? "none yet" : group.members.join(", ")) +
+        (group.invites.length === 0 ? "" : ", invited: " + group.invites.join(", ")) +
+        ")"
+      );
     });
     return header + "\n" + lines.join("\n");
   }

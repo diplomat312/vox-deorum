@@ -194,6 +194,44 @@ export function directPairOf(entry: SocialEntry): string[] {
   return directPartners(entry.to ?? "").sort();
 }
 
+// One group as a seat is allowed to see it.
+export interface VisibleGroup {
+  // The group id, which is what an accept or a leave must name.
+  id: string;
+  // The name given when the group was created.
+  name: string;
+  // Seats that have accepted membership.
+  members: string[];
+  // Seats invited but not yet accepted.
+  invites: string[];
+}
+
+// The groups a seat belongs to or has been invited to.
+//
+// What a seat may see is membership, not the group's existence. A seat invited
+// to a council has to be told what it is being asked to join and which id to
+// accept, or the invitation is unanswerable. The group's messages stay private
+// until the seat accepts, which is what membership governs.
+export async function groupsForSeat(runDir: string, seat: string): Promise<VisibleGroup[]> {
+  if (typeof seat !== "string" || seat.trim() === "") {
+    throw new Error("a seat is required");
+  }
+  const entries = await readLog(runDir);
+  const groups: VisibleGroup[] = [];
+  for (const entry of entries) {
+    if (entry.kind !== "group-create") continue;
+    const id = entry.group ?? entry.id;
+    const members = [...groupMembers(entries, id)];
+    const invites = entries
+      .filter((other) => other.kind === "invite" && other.group === id && typeof other.to === "string")
+      .map((other) => other.to as string)
+      .filter((invited) => !members.includes(invited));
+    if (!members.includes(seat) && !invites.includes(seat)) continue;
+    groups.push({ id, name: entry.name ?? id, members, invites });
+  }
+  return groups;
+}
+
 export async function getCursor(runDir: string, seat: string): Promise<number> {
   const all = await readCursorFile(runDir);
   const value = all[seat];

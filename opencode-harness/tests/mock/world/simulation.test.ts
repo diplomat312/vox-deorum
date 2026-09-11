@@ -172,6 +172,28 @@ describe("the generated environment", () => {
     expect(other).not.toContain("Only for you.");
   });
 
+  it("should show a seat the invitation it has been sent, and keep showing it", async () => {
+    const state = createSimState({ seats, seed: 5, game: "sim" });
+    const world = new SimulatedWorld({ state, socialDirectory: directory });
+    await applyOperations(directory, "austria", [{ kind: "group-create", name: "Four Courts Council" }], { seats });
+    // The group id is the id of the entry that created it.
+    const { readVisible } = await import("../../../src/social/social-store.js");
+    const groupId = (await readVisible(directory, "austria")).find((entry) => entry.kind === "group-create")?.id ?? "";
+    await applyOperations(directory, "austria", [{ kind: "invite", group: groupId, to: "korea" }], { seats });
+
+    await world.beginTurn("korea", 1);
+    const first = world.observation("korea", 1);
+    // Reading the observation again must still show the invitation. A view that
+    // consumed the seat's cursor would show it once and then forget it, which
+    // is how a seat ends up telling the table that the summons never arrived.
+    await world.beginTurn("korea", 2);
+    const second = world.observation("korea", 2);
+
+    expect(first).toContain("Four Courts Council");
+    expect(first).toContain("invited");
+    expect(second).toContain("Four Courts Council");
+  });
+
   it("should answer inspect from the generated state instead of from a recording", async () => {
     const state = createSimState({ seats, seed: 5, game: "sim" });
     state.seats.korea.gold = 137;
