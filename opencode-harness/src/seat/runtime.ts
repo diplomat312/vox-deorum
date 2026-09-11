@@ -68,6 +68,7 @@ export class SeatRuntime {
   // a seat that never decided is a fact about the run.
   async playTurn(seat: string, turn: number): Promise<TraceRecord> {
     const startedAt = new Date().toISOString();
+    await this.world.beginTurn(seat, turn);
     const observation = this.world.observation(seat, turn);
     const playerID = this.world.seats().find((entry) => entry.seat === seat)?.playerID ?? null;
     const context: SeatContext = {

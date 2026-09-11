@@ -132,13 +132,17 @@ describe("the seat tool surface", () => {
     expect(result.text).toContain("inspect failed when it was recorded: no units");
   });
 
-  it("should answer the inbox live rather than from the recording", async () => {
-    await dispatchSeatTool(context, "communicate", { operations: [{ kind: "world", message: "hello world" }] });
-
+  it("should still deliver a message even when the inspect cannot be answered", async () => {
+    const sent = await dispatchSeatTool(context, "communicate", {
+      operations: [{ kind: "world", message: "hello world" }]
+    });
+    // A recorded world holds no events call, so the inspect is a gap. That is
+    // the right answer: it is the world, not the tool layer, that decides what
+    // diplomacy a seat can see.
     const inbox = await dispatchSeatTool(context, "inspect", { subject: "events" });
 
-    expect(inbox.text).toContain("hello world");
-    expect(inbox.gap).toBeUndefined();
+    expect(sent.delivered).toBe(1);
+    expect(inbox.gap).toEqual({ subject: "events" });
   });
 
   it("should refuse an empty communicate", async () => {

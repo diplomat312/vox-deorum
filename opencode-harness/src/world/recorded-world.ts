@@ -5,7 +5,7 @@
 // their turns came from.
 
 import { loadCorpusDirectory } from "./corpus.js";
-import type { SeatInfo, World, WorldTurn } from "./types.js";
+import type { InspectAnswer, SeatInfo, World, WorldTurn } from "./types.js";
 
 // Serves a fixed set of recorded turns, indexed by seat and turn number.
 export class RecordedWorld implements World {
@@ -84,5 +84,43 @@ export class RecordedWorld implements World {
       );
     }
     return record.observation;
+  }
+
+  // Whether the recording holds this seat and turn.
+  hasTurn(seat: string, turn: number): boolean {
+    return this.turn(seat, turn) !== null;
+  }
+
+  // A recorded game holds nothing to prepare: the turn is already written, and
+  // talking reaches the seats through whatever ran the recording.
+  async beginTurn(): Promise<void> {
+    return;
+  }
+
+  // Answer an inspect the way the recording did: by finding the call the seat
+  // itself made, with the same subject and detail, and returning its result.
+  // A call the recording does not hold is a gap rather than an invention.
+  async inspect(seat: string, turn: number, subject: string, detail?: string): Promise<InspectAnswer> {
+    const recorded = this.turn(seat, turn);
+    if (recorded) {
+      for (const call of recorded.toolCalls) {
+        const name = call.tool.replace(/^vox-civ_/, "");
+        if (name !== "inspect") continue;
+        const input = (call.input ?? {}) as Record<string, unknown>;
+        if (input.subject !== subject) continue;
+        const recordedDetail = typeof input.detail === "string" ? input.detail : undefined;
+        if ((detail ?? "") !== (recordedDetail ?? "")) continue;
+        if (call.error) return { text: "inspect failed when it was recorded: " + call.error };
+        if (call.output) return { text: call.output };
+      }
+    }
+    return {
+      text:
+        "The simulation does not hold recorded state for inspect(" +
+        subject +
+        (detail ? ", " + detail : "") +
+        ") on this turn. The information below is what the observation carried.",
+      gap: true
+    };
   }
 }

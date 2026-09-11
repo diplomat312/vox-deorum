@@ -52,18 +52,38 @@ export interface WorldTurn {
   decision: DecisionKind;
 }
 
-// The state source a seat reads from. A recorded-game replay and a live game
-// both implement this, which keeps the seat runtime independent of the source.
+// What a world answered when a seat asked to see something.
+export interface InspectAnswer {
+  // The text handed back to the seat.
+  text: string;
+  // True when the world could not answer, which is recorded as a gap. What
+  // seats keep asking for and not getting is the sharpest signal about what
+  // the observation should carry, so an empty answer is a fact, not an error.
+  gap?: boolean;
+}
+
+// The state source a seat reads from. A simulated game, a recorded-game replay
+// and, later, a live game all implement this, which keeps the seat runtime
+// independent of where its situation came from.
 export interface World {
   // The game label every turn in this world shares.
   readonly game: string;
   // Every seat this world can play, in a stable order.
   seats(): SeatInfo[];
-  // Every turn number held for one seat, ascending.
-  turns(seat: string): number[];
-  // The recorded turn for a seat, or null when the world does not hold it.
-  turn(seat: string, turn: number): WorldTurn | null;
-  // The observation for a seat at a turn. Throws when the world does not hold
+  // Prepare a seat to be shown its turn. A simulated world advances to the
+  // turn here and delivers whatever arrived for that seat, so rendering the
+  // observation afterwards can be a plain read.
+  beginTurn(seat: string, turn: number): Promise<void>;
+  // Whether a seat has a turn to play at this number.
+  hasTurn(seat: string, turn: number): boolean;
+  // The observation for a seat at a turn. Throws when the world cannot produce
   // it, because a seat must never silently play against missing state.
+  //
+  // A live or simulated world may advance that seat's diplomacy cursor as a
+  // side effect, because rendering the observation is how messages are
+  // delivered to a seat.
   observation(seat: string, turn: number): string;
+  // Answer one inspect. A world that does not hold the answer says so rather
+  // than inventing state.
+  inspect(seat: string, turn: number, subject: string, detail?: string): Promise<InspectAnswer>;
 }

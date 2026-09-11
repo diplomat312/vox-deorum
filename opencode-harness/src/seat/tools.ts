@@ -6,7 +6,7 @@
 // two may be called as often as the seat likes.
 
 import { applyOperations, type Operation } from "../social/social-store.js";
-import type { World, WorldTurn } from "../world/types.js";
+import type { World } from "../world/types.js";
 
 // What a seat may ask to see. Each subject answers one question about the world.
 export const inspectSubjects = [
@@ -103,43 +103,12 @@ async function inspect(context: SeatContext, input: Record<string, unknown>): Pr
     return refuse("inspect needs a subject, one of: " + inspectSubjects.join(", "));
   }
   const detail = typeof input.detail === "string" ? input.detail : undefined;
-  const recorded = context.world.turn(context.seat, context.turn);
-
-  // Talking and deals are answered live, because within a run they are ours to
-  // answer rather than the recording's.
-  if (subject === "events") {
-    const { readInbox } = await import("../social/social-store.js");
-    const page = await readInbox(context.socialDirectory, context.seat);
-    return { text: JSON.stringify(page, null, 1), terminal: false };
-  }
-
-  const match = findRecordedCall(recorded, subject, detail);
-  if (match) return { text: match, terminal: false };
+  const answer = await context.world.inspect(context.seat, context.turn, subject, detail);
   return {
-    text:
-      "The simulation does not hold recorded state for inspect(" +
-      subject +
-      (detail ? ", " + detail : "") +
-      ") on this turn. The information below is what the observation carried.",
+    text: answer.text,
     terminal: false,
-    gap: detail ? { subject, detail } : { subject }
+    gap: answer.gap ? (detail ? { subject, detail } : { subject }) : undefined
   };
-}
-
-// Find a recorded answer for an inspect, if the seat made that call itself.
-function findRecordedCall(recorded: WorldTurn | null, subject: string, detail: string | undefined): string | null {
-  if (!recorded) return null;
-  for (const call of recorded.toolCalls) {
-    const name = call.tool.replace(/^vox-civ_/, "");
-    if (name !== "inspect") continue;
-    const input = (call.input ?? {}) as Record<string, unknown>;
-    if (input.subject !== subject) continue;
-    const recordedDetail = typeof input.detail === "string" ? input.detail : undefined;
-    if ((detail ?? "") !== (recordedDetail ?? "")) continue;
-    if (call.error) return "inspect failed when it was recorded: " + call.error;
-    if (call.output) return call.output;
-  }
-  return null;
 }
 
 // Apply a batch of social operations, which is the only way a seat talks.
