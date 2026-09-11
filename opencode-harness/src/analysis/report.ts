@@ -39,6 +39,15 @@ export interface DiplomacyMetrics {
   // on the same turn or later. This is the simplest reading of whether talking
   // went anywhere.
   directReplyRate: number;
+  // How many pairs of seats opened a private channel at all.
+  activePairs: number;
+  // For each pair, how long their correspondence stayed in use, in minutes,
+  // measured from the first message to the last. This is the durability reading:
+  // a channel used once is a courtesy, a channel still in use an hour later is a
+  // relationship.
+  pairMinutes: Record<string, number>;
+  // The middle of those spans, which is the one number worth putting in a table.
+  medianPairMinutes: number;
 }
 
 // One seat's share of the run's spend.
@@ -154,9 +163,15 @@ function countAddressed(social: SocialEntry[], seats: string[]): Record<string, 
 }
 
 // Count direct messages per unordered pair, and work out which pairs answered.
-function directPairs(social: SocialEntry[]): { counts: Record<string, number>; answered: string[] } {
+function directPairs(social: SocialEntry[]): {
+  counts: Record<string, number>;
+  answered: string[];
+  minutes: Record<string, number>;
+} {
   const counts: Record<string, number> = {};
   const directions = new Map<string, Set<string>>();
+  const firstAt = new Map<string, number>();
+  const lastAt = new Map<string, number>();
   for (const entry of social) {
     const pair = directPairOf(entry);
     if (pair.length !== 2) continue;
@@ -165,9 +180,21 @@ function directPairs(social: SocialEntry[]): { counts: Record<string, number>; a
     const pairDirections = directions.get(key) ?? new Set<string>();
     pairDirections.add(entry.from);
     directions.set(key, pairDirections);
+    const at = Date.parse(entry.at);
+    if (Number.isFinite(at)) {
+      firstAt.set(key, Math.min(firstAt.get(key) ?? at, at));
+      lastAt.set(key, Math.max(lastAt.get(key) ?? at, at));
+    }
   }
   const answered = [...directions.entries()].filter(([, senders]) => senders.size > 1).map(([key]) => key);
-  return { counts, answered };
+  const minutes: Record<string, number> = {};
+  for (const key of Object.keys(counts)) {
+    const from = firstAt.get(key);
+    const to = lastAt.get(key);
+    if (from === undefined || to === undefined) continue;
+    minutes[key] = Math.round((to - from) / 60000);
+  }
+  return { counts, answered, minutes };
 }
 
 // Work out the diplomacy metrics from the social log and the trace.
@@ -212,6 +239,7 @@ export function diplomacyMetrics(data: RunData, seats: string[]): DiplomacyMetri
   const refusals = data.toolCalls.filter(
     (call) => call.tool.replace(/^vox-civ_/, "") === "communicate" && call.result.includes("refused")
   ).length;
+  const pairSpans = Object.values(pairs.minutes);
 
   return {
     operations: social.length,
@@ -225,7 +253,10 @@ export function diplomacyMetrics(data: RunData, seats: string[]): DiplomacyMetri
     refusals,
     turnsWithSocial: speakingTurns.size,
     longestSilence,
-    directReplyRate: directMessages.length === 0 ? 0 : answeredDirect / directMessages.length
+    directReplyRate: directMessages.length === 0 ? 0 : answeredDirect / directMessages.length,
+    activePairs: Object.keys(pairs.counts).length,
+    pairMinutes: pairs.minutes,
+    medianPairMinutes: pairSpans.length === 0 ? 0 : median(pairSpans)
   };
 }
 
@@ -361,6 +392,8 @@ export function renderReport(report: RunReport, toolCalls: RunToolCall[]): strin
   lines.push("| Groups created | " + (diplomacy.byKind["group-create"] ?? 0) + " |");
   lines.push("| Refused social operations | " + diplomacy.refusals + " |");
   lines.push("| Direct messages answered in kind | " + Math.round(diplomacy.directReplyRate * 100) + "% |");
+  lines.push("| Private channels opened | " + diplomacy.activePairs + " |");
+  lines.push("| Median lifespan of a private channel | " + diplomacy.medianPairMinutes + " minutes |");
   lines.push("");
   if (Object.keys(diplomacy.authored).length > 0) {
     lines.push("Operations authored by seat: " + Object.entries(diplomacy.authored).map(([seat, count]) => seat + " " + count).join(", ") + ".");

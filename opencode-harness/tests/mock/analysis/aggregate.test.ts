@@ -20,6 +20,8 @@ function measures(overrides: Partial<RunMeasures> = {}): RunMeasures {
     turnsWithSocial: 2,
     longestSilence: 8,
     directReplyRate: 0,
+    activePairs: 0,
+    medianPairMinutes: 0,
     refusals: 0,
     cacheHitRatio: 0.95,
     inputPerTurn: 4000,

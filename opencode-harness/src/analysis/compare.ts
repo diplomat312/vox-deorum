@@ -33,6 +33,10 @@ export interface RunMeasures {
   longestSilence: number;
   // Share of direct messages whose pair exchanged messages both ways.
   directReplyRate: number;
+  // How many pairs opened a private channel.
+  activePairs: number;
+  // The middle lifespan of a private channel, in minutes.
+  medianPairMinutes: number;
   // Social operations the world refused.
   refusals: number;
   // Share of prompt tokens served from the cache.
@@ -75,6 +79,8 @@ export function measuresOf(report: RunReport): RunMeasures {
     turnsWithSocial: report.diplomacy.turnsWithSocial,
     longestSilence: report.diplomacy.longestSilence,
     directReplyRate: report.diplomacy.directReplyRate,
+    activePairs: report.diplomacy.activePairs,
+    medianPairMinutes: report.diplomacy.medianPairMinutes,
     refusals: report.diplomacy.refusals,
     cacheHitRatio: report.cost.cacheHitRatio,
     inputPerTurn: report.cost.inputPerTurn,
@@ -114,6 +120,8 @@ const rows: Array<{ label: string; read: (entry: RunMeasures) => number | null }
   { label: "Turns with any social operation", read: (entry) => entry.turnsWithSocial },
   { label: "Longest silence, in turns", read: (entry) => entry.longestSilence },
   { label: "Direct messages answered in kind", read: (entry) => entry.directReplyRate },
+  { label: "Private channels opened", read: (entry) => entry.activePairs },
+  { label: "Median lifespan of a private channel", read: (entry) => entry.medianPairMinutes },
   { label: "Refused social operations", read: (entry) => entry.refusals },
   { label: "Cache hit ratio", read: (entry) => entry.cacheHitRatio },
   { label: "Uncached input per turn", read: (entry) => entry.inputPerTurn },

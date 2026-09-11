@@ -70,6 +70,31 @@ describe("the run report", () => {
     expect(metrics.directPairs).toEqual({ "austria|korea": 2 });
     expect(metrics.answeredPairs).toEqual(["austria|korea"]);
     expect(metrics.directReplyRate).toBe(1);
+    expect(metrics.activePairs).toBe(1);
+  });
+
+  it("should measure how long a private channel stayed in use", () => {
+    // A channel used twice, ten minutes apart, against one used twice in the
+    // same minute. The second is a courtesy, the first is closer to a
+    // relationship, and the span is what tells them apart.
+    const data = {
+      runId: "run-1",
+      game: "sim",
+      trace: new Map([["korea", [record()]], ["austria", [record({ seat: "austria" })]]]),
+      social: [
+        { id: "e-1", at: "2026-01-01T00:00:00.000Z", from: "korea", kind: "dm" as const, to: "dm:austria:korea", text: "hello" },
+        { id: "e-2", at: "2026-01-01T00:10:00.000Z", from: "austria", kind: "dm" as const, to: "dm:austria:korea", text: "hi back" },
+        { id: "e-3", at: "2026-01-01T01:00:00.000Z", from: "siam", kind: "dm" as const, to: "dm:korea:siam", text: "greetings" }
+      ],
+      toolCalls: []
+    };
+
+    const metrics = diplomacyMetrics(data, ["korea", "austria", "siam"]);
+
+    expect(metrics.activePairs).toBe(2);
+    expect(metrics.pairMinutes["austria|korea"]).toBe(10);
+    expect(metrics.pairMinutes["korea|siam"]).toBe(0);
+    expect(metrics.medianPairMinutes).toBe(5);
   });
 
   it("should report a table that talked to nobody", () => {

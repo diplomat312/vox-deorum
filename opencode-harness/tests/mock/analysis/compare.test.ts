@@ -30,7 +30,10 @@ function report(overrides: Partial<RunReport> = {}): RunReport {
       refusals: 0,
       turnsWithSocial: 0,
       longestSilence: 10,
-      directReplyRate: 0
+      directReplyRate: 0,
+      activePairs: 0,
+      pairMinutes: {},
+      medianPairMinutes: 0
     },
     cost: {
       perSeat: {},
