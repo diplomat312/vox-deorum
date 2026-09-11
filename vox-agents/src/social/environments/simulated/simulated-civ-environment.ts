@@ -33,16 +33,27 @@ export interface SimulatedCivEnvironmentOptions {
   game: string;
   // Who is played by a person rather than a model, and so is never woken.
   humanActorId?: string;
-  // How long the world holds still between turns, in milliseconds.
+  // The least time between turns, in milliseconds. With a table to wait for this
+  // is only a floor, which keeps a turn from following so fast that the news of
+  // one arrives alongside the news of the next.
   tickMs?: number;
   // Ask the social runtime to wake one seat.
   enqueue: (actorId: string, reason: string) => Promise<void>;
+  // Wait until the table has finished what it is doing.
+  //
+  // A turn of a game waits for the players, and here the players are model
+  // sessions that take half a minute each. Advancing on a wall clock instead
+  // would either outrun the conversation or waste most of its time waiting, so
+  // the world asks whether the table is still busy. Absent, the world falls back
+  // to a timer, which is what a caller with no runtime to ask would use.
+  waitForIdle?: () => Promise<void>;
   // Circumstances to inject on chosen turns, which is how an experiment is set up.
   script?: Array<{ turn: number; order: string; seat: string; args: Record<string, unknown> }>;
 }
 
-// How long the world holds still between turns when nobody says otherwise.
-const defaultTickMs = 45000;
+// The least time between turns when nobody says otherwise. Short, because with a
+// table to wait for the models set the pace and this is only a floor.
+const defaultTickMs = 5000;
 
 // What one seat can ask to read.
 const inspectSubjects = ["self", "army", "neighbours", "diplomacy"] as const;
@@ -55,6 +66,7 @@ export class SimulatedCivEnvironment implements SocialEnvironmentPort {
   private readonly humanActorId: string | undefined;
   private readonly tickMs: number;
   private readonly enqueue: SimulatedCivEnvironmentOptions["enqueue"];
+  private readonly waitForIdle: (() => Promise<void>) | undefined;
   private readonly script: Array<{ turn: number; order: string; seat: string; args: Record<string, unknown> }>;
   // How far into the event log each seat has been told about.
   private readonly told = new Map<string, number>();
@@ -69,6 +81,7 @@ export class SimulatedCivEnvironment implements SocialEnvironmentPort {
     this.humanActorId = options.humanActorId;
     this.tickMs = options.tickMs ?? defaultTickMs;
     this.enqueue = options.enqueue;
+    this.waitForIdle = options.waitForIdle;
     this.script = options.script ?? [];
     // Every seat already knows the table; what it does not know is what the
     // others are doing, which is the thing worth finding out.
@@ -78,6 +91,12 @@ export class SimulatedCivEnvironment implements SocialEnvironmentPort {
   // Keep compatibility memory, because remembering a conversation is the point of
   // a persistent seat.
   readonly useSocialMemory: boolean;
+
+  // The turn the world has reached, so a caller can run until a number rather
+  // than until a clock, and a report can say how far a game actually got.
+  get turn(): number {
+    return this.world.state.turn;
+  }
 
   /** Build the environment, which is asynchronous because the engine is loaded lazily. */
   public static async start(options: SimulatedCivEnvironmentOptions): Promise<SimulatedCivEnvironment> {
@@ -92,8 +111,25 @@ export class SimulatedCivEnvironment implements SocialEnvironmentPort {
       if (seat === this.humanActorId) continue;
       await this.wake(seat, "the game has begun");
     }
-    this.timer = setInterval(() => {
-      void this.tick();
+    // The world moves on when the table has finished talking about the last turn.
+
+    // A turn here is a turn-based game turn, and a turn waits for its players.
+    // Advancing on a wall clock would either outrun the conversation or spend most
+    // of its time waiting on nothing, so when a caller can say whether the table is
+    // busy, the world asks. Without that, it falls back to a timer.
+    const step = async (): Promise<void> => {
+      if (this.closed) return;
+      if (this.waitForIdle) await this.waitForIdle().catch(() => undefined);
+      if (this.closed) return;
+      await this.tick();
+      if (this.closed) return;
+      this.timer = setTimeout(() => {
+        void step();
+      }, this.tickMs);
+      if (typeof this.timer.unref === "function") this.timer.unref();
+    };
+    this.timer = setTimeout(() => {
+      void step();
     }, this.tickMs);
     // A timer must not keep a process alive on its own.
     if (typeof this.timer.unref === "function") this.timer.unref();
@@ -274,7 +310,7 @@ export class SimulatedCivEnvironment implements SocialEnvironmentPort {
   /** Stop the world and release its timer. */
   public async close(): Promise<void> {
     this.closed = true;
-    if (this.timer) clearInterval(this.timer);
+    if (this.timer) clearTimeout(this.timer);
     this.timer = null;
   }
 

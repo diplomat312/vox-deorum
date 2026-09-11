@@ -61,10 +61,14 @@ export async function attachSimulatedCiv(
         payload: JSON.stringify({ type: "game-event", gameId: sessionId, payload: { reason } }),
         dedupeKey: null
       });
+    },
+    // A turn waits for the players. Without this the world would advance on a
+    // clock and either outrun the conversation or waste its time between turns.
+    waitForIdle: async (): Promise<void> => {
+      await runtime.waitForIdle(120_000).catch(() => undefined);
     }
   });
   runtime.attachEnvironment(environment);
   await environment.open();
   return { environment, seed };
 }
-

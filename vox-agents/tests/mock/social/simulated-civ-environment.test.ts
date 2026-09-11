@@ -201,6 +201,33 @@ describe("a generated world under a session", () => {
     await environment.close();
   });
 
+  it("should wait for the table before moving the world on", async () => {
+    // A turn is a turn-based game turn, so it waits for the players. The world
+    // asks whether the table is busy rather than assuming a wall clock.
+    const order: string[] = [];
+    const environment = await SimulatedCivEnvironment.start({
+      seats,
+      seed: 11,
+      game: "sim-test",
+      tickMs: 20,
+      enqueue: async () => undefined,
+      waitForIdle: async () => {
+        order.push("waited");
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      }
+    });
+
+    await environment.open();
+    await new Promise((resolve) => setTimeout(resolve, 120));
+
+    // The table was asked before every turn the world took, and the world moved
+    // more than once, which is what makes a run bounded by the models rather than
+    // by a timer.
+    expect(order.length).toBeGreaterThan(1);
+    expect(order.every((entry) => entry === "waited")).toBe(true);
+    await environment.close();
+  });
+
   it("should stop moving the world once it is closed", async () => {
     const { environment } = await world();
 
