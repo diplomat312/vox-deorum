@@ -21,6 +21,12 @@ node opencode-harness/dist/run/simulate.js --seats korea,austria,siam,iroquois -
 
 Useful options include `--coaching on` to close each observation by stating what dialogue is for, `--briefing on` to add a standing summary of contact with each other seat, `--scenario` to inject circumstances from a JSON file, and `--turn-timeout` to bound how long a seat turn may take.
 
+One run of a variant is an anecdote. To play a variant several times and get a spread:
+
+```
+node opencode-harness/dist/run/matrix.js --variant plain --seeds 11,12,13 --from 1 --to 10
+```
+
 Nothing here launches Civilization V, and no test touches a network or a game.
 
 ## Reading a run
@@ -28,10 +34,11 @@ Nothing here launches Civilization V, and no test touches a network or a game.
 ```
 node opencode-harness/dist/analysis/report-run.js <run-id>
 node opencode-harness/dist/analysis/compare-runs.js base1 variant1
+node opencode-harness/dist/analysis/compare-variants.js plain coached
 node opencode-harness/dist/analysis/watch-run.js <run-id>
 ```
 
-The report measures how much the seats talked, who stayed silent, how long the quiet stretches ran, whether direct messages were answered in kind, and what it all cost, including the prompt cache hit ratio and the cost per social operation. The comparison places runs side by side and lists what changed against the baseline. The watcher tails a run while it plays.
+The report measures how much the seats talked, who stayed silent, how long the quiet stretches ran, whether direct messages were answered in kind, how long a private channel stayed in use, and what it all cost, including the prompt cache hit ratio and the cost per social operation. The comparison places runs side by side and lists what changed against the baseline. Comparing variants puts the summaries of replicated variants together and marks a difference as a result only when the ranges do not overlap. The watcher tails a run while it plays.
 
 A run writes under `opencode-harness/runs/<run-id>`: `trace/` holds one JSONL file per seat, `social/` holds the diplomacy log and the tool call log, and `state/` holds the world snapshot the seats read.
 
@@ -42,4 +49,3 @@ A run writes under `opencode-harness/runs/<run-id>`: `trace/` holds one JSONL fi
 ## Relationship to Vox Agents
 
 The unified civilization mind in `vox-agents` is the previous approach to a model-driven seat and is now legacy. The harness treats OpenCode as the session layer, and Vox stays authoritative for game integration, action validation and replay. In a live game a seat's reads and writes go through the same MCP tools and bridge every other caller uses; the simulated bench replaces only the state source.
-
