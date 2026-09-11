@@ -29,6 +29,26 @@ node opencode-harness/dist/run/matrix.js --variant plain --seeds 11,12,13 --from
 
 Nothing here launches Civilization V, and no test touches a network or a game.
 
+## Playing a live run without the game
+
+The live path reaches a real game through Vox Deorum's MCP server, which is the one part of the harness that cannot be covered by a fake connection: in a live run each seat reaches the game through its own tool server, in its own process. A stand-in game speaks that same protocol on the same transport, so a whole live run can be played, paced and read with no game installed:
+
+```
+node opencode-harness/dist/run/fake-game.js --port 4000
+node opencode-harness/dist/run/live.js --seats korea:0,austria:1 --turns 2 --run-id standin
+```
+
+The stand-in holds a turn clock that really moves and really holds, players whose reads change when their writes land, a transcript with real message ids, and deals that validate before they enact. It is not a simulation of Civilization V and does not aim to be: it exists so the live path can be exercised rather than assumed. Point it at another address with `--port`, and point a run anywhere with `--mcp`.
+
+## What a seat is actually given
+
+A seat's session inherits the machine's own OpenCode configuration as well as the one the harness writes, so a seat was being offered the operator's other MCP servers along with its own. The written configuration now switches those off by name, and every run asks each seat's session what servers it holds:
+
+- A seat whose own game tools are missing or not connected refuses to start, because it would otherwise play a whole game with nothing to call and be recorded as a seat that chose to say nothing.
+- A seat that can still reach a server it has no business using is reported in the run log.
+
+The check is one read of the session's server list, so it costs nothing and catches the failure that hides itself.
+
 ## Reading a run
 
 ```

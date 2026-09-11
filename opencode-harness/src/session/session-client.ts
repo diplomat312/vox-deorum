@@ -249,6 +249,22 @@ export class SessionClient {
     return Array.isArray(messages) ? messages : [];
   }
 
+  // The MCP servers this seat's session has, and the status of each.
+  //
+  // A seat's game tools arrive as an MCP server, and a server that never started
+  // leaves the seat with a prose-shaped hole where its tools should be: it
+  // answers the observation, never reaches for a tool, and is recorded as a seat
+  // that chose to say nothing. Reading the server list is what tells those two
+  // apart, and it costs nothing.
+  async mcpServers(): Promise<Record<string, string>> {
+    const answer = await this.request<Record<string, { status?: unknown }>>("GET", "/mcp");
+    const statuses: Record<string, string> = {};
+    for (const [name, entry] of Object.entries(answer ?? {})) {
+      statuses[name] = typeof entry?.status === "string" ? entry.status : "unknown";
+    }
+    return statuses;
+  }
+
   // One authenticated call against the server, with a timeout so a lost
   // server cannot hang a run forever.
   private async request<T>(method: string, route: string, body?: unknown, timeoutMs?: number): Promise<T> {

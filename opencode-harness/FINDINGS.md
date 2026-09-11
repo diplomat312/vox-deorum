@@ -8,6 +8,10 @@ Every run plays the same four seats (Korea, Austria, Siam, Iroquois) on a genera
 
 An intervention works when it names what a mechanic is for, and fails when it does not. Two experiments this batch test that directly, and they came out opposite ways.
 
+**Naming the grand strategy does not work either.** The same test was run a third time on a third mechanic. Six runs that close by saying what dialogue is for, three of which also say that a grand strategy is how a seat declares its intent to the table: social operations come out at 12.7 and 13.3, turns with any operation at 3.3 and 3.3, and postures at 0 and 1 in one run of three. **Nothing moved.** So the rule is narrower still than "name the mechanic": naming posture worked, and naming a council and naming a strategy did not. What separates them is not whether a mechanic was named but whether the seat that was told had a reason to reach for it that turn.
+
+Two measures in that arm did shift in the same direction in all three runs, and neither is a result. Substantive messages went from 0.17 to 0.42, and proposals from 1.7 to 3. With three seeds and ranges that touch, all this says is that the effect, if it exists, is smaller than the spread between two runs of the same variant.
+
 **Naming posture works.** A posture action is how the game records that one seat regards another in a particular way, and it is the only mechanic by which diplomacy has a consequence the game itself will honour. Across three baseline runs, zero postures were set and all four seats never set one. Adding a single closing line, which explains that a posture is how a relationship is recorded and that it outlasts anything said, produced 4 postures per run (range 3 to 5) and cut the seats that never set one from 4 to 2. **The ranges separate.** Across six seeds the variant produced postures in five runs, once as many as 7.
 
 **Naming councils does not work.** The same experiment on a different mechanic gave a negative result. Across three control runs, seats founded a council in one run unprompted. Across three runs that were told what a council is for, they founded one in one run. **The rate did not move.** A third arm then tested whether a crisis, which is what makes a table busy, does what the instruction could not. It did not either: one council in three runs, exactly the same rate. Across twelve replicated runs, a council is founded in roughly one in three whatever is done to encourage it.
@@ -92,6 +96,18 @@ A live turn now carries what the others said, in the same sections the generated
 
 What this batch shows about the live path is worth stating plainly, because it is not flattering. Every defect found in it was found by reading it rather than by running it, and two of the three were the kind that produces no error at all: a server that exited at startup with its reason on a stream nobody reads, and a turn that rendered four sections of a five-part conversation. A live run has still never met a real game. Until it does, the honest reading is that the live path is written and covered but unproven, and that this is exactly where an unexercised path hides its faults.
 
+## The live path has now been played
+
+Every defect above was found by reading code. The fix was to stop reading and play: a stand-in game that speaks the same protocol on the same transport, so a live run can be started with two real model seats and no Civilization V. Four things came out of the first runs.
+
+**A seat can pilot a seat through Vox MCP.** Two seats on deepseek-v4.1-flash reached the game through their own tool servers, inspected, committed research and policy and a posture, and the run recorded two turns with nothing unfinished. Pacing held the game four times and missed once never, which is the first time the freeze policy has run against a clock that actually moves. The refusals the game sent back, a technology and a policy the game does not have, were recorded as refusals rather than as actions taken.
+
+**The empty-answer retry earned its place.** On a later run Austria's turn came back with no text, no thinking and no tool calls, the exact shape that had been mistaken for a seat choosing silence. The turn was asked again and Austria committed research and a posture. That is one rescued turn in a run of two, which is a high rate for two runs, and it is the difference between a lost turn and a full one.
+
+**A seat with no tools was invisible, and now is not.** The first live run produced four turns that were all recorded as a seat choosing to say nothing. The seats' own thinking explained it: the tool server's path was wrong, so the session had no game tools at all, and the model was left reasoning in prose about a game it could not touch. Nothing in the run said so. Every run now asks each seat's session what servers it holds before playing, refuses a seat whose own tools are missing, and reports any other server a seat can reach. Pointing a run at a path that does not exist now stops it with "the seat's game tool server is failed rather than connected, so it would play with no tools".
+
+**A seat was offered far more than the game.** Asking the session what it had was itself the discovery. The machine's own OpenCode configuration is read alongside the one the harness writes, so a seat was also being offered a Google Workspace connection, three plugins including a browser, and nineteen built-in tools. The written configuration now switches the inherited MCP servers off by name, and the run log confirms they are gone. The browser tools and the built-in tools are still visible: a project configuration can disable an inherited server but not an inherited plugin, and the seat's own agent definition is the route to that, which is written up under what to test next.
+
 The one thing this batch did not settle is whether a person playing against model seats behaves differently from the model seats themselves. One three turn game with a stand-in player is a wiring proof, not evidence about people.
 
 ## Durability: a crisis is what makes a contact a relationship
@@ -150,10 +166,11 @@ CI on the fork now passes. It had been failing at the install step on every push
 
 ## What to test next
 
-1. **What makes a table busy enough to form a council.** The instruction failed and intensity correlates, so the next question is what drives intensity: a crisis does, it seems, and so does a longer game.
-2. **Whether a recorded posture changes behaviour.** Naming postures now produces them; nobody has yet measured whether a seat that records wariness acts on it differently a few turns later.
-3. **A grounded betrayal.** Play the treasury-emptying scenario so a promise made inside the run is the promise that fails, then read whether the wronged seat's reply differs from the run where the betrayal was narrated.
-4. **Cost per unit of change.** Talking is nearly free, so the interesting budget question is how much talking is needed per posture, per deal and per ratified article.
+1. **Confinement, finished.** A project configuration disables an inherited MCP server but not an inherited plugin, so a seat can still see a browser and nineteen built-in tools. The message a session accepts names an agent, and an agent definition carries a tool list, so a named seat agent is the route: define one that offers only the game tools, have every seat message name it, and read the session back to prove the surface shrank.
+2. **What makes a table busy enough to form a council.** The instruction failed and intensity correlates, so the next question is what drives intensity: a crisis does, it seems, and so does a longer game.
+3. **Whether a recorded posture changes behaviour.** Naming postures produces them; nobody has yet measured whether a seat that records wariness acts on it differently a few turns later.
+4. **A grounded betrayal.** Play the treasury-emptying scenario so a promise made inside the run is the promise that fails, then read whether the wronged seat's reply differs from the run where the betrayal was narrated.
+5. **Cost per unit of change.** Talking is nearly free, so the interesting budget question is how much talking is needed per posture, per deal and per ratified article.
 
 ## Caveats
 

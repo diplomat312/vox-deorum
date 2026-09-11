@@ -49,6 +49,17 @@ const deniedPermissions = [
   "skill"
 ];
 
+// The MCP servers a seat's session must not inherit.
+//
+// A session reads the machine's own OpenCode configuration as well as the one
+// written here, so a seat on this machine was offered the operator's Google
+// Workspace connection and everything it reaches. A seat needs one server, its
+// own, and this is what says so: naming the others and setting the same key
+// switches them off for this directory, which is the only place the harness
+// writes. Named rather than discovered because a configuration file is written
+// before any session exists, so there is nothing to ask yet.
+const deniedServers = ["google-workspace"];
+
 // Build the OpenCode configuration object for a seat.
 export function seatConfig(options: SeatConfigOptions): Record<string, unknown> {
   const permission: Record<string, string> = {};
@@ -74,7 +85,8 @@ export function seatConfig(options: SeatConfigOptions): Record<string, unknown> 
           ...(process.env.VOX_MCP_ENDPOINT ? { VOX_MCP_ENDPOINT: process.env.VOX_MCP_ENDPOINT } : {})
         },
         enabled: true
-      }
+      },
+      ...Object.fromEntries(deniedServers.map((name) => [name, { enabled: false }]))
     }
   };
 }

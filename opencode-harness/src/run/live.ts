@@ -13,6 +13,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { SeatRuntime, type PendingDecision } from "../seat/runtime.js";
 import { SeatPacer } from "../seat/pacing.js";
+import { inheritedServers, surfaceProblem } from "../session/seat-surface.js";
 import { OpenCodeServer } from "../session/opencode-server.js";
 import { SessionClient } from "../session/session-client.js";
 import type { SeatModel } from "../session/types.js";
@@ -205,6 +206,18 @@ export async function runLive(options: LiveRunOptions): Promise<LiveRunResult> {
           turnTimeoutMs: options.turnTimeoutMs
         });
         await client.openSeat(seat, "seat " + seat);
+        // A seat with no game tools cannot play, and would otherwise be recorded
+        // as a seat that chose to say nothing on every turn of the run.
+        const surface = await client.mcpServers().catch(() => null);
+        if (surface === null) {
+          throw new Error("the seat's session would not say what tools it has, so it cannot be trusted to have any");
+        }
+        const problem = surfaceProblem(surface);
+        if (problem) throw new Error(problem);
+        const inherited = inheritedServers(surface);
+        if (inherited.length > 0) {
+          logger.warn("Seat " + seat + " can also reach servers it has no business using: " + inherited.join(", "));
+        }
         clients.set(seat, client);
         logger.info("Seat " + seat + " is ready on port " + (options.portBase + index));
       } catch (failure) {
