@@ -41,3 +41,10 @@ scripts/.dll-cache
 
 # Social sandbox runtime state (sessions, messages, cascades).
 /social-data/
+
+# Compiled output that must never sit beside source. A build with the wrong
+# rootDir once emitted these into the harness source tree.
+/opencode-harness/src/**/*.js
+/opencode-harness/src/**/*.js.map
+/opencode-harness/src/**/*.d.ts
+/opencode-harness/src/**/*.d.ts.map

@@ -63,6 +63,9 @@ jobs:
       - name: Build MCP server dependencies
         run: npm --prefix mcp-server run build
 
+      - name: Build the OpenCode harness
+        run: npm --prefix opencode-harness run build
+
       - name: Run deterministic tests
         run: npm run test:all
 
@@ -110,6 +113,9 @@ jobs:
 
       - name: Build MCP server dependencies
         run: npm --prefix mcp-server run build
+
+      - name: Build the OpenCode harness
+        run: npm --prefix opencode-harness run build
 
       - name: Typecheck bridge service
         run: npm --prefix bridge-service run type-check

@@ -16,11 +16,18 @@
 
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { homedir } from "node:os";
 import type { ModelMessage } from "ai";
-import { OpenCodeServer } from "opencode-harness/session/opencode-server.js";
-import { SessionClient } from "opencode-harness/session/session-client.js";
-import { writeSeatConfig } from "opencode-harness/run/seat-config.js";
-import { seatWorkspaceDirectory } from "opencode-harness/session/seat-workspace.js";
+// The harness is reached lazily rather than imported at the top of this file.
+//
+// This runner is only used when a session asks to think with OpenCode, and the
+// harness is a separate workspace whose built output is not in the repository. A
+// top-level import would make every test run and every build depend on that
+// output existing; a lazy one means nothing is loaded until a session actually
+// wants an OpenCode mind.
+import type { OpenCodeServer } from "opencode-harness/session/opencode-server.js";
+import type { SessionClient } from "opencode-harness/session/session-client.js";
+import type { SeatConfigOptions } from "opencode-harness/run/seat-config.js";
 import { socialSeatIdentity } from "./opencode-seat-identity.js";
 import type { SocialActor, SocialDecision } from "../types.js";
 import type { SocialContextBundle } from "../context/social-context-builder.js";
@@ -51,6 +58,39 @@ export interface OpenCodeMindRunnerOptions {
 
 // The agent name a social actor's turns run under, which its configuration defines.
 const socialAgent = "social-seat";
+
+// The type of the pieces this runner borrows from the harness.
+interface HarnessModules {
+  // Start and stop one OpenCode server.
+  OpenCodeServer: typeof OpenCodeServer;
+  // Hold one persistent session and read a whole turn back from it.
+  SessionClient: typeof SessionClient;
+  // Write one seat's confined configuration.
+  writeSeatConfig: (options: SeatConfigOptions) => Promise<string>;
+  // Where a seat's workspace lives, which must be outside every repository.
+  seatWorkspaceDirectory: (runId: string, seat: string) => string;
+}
+
+// Load the harness pieces on first use, once per process.
+let harnessModules: Promise<HarnessModules> | null = null;
+function loadHarness(): Promise<HarnessModules> {
+  if (harnessModules) return harnessModules;
+  harnessModules = (async (): Promise<HarnessModules> => {
+    const [server, client, config, workspace] = await Promise.all([
+      import("opencode-harness/session/opencode-server.js"),
+      import("opencode-harness/session/session-client.js"),
+      import("opencode-harness/run/seat-config.js"),
+      import("opencode-harness/session/seat-workspace.js"),
+    ]);
+    return {
+      OpenCodeServer: server.OpenCodeServer,
+      SessionClient: client.SessionClient,
+      writeSeatConfig: config.writeSeatConfig,
+      seatWorkspaceDirectory: workspace.seatWorkspaceDirectory,
+    };
+  })();
+  return harnessModules;
+}
 
 /** How one actor is reached and what it has already been told. */
 interface ActorSession {
@@ -145,12 +185,13 @@ export class OpenCodeMindRunner implements SocialModelExecutor {
   private async sessionFor(actor: SocialActor): Promise<ActorSession> {
     const held = this.sessions.get(actor.id);
     if (held) return held;
+    const harness = await loadHarness();
     // A session reads the configuration of the directory its server was started
     // in, so one server for the whole table would read one actor's configuration
     // and serve it to everyone. Each actor therefore gets its own server in its
     // own workspace, which is also what keeps two actors from sharing a session.
-    const seatDirectory = seatWorkspaceDirectory(this.options.runId, actor.id);
-    await writeSeatConfig({
+    const seatDirectory = harness.seatWorkspaceDirectory(this.options.runId, actor.id);
+    await harness.writeSeatConfig({
       seat: actor.id,
       playerID: null,
       model: { providerID: this.options.providerID, modelID: this.options.modelID },
@@ -176,7 +217,7 @@ export class OpenCodeMindRunner implements SocialModelExecutor {
       agentName: this.options.agent ?? socialAgent,
     });
     const server = await this.startServerFor(actor.id, seatDirectory);
-    const client = new SessionClient(server.address(), { providerID: this.options.providerID, modelID: this.options.modelID }, {}, { turnTimeoutMs: this.options.turnTimeoutMs, agent: this.options.agent ?? socialAgent });
+    const client = new harness.SessionClient(server.address(), { providerID: this.options.providerID, modelID: this.options.modelID }, {}, { turnTimeoutMs: this.options.turnTimeoutMs, agent: this.options.agent ?? socialAgent });
     await client.openSeat(actor.id, "social seat " + actor.displayName);
     const session: ActorSession = { client, sentMessages: 0 };
     this.sessions.set(actor.id, session);
@@ -191,7 +232,8 @@ export class OpenCodeMindRunner implements SocialModelExecutor {
   private async startServerFor(actorId: string, seatDirectory: string): Promise<OpenCodeServer> {
     const held = this.servers.get(actorId);
     if (held) return held;
-    const server = new OpenCodeServer(seatDirectory);
+    const harness = await loadHarness();
+    const server = new harness.OpenCodeServer(seatDirectory);
     const index = this.servers.size;
     await server.start({ port: (this.options.port ?? 7300) + index });
     this.servers.set(actorId, server);
@@ -218,7 +260,21 @@ export class OpenCodeMindRunner implements SocialModelExecutor {
   private socialDirectoryFor(actorId: string): string { return path.join(this.seatRoot(), actorId); }
   // The state a run keeps for its seats, beside the workspaces rather than inside
   // one, because a turn file is the runner's record and not a seat's instruction.
-  private seatRoot(): string { return path.join(path.dirname(seatWorkspaceDirectory(this.options.runId, "anchor")), "state"); }
+  private seatRoot(): string {
+    // The state a run keeps for its seats sits beside the workspaces rather than
+    // inside one, because a turn file is the runner's record and not a seat's
+    // instruction. The anchor seat is never created; only its path is used.
+    return path.join(path.dirname(path.join(this.workspaceRoot(), this.options.runId, "anchor")), "state");
+  }
+
+  // Where the harness puts seat workspaces, read from its own directory helper by
+  // asking for one and taking its parent.
+  private workspaceRoot(): string {
+    // A constant path rather than a call, so it can be used before the harness is
+    // loaded. The harness module is the authority for it and the test for the
+    // workspace helper holds the two in agreement.
+    return path.join(homedir(), ".vox-deorum", "harness-seats");
+  }
 }
 
 // Map the harness usage shape onto the environment's, so a diagnostic panel sees

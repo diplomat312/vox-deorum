@@ -5,10 +5,10 @@
   "private": true,
   "type": "module",
   "workspaces": [
+    "opencode-harness",
     "bridge-service",
     "mcp-server",
-    "vox-agents",
-    "opencode-harness"
+    "vox-agents"
   ],
   "scripts": {
     "build:all": "npm run build -ws",
