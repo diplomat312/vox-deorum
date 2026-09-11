@@ -88,8 +88,10 @@ export interface World {
   inspect(seat: string, turn: number, subject: string, detail?: string): Promise<InspectAnswer>;
   // Carry out the actions a seat committed. A recording has nothing to do
   // here, because its world already happened. A generated world must apply
-  // them, or a seat's choices would never change what the others see.
-  applyDecision(seat: string, actions: Array<Record<string, unknown>>): void;
+  // them, or a seat's choices would never change what the others see. A live
+  // world sends them to the game, which is why this may be asynchronous even
+  // though the generated one answers at once.
+  applyDecision(seat: string, actions: Array<Record<string, unknown>>): void | Promise<void>;
   // Names a seat may be addressed by besides its seat name, mapped to the seat
   // they mean. A model naturally writes "Austria", so refusing that because the
   // seat is called "austria" wastes a turn and teaches it nothing.

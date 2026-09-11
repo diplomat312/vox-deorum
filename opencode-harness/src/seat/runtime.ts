@@ -135,7 +135,7 @@ export class SeatRuntime {
       // calls. A tool server validates and records the actions; the world they
       // change is the harness's own, so applying them is the harness's job.
       if (outcome === "committed" && actions.length > 0) {
-        this.world.applyDecision(seat, actions as unknown as Array<Record<string, unknown>>);
+        await this.world.applyDecision(seat, actions as unknown as Array<Record<string, unknown>>);
       }
     } catch (failure) {
       outcome = "failed";
