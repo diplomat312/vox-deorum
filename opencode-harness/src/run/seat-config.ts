@@ -21,6 +21,9 @@ export interface SeatConfigOptions {
   seatDirectory: string;
   // The harvested fixture directory the tool server answers from.
   corpusDirectory: string;
+  // Path of the snapshot of a generated game, when the seat plays one instead
+  // of a recorded game.
+  worldStateFile?: string;
   // Where the run keeps its social log.
   socialDirectory: string;
   // The built tool server entry point.
@@ -57,6 +60,7 @@ export function seatConfig(options: SeatConfigOptions): Record<string, unknown> 
         environment: {
           SEAT: options.seat,
           CORPUS_DIR: options.corpusDirectory,
+          WORLD_STATE_FILE: options.worldStateFile ?? "",
           SOCIAL_DIR: options.socialDirectory,
           STATE_FILE: path.join(options.seatDirectory, "current-turn.json"),
           ...(options.playerID === null ? {} : { PLAYER_ID: String(options.playerID) })

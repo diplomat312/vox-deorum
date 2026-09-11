@@ -40,8 +40,10 @@ export const maxLoggedResultLength = 4000;
 export interface SeatServerOptions {
   // The seat this server answers for.
   seat: string;
-  // The state source the seat reads.
-  world: World;
+  // The state source the seat reads. A generated game changes every turn, so a
+  // caller may hand over a function that builds the world afresh for each call
+  // instead of one fixed world.
+  world: World | (() => Promise<World>);
   // Directory holding this run's social log and this seat's tool call log.
   socialDirectory: string;
   // Path of the file naming the turn being played.
@@ -145,6 +147,7 @@ async function answer(
 // record what happened. Every path through here writes exactly one log line.
 async function serveCall(
   options: SeatServerOptions,
+  world: World,
   tool: string,
   args: Record<string, unknown>
 ): Promise<CallToolResult> {
@@ -165,9 +168,9 @@ async function serveCall(
   }
   const context: SeatContext = {
     seat: options.seat,
-    playerID: options.world.seats().find((entry) => entry.seat === options.seat)?.playerID ?? null,
+    playerID: world.seats().find((entry) => entry.seat === options.seat)?.playerID ?? null,
     turn: state.turn,
-    world: options.world,
+    world,
     socialDirectory: options.socialDirectory
   };
   try {
@@ -193,6 +196,16 @@ export function createSeatServer(options: SeatServerOptions): McpServer {
   // The chain that keeps the seat's calls one at a time. A failed call never
   // breaks the chain, so the seat's next call still runs.
   let tail: Promise<unknown> = Promise.resolve();
+  // The world is resolved once per turn, so several calls in one turn share a
+  // single read of the game rather than reloading it each time.
+  let cachedWorld: World | null = typeof options.world === "function" ? null : options.world;
+  let cachedTurn: number | null = null;
+  async function worldFor(turn: number): Promise<World> {
+    if (cachedWorld && cachedTurn === turn) return cachedWorld;
+    cachedWorld = typeof options.world === "function" ? await options.world() : options.world;
+    cachedTurn = turn;
+    return cachedWorld;
+  }
   function enqueue(work: () => Promise<CallToolResult>): Promise<CallToolResult> {
     const run = tail.then(work, work);
     tail = run.then(
@@ -206,7 +219,12 @@ export function createSeatServer(options: SeatServerOptions): McpServer {
     server.registerTool(
       definition.name,
       { description: definition.description, inputSchema: schemaForTool(definition.inputSchema) },
-      (args: Record<string, unknown>) => enqueue(() => serveCall(options, definition.name, args ?? {}))
+      (args: Record<string, unknown>) =>
+        enqueue(async () => {
+          const state = await readCurrentTurn(options.stateFile);
+          const world = await worldFor(state?.turn ?? -1);
+          return serveCall(options, world, definition.name, args ?? {});
+        })
     );
   }
 

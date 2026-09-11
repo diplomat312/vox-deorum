@@ -97,6 +97,11 @@ export class RecordedWorld implements World {
     return;
   }
 
+  // A recorded game has already happened, so a decision has nowhere to land.
+  applyDecision(): void {
+    return;
+  }
+
   // Answer an inspect the way the recording did: by finding the call the seat
   // itself made, with the same subject and detail, and returning its result.
   // A call the recording does not hold is a gap rather than an invention.

@@ -7,18 +7,21 @@
 
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { RecordedWorld } from "../world/recorded-world.js";
+import { SimulatedWorld } from "../world/simulated/simulated-world.js";
 import { createSeatServer } from "./seat-server.js";
 
 // The variables a seat's server cannot run without.
-const requiredVariables = ["SEAT", "CORPUS_DIR", "SOCIAL_DIR", "STATE_FILE"] as const;
+const requiredVariables = ["SEAT", "SOCIAL_DIR", "STATE_FILE"] as const;
 
 // What the entry point read out of the environment, or the one line that says
 // what is missing.
 interface EntryPointConfig {
   // The seat this server answers for.
   seat: string;
-  // Directory of harvested fixtures for the recorded game.
+  // Directory of harvested fixtures, when the seat is playing a recorded game.
   corpusDirectory: string;
+  // Path of the snapshot of a generated game, when the seat is playing one.
+  worldStateFile: string;
   // Directory holding this run's social log and this seat's tool call log.
   socialDirectory: string;
   // Path of the file naming the turn being played.
@@ -49,19 +52,33 @@ function readEnvironment(): EntryPointConfig {
     );
   }
   const game = (process.env.GAME ?? "").trim();
+  const corpusDirectory = (process.env.CORPUS_DIR ?? "").trim();
+  const worldStateFile = (process.env.WORLD_STATE_FILE ?? "").trim();
+  if (corpusDirectory === "" && worldStateFile === "") {
+    fail(
+      "vox-civ seat server cannot start: set CORPUS_DIR for a recorded game or WORLD_STATE_FILE for a generated one."
+    );
+  }
   return {
     seat: (process.env.SEAT ?? "").trim(),
-    corpusDirectory: (process.env.CORPUS_DIR ?? "").trim(),
+    corpusDirectory,
+    worldStateFile,
     socialDirectory: (process.env.SOCIAL_DIR ?? "").trim(),
     stateFile: (process.env.STATE_FILE ?? "").trim(),
     game: game === "" ? undefined : game
   };
 }
 
-// Build the seat's server from the recorded game and connect it over stdio.
+// Build the seat's server from the game it is playing and connect it over stdio.
+// A generated game is rebuilt per call from its snapshot, because the harness
+// owns the game and advances it between calls. A recorded game is read once,
+// because it never changes.
 async function main(): Promise<void> {
   const config = readEnvironment();
-  const world = await RecordedWorld.fromDirectory(config.corpusDirectory);
+  const world =
+    config.worldStateFile !== ""
+      ? () => SimulatedWorld.fromSnapshot(config.worldStateFile, config.socialDirectory)
+      : await RecordedWorld.fromDirectory(config.corpusDirectory);
   const server = createSeatServer({
     seat: config.seat,
     world,

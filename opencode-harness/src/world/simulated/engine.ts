@@ -362,6 +362,31 @@ export function researchOptions(player: SimSeat): string[] {
   return availableTechs(player.techs, 5);
 }
 
+// Write the world out as plain JSON, so a separate process can read the state
+// a run has reached. The tool server runs in its own process, so a snapshot on
+// disk is what lets it answer inspect from the live game rather than a guess.
+export function serializeSimState(state: SimState): string {
+  return JSON.stringify(state);
+}
+
+// Read a world back from a snapshot. A snapshot that does not carry the fields
+// a world needs stops the caller, because answering from half a world would be
+// worse than not answering at all.
+export function deserializeSimState(text: string): SimState {
+  const parsed: unknown = JSON.parse(text);
+  if (parsed === null || typeof parsed !== "object") {
+    throw new Error("A world snapshot must be a JSON object");
+  }
+  const record = parsed as Record<string, unknown>;
+  if (typeof record.game !== "string" || typeof record.turn !== "number") {
+    throw new Error("A world snapshot must carry a game label and a turn number");
+  }
+  if (!Array.isArray(record.order) || typeof record.seats !== "object" || record.seats === null) {
+    throw new Error("A world snapshot must carry the seat order and the seats themselves");
+  }
+  return parsed as SimState;
+}
+
 // The policies a seat may adopt next.
 export function policyOptions(player: SimSeat): string[] {
   return availablePolicies(player.policies, 6);

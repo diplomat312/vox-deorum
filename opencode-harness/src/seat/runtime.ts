@@ -35,6 +35,8 @@ export interface SeatRuntimeOptions {
   // session instead of answering them a second time. Answering twice would
   // apply every social message twice, so the distinction matters.
   toolServing?: "serve" | "observe";
+  // Called once the world is ready for a turn and before the seat is asked.
+  onTurnPrepared?: (seat: string, turn: number) => Promise<void>;
 }
 
 // Plays turns for the seats of one run.
@@ -54,6 +56,10 @@ export class SeatRuntime {
   // Who answers the seat's tool calls.
   private readonly toolServing: "serve" | "observe";
 
+  // Called once the world is ready for a turn and before the seat is asked, so
+  // a harness can publish the state a tool server in another process will read.
+  private readonly onTurnPrepared?: (seat: string, turn: number) => Promise<void>;
+
   // Build a runtime for one run.
   constructor(options: SeatRuntimeOptions) {
     this.client = options.client;
@@ -61,6 +67,7 @@ export class SeatRuntime {
     this.socialDirectory = options.socialDirectory;
     this.store = options.store;
     this.toolServing = options.toolServing ?? "serve";
+    this.onTurnPrepared = options.onTurnPrepared;
   }
 
   // Play one turn for one seat and record it. A turn that produces no terminal
@@ -69,6 +76,7 @@ export class SeatRuntime {
   async playTurn(seat: string, turn: number): Promise<TraceRecord> {
     const startedAt = new Date().toISOString();
     await this.world.beginTurn(seat, turn);
+    if (this.onTurnPrepared) await this.onTurnPrepared(seat, turn);
     const observation = this.world.observation(seat, turn);
     const playerID = this.world.seats().find((entry) => entry.seat === seat)?.playerID ?? null;
     const context: SeatContext = {
@@ -93,10 +101,18 @@ export class SeatRuntime {
         if (servedCalls.outcome) outcome = servedCalls.outcome;
         actions = servedCalls.actions;
       } else {
+        // A live tool server has already applied whatever the seat asked for,
+        // so the runtime only classifies it here.
         const observed = readServedCalls(result);
         gaps = observed.gaps;
         if (observed.outcome) outcome = observed.outcome;
         actions = observed.actions;
+      }
+      // A committed decision lands in the world here, whichever mode served the
+      // calls. A tool server validates and records the actions; the world they
+      // change is the harness's own, so applying them is the harness's job.
+      if (outcome === "committed" && actions.length > 0) {
+        this.world.applyDecision(seat, actions as unknown as Array<Record<string, unknown>>);
       }
     } catch (failure) {
       outcome = "failed";

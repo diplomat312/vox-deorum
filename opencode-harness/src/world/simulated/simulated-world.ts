@@ -5,6 +5,8 @@
 // choices, actually produced. The observation is rendered in the same shape the
 // live game produces, so a seat sees the same kind of briefing either way.
 
+import { mkdir, writeFile } from "node:fs/promises";
+import path from "node:path";
 import type { DiplomacyGroup, DiplomacyMessage, DiplomacyView } from "../../social/diplomacy-view.js";
 import { socialDiplomacyView } from "../../social/diplomacy-view.js";
 import type { InspectAnswer, SeatInfo, World } from "../types.js";
@@ -21,6 +23,8 @@ import {
   techCost,
   totalPopulation,
   totalTerritory,
+  deserializeSimState,
+  serializeSimState,
   type SimCommitAction
 } from "./engine.js";
 import { applyShocks, type ScenarioShock } from "./scenario.js";
@@ -93,6 +97,27 @@ export class SimulatedWorld implements World {
     this.config = options.config ?? defaultSimConfig;
     this.shocks = options.shocks ?? [];
     this.diplomacy = socialDiplomacyView(options.socialDirectory);
+  }
+
+  // Build a read-only view of a world that another process has already
+  // advanced. The tool server uses this, because the game itself lives in the
+  // harness process and only its snapshot crosses the boundary.
+  static async fromSnapshot(stateFile: string, socialDirectory: string): Promise<SimulatedWorld> {
+    const { readFile } = await import("node:fs/promises");
+    const text = await readFile(stateFile, "utf8");
+    return new SimulatedWorld({ state: deserializeSimState(text), socialDirectory });
+  }
+
+  // Carry out what a seat committed, so its choices land in the world the other
+  // seats will read next turn.
+  applyDecision(seat: string, actions: Array<Record<string, unknown>>): void {
+    applyCommit(this.state, seat, actions as unknown as SimCommitAction[]);
+  }
+
+  // Write the world out so a tool server in another process can read it.
+  async writeSnapshot(file: string): Promise<void> {
+    await mkdir(path.dirname(file), { recursive: true });
+    await writeFile(file, serializeSimState(this.state), "utf8");
   }
 
   // The seats at the table.

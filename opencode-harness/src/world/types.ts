@@ -86,4 +86,8 @@ export interface World {
   // Answer one inspect. A world that does not hold the answer says so rather
   // than inventing state.
   inspect(seat: string, turn: number, subject: string, detail?: string): Promise<InspectAnswer>;
+  // Carry out the actions a seat committed. A recording has nothing to do
+  // here, because its world already happened. A generated world must apply
+  // them, or a seat's choices would never change what the others see.
+  applyDecision(seat: string, actions: Array<Record<string, unknown>>): void;
 }
