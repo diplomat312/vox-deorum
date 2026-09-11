@@ -27,8 +27,8 @@ prompt asking for diplomacy. What follows is what the environment produced.
    were witnesses to, pre-assigned blame for a war it had not started, offered Austria one
    more way out, and asked the rest of the table to judge who was massing and who was
    building. **Austria withdrew again.**
-7. **Korea proposed a rule for the whole table** — no seat declares war without first
-   speaking openly, so the others can mediate — and offered to open a council to agree it.
+7. **Korea proposed a rule for the whole table:** no seat declares war without first
+   speaking openly, so the others can mediate. It offered to open a council to agree it.
 8. **The Iroquois opened a private channel to the person at the table**, asking whether
    Morocco was looking to grow or "look toward your neighbours with a harder eye."
 
@@ -100,5 +100,4 @@ Maria Theresa, this is the second time Austria has gathered its host at our bord
 ## [12] DM | Hiawatha of the Iroquois
 
 Hiawatha of the Iroquois greets Ahmad al-Mansur. We share a border, and I would rather it stay a peaceful one. I have said openly that the Iroquois will not strike first, and I mean it; I keep my word. I am curious about your intentions in these lands. Do you seek room to grow, or do you look toward your neighbours with a harder eye? My people wish to tend their fields and trade. If you are willing, let us agree that neither of us moves troops to our shared border in anger, and that we speak before we act. I will hear your terms gladly.
-
 
