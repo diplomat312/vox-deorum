@@ -37,6 +37,16 @@ export interface RunMeasures {
   activePairs: number;
   // The middle lifespan of a private channel, in minutes.
   medianPairMinutes: number;
+  // Share of messages that carried substance rather than only courtesy.
+  substantiveRate: number;
+  // Share of messages that named another seat rather than addressing the room.
+  personalisedRate: number;
+  // Share of messages that referred to the machinery rather than the game.
+  metaRate: number;
+  // Messages that proposed an arrangement.
+  proposals: number;
+  // Messages that repaired harm after a grievance.
+  repairs: number;
   // Social operations the world refused.
   refusals: number;
   // Share of prompt tokens served from the cache.
@@ -81,6 +91,11 @@ export function measuresOf(report: RunReport): RunMeasures {
     directReplyRate: report.diplomacy.directReplyRate,
     activePairs: report.diplomacy.activePairs,
     medianPairMinutes: report.diplomacy.medianPairMinutes,
+    substantiveRate: report.quality.substantiveRate,
+    personalisedRate: report.quality.personalisedRate,
+    metaRate: report.quality.metaRate,
+    proposals: report.quality.proposals,
+    repairs: report.quality.repairs,
     refusals: report.diplomacy.refusals,
     cacheHitRatio: report.cost.cacheHitRatio,
     inputPerTurn: report.cost.inputPerTurn,
@@ -122,6 +137,11 @@ const rows: Array<{ label: string; read: (entry: RunMeasures) => number | null }
   { label: "Direct messages answered in kind", read: (entry) => entry.directReplyRate },
   { label: "Private channels opened", read: (entry) => entry.activePairs },
   { label: "Median lifespan of a private channel", read: (entry) => entry.medianPairMinutes },
+  { label: "Substantive messages", read: (entry) => entry.substantiveRate },
+  { label: "Messages naming another seat", read: (entry) => entry.personalisedRate },
+  { label: "Messages that leaked the machinery", read: (entry) => entry.metaRate },
+  { label: "Proposals", read: (entry) => entry.proposals },
+  { label: "Repairs after harm", read: (entry) => entry.repairs },
   { label: "Refused social operations", read: (entry) => entry.refusals },
   { label: "Cache hit ratio", read: (entry) => entry.cacheHitRatio },
   { label: "Uncached input per turn", read: (entry) => entry.inputPerTurn },

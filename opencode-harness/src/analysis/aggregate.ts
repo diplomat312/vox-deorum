@@ -46,6 +46,11 @@ const measureRows: Array<{ label: string; read: (entry: RunMeasures) => number |
   { label: "Uncached input per turn", read: (entry) => entry.inputPerTurn },
   { label: "Cost", read: (entry) => entry.totalCost },
   { label: "Cost per social operation", read: (entry) => entry.costPerSocialOperation },
+  { label: "Substantive messages", read: (entry) => entry.substantiveRate },
+  { label: "Messages naming another seat", read: (entry) => entry.personalisedRate },
+  { label: "Messages that leaked the machinery", read: (entry) => entry.metaRate },
+  { label: "Proposals", read: (entry) => entry.proposals },
+  { label: "Repairs after harm", read: (entry) => entry.repairs },
   { label: "Turns that did not finish", read: (entry) => entry.unfinished }
 ];
 

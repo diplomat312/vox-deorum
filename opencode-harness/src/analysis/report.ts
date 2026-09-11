@@ -8,6 +8,7 @@
 import { writeFile } from "node:fs/promises";
 import path from "node:path";
 import { addressesOf, directPairOf, type SocialEntry } from "../social/social-store.js";
+import { qualityMetrics, type QualityMetrics } from "./quality.js";
 import { allTurns, readRun, type RunData, type RunToolCall } from "./read-run.js";
 import type { TraceRecord } from "../trace/types.js";
 
@@ -116,6 +117,8 @@ export interface RunReport {
   gaps: Record<string, number>;
   // What each seat did, turn by turn, for reading back.
   roundup: Array<{ seat: string; turn: number; thought: string; did: string }>;
+  // What the messages actually did, as opposed to how many there were.
+  quality: QualityMetrics;
 }
 
 // Pull the information gaps back out of a turn's applied line.
@@ -336,6 +339,7 @@ export async function buildReport(runDirectory: string): Promise<RunReport> {
     diplomacy: diplomacyMetrics(data, seats),
     cost: costMetrics(data, seats),
     gaps,
+    quality: qualityMetrics(data.social, seats),
     roundup: turns.map((record) => ({
       seat: record.seat,
       turn: record.turn,
@@ -419,6 +423,24 @@ export function renderReport(report: RunReport, toolCalls: RunToolCall[]): strin
     );
     lines.push("");
   }
+  lines.push("## What the messages did");
+  lines.push("");
+  lines.push("| Move | Messages |");
+  lines.push("| --- | --- |");
+  for (const [move, count] of Object.entries(report.quality.byMove)) {
+    lines.push("| " + move + " | " + count + " |");
+  }
+  lines.push("");
+  lines.push(
+    "Substantive messages (anything beyond courtesy) " +
+      Math.round(report.quality.substantiveRate * 100) +
+      "%, messages naming another seat " +
+      Math.round(report.quality.personalisedRate * 100) +
+      "%, messages that leaked the machinery " +
+      Math.round(report.quality.metaRate * 100) +
+      "%."
+  );
+  lines.push("");
   lines.push("## What it cost");
   lines.push("");
   lines.push("| Seat | Turns | Input | Cache read | Cache write | Output | Reasoning | Cost | Median turn |");

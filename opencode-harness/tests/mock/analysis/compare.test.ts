@@ -33,7 +33,12 @@ function report(overrides: Partial<RunReport> = {}): RunReport {
       directReplyRate: 0,
       activePairs: 0,
       pairMinutes: {},
-      medianPairMinutes: 0
+      medianPairMinutes: 0,
+      substantiveRate: 0,
+      personalisedRate: 0,
+      metaRate: 0,
+      proposals: 0,
+      repairs: 0
     },
     cost: {
       perSeat: {},
@@ -47,6 +52,29 @@ function report(overrides: Partial<RunReport> = {}): RunReport {
       contextResets: 0
     },
     gaps: {},
+    quality: {
+      messages: 0,
+      byMove: {
+        ceremony: 0,
+        information: 0,
+        proposal: 0,
+        commitment: 0,
+        demand: 0,
+        question: 0,
+        accusation: 0,
+        apology: 0,
+        meta: 0
+      },
+      substantive: 0,
+      substantiveRate: 0,
+      personalised: 0,
+      personalisedRate: 0,
+      meta: 0,
+      metaRate: 0,
+      proposals: 0,
+      repairs: 0,
+      labelled: []
+    },
     roundup: [],
     ...overrides
   };
