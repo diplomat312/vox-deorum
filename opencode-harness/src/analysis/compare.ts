@@ -25,6 +25,13 @@ export interface RunMeasures {
   direct: number;
   // Operations that were group messages.
   group: number;
+  // Councils founded. The count matters because a council that is founded and
+  // then used is a different outcome from one that is founded and ignored, and
+  // both are different from none at all.
+  councils: number;
+  // Invitations sent, and the times one was accepted.
+  invites: number;
+  accepts: number;
   // Seats that sent nothing.
   silence: number;
   // Turns on which the table said anything at all.
@@ -100,6 +107,9 @@ export function measuresOf(report: RunReport): RunMeasures {
     world: report.diplomacy.byKind.world ?? 0,
     direct: report.diplomacy.byKind.dm ?? 0,
     group: report.diplomacy.byKind["group-msg"] ?? 0,
+    councils: report.diplomacy.byKind["group-create"] ?? 0,
+    invites: report.diplomacy.byKind.invite ?? 0,
+    accepts: report.diplomacy.byKind.accept ?? 0,
     silence: report.diplomacy.seatsSilent.length,
     turnsWithSocial: report.diplomacy.turnsWithSocial,
     longestSilence: report.diplomacy.longestSilence,
@@ -153,6 +163,9 @@ const rows: Array<{ label: string; read: (entry: RunMeasures) => number | null }
   { label: "World messages", read: (entry) => entry.world },
   { label: "Direct messages", read: (entry) => entry.direct },
   { label: "Group messages", read: (entry) => entry.group },
+  { label: "Councils founded", read: (entry) => entry.councils },
+  { label: "Invitations sent", read: (entry) => entry.invites },
+  { label: "Invitations accepted", read: (entry) => entry.accepts },
   { label: "Silent seats", read: (entry) => entry.silence },
   { label: "Turns with any social operation", read: (entry) => entry.turnsWithSocial },
   { label: "Longest silence, in turns", read: (entry) => entry.longestSilence },
