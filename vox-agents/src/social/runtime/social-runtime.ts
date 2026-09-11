@@ -5,11 +5,12 @@ import { ActorLane } from './actor-lane.js';
 import { SocialEventHub } from '../events/social-event-hub.js';
 import { SocialStore } from '../store/social-store.js';
 import { SocialScheduler } from './social-scheduler.js';
-import type { SocialDecisionExecutor } from './social-model-executor.js';
 import { SocialDecisionExecutor as SocialDecisionApplier } from './social-decision-executor.js';
 import type { SocialActor, SocialActorDefinition, SocialChannel, SocialDecisionDiagnostic, SocialIntention, SocialInvitation, SocialMembership, SocialMessage, SocialSessionDefinition, VisibleMessagePage } from '../types.js';
 import { getSocialPacingBudget, type SocialPacingProfile } from './social-pacing.js';
 import type { SocialEnvironmentPort } from './social-environment-port.js';
+import type { SocialDecisionExecutor } from './social-model-executor.js';
+import { openCodeMindForSession } from './opencode-mind-factory.js';
 
 /** Configuration for one standalone social sandbox. */
 export interface SocialRuntimeConfig { sessionId?: string; humanActorId?: string; title?: string; pacingProfile?: SocialPacingProfile; actors: SocialActorDefinition[]; dataDirectory: string; modelExecutor?: SocialDecisionExecutor; liveCiv?: boolean; }
@@ -35,7 +36,7 @@ export class SocialRuntime {
     this.store = new SocialStore(path.join(config.dataDirectory, `${this.session.id}.sqlite`));
     await this.store.createSession(this.session, config.actors);
     for (const actor of config.actors) this.lanes.set(actor.id, new ActorLane());
-    this.modelExecutor = config.modelExecutor;
+this.modelExecutor = config.modelExecutor ?? openCodeMindForSession(config.actors, config.sessionId ?? 'social-' + Date.now());
     this.scheduler = this.createScheduler();
   }
   /** Reopen a persisted social session without creating duplicate channels or messages. */

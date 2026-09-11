@@ -14,6 +14,9 @@
     "declarationMap": true,
     "sourceMap": true,
     "moduleResolution": "node",
+    "paths": {
+      "opencode-harness/*": ["../opencode-harness/dist/*"]
+    },
     "allowSyntheticDefaultImports": true,
     "noImplicitAny": true,
     "strictNullChecks": true,

@@ -4,6 +4,11 @@
   "description": "OpenCode seat harness for Vox Deorum - Lets OpenCode model sessions pilot a Civilization V seat",
   "private": true,
   "type": "module",
+  "exports": {
+    "./session/*": "./dist/session/*",
+    "./run/*": "./dist/run/*",
+    "./utils/*": "./dist/utils/*"
+  },
   "scripts": {
     "build": "rimraf dist && node ../node_modules/typescript/bin/tsc",
     "type-check": "tsc --noEmit",

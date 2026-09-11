@@ -36,6 +36,19 @@ export interface SeatConfigOptions {
   // The identity the seat plays under, which becomes its whole system prompt.
   // Written once and never changed between turns, so the prompt cache holds.
   identity: string;
+  // The name the seat's one tool server is registered under, when a caller
+  // serves a different surface than the game's own four tools.
+  mcpServerName?: string;
+  // The environment the tool server is given, when a caller has its own contract.
+  // Omitted, the game contract below is written.
+  mcpEnvironment?: Record<string, string>;
+  // Which tools the seat's agent may reach, when a caller serves a different
+  // surface. Omitted, the game's own tools are the only ones switched on.
+  agentTools?: Record<string, boolean>;
+  // The name of the agent this seat's turns run under, when a caller's own turns
+  // name something other than the harness's seat agent. The name written here is
+  // the name the caller must send, or the session finds no agent at all.
+  agentName?: string;
 }
 
 // The permissions a seat is denied. Everything denied here is a capability the
@@ -79,7 +92,7 @@ export function seatConfig(options: SeatConfigOptions): Record<string, unknown> 
     // plugins, so a seat on the default agent is offered a browser. Everything
     // is switched off here and the seat's own tools are switched back on.
     agent: {
-      [seatAgent]: {
+      [options.agentName ?? seatAgent]: {
         description: "A Civilization seat, which may only reach the game.",
         // The identity is the entire standing context a seat gets. It is set
         // here rather than sent with each turn so that it is byte identical from
@@ -88,15 +101,15 @@ export function seatConfig(options: SeatConfigOptions): Record<string, unknown> 
         prompt: options.identity,
         tools: {
           "*": false,
-          [seatToolServer + "_*"]: true
+          ...(options.agentTools ?? { [seatToolServer + "_*"]: true })
         }
       }
     },
     mcp: {
-      "vox-civ": {
+      [options.mcpServerName ?? seatToolServer]: {
         type: "local",
         command: [process.execPath, options.serverEntry],
-        environment: {
+        environment: options.mcpEnvironment ?? {
           SEAT: options.seat,
           CORPUS_DIR: options.corpusDirectory,
           WORLD_STATE_FILE: options.worldStateFile ?? "",

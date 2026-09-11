@@ -169,12 +169,13 @@ export class SessionClient {
     server: RunningServer,
     defaultModel: SeatModel,
     overrides: Record<string, SeatModel> = {},
-    options: { turnTimeoutMs?: number } = {}
+    options: { turnTimeoutMs?: number; agent?: string } = {}
   ) {
     this.server = server;
     this.models = new Map(Object.entries(overrides));
     this.defaultModel = defaultModel;
     this.turnTimeoutMs = options.turnTimeoutMs ?? defaultTurnTimeoutMs;
+    this.agent = options.agent ?? seatAgent;
   }
 
   // The model used by seats without an override.
@@ -182,6 +183,11 @@ export class SessionClient {
 
   // How long one turn may take before the harness gives up on it.
   private readonly turnTimeoutMs: number;
+
+  // The agent every turn names, which is what confines a session to its tools.
+  // A caller with its own agent passes it in; the harness's own seat agent is
+  // the default so every existing run keeps behaving the same way.
+  private readonly agent: string;
 
   // The session already held for a seat, if there is one.
   sessionOf(seat: string): string | null {
@@ -231,7 +237,7 @@ export class SessionClient {
       // agent carries a tool list, and it covers the tools a configuration
       // cannot: a seat left on the default agent is offered whatever the machine
       // has installed, including a browser.
-      agent: seatAgent,
+      agent: this.agent,
       parts: [{ type: "text", text: observation }]
     });
     const latencyMs = Date.now() - started;
