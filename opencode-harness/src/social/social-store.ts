@@ -86,6 +86,9 @@ export interface SocialEntry {
   resource?: string;
   // The id of the deal-propose entry a deal-accept or deal-reject answers.
   deal?: string;
+  // The game turn this entry was made on, when the caller knew it. This is what
+  // makes silence countable in turns rather than only in wall-clock time.
+  turn?: number;
 }
 
 // Where a run keeps its log and its cursors.
@@ -112,6 +115,13 @@ export interface ApplyOptions {
   // it has appeared in the log, as a sender or as the target of a direct message
   // or an invitation.
   seats?: readonly string[];
+  // The turn the operations are being made on, when the caller knows it.
+  //
+  // A log entry used to carry a wall-clock time and no turn, which is enough to
+  // order one entry after another and not enough to say that a seat has been
+  // silent for six turns. Silence over turns is what a game is measured in, so
+  // the turn is recorded where the caller knows it.
+  turn?: number;
 }
 
 // The log and cursor paths for one run directory.
@@ -144,6 +154,7 @@ export async function applyOperations(
   const applied: SocialEntry[] = [];
   for (const operation of operations) {
     const entry = buildEntry(operation, seat, staged, roster, staged.length + 1);
+    if (options.turn !== undefined) entry.turn = options.turn;
     applied.push(entry);
     staged.push(entry);
   }

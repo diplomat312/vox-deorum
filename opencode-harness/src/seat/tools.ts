@@ -150,7 +150,10 @@ async function communicate(context: SeatContext, input: Record<string, unknown>)
     const applied =
       social.length > 0
         ? await applyOperations(context.socialDirectory, context.seat, social, {
-            seats: context.world.seats().map((entry) => entry.seat)
+            seats: context.world.seats().map((entry) => entry.seat),
+            // The turn is stamped onto every entry, so a reading can say how long
+            // a seat has been silent in the unit a game is measured in.
+            turn: context.turn
           })
         : [];
     const settled: DecisionOutcome[] = [];
