@@ -10,7 +10,7 @@ An intervention works when it names what a mechanic is for, and fails when it do
 
 **Naming posture works.** A posture action is how the game records that one seat regards another in a particular way, and it is the only mechanic by which diplomacy has a consequence the game itself will honour. Across three baseline runs, zero postures were set and all four seats never set one. Adding a single closing line, which explains that a posture is how a relationship is recorded and that it outlasts anything said, produced 4 postures per run (range 3 to 5) and cut the seats that never set one from 4 to 2. **The ranges separate.** Across six seeds the variant produced postures in five runs, once as many as 7.
 
-**Naming councils does not work.** The same experiment on a different mechanic gave a negative result. Across three control runs, seats founded a council in one run unprompted. Across three runs that were told what a council is for, they founded one in one run. **The rate did not move.**
+**Naming councils does not work.** The same experiment on a different mechanic gave a negative result. Across three control runs, seats founded a council in one run unprompted. Across three runs that were told what a council is for, they founded one in one run. **The rate did not move.** A third arm then tested whether a crisis, which is what makes a table busy, does what the instruction could not. It did not either: one council in three runs, exactly the same rate. Across twelve replicated runs, a council is founded in roughly one in three whatever is done to encourage it.
 
 So the rule is narrower than "tell the seats what exists". A posture is a small, immediate action a seat can take the moment it feels something. A council is a social undertaking that needs a whole table to want a private room at the same time, and being told what one is does not create that want.
 
@@ -27,9 +27,22 @@ They then disclosed their research to each other and coordinated it so their eff
 
 The other working council, in a control run that was told nothing about councils, carried 5 messages. So the mechanism works, and the scale of its use varies enormously with how socially intense the run already is.
 
-The correlation is worth stating plainly: the runs that formed councils are the runs where the table was talking most. Council formation follows a busy table rather than causing one.
+**A claim I made here and then disproved.** Having seen councils in the runs where the table was busiest, I wrote that council formation follows a busy table. The test refuted it: adding a crisis to the council instruction produced one council in three runs, against one in three without the crisis. Two data points that agreed with each other were a coincidence, and the honest reading is that council formation is not under the control of anything I have tried. It happens about a third of the time, and what decides it is not the instruction, not the crisis, and not the volume of talk.
 
 ## The finding that still matters most: talking rarely becomes an action
+## The harness can now be played by a person, and pointed at a real game
+
+Two capabilities landed this batch, both verifiable without Civilization V running.
+
+**A person can take a seat.** Any seat can be played by someone reading the same briefing a model reads and answering through the same four tools. The exchange is files: the briefing is written to the seat's directory, a decision comes back with a rationale, actions and messages, and a lookup can be asked for between the two. The person's rationale is kept as the seat's reasoning and their token use is recorded as zero rather than invented.
+
+It was proven end to end: a person and a model played three turns of the same game. The person read the briefing, committed a technology, sent a message to the table and passed, and all of it appears in the same trace and the same report as the model's turns. Their committed action reached the world and their message reached the other seat. A game with someone in it is therefore measured exactly like one without, which is what makes a human seat useful for evaluation rather than only for play.
+
+**The harness can drive a real game.** A live world reads state and writes decisions through Vox Deorum's MCP server, so the seats reach the game the same way every other caller does and action legality stays with the game. The seat runtime is untouched, which is what the world seam was for: the same four tools, the same trace and the same report against a real game as against a generated one. A turn's reads are fetched up front, a read that fails says so rather than losing the turn, and an action with no live equivalent is reported rather than dropped.
+
+It is verified against a fake connection, which is what allowed it to be written without launching a game. What it has not had is a real game, so three things are deliberately unbuilt: the pacing policy, the game's own deal system, and backend supervision against a live stack.
+
+The one thing this batch did not settle is whether a person playing against model seats behaves differently from the model seats themselves. One three turn game with a stand-in player is a wiring proof, not evidence about people.
 ## Durability: a crisis is what makes a contact a relationship
 
 Counting messages cannot tell a conversation from a standing channel. The durability reading uses turn numbers instead, and it produces the second clean replicated result of this batch.
