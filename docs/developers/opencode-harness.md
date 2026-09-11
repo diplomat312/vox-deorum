@@ -58,7 +58,12 @@ node opencode-harness/dist/analysis/report-run.js <run-id>
 node opencode-harness/dist/analysis/compare-runs.js base1 variant1
 node opencode-harness/dist/analysis/compare-variants.js plain coached
 node opencode-harness/dist/analysis/watch-run.js <run-id>
+node opencode-harness/dist/analysis/roundup-run.js <run-id>
+node opencode-harness/dist/analysis/divergence-run.js <run-id>
+node opencode-harness/dist/analysis/inspect-turn-run.js <run-dir> [seat] [turn]
 ```
+
+The first three answer questions about a run as a whole. The next two reconstruct what the seats were thinking: the roundup keeps the moments that carry the arc, and the divergence reading puts a seat's private intention beside what it said in the same turn, keeping both quotes so a reader decides whether the two match. The last is the opposite of all of them: one seat's single turn laid out in full, with the observation exactly as it was sent, the thinking, every call with its arguments and its answer, what the world would not do, and the turn's cost. That is the view to read when asking whether the observation is carrying the right information.
 
 The report answers five questions. How much did the seats talk, and who stayed silent. What did each message do, read from its wording, rather than only how many there were: ceremony, information, a proposal, a commitment, a demand, a question, an accusation, an apology, or a leak of the machinery. Whether the talking changed anything in the world, counted from the actions the seats actually committed, including the posture changes that record how a seat regards another. What the world recorded by the end, meaning the deals carried out, the promises still being paid and the ones broken, the wars declared, and the coldest regard one seat holds toward another. And what it all cost, including the prompt cache hit ratio and the cost per social operation. The comparison places runs side by side and lists what changed against the baseline. Comparing variants puts the summaries of replicated variants together and marks a difference as a result only when the ranges do not overlap. The watcher tails a run while it plays, and the roundup reconstructs what each seat was thinking across the game, keeping the sentence each reading came from.
 
