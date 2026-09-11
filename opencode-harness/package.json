@@ -1,0 +1,31 @@
+{
+  "name": "opencode-harness",
+  "version": "1.0.0",
+  "description": "OpenCode seat harness for Vox Deorum - Lets OpenCode model sessions pilot a Civilization V seat",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "rimraf dist && node ../node_modules/typescript/bin/tsc",
+    "type-check": "tsc --noEmit",
+    "lint": "eslint src --ext .ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "clean": "rimraf dist",
+    "harvest": "node scripts/harvest-corpus.mjs"
+  },
+  "keywords": [
+    "civilization",
+    "opencode",
+    "harness",
+    "simulation",
+    "ai",
+    "nodejs",
+    "typescript"
+  ],
+  "author": "John Chen",
+  "license": "CC-BY-NC-SA-4.0",
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

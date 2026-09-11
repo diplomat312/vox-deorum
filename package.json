@@ -7,7 +7,8 @@
   "workspaces": [
     "bridge-service",
     "mcp-server",
-    "vox-agents"
+    "vox-agents",
+    "opencode-harness"
   ],
   "scripts": {
     "build:all": "npm run build -ws",
