@@ -48,3 +48,8 @@ scripts/.dll-cache
 /opencode-harness/src/**/*.js.map
 /opencode-harness/src/**/*.d.ts
 /opencode-harness/src/**/*.d.ts.map
+
+# Benchmark output. The transcripts and measures are worth keeping; the session
+# databases and the per-seat session state are not.
+/runs-sim/*/store/
+
