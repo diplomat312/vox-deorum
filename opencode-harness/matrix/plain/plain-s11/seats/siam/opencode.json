@@ -1,0 +1,34 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "model": "opencode-go/deepseek-v4.1-flash",
+  "permission": {
+    "bash": "deny",
+    "edit": "deny",
+    "write": "deny",
+    "read": "deny",
+    "glob": "deny",
+    "grep": "deny",
+    "webfetch": "deny",
+    "websearch": "deny",
+    "task": "deny",
+    "skill": "deny"
+  },
+  "mcp": {
+    "vox-civ": {
+      "type": "local",
+      "command": [
+        "C:\\Program Files\\nodejs\\node.exe",
+        "C:\\Users\\bikka\\OneDrive\\Documents\\ChatGPT\\Vox Deorum\\opencode-harness\\dist\\mcp\\seat-mcp.js"
+      ],
+      "environment": {
+        "SEAT": "siam",
+        "CORPUS_DIR": "",
+        "WORLD_STATE_FILE": "C:\\Users\\bikka\\OneDrive\\Documents\\ChatGPT\\Vox Deorum\\opencode-harness\\matrix\\plain\\plain-s11\\state\\world.json",
+        "SOCIAL_DIR": "C:\\Users\\bikka\\OneDrive\\Documents\\ChatGPT\\Vox Deorum\\opencode-harness\\matrix\\plain\\plain-s11\\social",
+        "STATE_FILE": "C:\\Users\\bikka\\OneDrive\\Documents\\ChatGPT\\Vox Deorum\\opencode-harness\\matrix\\plain\\plain-s11\\seats\\siam\\current-turn.json",
+        "PLAYER_ID": "2"
+      },
+      "enabled": true
+    }
+  }
+}
