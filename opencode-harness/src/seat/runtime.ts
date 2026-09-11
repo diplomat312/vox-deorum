@@ -13,8 +13,10 @@ import { dispatchSeatTool, type CommitAction, type SeatContext } from "./tools.j
 // The part of a session client the runtime needs, so a test can stand in for
 // the real one without starting a server.
 export interface SessionDriver {
-  // Send one observation to a seat and read back what it did.
-  sendObservation(seat: string, observation: string): Promise<SeatTurnResult>;
+  // Send one observation to a seat and read back what it did. The turn is
+  // passed because a driver that hands the turn to a person needs to name it,
+  // while a driver talking to a model can ignore it.
+  sendObservation(seat: string, observation: string, turn: number): Promise<SeatTurnResult>;
 }
 
 // Everything the runtime needs to play a seat.
@@ -117,7 +119,7 @@ export class SeatRuntime {
     let contextReset = false;
 
     try {
-      result = await this.client.sendObservation(seat, observation);
+      result = await this.client.sendObservation(seat, observation, turn);
       if (this.toolServing === "serve") {
         const servedCalls = await this.serveCalls(context, result);
         gaps = servedCalls.gaps;

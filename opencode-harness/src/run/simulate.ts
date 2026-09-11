@@ -11,6 +11,7 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { SeatRuntime } from "../seat/runtime.js";
+import { HumanSeatDriver } from "../seat/human-driver.js";
 import { OpenCodeServer } from "../session/opencode-server.js";
 import { SessionClient } from "../session/session-client.js";
 import type { SeatModel } from "../session/types.js";
@@ -63,6 +64,12 @@ export interface SimulationOptions {
   // below the five minutes a socket layer will otherwise wait, so the harness
   // notices a stall first and can clear the work it started.
   turnTimeoutMs?: number;
+  // Seats played by a person rather than a model. A human seat is offered the
+  // same briefing a model seat reads and answers through the same four tools,
+  // so a game with someone in it is measured the same way as one without.
+  humanSeats?: string[];
+  // How long a person has to decide one turn, in milliseconds.
+  humanTurnTimeoutMs?: number;
 }
 
 // What a finished run reports.
@@ -125,8 +132,13 @@ export async function simulate(options: SimulationOptions): Promise<SimulationRe
   // rather than losing the whole game to one seat, and the summary says so.
   const unavailable: string[] = [];
   try {
+    const humans = options.humanSeats ?? [];
     for (let index = 0; index < options.seats.length; index += 1) {
       const seat = options.seats[index];
+      if (humans.includes(seat)) {
+        logger.info("Seat " + seat + " is played by a person and needs no session server");
+        continue;
+      }
       try {
         const seatDirectory = path.join(options.runDirectory, "seats", seat);
         const playerID = world.seats().find((entry) => entry.seat === seat)?.playerID ?? null;
@@ -165,6 +177,34 @@ export async function simulate(options: SimulationOptions): Promise<SimulationRe
 
     const runtimes = new Map<string, SeatRuntime>();
     for (const seat of playing) {
+      // A person plays through the same runtime, in the mode where the harness
+      // answers the calls, so their messages reach the table and their committed
+      // actions reach the world exactly as a model's do.
+      if (humans.includes(seat)) {
+        const seatDirectory = path.join(options.runDirectory, "seats", seat);
+        const driver = new HumanSeatDriver({
+          seat,
+          directory: seatDirectory,
+          timeoutMs: options.humanTurnTimeoutMs ?? 1800000,
+          answerInspect: async (request) => {
+            // A person asking to look something up is answered for the turn
+            // being played, which is the turn they are looking at.
+            const answer = await world.inspect(seat, currentTurn, request.subject, request.detail);
+            return answer.text;
+          }
+        });
+        runtimes.set(
+          seat,
+          new SeatRuntime({
+            client: driver,
+            world,
+            socialDirectory,
+            store,
+            toolServing: "serve"
+          })
+        );
+        continue;
+      }
       runtimes.set(
         seat,
         new SeatRuntime({
@@ -235,7 +275,11 @@ export async function simulate(options: SimulationOptions): Promise<SimulationRe
     let turnsPlayed = 0;
     let failures = 0;
     const gaps: Record<string, number> = {};
+    // The turn in progress, so a person looking something up is answered for
+    // the turn they are looking at rather than the turn before it.
+    let currentTurn = options.fromTurn;
     for (let turn = options.fromTurn; turn <= options.toTurn; turn += 1) {
+      currentTurn = turn;
       for (const seat of playing) {
         const seatDirectory = path.join(options.runDirectory, "seats", seat);
         await writeTurnState(seatDirectory, { turn, seat });
@@ -340,6 +384,10 @@ async function main(): Promise<void> {
   const scenarioFile = value("scenario", undefined) as string | undefined;
   const briefing = (value("briefing", "off") as string) === "on";
   const coaching = (value("coaching", "off") as string) === "on";
+  const humanSeats = ((value("human", "") as string) || "")
+    .split(",")
+    .map((seat) => seat.trim())
+    .filter(Boolean);
   const postureCoaching = (value("posture-coaching", "off") as string) === "on";
   const councilCoaching = (value("council-coaching", "off") as string) === "on";
   const turnTimeoutMs = Number(value("turn-timeout", "150000"));
@@ -363,6 +411,9 @@ async function main(): Promise<void> {
     ,
     postureCoaching,
     councilCoaching
+    ,
+    humanSeats,
+    humanTurnTimeoutMs: Number(value("human-timeout", "1800000"))
   });
   logger.info(
     "Run " +
