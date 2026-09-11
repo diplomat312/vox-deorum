@@ -105,6 +105,8 @@ export interface RunReport {
   runId: string;
   // The game played.
   game: string;
+  // The harness build that played it, when the run recorded one.
+  build: string | null;
   // Seats at the table, in a stable order.
   seats: string[];
   // Turns recorded across seats.
@@ -345,6 +347,7 @@ export async function buildReport(runDirectory: string): Promise<RunReport> {
   return {
     runId: data.runId,
     game: data.game,
+    build: data.build,
     seats,
     turnsPlayed: turns.length,
     fromTurn: turns.length === 0 ? 0 : turns[0].turn,
@@ -404,6 +407,12 @@ export function renderReport(report: RunReport, toolCalls: RunToolCall[]): strin
       report.turnsPlayed +
       " seat turns)."
   );
+  if (report.build) {
+    // A run whose build is known can be compared with another; the same numbers
+    // from a different build are evidence of a change rather than of a variant.
+    lines.push("");
+    lines.push("Played on harness build " + report.build + ".");
+  }
   lines.push("");
   lines.push("## Diplomacy");
   lines.push("");

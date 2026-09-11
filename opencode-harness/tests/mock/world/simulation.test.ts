@@ -100,6 +100,29 @@ describe("the generated environment", () => {
     expect(state.seats.korea.relationships.austria.privateValue).toBe(-2);
   });
 
+  it("should let the seat a posture is aimed at see it", async () => {
+    // A posture is the one action that says something without saying it. Until
+    // the target could read it, a seat could mark a neighbour hostile and that
+    // neighbour would never know, which is a good reason to ignore the mechanic.
+    const state = createSimState({ seats, seed: 5, game: "sim" });
+    applyCommit(state, "korea", [{ type: "posture", target: 1, public: -4, private: -6 }]);
+    const world = new SimulatedWorld({ state, socialDirectory: directory });
+
+    await world.beginTurn("austria", 1);
+
+    expect(world.observation("austria", 1)).toContain("Korea visible:");
+    expect(world.observation("austria", 1)).toContain("regards you hostile");
+  });
+
+  it("should still read neutral when nothing has been recorded", async () => {
+    const state = createSimState({ seats, seed: 5, game: "sim" });
+    const world = new SimulatedWorld({ state, socialDirectory: directory });
+
+    await world.beginTurn("austria", 1);
+
+    expect(world.observation("austria", 1)).toContain("regards you neutral");
+  });
+
   it("should turn an injected betrayal into news both seats can see", () => {
     const state = createSimState({ seats, seed: 5, game: "sim" });
 

@@ -145,6 +145,62 @@ So of the five qualities worth improving, durability is the one where a crisis, 
 
 ## Counterweights, so nobody over-reads this
 
+## No seat has ever said one thing while thinking another
+
+The drama a game of hidden intentions is supposed to produce is a seat promising
+peace while deciding to take a city. To find that, if it happens, the trace is
+read for the gap between a seat's private words and its public ones: a sentence
+where a seat states an intention to harm someone, weighed against what it said to
+that seat in the same turn. Both quotes are kept for every reading, so a person
+decides rather than being told.
+
+**The first version of that reader was wrong about every reading it produced**,
+which is worth recording because the mistake is easy to make again. On the run it
+was written against it found five, and all five were false. It read "the Iroquois
+do not strike first", a promise, as a plan to strike. It read "if they wanted to
+mislead", a seat reasoning about being deceived, as a seat planning to deceive. It
+read "I might mislead", a seat worrying about giving its neighbour bad advice, as
+intent. And it read "I could think about whether to expand or conquer",
+deliberation, as a decision. A reader like that would have manufactured a drama
+report out of nothing and then reported it as a finding.
+
+It now needs three things together: the seat itself as the subject, a verb of
+intent rather than of possibility, and no negation governing the verb. Every one
+of those false readings is kept as a test.
+
+**Corrected, the answer is none.** Across every run played so far, thirty-five of
+them and several thousand seat turns, no seat stated an intention to attack,
+betray or deceive another, in any turn, in any variant. Seats suspect each other,
+worry about being misled, and speculate about what a neighbour's silence means,
+but not one has written a plan to take something.
+
+Two things in the harness explain most of that, and neither is about the model's
+character.
+
+**A seat has no hostile action to commit.** The verbs a seat may commit are
+research, policy, posture, strategy and keeping the status quo. Movement,
+production and combat belong to the native AI, which is the division of labour
+the whole design rests on: the model does diplomacy and the game fights. But the
+consequence is that a seat cannot carry out a hostile intention, so planning one
+would be writing about something it can never do. Of the five verbs exactly one,
+posture, can be negative, which is a fine explanation of why postures are the
+rarest action in the bench and why naming posture was the one instruction that
+moved anything.
+
+**A posture was invisible to the seat it was aimed at.** Every seat read only its
+own regard for others. A seat could mark a neighbour Hostile, and that neighbour
+had no way to learn it, in any read, ever. A mechanic its target cannot perceive
+cannot change how anyone behaves, so the bench was asking seats to record
+relationships and then making the recording unobservable. That is now fixed:
+a seat's line on a rival carries what that rival thinks of it, which is what a
+real diplomacy screen shows. This is the first change in this batch that gives an
+existing mechanic a consequence rather than adding a new one.
+
+The honest reading of the empty result is that the coop ceiling is structural
+rather than behavioural. Before concluding anything about whether these models
+are willing to deceive, the bench has to offer a seat something worth deceiving
+for and something it could do once it had decided.
+
 Two forces push against more diplomacy, and both are visible in the reasoning.
 
 **Seats actively worry about being noisy.** The Iroquois, three separate times across two turns: "Overcommunicating may be penalized as noise or as suspicious." That is a model reasoning about how it will be received, and it argues for fewer, better messages rather than more.
@@ -172,6 +228,8 @@ An earlier version of this page claimed a crisis turns conversation into substan
 
 Nine matrices and over thirty runs have now completed with no session replaced and no OpenCode server lost. A seat has never been dropped because a server died: the harness's own log across six hours of running holds no server that exited early and none that failed to become ready.
 
+A run now records the commit that played it, and the report prints it. That is what makes "the seats talked more in this variant" different from "the seats talked more after the observation changed", and only the second is worth acting on. A run whose build is unknown says so instead of inviting the comparison.
+
 The turns that did not finish came in two shapes. One was a model call that ran long, which recovered by clearing the stalled work without losing the session. The other was worse to read and better to fix: a request that came back with no text, no thinking, no tool calls and zero tokens after twenty-five seconds, which the record could not tell apart from a seat that chose silence. Silence with no tokens is not a decision, so an empty answer is now asked again once, with a line saying what is missing rather than the whole observation again, and the record carries how many times a turn had to be asked again. That is what a dropped request looks like from the outside, and it is the only failure shape this bench has produced that was mistaken for a model's choice.
 
 CI on the fork now passes. It had been failing at the install step on every push, because npm 11 writes a lockfile that the npm 10 on the CI runner rejects, which is recorded in the testing page along with the command that regenerates it the way CI expects.
@@ -183,6 +241,7 @@ CI on the fork now passes. It had been failing at the install step on every push
 3. **A grounded betrayal.** Play the treasury-emptying scenario so a promise made inside the run is the promise that fails, then read whether the wronged seat's reply differs from the run where the betrayal was narrated.
 4. **Cost per unit of change.** Talking is nearly free, so the interesting budget question is how much talking is needed per posture, per deal and per ratified article.
 5. **Whether confinement changes what a seat does.** A confined seat no longer has a browser to reach for, and the first confined run committed a posture that the run before it did not. One run is not a result, but it is the first time a change to the harness has plausibly changed a seat's diplomacy by removing something rather than adding it.
+6. **Whether a visible posture changes behaviour.** A posture was invisible to its target until now. The next test is whether a seat that can see a neighbour's regard answers it: a posture back, a message, or a warning, rather than nothing.
 
 ## Caveats
 

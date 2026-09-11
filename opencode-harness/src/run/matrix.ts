@@ -62,7 +62,8 @@ export async function runMatrix(options: MatrixOptions): Promise<string> {
       postureCoaching: options.postureCoaching,
       councilCoaching: options.councilCoaching,
       strategyCoaching: options.strategyCoaching,
-      turnTimeoutMs: options.turnTimeoutMs
+      turnTimeoutMs: options.turnTimeoutMs,
+      repositoryRoot: options.repositoryRoot
     });
     runs.push(measuresOf(await buildReport(runDirectory)));
   }
@@ -119,6 +120,7 @@ async function main(): Promise<void> {
     councilCoaching: (value("council-coaching", "off") as string) === "on",
     strategyCoaching: (value("strategy-coaching", "off") as string) === "on",
     turnTimeoutMs: Number(value("turn-timeout", "150000")),
+    repositoryRoot,
     reuse: args.includes("--reuse")
   });
   process.exit(0);

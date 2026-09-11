@@ -515,6 +515,17 @@ export class SimulatedWorld implements World {
   }
 
   // What a seat can see of a rival.
+  //
+  // The last clause is what the rival thinks of this seat, and it is the whole
+  // point of a posture. A posture is the one action a seat can take that says
+  // something without saying it, and until this clause existed the seat it was
+  // aimed at could not see it: every seat read only its own regard for others,
+  // so a seat could mark a neighbour Hostile and that neighbour would never
+  // know. A mechanic its target cannot perceive cannot change how anyone
+  // behaves, which is a sound reason for a reasoning model to ignore it.
+  //
+  // A real diplomacy screen shows where the other civilizations stand on you,
+  // so this is what the bench was missing rather than an addition to it.
   private rivalLine(seat: string, rival: SimSeat): string {
     const known = rival.relationships[seat];
     const met = known ? known.metOnTurn <= this.state.turn : false;
@@ -535,6 +546,8 @@ export class SimulatedWorld implements World {
       rival.cities.length +
       " cities, military " +
       rival.militaryStrength +
+      ", regards you " +
+      relationshipLine(this.state, rival.seat, seat).toLowerCase() +
       "."
     );
   }

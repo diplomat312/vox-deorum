@@ -14,6 +14,7 @@ import path from "node:path";
 import { SeatRuntime, type PendingDecision } from "../seat/runtime.js";
 import { SeatPacer } from "../seat/pacing.js";
 import { agentProblem, inheritedServers, surfaceProblem } from "../session/seat-surface.js";
+import { harnessBuild } from "./build-id.js";
 import { OpenCodeServer } from "../session/opencode-server.js";
 import { SessionClient } from "../session/session-client.js";
 import type { SeatModel } from "../session/types.js";
@@ -55,6 +56,8 @@ export interface LiveRunOptions {
   seats: LiveSeat[];
   // The names to introduce each seat by.
   names?: Record<string, { civ: string; leader: string }>;
+  // Where the repository is, so the run can record which commit played it.
+  repositoryRoot?: string;
   // The model every seat runs on.
   model: SeatModel;
   // Per-seat model overrides.
@@ -337,10 +340,13 @@ export async function runLive(options: LiveRunOptions): Promise<LiveRunResult> {
       }
     }
     const summary = await store.summary();
+    // Which build played this run, so its numbers can be compared with another
+    // run's rather than only with another run of the same day.
+    const build = await harnessBuild(options.repositoryRoot ?? process.cwd());
     await writeFile(
       path.join(options.runDirectory, "summary.json"),
       JSON.stringify(
-        { ...summary, failures, unavailable, pacing, holdsTaken, holdsMissed, verdicts },
+        { ...summary, build, failures, unavailable, pacing, holdsTaken, holdsMissed, verdicts },
         null,
         2
       ),
@@ -399,6 +405,7 @@ async function main(): Promise<void> {
     portBase: Number(value("port-base", "5800")),
     turns: Number(value("turns", "10")),
     turnTimeoutMs: Number(value("turn-timeout", "150000")),
+    repositoryRoot,
     mcpEndpoint: value("mcp", undefined) as string | undefined
     ,
     pacing: paceFrom(value("pacing", "freeze") as string)

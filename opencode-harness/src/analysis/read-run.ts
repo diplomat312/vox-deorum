@@ -39,6 +39,10 @@ export interface RunData {
   social: SocialEntry[];
   // Everything the seats asked for, in order.
   toolCalls: RunToolCall[];
+  // The harness build that played this run, when the run recorded one. A run
+  // whose build is unknown cannot be compared with another as though the same
+  // code produced both, so the report says which it is.
+  build: string | null;
 }
 
 // Read a JSONL file, returning an empty list when it does not exist.
@@ -62,6 +66,20 @@ async function readJsonLines<T>(file: string): Promise<T[]> {
   return rows;
 }
 
+// Read the build a run recorded, or null when it did not record one.
+async function readBuild(runDirectory: string): Promise<string | null> {
+  try {
+    const parsed: unknown = JSON.parse(await readFile(path.join(runDirectory, "summary.json"), "utf8"));
+    if (parsed !== null && typeof parsed === "object") {
+      const build = (parsed as { build?: unknown }).build;
+      if (typeof build === "string" && build !== "") return build;
+    }
+  } catch {
+    // A run from before the build was recorded simply has none.
+  }
+  return null;
+}
+
 // Read one run directory.
 export async function readRun(runDirectory: string): Promise<RunData> {
   const traceDirectory = path.join(runDirectory, "trace");
@@ -72,7 +90,7 @@ export async function readRun(runDirectory: string): Promise<RunData> {
   const social = await readJsonLines<SocialEntry>(path.join(socialDirectory, "social.jsonl"));
   const toolCalls = await readJsonLines<RunToolCall>(path.join(socialDirectory, "tool-calls.jsonl"));
   const game = firstGame(trace);
-  return { runId, game, trace, social, toolCalls };
+  return { runId, game, trace, social, toolCalls, build: await readBuild(runDirectory) };
 }
 
 // Every turn a run recorded, across seats, in turn then seat order.

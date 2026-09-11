@@ -22,6 +22,7 @@ import { SimulatedWorld } from "../world/simulated/simulated-world.js";
 import type { ScenarioShock } from "../world/simulated/scenario.js";
 import type { SimConfig } from "../world/simulated/types.js";
 import { writeSeatConfig } from "./seat-config.js";
+import { harnessBuild } from "./build-id.js";
 import { agentProblem, inheritedServers, surfaceProblem } from "../session/seat-surface.js";
 import { writeTurnState } from "./turn-state.js";
 
@@ -67,6 +68,8 @@ export interface SimulationOptions {
   // below the five minutes a socket layer will otherwise wait, so the harness
   // notices a stall first and can clear the work it started.
   turnTimeoutMs?: number;
+  // Where the repository is, so the run can record which commit played it.
+  repositoryRoot?: string;
   // Seats played by a person rather than a model. A human seat is offered the
   // same briefing a model seat reads and answers through the same four tools,
   // so a game with someone in it is measured the same way as one without.
@@ -338,10 +341,13 @@ export async function simulate(options: SimulationOptions): Promise<SimulationRe
 
     const summary = await store.summary();
     const socialOperations = await countSocialOperations(socialDirectory);
+    // Which build played this run, so its numbers can be compared with another
+    // run's rather than only with another run of the same day.
+    const build = await harnessBuild(options.repositoryRoot ?? process.cwd());
     await world.writeSnapshot(worldStateFile);
     await writeFile(
       path.join(options.runDirectory, "summary.json"),
-      JSON.stringify({ ...summary, failures, gaps, socialOperations, injected, unavailable }, null, 2),
+      JSON.stringify({ ...summary, build, failures, gaps, socialOperations, injected, unavailable }, null, 2),
       "utf8"
     );
     return { runId: options.runId, turnsPlayed, failures, gaps, socialOperations, injected, unavailable };
@@ -418,6 +424,7 @@ async function main(): Promise<void> {
     runId,
     seats,
     fromTurn,
+    repositoryRoot,
     toTurn,
     seed,
     model: { providerID: modelSetting[0], modelID: modelSetting.slice(1).join("/") },
