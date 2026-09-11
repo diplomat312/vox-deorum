@@ -21,6 +21,8 @@ Options worth knowing:
 | `--from`, `--to` | The turn span to play. |
 | `--seed` | The world to generate. The same seed is the same game. |
 | `--coaching on` | Closes each observation by stating what dialogue is for. |
+| `--posture-coaching on` | Adds a line naming posture as how a relationship is recorded. |
+| `--council-coaching on` | Adds a line saying what a council is for. |
 | `--briefing on` | Adds a standing summary of contact with each other seat. |
 | `--scenario` | A JSON file of circumstances to inject, such as a betrayal or a war. |
 | `--turn-timeout` | How long a seat turn may take before it is abandoned. |
@@ -37,7 +39,7 @@ node dist/analysis/watch-run.js <run-id>           # tails a run while it plays
 node dist/analysis/roundup-run.js <run-id>         # what each seat was thinking across the game
 ```
 
-The report measures how much the seats talked, who stayed silent, how long the quiet stretches ran, whether direct messages were answered in kind, and what it all cost, including the cache hit ratio and the cost per social operation. The comparison puts several runs side by side and lists what changed against the baseline.
+The report answers four questions. How much did the seats talk, and who stayed silent. What did each message do, read from its wording, rather than only how many there were. Whether the talking changed anything in the world, counted from the actions the seats actually committed, including the posture changes that record a relationship. And what it cost, including the cache hit ratio and the cost per social operation. The comparison puts several runs side by side and lists what changed against the baseline.
 
 ## Recorded corpus
 
