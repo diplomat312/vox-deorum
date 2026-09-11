@@ -227,7 +227,7 @@ export function seatToolDefinitions(): Array<{ name: string; description: string
     {
       name: "communicate",
       description:
-        "Send up to 8 social operations in one call. Kinds: world {message}, dm {to, message}, group-create {name}, invite {group, to}, accept {group}, group-msg {group, message}, leave {group}. Invited seats must accept before group messaging.",
+        "Send up to 8 social operations in one call. Kinds: world {message}, dm {to, message}, group-create {name}, invite {group, to}, accept {group}, group-msg {group, message}, leave {group}, deal-propose {to, gold?, goldPerTurn?, resource?, message?}, deal-accept {deal}, deal-reject {deal}. Invited seats must accept before group messaging. A deal is a promise with terms: the other seat answers it, and what you promise you pay.",
       inputSchema: {
         type: "object",
         properties: {
@@ -240,12 +240,27 @@ export function seatToolDefinitions(): Array<{ name: string; description: string
               properties: {
                 kind: {
                   type: "string",
-                  enum: ["world", "dm", "group-create", "invite", "accept", "group-msg", "leave"]
+                  enum: [
+                    "world",
+                    "dm",
+                    "group-create",
+                    "invite",
+                    "accept",
+                    "group-msg",
+                    "leave",
+                    "deal-propose",
+                    "deal-accept",
+                    "deal-reject"
+                  ]
                 },
                 to: { type: "string" },
                 message: { type: "string" },
                 name: { type: "string" },
-                group: { type: "string" }
+                group: { type: "string" },
+                gold: { type: "number" },
+                goldPerTurn: { type: "number" },
+                resource: { type: "string" },
+                deal: { type: "string" }
               },
               required: ["kind"]
             }

@@ -9,7 +9,21 @@ import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { DiplomacyGroup, DiplomacyMessage, DiplomacyView } from "../../social/diplomacy-view.js";
 import { socialDiplomacyView } from "../../social/diplomacy-view.js";
-import { addressesOf, readVisible, type SocialEntry } from "../../social/social-store.js";
+import { acceptedDeals, addressesOf, openDealsForSeat, readVisible, type SocialEntry } from "../../social/social-store.js";
+
+// How many turns a promised tribute runs for. A deal that promised gold per
+// turn keeps paying for this long, which is what makes a promise a lasting
+// commitment rather than a single transfer.
+const tributeTurns = 10;
+
+// How a deal reads in the news and in the deal thread.
+function termsOf(deal: { gold?: number; goldPerTurn?: number; resource?: string }): string {
+  const terms: string[] = [];
+  if (deal.gold) terms.push(deal.gold + " gold");
+  if (deal.goldPerTurn) terms.push(deal.goldPerTurn + " gold per turn for " + tributeTurns + " turns");
+  if (deal.resource) terms.push("a supply of " + deal.resource);
+  return terms.length === 0 ? "no terms" : terms.join(", ");
+}
 import type { InspectAnswer, SeatInfo, World } from "../types.js";
 import { availablePolicies, availableTechs, buildOptions, eraForTechCount } from "./content.js";
 import {
@@ -19,6 +33,7 @@ import {
   defaultSimConfig,
   goldPerTurn,
   policyCost,
+  pushEvent,
   researchOptions,
   sciencePerTurn,
   techCost,
@@ -108,6 +123,10 @@ export class SimulatedWorld implements World {
   // the standing section can say who has been in touch.
   private readonly visible = new Map<string, SocialEntry[]>();
 
+  // The deals on the table for a seat, collected when its turn begins so the
+  // observation can name them without reading the log again.
+  private readonly openDeals = new Map<string, Awaited<ReturnType<typeof openDealsForSeat>>>();
+
   // Whether the observation carries the diplomacy standing section.
   private readonly diplomacyBriefing: boolean;
 
@@ -183,9 +202,53 @@ export class SimulatedWorld implements World {
       advanceTurn(this.state, this.config);
       applyShocks(this.state, this.shocks);
     }
+    await this.settleDeals();
     this.delivered.set(seat, await this.diplomacy.deliverMessages(seat));
     this.groups.set(seat, await this.diplomacy.groupsFor(seat));
     this.visible.set(seat, await readVisible(this.socialDirectory, seat));
+    this.openDeals.set(seat, await openDealsForSeat(this.socialDirectory, seat));
+  }
+
+  // Carry out the terms of every deal the seats have agreed, once each.
+  //
+  // A deal is agreed in the log and paid in the world: the log records what was
+  // promised, and this is where the promise costs something. Settling here
+  // rather than at the moment of agreement means a deal only takes effect from
+  // the next turn, which is how a treaty works.
+  private async settleDeals(): Promise<void> {
+    for (const deal of await acceptedDeals(this.socialDirectory)) {
+      if (this.state.settledDeals.includes(deal.id)) continue;
+      const payer = this.state.seats[deal.from];
+      const receiver = this.state.seats[deal.to];
+      if (payer && receiver) {
+        const gold = Math.min(deal.gold ?? 0, Math.max(0, payer.gold));
+        if (gold > 0) {
+          payer.gold = Math.round((payer.gold - gold) * 10) / 10;
+          receiver.gold = Math.round((receiver.gold + gold) * 10) / 10;
+        }
+        if (deal.goldPerTurn && deal.goldPerTurn > 0) {
+          this.state.transfers.push({
+            deal: deal.id,
+            from: payer.seat,
+            to: receiver.seat,
+            goldPerTurn: deal.goldPerTurn,
+            remaining: tributeTurns
+          });
+        }
+        const relation = payer.relationships[receiver.seat];
+        if (relation) {
+          relation.publicValue += 1;
+          relation.privateValue += 1;
+        }
+        pushEvent(
+          this.state,
+          null,
+          "deal",
+          payer.civ + " and " + receiver.civ + " concluded a deal: " + termsOf(deal)
+        );
+      }
+      this.state.settledDeals.push(deal.id);
+    }
   }
 
   // Render the observation for a seat, in the same shape the live game uses.
@@ -253,8 +316,7 @@ export class SimulatedWorld implements World {
       lines.push(this.standingSection(seat, others));
     }
     lines.push("");
-    lines.push("Deal thread (deal_propose sends; deal_accept {proposalId} enacts; deal_reject {proposalId} declines; inspect(deals) shows what is tradable):");
-    lines.push("- No deals on the table.");
+    lines.push(this.dealsSection(seat));
     lines.push("");
     lines.push(
       this.diplomacyCoaching ? coachedInstruction() : plainInstruction()
@@ -305,10 +367,33 @@ export class SimulatedWorld implements World {
       return { text: this.diplomacyDetail(seat, detail) };
     }
     if (subject === "deals") {
+      const open = (this.openDeals.get(seat) ?? []).map((deal) => ({
+        Deal: deal.id,
+        From: this.state.seats[deal.from]?.civ ?? deal.from,
+        To: this.state.seats[deal.to]?.civ ?? deal.to,
+        Terms: termsOf(deal),
+        Message: deal.text ?? null
+      }));
       return {
-        text:
-          "No deal system is available in this simulation yet. Deal talk can still be sent as a direct message, but nothing enforces it.",
-        gap: true
+        text: JSON.stringify(
+          {
+            OpenDeals: open,
+            YourTreasury: { Gold: player.gold, GoldPerTurn: goldPerTurn(player, this.config) },
+            Tribute: this.state.transfers
+              .filter((transfer) => transfer.from === seat || transfer.to === seat)
+              .map((transfer) => ({
+                Deal: transfer.deal,
+                From: transfer.from,
+                To: transfer.to,
+                GoldPerTurn: transfer.goldPerTurn,
+                TurnsLeft: transfer.remaining
+              })),
+            HowToTrade:
+              "Offer with communicate kind deal-propose, naming to, at least one of gold, goldPerTurn or resource, and an optional message. The other seat answers with kind deal-accept or kind deal-reject naming the deal id."
+          },
+          null,
+          1
+        )
       };
     }
     if (subject === "events") {
@@ -429,6 +514,25 @@ export class SimulatedWorld implements World {
   // The groups a seat belongs to or has been invited to.
   private groupsSection(seat: string): string {
     return this.groupsText(seat);
+  }
+
+  // The deals on the table, and how to answer one.
+  //
+  // The id is named because answering a proposal has to name it, and the terms
+  // are spelled out because a seat cannot weigh an offer it cannot read.
+  private dealsSection(seat: string): string {
+    const open = this.openDeals.get(seat) ?? [];
+    const header =
+      "Deal thread (offer terms with communicate kind deal-propose, answer one with kind deal-accept or kind deal-reject naming its deal id):";
+    if (open.length === 0) return header + "\n- No deals on the table.";
+    const lines = open.map((deal) => {
+      const from = this.state.seats[deal.from];
+      const to = this.state.seats[deal.to];
+      const direction = deal.from === seat ? "your offer to " + to.civ : "an offer from " + from.civ;
+      const call = deal.from === seat ? "waiting on them" : "answer with deal-accept or deal-reject and deal " + deal.id;
+      return "- deal " + deal.id + ": " + direction + " for " + termsOf(deal) + (call ? " (" + call + ")" : "");
+    });
+    return header + "\n" + lines.join("\n");
   }
 
   // The diplomacy standing section, which names the state of play with each
@@ -627,6 +731,7 @@ function coachedInstruction(): string {
     "- Other seats act on what they know of you. What you say in the open becomes your reputation, and they weigh it.",
     "- A direct message reaches one seat and no one else, so it is the only way to say something you do not want overheard.",
     "- A seat that has written to you is waiting on you, and a seat that is guessing about you will guess badly.",
+    "- A deal is a promise with terms: gold now, gold for ten turns, or a supply of a resource. What you promise, you pay.",
     "- Saying nothing is a decision like any other, and it leaves the other seats to draw their own conclusions."
   ].join("\n");
 }

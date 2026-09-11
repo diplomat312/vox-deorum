@@ -6,10 +6,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
+  acceptedDeals,
   applyOperations,
   getCursor,
+  openDealsForSeat,
   readCorrespondence,
   readInbox,
+  readVisible,
   setCursor,
   storePaths
 } from "../../../src/social/social-store.js";
@@ -239,5 +242,191 @@ describe("social store", () => {
     } finally {
       await rm(other, { recursive: true, force: true });
     }
+  });
+});
+
+// Covers negotiated deals: who may propose, who may answer, and what a world
+// reads back once a deal is settled.
+describe("negotiated deals", () => {
+  it("should show a deal proposal to both parties and to no one else", async () => {
+    const applied = await applyOperations(
+      runDir,
+      "korea",
+      [{ kind: "deal-propose", to: "siam", gold: 100, message: "peace for gold" }],
+      { seats }
+    );
+
+    expect(applied[0]).toMatchObject({
+      id: "e-1",
+      from: "korea",
+      kind: "deal-propose",
+      to: "siam",
+      gold: 100,
+      text: "peace for gold"
+    });
+    expect((await readVisible(runDir, "korea")).filter((entry) => entry.kind === "deal-propose")).toHaveLength(1);
+    expect((await readVisible(runDir, "siam")).filter((entry) => entry.kind === "deal-propose")).toHaveLength(1);
+    expect(await readVisible(runDir, "austria")).toEqual([]);
+  });
+
+  it("should refuse a deal a seat proposes to itself", async () => {
+    await expect(
+      applyOperations(runDir, "korea", [{ kind: "deal-propose", to: "korea", gold: 1 }], { seats })
+    ).rejects.toThrowError(/cannot propose a deal to yourself/);
+  });
+
+  it("should refuse a deal proposal with no terms", async () => {
+    await expect(
+      applyOperations(runDir, "korea", [{ kind: "deal-propose", to: "siam" }], { seats })
+    ).rejects.toThrowError(/at least one term/);
+    await expect(
+      applyOperations(runDir, "korea", [{ kind: "deal-propose", to: "siam", resource: "  " }], { seats })
+    ).rejects.toThrowError(/at least one term/);
+  });
+
+  it("should refuse a negative or fractional gold amount", async () => {
+    await expect(
+      applyOperations(runDir, "korea", [{ kind: "deal-propose", to: "siam", gold: -5 }], { seats })
+    ).rejects.toThrowError(/positive whole number for gold/);
+    await expect(
+      applyOperations(runDir, "korea", [{ kind: "deal-propose", to: "siam", gold: 2.5 }], { seats })
+    ).rejects.toThrowError(/positive whole number for gold/);
+    await expect(
+      applyOperations(runDir, "korea", [{ kind: "deal-propose", to: "siam", goldPerTurn: 0 }], { seats })
+    ).rejects.toThrowError(/positive whole number for goldPerTurn/);
+  });
+
+  it("should let the recipient accept a deal and refuse the proposer", async () => {
+    const proposed = await applyOperations(
+      runDir,
+      "korea",
+      [{ kind: "deal-propose", to: "siam", gold: 50, goldPerTurn: 2 }],
+      { seats }
+    );
+    const deal = proposed[0].id;
+
+    await expect(
+      applyOperations(runDir, "korea", [{ kind: "deal-accept", deal }], { seats })
+    ).rejects.toThrowError(/cannot answer their own deal/);
+
+    const accepted = await applyOperations(runDir, "siam", [{ kind: "deal-accept", deal }], { seats });
+    expect(accepted[0]).toMatchObject({ id: "e-2", kind: "deal-accept", from: "siam", to: "korea", deal });
+    expect((await readVisible(runDir, "korea")).some((entry) => entry.kind === "deal-accept")).toBe(true);
+    expect((await readVisible(runDir, "siam")).some((entry) => entry.kind === "deal-accept")).toBe(true);
+    expect((await readVisible(runDir, "austria")).some((entry) => entry.kind === "deal-accept")).toBe(false);
+  });
+
+  it("should let the recipient reject a deal", async () => {
+    const proposed = await applyOperations(
+      runDir,
+      "korea",
+      [{ kind: "deal-propose", to: "siam", goldPerTurn: 5 }],
+      { seats }
+    );
+
+    const rejected = await applyOperations(runDir, "siam", [{ kind: "deal-reject", deal: proposed[0].id }], { seats });
+    expect(rejected[0]).toMatchObject({
+      id: "e-2",
+      kind: "deal-reject",
+      from: "siam",
+      to: "korea",
+      deal: proposed[0].id
+    });
+    expect((await readVisible(runDir, "korea")).some((entry) => entry.kind === "deal-reject")).toBe(true);
+    expect((await readVisible(runDir, "austria")).some((entry) => entry.kind === "deal-reject")).toBe(false);
+  });
+
+  it("should refuse a second answer to the same deal", async () => {
+    const proposed = await applyOperations(runDir, "korea", [{ kind: "deal-propose", to: "siam", gold: 1 }], {
+      seats
+    });
+    await applyOperations(runDir, "siam", [{ kind: "deal-accept", deal: proposed[0].id }], { seats });
+
+    await expect(
+      applyOperations(runDir, "siam", [{ kind: "deal-reject", deal: proposed[0].id }], { seats })
+    ).rejects.toThrowError(/has already been answered/);
+  });
+
+  it("should refuse an answer for an unknown deal or from a stranger", async () => {
+    await expect(
+      applyOperations(runDir, "siam", [{ kind: "deal-accept", deal: "e-99" }], { seats })
+    ).rejects.toThrowError(/unknown deal 'e-99'/);
+    await expect(
+      applyOperations(runDir, "siam", [{ kind: "deal-reject", deal: "e-99" }], { seats })
+    ).rejects.toThrowError(/unknown deal 'e-99'/);
+
+    const proposed = await applyOperations(runDir, "korea", [{ kind: "deal-propose", to: "siam", gold: 1 }], {
+      seats
+    });
+    await expect(
+      applyOperations(runDir, "austria", [{ kind: "deal-accept", deal: proposed[0].id }], { seats })
+    ).rejects.toThrowError(/is not addressed to austria/);
+  });
+
+  it("should list an open deal for both parties until it is answered", async () => {
+    const proposed = await applyOperations(runDir, "korea", [{ kind: "deal-propose", to: "siam", gold: 30 }], {
+      seats
+    });
+    await applyOperations(runDir, "korea", [{ kind: "deal-propose", to: "austria", resource: "iron" }], { seats });
+
+    expect(await openDealsForSeat(runDir, "korea")).toEqual([
+      { id: proposed[0].id, from: "korea", to: "siam", gold: 30 },
+      { id: "e-2", from: "korea", to: "austria", resource: "iron" }
+    ]);
+    expect(await openDealsForSeat(runDir, "siam")).toEqual([
+      { id: proposed[0].id, from: "korea", to: "siam", gold: 30 }
+    ]);
+    expect(await openDealsForSeat(runDir, "austria")).toEqual([
+      { id: "e-2", from: "korea", to: "austria", resource: "iron" }
+    ]);
+
+    await applyOperations(runDir, "siam", [{ kind: "deal-reject", deal: proposed[0].id }], { seats });
+    expect(await openDealsForSeat(runDir, "korea")).toEqual([
+      { id: "e-2", from: "korea", to: "austria", resource: "iron" }
+    ]);
+    expect(await openDealsForSeat(runDir, "siam")).toEqual([]);
+  });
+
+  it("should report an accepted deal with its terms and who accepted", async () => {
+    const deals = await applyOperations(
+      runDir,
+      "korea",
+      [
+        { kind: "deal-propose", to: "siam", gold: 40, resource: "silk", message: "take it" },
+        { kind: "deal-propose", to: "austria", goldPerTurn: 3 }
+      ],
+      { seats }
+    );
+    await applyOperations(runDir, "siam", [{ kind: "deal-accept", deal: deals[0].id }], { seats });
+
+    expect(await acceptedDeals(runDir)).toEqual([
+      {
+        id: deals[0].id,
+        from: "korea",
+        to: "siam",
+        gold: 40,
+        resource: "silk",
+        text: "take it",
+        acceptedBy: "siam"
+      }
+    ]);
+  });
+
+  it("should leave the log unchanged when a deal operation in a batch is refused", async () => {
+    await expect(
+      applyOperations(
+        runDir,
+        "korea",
+        [
+          { kind: "world", message: "fine" },
+          { kind: "deal-propose", to: "siam" }
+        ],
+        { seats }
+      )
+    ).rejects.toThrowError(/at least one term/);
+
+    expect(await readVisible(runDir, "korea")).toEqual([]);
+    expect(await openDealsForSeat(runDir, "siam")).toEqual([]);
+    expect(bodies(await readInbox(runDir, "siam"))).toEqual([]);
   });
 });

@@ -11,7 +11,7 @@ import {
   eraForTechCount,
   type CivDefinition
 } from "./content.js";
-import type { SimCity, SimConfig, SimSeat, SimState } from "./types.js";
+import type { SimCity, SimConfig, SimSeat, SimState, SimTransfer } from "./types.js";
 
 // The rates a simulated game runs at when nothing is calibrated. They are set
 // to the shape of an ordinary early game: a handful of cities by turn 60, a
@@ -117,7 +117,9 @@ export function createSimState(options: {
     seed: options.seed,
     order,
     seats,
-    events: []
+    events: [],
+    settledDeals: [],
+    transfers: []
   };
   for (const seat of order) {
     pushEvent(state, seat, "table", seat + " enters the game");
@@ -191,6 +193,7 @@ export function advanceTurn(state: SimState, config: SimConfig): void {
     advanceResearch(state, player, config);
     advancePolicy(state, player, config);
     player.gold = round1(player.gold + goldPerTurn(player, config));
+    payTribute(state, player);
     player.sciencePerTurn = sciencePerTurn(player, config);
     player.culturePerTurn = culturePerTurn(player, config);
     player.militaryStrength = round1(player.militaryStrength + config.militaryPerTurn);
@@ -206,6 +209,36 @@ export function advanceTurn(state: SimState, config: SimConfig): void {
     player.era = eraForTechCount(player.techs.length);
     considerFounding(state, player, config);
   }
+}
+
+// Move whatever tribute this seat is paying or receiving, and retire a tribute
+// once its turns run out or the payer cannot pay. A bankrupt seat pays what it
+// can, and the promise ends rather than going into debt.
+function payTribute(state: SimState, player: SimSeat): void {
+  const finished: SimTransfer[] = [];
+  for (const transfer of state.transfers) {
+    if (transfer.from !== player.seat && transfer.to !== player.seat) continue;
+    const payer = state.seats[transfer.from];
+    const receiver = state.seats[transfer.to];
+    if (!payer || !receiver) {
+      finished.push(transfer);
+      continue;
+    }
+    const paid = Math.min(transfer.goldPerTurn, Math.max(0, payer.gold));
+    payer.gold = Math.round((payer.gold - paid) * 10) / 10;
+    receiver.gold = Math.round((receiver.gold + paid) * 10) / 10;
+    transfer.remaining -= 1;
+    if (transfer.remaining <= 0 || paid < transfer.goldPerTurn) {
+      pushEvent(
+        state,
+        payer.seat,
+        "deal",
+        "Tribute from " + payer.civ + " to " + receiver.civ + " has ended after " + (transfer.remaining <= 0 ? "its agreed term" : "a missed payment")
+      );
+      finished.push(transfer);
+    }
+  }
+  if (finished.length > 0) state.transfers = state.transfers.filter((entry) => !finished.includes(entry));
 }
 
 // Grow each city and settle whether a second one can be founded.

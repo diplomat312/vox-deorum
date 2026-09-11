@@ -204,7 +204,75 @@ describe("the generated environment", () => {
 
     expect(answer.text).toContain("137");
     expect(answer.gap).toBeUndefined();
-    expect(deals.gap).toBe(true);
+    // Deals are a real surface now, so the answer carries the open deals and
+    // how to propose one rather than reporting that none exists.
+    expect(deals.gap).toBeUndefined();
+    expect(deals.text).toContain("HowToTrade");
+  });
+
+  it("should carry out the terms of an agreed deal", async () => {
+    const state = createSimState({ seats, seed: 5, game: "sim" });
+    state.seats.austria.gold = 200;
+    state.seats.korea.gold = 0;
+    const world = new SimulatedWorld({ state, socialDirectory: directory });
+
+    // Austria offers gold, and Korea accepts. Terms are paid in the world.
+    const proposed = await applyOperations(directory, "austria", [
+      { kind: "deal-propose", to: "korea", gold: 50, goldPerTurn: 5, message: "For our friendship." }
+    ], { seats });
+    const dealId = proposed[0].id;
+    await applyOperations(directory, "korea", [{ kind: "deal-accept", deal: dealId }], { seats });
+
+    await world.beginTurn("korea", 1);
+
+    expect(state.seats.austria.gold).toBe(150);
+    expect(state.seats.korea.gold).toBe(50);
+    expect(state.transfers).toHaveLength(1);
+    expect(state.events.some((event) => event.kind === "deal")).toBe(true);
+  });
+
+  it("should show a seat the offer it has been sent and who owes it tribute", async () => {
+    const state = createSimState({ seats, seed: 5, game: "sim" });
+    state.seats.austria.gold = 200;
+    const world = new SimulatedWorld({ state, socialDirectory: directory });
+
+    const proposed = await applyOperations(directory, "austria", [
+      { kind: "deal-propose", to: "korea", gold: 20, message: "A token of goodwill." }
+    ], { seats });
+    const dealId = proposed[0].id;
+
+    await world.beginTurn("korea", 1);
+    const observation = world.observation("korea", 1);
+    const detail = await world.inspect("korea", 1, "deals");
+
+    // The seat is told the id to answer and what answering buys.
+    expect(observation).toContain("deal " + dealId);
+    expect(observation).toContain("20 gold");
+    expect(detail.text).toContain(dealId);
+
+    // The proposer sees its own offer waiting, and can pay it.
+    await world.beginTurn("austria", 1);
+    expect(world.observation("austria", 1)).toContain("waiting on them");
+  });
+
+  it("should settle an agreed deal once and only once", async () => {
+    const state = createSimState({ seats, seed: 5, game: "sim" });
+    state.seats.austria.gold = 200;
+    const world = new SimulatedWorld({ state, socialDirectory: directory });
+    const proposed = await applyOperations(directory, "austria", [
+      { kind: "deal-propose", to: "korea", gold: 50 }
+    ], { seats });
+    await applyOperations(directory, "korea", [{ kind: "deal-accept", deal: proposed[0].id }], { seats });
+
+    await world.beginTurn("korea", 1);
+    const afterFirst = state.seats.korea.gold;
+    // Playing later turns must not pay the same promise again.
+    await world.beginTurn("korea", 2);
+    await world.beginTurn("korea", 3);
+
+    expect(afterFirst).toBe(50);
+    expect(state.seats.korea.gold).toBeGreaterThanOrEqual(50);
+    expect(state.settledDeals).toHaveLength(1);
   });
 
   it("should carry a committed action into the world and the next observation", async () => {

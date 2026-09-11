@@ -120,6 +120,26 @@ export interface SimState {
   seats: Record<string, SimSeat>;
   // Everything that has happened, newest last.
   events: SimEvent[];
+  // Ids of accepted deals whose terms have already been carried out, so a
+  // settlement is applied once and never twice.
+  settledDeals: string[];
+  // Tribute still being paid: a deal can promise gold per turn, which keeps
+  // moving gold until it runs out.
+  transfers: SimTransfer[];
+}
+
+// Gold promised by one seat to another, paid out turn by turn.
+export interface SimTransfer {
+  // The deal that created it.
+  deal: string;
+  // The seat paying.
+  from: string;
+  // The seat receiving.
+  to: string;
+  // Gold moved each turn.
+  goldPerTurn: number;
+  // How many turns of payment are left.
+  remaining: number;
 }
 
 // The rates the simulation advances at. They are knobs rather than constants

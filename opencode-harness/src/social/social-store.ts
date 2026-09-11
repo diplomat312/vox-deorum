@@ -19,7 +19,9 @@ export const maxOperationsPerBatch = 8;
 // Every operation a seat may ask for. Each one carries only the fields it needs:
 // world takes a message, dm takes a target seat and a message, group-create takes
 // a name, invite takes a group and a target seat, accept takes a group, group-msg
-// takes a group and a message, and leave takes a group.
+// takes a group and a message, leave takes a group, deal-propose takes a target
+// seat and at least one term, and deal-accept and deal-reject take the id of the
+// proposal they answer.
 export type OperationKind =
   | "world"
   | "dm"
@@ -27,7 +29,10 @@ export type OperationKind =
   | "invite"
   | "accept"
   | "group-msg"
-  | "leave";
+  | "leave"
+  | "deal-propose"
+  | "deal-accept"
+  | "deal-reject";
 
 // One requested social operation, as the caller hands it in.
 export interface Operation {
@@ -41,6 +46,14 @@ export interface Operation {
   name?: string;
   // The group id for invite, accept, group-msg and leave.
   group?: string;
+  // A gold term of a proposed deal, in whole coins.
+  gold?: number;
+  // A per-turn gold term of a proposed deal, in whole coins per turn.
+  goldPerTurn?: number;
+  // A resource term of a proposed deal, named by the caller.
+  resource?: string;
+  // The id of the deal-propose entry a deal-accept or deal-reject answers.
+  deal?: string;
 }
 
 // One recorded line of the log. Every entry carries a stable id, an ISO
@@ -65,6 +78,14 @@ export interface SocialEntry {
   name?: string;
   // The group id, for invite, accept, group-msg and leave.
   group?: string;
+  // A gold term of a proposed deal, in whole coins.
+  gold?: number;
+  // A per-turn gold term of a proposed deal, in whole coins per turn.
+  goldPerTurn?: number;
+  // A resource term of a proposed deal, named by the caller.
+  resource?: string;
+  // The id of the deal-propose entry a deal-accept or deal-reject answers.
+  deal?: string;
 }
 
 // Where a run keeps its log and its cursors.
@@ -172,6 +193,59 @@ export async function readVisible(runDir: string, seat: string): Promise<SocialE
   return entries.filter((entry) => seesEntry(entry, seat, entries));
 }
 
+// The terms of one proposed deal, without the bookkeeping that a reader of the
+// log does not need.
+export interface DealTerms {
+  // The id of the deal-propose entry, which is what an answer must name.
+  id: string;
+  // The seat that proposed the deal.
+  from: string;
+  // The seat the deal was proposed to.
+  to: string;
+  // A gold term, when the proposal carried one.
+  gold?: number;
+  // A per-turn gold term, when the proposal carried one.
+  goldPerTurn?: number;
+  // A resource term, when the proposal carried one.
+  resource?: string;
+  // The message that came with the proposal, when it carried one.
+  text?: string;
+}
+
+// Every deal a seat is still negotiating, whether it proposed the deal or was
+// proposed it, oldest first. A deal that either side has accepted or rejected is
+// settled and drops out.
+export async function openDealsForSeat(runDir: string, seat: string): Promise<DealTerms[]> {
+  if (typeof seat !== "string" || seat.trim() === "") {
+    throw new Error("a seat is required");
+  }
+  const entries = await readLog(runDir);
+  return entries
+    .filter(
+      (entry) =>
+        entry.kind === "deal-propose" &&
+        (entry.from === seat || entry.to === seat) &&
+        !dealAnswered(entries, entry.id)
+    )
+    .map(dealTermsOf);
+}
+
+// Every deal that has been accepted, with the seat that accepted it. A world
+// reads this to carry the agreed terms out, so it covers the whole log rather
+// than one seat's view.
+export async function acceptedDeals(runDir: string): Promise<Array<DealTerms & { acceptedBy: string }>> {
+  const entries = await readLog(runDir);
+  const accepted: Array<DealTerms & { acceptedBy: string }> = [];
+  for (const entry of entries) {
+    if (entry.kind !== "deal-propose") continue;
+    const answer = entries.find((other) => other.kind === "deal-accept" && other.deal === entry.id);
+    if (answer !== undefined) {
+      accepted.push({ ...dealTermsOf(entry), acceptedBy: answer.from });
+    }
+  }
+  return accepted;
+}
+
 // The seats an entry is addressed to, beyond its author.
 //
 // A direct message does not store a recipient the way an invitation does: its
@@ -181,7 +255,13 @@ export function addressesOf(entry: SocialEntry): string[] {
   if (entry.kind === "dm") {
     return directPartners(entry.to ?? "").filter((seat) => seat !== entry.from);
   }
-  if (entry.kind === "invite" && typeof entry.to === "string") {
+  if (
+    (entry.kind === "invite" ||
+      entry.kind === "deal-propose" ||
+      entry.kind === "deal-accept" ||
+      entry.kind === "deal-reject") &&
+    typeof entry.to === "string"
+  ) {
     return [entry.to];
   }
   return [];
@@ -327,18 +407,127 @@ function buildEntry(
       }
       return { id, at, from, kind, group };
     }
+    case "deal-propose": {
+      const to = requiredField(operation, "to");
+      if (to === from) {
+        throw new Error("cannot propose a deal to yourself");
+      }
+      if (!roster.has(to)) {
+        throw new Error("deal-propose target '" + to + "' is not a seat in this run");
+      }
+      const gold = optionalAmount(operation, "gold");
+      const goldPerTurn = optionalAmount(operation, "goldPerTurn");
+      const resource = optionalResource(operation);
+      if (gold === undefined && goldPerTurn === undefined && resource === undefined) {
+        throw new Error("deal-propose operation needs at least one term: gold, goldPerTurn or resource");
+      }
+      const entry: SocialEntry = { id, at, from, kind, to };
+      if (gold !== undefined) {
+        entry.gold = gold;
+      }
+      if (goldPerTurn !== undefined) {
+        entry.goldPerTurn = goldPerTurn;
+      }
+      if (resource !== undefined) {
+        entry.resource = resource;
+      }
+      const message = optionalMessage(operation);
+      if (message !== undefined) {
+        entry.text = message;
+      }
+      return entry;
+    }
+    case "deal-accept":
+    case "deal-reject": {
+      const deal = requiredField(operation, "deal");
+      const proposal = staged.find((entry) => entry.kind === "deal-propose" && entry.id === deal);
+      if (proposal === undefined) {
+        throw new Error("unknown deal '" + deal + "'");
+      }
+      if (proposal.from === from) {
+        throw new Error(from + " cannot answer their own deal '" + deal + "'");
+      }
+      if (proposal.to !== from) {
+        throw new Error("deal '" + deal + "' is not addressed to " + from);
+      }
+      if (dealAnswered(staged, deal)) {
+        throw new Error("deal '" + deal + "' has already been answered");
+      }
+      return { id, at, from, kind, deal, to: proposal.from };
+    }
     default:
       throw new Error("unknown operation kind: " + String(kind));
   }
 }
 
 // Read a required text field from an operation, or refuse the operation.
-function requiredField(operation: Operation, field: "message" | "to" | "name"): string {
+function requiredField(operation: Operation, field: "message" | "to" | "name" | "deal"): string {
   const value = operation?.[field];
   if (typeof value !== "string" || value.trim() === "") {
     throw new Error(operation?.kind + " operation needs " + field);
   }
   return value.trim();
+}
+
+// Read an optional whole-number term from an operation. A missing term is no
+// term at all, while anything that is not a positive whole number is refused.
+function optionalAmount(operation: Operation, field: "gold" | "goldPerTurn"): number | undefined {
+  const value: unknown = operation?.[field];
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+  if (typeof value !== "number" || !Number.isInteger(value) || value <= 0) {
+    throw new Error(operation?.kind + " operation needs a positive whole number for " + field);
+  }
+  return value;
+}
+
+// Read an optional resource term from an operation. A blank value counts as no
+// term, so a proposal that carries only a blank resource has nothing to trade.
+function optionalResource(operation: Operation): string | undefined {
+  const value: unknown = operation?.resource;
+  if (typeof value !== "string") {
+    return undefined;
+  }
+  const trimmed = value.trim();
+  return trimmed === "" ? undefined : trimmed;
+}
+
+// Read the optional message that comes with a deal proposal. Unlike a direct
+// message, a proposal needs no words to be valid.
+function optionalMessage(operation: Operation): string | undefined {
+  const value: unknown = operation?.message;
+  if (typeof value !== "string") {
+    return undefined;
+  }
+  const trimmed = value.trim();
+  return trimmed === "" ? undefined : trimmed;
+}
+
+// Whether a proposal already has an answer from either side. The first accept or
+// reject settles a deal, so a second answer is refused.
+function dealAnswered(entries: readonly SocialEntry[], deal: string): boolean {
+  return entries.some(
+    (entry) => (entry.kind === "deal-accept" || entry.kind === "deal-reject") && entry.deal === deal
+  );
+}
+
+// The terms of a deal-propose entry, as a reader outside the store needs them.
+function dealTermsOf(entry: SocialEntry): DealTerms {
+  const terms: DealTerms = { id: entry.id, from: entry.from, to: entry.to ?? "" };
+  if (entry.gold !== undefined) {
+    terms.gold = entry.gold;
+  }
+  if (entry.goldPerTurn !== undefined) {
+    terms.goldPerTurn = entry.goldPerTurn;
+  }
+  if (entry.resource !== undefined) {
+    terms.resource = entry.resource;
+  }
+  if (entry.text !== undefined) {
+    terms.text = entry.text;
+  }
+  return terms;
 }
 
 // Read a group id from an operation and require that the group was created.
@@ -394,6 +583,10 @@ function seesEntry(entry: SocialEntry, seat: string, entries: readonly SocialEnt
       return entry.from === seat || groupMembers(entries, entry.id).has(seat);
     case "invite":
       return entry.to === seat;
+    case "deal-propose":
+    case "deal-accept":
+    case "deal-reject":
+      return entry.from === seat || entry.to === seat;
     case "accept":
     case "leave":
       return entry.from === seat || (entry.group !== undefined && groupMembers(entries, entry.group).has(seat));
