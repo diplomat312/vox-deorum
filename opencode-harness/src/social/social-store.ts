@@ -158,6 +158,42 @@ export async function readInbox(runDir: string, seat: string): Promise<InboxPage
 
 // Read one seat's persisted cursor, counted in log entries. A missing file, or a
 // seat that never read, starts at zero.
+// Read everything a seat can see, without moving its cursor.
+//
+// readInbox answers "what is new for this seat" and advances the cursor as it
+// goes. This answers "what does this seat know", which is what a view of the
+// standing between seats needs. It never writes, so it is safe to call as often
+// as a caller likes.
+export async function readVisible(runDir: string, seat: string): Promise<SocialEntry[]> {
+  if (typeof seat !== "string" || seat.trim() === "") {
+    throw new Error("a seat is required");
+  }
+  const entries = await readLog(runDir);
+  return entries.filter((entry) => seesEntry(entry, seat, entries));
+}
+
+// The seats an entry is addressed to, beyond its author.
+//
+// A direct message does not store a recipient the way an invitation does: its
+// scope carries both seats, written "dm:<a>:<b>". Anything reading a log has to
+// know that, so the interpretation lives here rather than in each caller.
+export function addressesOf(entry: SocialEntry): string[] {
+  if (entry.kind === "dm") {
+    return directPartners(entry.to ?? "").filter((seat) => seat !== entry.from);
+  }
+  if (entry.kind === "invite" && typeof entry.to === "string") {
+    return [entry.to];
+  }
+  return [];
+}
+
+// The two seats a direct message is between, or an empty list when the scope is
+// not a direct message.
+export function directPairOf(entry: SocialEntry): string[] {
+  if (entry.kind !== "dm") return [];
+  return directPartners(entry.to ?? "").sort();
+}
+
 export async function getCursor(runDir: string, seat: string): Promise<number> {
   const all = await readCursorFile(runDir);
   const value = all[seat];

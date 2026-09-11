@@ -9,6 +9,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { DiplomacyGroup, DiplomacyMessage, DiplomacyView } from "../../social/diplomacy-view.js";
 import { socialDiplomacyView } from "../../social/diplomacy-view.js";
+import { addressesOf, readVisible, type SocialEntry } from "../../social/social-store.js";
 import type { InspectAnswer, SeatInfo, World } from "../types.js";
 import { availablePolicies, availableTechs, buildOptions, eraForTechCount } from "./content.js";
 import {
@@ -40,6 +41,10 @@ export interface SimulatedWorldOptions {
   config?: SimConfig;
   // Circumstances to inject on chosen turns.
   shocks?: ScenarioShock[];
+  // Whether to render a diplomacy standing section. This is a variant toggle
+  // rather than a permanent feature, because the point of having a simulated
+  // environment is to measure what showing a seat more actually changes.
+  diplomacyBriefing?: boolean;
 }
 
 // How a seat regards another, trimmed to what a seat is allowed to know.
@@ -84,11 +89,23 @@ export class SimulatedWorld implements World {
   // The diplomacy view over the run's social log.
   private readonly diplomacy: DiplomacyView;
 
+  // Directory holding the run's social log, read when a seat needs its whole
+  // correspondence rather than only what arrived since it last looked.
+  private readonly socialDirectory: string;
+
   // Messages delivered to each seat for the turn it is about to play.
   private readonly delivered = new Map<string, DiplomacyMessage[]>();
 
   // Groups visible to each seat for the turn it is about to play.
   private readonly groups = new Map<string, DiplomacyGroup[]>();
+
+  // Everything each seat can see, collected when its turn begins. This is the
+  // seat's whole correspondence, not only what arrived since it last looked, so
+  // the standing section can say who has been in touch.
+  private readonly visible = new Map<string, SocialEntry[]>();
+
+  // Whether the observation carries the diplomacy standing section.
+  private readonly diplomacyBriefing: boolean;
 
   // Build a world over the given state.
   constructor(options: SimulatedWorldOptions) {
@@ -97,6 +114,8 @@ export class SimulatedWorld implements World {
     this.config = options.config ?? defaultSimConfig;
     this.shocks = options.shocks ?? [];
     this.diplomacy = socialDiplomacyView(options.socialDirectory);
+    this.socialDirectory = options.socialDirectory;
+    this.diplomacyBriefing = options.diplomacyBriefing ?? false;
   }
 
   // Build a read-only view of a world that another process has already
@@ -158,6 +177,7 @@ export class SimulatedWorld implements World {
     }
     this.delivered.set(seat, await this.diplomacy.deliverMessages(seat));
     this.groups.set(seat, await this.diplomacy.groupsFor(seat));
+    this.visible.set(seat, await readVisible(this.socialDirectory, seat));
   }
 
   // Render the observation for a seat, in the same shape the live game uses.
@@ -220,6 +240,10 @@ export class SimulatedWorld implements World {
     lines.push(this.messagesSection(seat));
     lines.push("");
     lines.push(this.groupsSection(seat));
+    if (this.diplomacyBriefing) {
+      lines.push("");
+      lines.push(this.standingSection(seat, others));
+    }
     lines.push("");
     lines.push("Deal thread (deal_propose sends; deal_accept {proposalId} enacts; deal_reject {proposalId} declines; inspect(deals) shows what is tradable):");
     lines.push("- No deals on the table.");
@@ -396,6 +420,48 @@ export class SimulatedWorld implements World {
 
   // The groups a seat belongs to or has been invited to.
   private groupsSection(seat: string): string {
+    return this.groupsText(seat);
+  }
+
+  // The diplomacy standing section, which names the state of play with each
+  // other seat rather than leaving it implicit in the message history. It also
+  // states that a direct message is private, because a seat that does not know
+  // that never has a reason to use one.
+  private standingSection(seat: string, others: string[]): string {
+    const entries = this.visible.get(seat) ?? [];
+    const lines = others.map((other) => {
+      const player = this.state.seats[other];
+      const fromThem = entries.filter(
+        (entry) =>
+          entry.from === other &&
+          (entry.kind === "world" || addressesOf(entry).includes(seat) || entry.kind === "group-msg")
+      );
+      const toThem = entries.filter((entry) => entry.from === seat && addressesOf(entry).includes(other));
+      const last = fromThem[fromThem.length - 1];
+      const heard = fromThem.length === 0 ? "has not been in touch" : "last said: " + (last.text ?? "(no text)");
+      const spoke = toThem.length === 0 ? "you have sent them nothing privately" : "you have sent them " + toThem.length + " private message(s)";
+      const relation = this.state.seats[seat].relationships[other];
+      const regard = relation?.atWar ? "AT WAR" : relation?.privateValue && relation.privateValue < 0 ? "you do not trust them" : "no private feeling recorded";
+      return (
+        "- " +
+        player.civ +
+        ": " +
+        heard +
+        "; " +
+        spoke +
+        "; " +
+        regard +
+        "."
+      );
+    });
+    return (
+      "Diplomacy standing (a direct message goes only to that one seat and no one else reads it; a world message is heard by everyone):\n" +
+      (lines.length === 0 ? "- No one else is at the table." : lines.join("\n"))
+    );
+  }
+
+  // The group lines a seat reads.
+  private groupsText(seat: string): string {
     const groups = this.groups.get(seat) ?? [];
     const header =
       "Groups for you (up to 8 social operations per turn; send all of them in one communicate operations array 'group:<id>'):";

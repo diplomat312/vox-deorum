@@ -49,6 +49,10 @@ export interface SimulationOptions {
   shocks?: ScenarioShock[];
   // The rates the world advances at.
   config?: SimConfig;
+  // Whether the observation carries the diplomacy standing section. This is the
+  // first thing a run varies, because a seat that cannot see the state of its
+  // contact with anyone has no reason to change it.
+  diplomacyBriefing?: boolean;
 }
 
 // What a finished run reports.
@@ -86,7 +90,8 @@ export async function simulate(options: SimulationOptions): Promise<SimulationRe
     }),
     socialDirectory,
     config: options.config,
-    shocks: options.shocks ?? []
+    shocks: options.shocks ?? [],
+    diplomacyBriefing: options.diplomacyBriefing ?? false
   });
 
   // One OpenCode server per seat, because each seat needs its own tool server
@@ -245,6 +250,7 @@ async function main(): Promise<void> {
     value("server", path.join(repositoryRoot, "opencode-harness/dist/mcp/seat-mcp.js")) as string
   );
   const scenarioFile = value("scenario", undefined) as string | undefined;
+  const briefing = (value("briefing", "off") as string) === "on";
   const shocks = scenarioFile ? await readScenario(repositoryRoot, scenarioFile) : [];
 
   const result = await simulate({
@@ -257,7 +263,8 @@ async function main(): Promise<void> {
     model: { providerID: modelSetting[0], modelID: modelSetting.slice(1).join("/") },
     serverEntry,
     portBase,
-    shocks
+    shocks,
+    diplomacyBriefing: briefing
   });
   logger.info(
     "Run " +

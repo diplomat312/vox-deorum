@@ -197,4 +197,32 @@ describe("the generated environment", () => {
     expect(state.seats.korea.currentResearch).toBe("Pottery");
     expect(observation).toContain("Research set to Pottery");
   });
+
+  it("should leave the diplomacy standing out of the observation by default", async () => {
+    const state = createSimState({ seats, seed: 5, game: "sim" });
+    const world = new SimulatedWorld({ state, socialDirectory: directory });
+    await world.beginTurn("korea", 1);
+
+    expect(world.observation("korea", 1)).not.toContain("Diplomacy standing");
+  });
+
+  it("should name the state of contact when the diplomacy standing is on", async () => {
+    const state = createSimState({ seats, seed: 5, game: "sim" });
+    const world = new SimulatedWorld({ state, socialDirectory: directory, diplomacyBriefing: true });
+    await applyOperations(directory, "austria", [{ kind: "world", message: "Greetings from Vienna." }], { seats });
+    await applyOperations(directory, "korea", [{ kind: "dm", to: "siam", message: "A private word." }], { seats });
+
+    await world.beginTurn("korea", 1);
+    const observation = world.observation("korea", 1);
+
+    // The section states what a private message is, because a seat that does
+    // not know it is private has no reason to send one.
+    expect(observation).toContain("Diplomacy standing");
+    expect(observation).toContain("a direct message goes only to that one seat");
+    // Austria has been heard from, and Korea's own private word to Siam is
+    // reflected back so it can see that it has opened a channel.
+    expect(observation).toContain("Austria: last said: Greetings from Vienna.");
+    expect(observation).toContain("Siam: has not been in touch; you have sent them 1 private message(s)");
+    expect(observation).toContain("Iroquois: has not been in touch");
+  });
 });

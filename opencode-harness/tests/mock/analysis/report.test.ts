@@ -50,9 +50,11 @@ describe("the run report", () => {
       game: "sim",
       trace: new Map([["korea", [record()]], ["austria", [record({ seat: "austria" })]]]),
       social: [
-        { id: "e-1", at: "t", from: "korea", kind: "dm" as const, to: "austria", text: "hello" },
-        { id: "e-2", at: "t", from: "austria", kind: "dm" as const, to: "korea", text: "hi back" },
-        { id: "e-3", at: "t", from: "korea", kind: "world" as const, text: "to everyone" }
+        // A direct message carries both seats in its scope, sorted, which is
+        // how the store writes it.
+        { id: "e-1", at: "t", from: "korea", kind: "dm" as const, to: "dm:austria:korea", text: "hello" },
+        { id: "e-2", at: "t", from: "austria", kind: "dm" as const, to: "dm:austria:korea", text: "hi back" },
+        { id: "e-3", at: "t", from: "korea", kind: "world" as const, to: "world", text: "to everyone" }
       ],
       toolCalls: []
     };
@@ -123,8 +125,8 @@ describe("the run report", () => {
         ["austria", [record({ seat: "austria", turn: 1 })]]
       ]),
       social: [
-        { id: "e-1", at: "t", from: "korea", kind: "world" as const, text: "hello" },
-        { id: "e-2", at: "t", from: "austria", kind: "dm" as const, to: "korea", text: "hi" }
+        { id: "e-1", at: "t", from: "korea", kind: "world" as const, to: "world", text: "hello" },
+        { id: "e-2", at: "t", from: "austria", kind: "dm" as const, to: "dm:austria:korea", text: "hi" }
       ],
       toolCalls: []
     };
@@ -158,7 +160,7 @@ describe("the run report", () => {
     await mkdir(path.join(runDirectory, "social"), { recursive: true });
     await writeFile(
       path.join(runDirectory, "social", "social.jsonl"),
-      JSON.stringify({ id: "e-1", at: "t", from: "korea", kind: "world", text: "hello" }) + "\n",
+      JSON.stringify({ id: "e-1", at: "t", from: "korea", kind: "world", to: "world", text: "hello" }) + "\n",
       "utf8"
     );
     await writeFile(

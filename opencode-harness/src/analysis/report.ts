@@ -7,7 +7,7 @@
 
 import { writeFile } from "node:fs/promises";
 import path from "node:path";
-import type { SocialEntry } from "../social/social-store.js";
+import { addressesOf, directPairOf, type SocialEntry } from "../social/social-store.js";
 import { allTurns, readRun, type RunData, type RunToolCall } from "./read-run.js";
 import type { TraceRecord } from "../trace/types.js";
 
@@ -142,8 +142,9 @@ function countAddressed(social: SocialEntry[], seats: string[]): Record<string, 
   const addressed: Record<string, number> = {};
   for (const seat of seats) addressed[seat] = 0;
   for (const entry of social) {
-    if (entry.kind === "dm" && entry.to && addressed[entry.to] !== undefined) addressed[entry.to] += 1;
-    if (entry.kind === "invite" && entry.to && addressed[entry.to] !== undefined) addressed[entry.to] += 1;
+    for (const seat of addressesOf(entry)) {
+      if (addressed[seat] !== undefined) addressed[seat] += 1;
+    }
   }
   return addressed;
 }
@@ -153,8 +154,9 @@ function directPairs(social: SocialEntry[]): { counts: Record<string, number>; a
   const counts: Record<string, number> = {};
   const directions = new Map<string, Set<string>>();
   for (const entry of social) {
-    if (entry.kind !== "dm" || !entry.to) continue;
-    const key = [entry.from, entry.to].sort().join("|");
+    const pair = directPairOf(entry);
+    if (pair.length !== 2) continue;
+    const key = pair.join("|");
     counts[key] = (counts[key] ?? 0) + 1;
     const pairDirections = directions.get(key) ?? new Set<string>();
     pairDirections.add(entry.from);
@@ -175,14 +177,14 @@ export function diplomacyMetrics(data: RunData, seats: string[]): DiplomacyMetri
     byKind[entry.kind] = (byKind[entry.kind] ?? 0) + 1;
   }
   const pairs = directPairs(social);
-  const directMessages = byKind.dm ?? 0;
-  const directSenders = new Set(social.filter((entry) => entry.kind === "dm").map((entry) => entry.from));
-  const answeredDirect = social.filter(
-    (entry) =>
-      entry.kind === "dm" &&
-      entry.to !== undefined &&
-      social.some((other) => other.kind === "dm" && other.from === entry.to && other.to === entry.from)
-  ).length;
+  const directMessages = social.filter((entry) => entry.kind === "dm");
+  // A direct message counts as answered in kind when its pair saw traffic in
+  // both directions, which is the plainest reading of whether talking went
+  // anywhere.
+  const answeredDirect = directMessages.filter((entry) => {
+    const pair = directPairOf(entry).join("|");
+    return pairs.answered.includes(pair);
+  }).length;
 
   // Turns on which the table was silent, for the longest stretch of quiet.
   const turnsPlayed = [...new Set(allTurns(data).map((record) => record.turn))].sort((left, right) => left - right);
@@ -219,7 +221,7 @@ export function diplomacyMetrics(data: RunData, seats: string[]): DiplomacyMetri
     refusals,
     turnsWithSocial: speakingTurns.size,
     longestSilence,
-    directReplyRate: directSenders.size === 0 ? 0 : answeredDirect / directMessages
+    directReplyRate: directMessages.length === 0 ? 0 : answeredDirect / directMessages.length
   };
 }
 
