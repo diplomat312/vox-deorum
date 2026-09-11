@@ -54,6 +54,10 @@ const measureRows: Array<{ label: string; read: (entry: RunMeasures) => number |
   { label: "Posture changes", read: (entry) => entry.postures },
   { label: "Seats that never set a posture", read: (entry) => entry.seatsWithoutPosture },
   { label: "Turns that changed something lasting", read: (entry) => entry.actionRate },
+  { label: "Pairs that spoke on more than one turn", read: (entry) => entry.sustainedPairs },
+  { label: "Pairs still in contact at the end", read: (entry) => entry.pairsStillActiveAtEnd },
+  { label: "Median span of a private channel", read: (entry) => entry.medianSpan },
+  { label: "Median turn coverage of a channel", read: (entry) => entry.medianCoverage },
   { label: "Turns that did not finish", read: (entry) => entry.unfinished }
 ];
 

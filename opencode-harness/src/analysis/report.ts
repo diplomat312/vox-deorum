@@ -11,6 +11,7 @@ import { addressesOf, directPairOf, type SocialEntry } from "../social/social-st
 import { qualityMetrics, type QualityMetrics } from "./quality.js";
 import { effectivenessMetrics, type EffectivenessMetrics } from "./effectiveness.js";
 import { readWorldSummary, type WorldSummary } from "./world-summary.js";
+import { durabilityMetrics, type DurabilityMetrics } from "./durability.js";
 import { allTurns, readRun, type RunData, type RunToolCall } from "./read-run.js";
 import type { TraceRecord } from "../trace/types.js";
 
@@ -125,6 +126,8 @@ export interface RunReport {
   effectiveness: EffectivenessMetrics;
   // What the world recorded by the end, when the run left a snapshot.
   world: WorldSummary | null;
+  // Whether any relationship lasted rather than merely happened.
+  durability: DurabilityMetrics;
 }
 
 // Pull the information gaps back out of a turn's applied line.
@@ -348,6 +351,7 @@ export async function buildReport(runDirectory: string): Promise<RunReport> {
     quality: qualityMetrics(data.social, seats),
     effectiveness: effectivenessMetrics(turns, seats),
     world: await readWorldSummary(runDirectory),
+    durability: durabilityMetrics(turns, data.social),
     roundup: turns.map((record) => ({
       seat: record.seat,
       turn: record.turn,
@@ -406,6 +410,10 @@ export function renderReport(report: RunReport, toolCalls: RunToolCall[]): strin
   lines.push("| Direct messages answered in kind | " + Math.round(diplomacy.directReplyRate * 100) + "% |");
   lines.push("| Private channels opened | " + diplomacy.activePairs + " |");
   lines.push("| Median lifespan of a private channel | " + diplomacy.medianPairMinutes + " minutes |");
+  lines.push("| Pairs that spoke on more than one turn | " + report.durability.sustainedPairs + " |");
+  lines.push("| Pairs still in contact at the end | " + report.durability.pairsStillActiveAtEnd + " |");
+  lines.push("| Median span of a private channel | " + report.durability.medianSpan + " turns |");
+  lines.push("| Median turn coverage of a channel | " + Math.round(report.durability.medianCoverage * 100) + "% |");
   lines.push("");
   if (Object.keys(diplomacy.authored).length > 0) {
     lines.push("Operations authored by seat: " + Object.entries(diplomacy.authored).map(([seat, count]) => seat + " " + count).join(", ") + ".");

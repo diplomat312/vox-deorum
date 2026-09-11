@@ -42,6 +42,11 @@ function report(overrides: Partial<RunReport> = {}): RunReport {
       postures: 0,
       seatsWithoutPosture: 0,
       actionRate: 0
+      ,
+      sustainedPairs: 0,
+      pairsStillActiveAtEnd: 0,
+      medianSpan: 0,
+      medianCoverage: 0
     },
     effectiveness: {
       actions: [],
@@ -64,6 +69,16 @@ function report(overrides: Partial<RunReport> = {}): RunReport {
       contextResets: 0
     },
     gaps: {},
+    durability: {
+      pairs: [],
+      sustainedPairs: 0,
+      medianSpan: 0,
+      medianCoverage: 0,
+      pairsStillActiveAtEnd: 0,
+      turnsPlayed: 0,
+      lastTurn: 0
+    },
+    world: null,
     quality: {
       messages: 0,
       byMove: {

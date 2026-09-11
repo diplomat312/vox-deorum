@@ -53,6 +53,15 @@ export interface RunMeasures {
   seatsWithoutPosture: number;
   // Share of seat turns that changed something lasting.
   actionRate: number;
+  // Pairs that spoke on more than one turn, which is the difference between an
+  // exchange and a relationship.
+  sustainedPairs: number;
+  // Pairs still in contact in the last quarter of the game.
+  pairsStillActiveAtEnd: number;
+  // How far apart a channel's first and last message were, in turns.
+  medianSpan: number;
+  // Contact as a share of the turns a channel was open for.
+  medianCoverage: number;
   // Social operations the world refused.
   refusals: number;
   // Share of prompt tokens served from the cache.
@@ -105,6 +114,10 @@ export function measuresOf(report: RunReport): RunMeasures {
     postures: report.effectiveness.postures,
     seatsWithoutPosture: report.effectiveness.seatsWithoutPosture.length,
     actionRate: report.effectiveness.actionRate,
+    sustainedPairs: report.durability.sustainedPairs,
+    pairsStillActiveAtEnd: report.durability.pairsStillActiveAtEnd,
+    medianSpan: report.durability.medianSpan,
+    medianCoverage: report.durability.medianCoverage,
     refusals: report.diplomacy.refusals,
     cacheHitRatio: report.cost.cacheHitRatio,
     inputPerTurn: report.cost.inputPerTurn,
@@ -154,6 +167,10 @@ const rows: Array<{ label: string; read: (entry: RunMeasures) => number | null }
   { label: "Posture changes", read: (entry) => entry.postures },
   { label: "Seats that never set a posture", read: (entry) => entry.seatsWithoutPosture },
   { label: "Turns that changed something lasting", read: (entry) => entry.actionRate },
+  { label: "Pairs that spoke on more than one turn", read: (entry) => entry.sustainedPairs },
+  { label: "Pairs still in contact at the end", read: (entry) => entry.pairsStillActiveAtEnd },
+  { label: "Median span of a private channel", read: (entry) => entry.medianSpan },
+  { label: "Median turn coverage of a channel", read: (entry) => entry.medianCoverage },
   { label: "Refused social operations", read: (entry) => entry.refusals },
   { label: "Cache hit ratio", read: (entry) => entry.cacheHitRatio },
   { label: "Uncached input per turn", read: (entry) => entry.inputPerTurn },
