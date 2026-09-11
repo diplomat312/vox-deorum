@@ -21,6 +21,12 @@ The mock tiers are what make those jobs meaningful: they run without a game, a D
 
 The pre-submit routine below mirrors those jobs, so a green local run means a green CI run.
 
+One caveat about the lockfile. CI installs with `npm ci` on Node 20, which ships npm 10, while a newer npm on a developer machine can write a lockfile that npm 10 rejects as out of sync, failing every job at the install step before any check runs. When the lockfile needs to change, regenerate it with the same major npm CI uses:
+
+```
+npx --yes npm@10 install --package-lock-only
+```
+
 ## Running the tests
 
 From the repo root, `npm run test:all` runs every workspace's suite and then the UI suite (`npm run test -ws && npm --prefix vox-agents/ui run test`). The UI sits outside the npm workspaces, which is why it needs that second command.
