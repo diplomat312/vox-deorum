@@ -393,6 +393,28 @@ describe("the generated environment", () => {
     expect(observation).toContain("Iroquois: has not been in touch");
   });
 
+  it("should name posture and councils only when asked to", async () => {
+    const state = createSimState({ seats, seed: 5, game: "sim" });
+    const plain = new SimulatedWorld({ state, socialDirectory: directory, diplomacyCoaching: true });
+    const named = new SimulatedWorld({
+      state: createSimState({ seats, seed: 5, game: "sim" }),
+      socialDirectory: directory,
+      diplomacyCoaching: true,
+      postureCoaching: true,
+      councilCoaching: true
+    });
+    await plain.beginTurn("korea", 1);
+    await named.beginTurn("korea", 1);
+
+    // Posture and councils are separate from coaching on purpose: a seat that
+    // talks without acting is the gap this closes, and mixing it into the
+    // coaching line would make the two effects impossible to tell apart.
+    expect(plain.observation("korea", 1)).not.toContain("A posture action is how the game records");
+    const observation = named.observation("korea", 1);
+    expect(observation).toContain("A posture action is how the game records how you regard another seat");
+    expect(observation).toContain("A council is a private room for part of the table");
+  });
+
   it("should close with the plain instruction unless coaching is on", async () => {
     const state = createSimState({ seats, seed: 5, game: "sim" });
     const plain = new SimulatedWorld({ state, socialDirectory: directory });

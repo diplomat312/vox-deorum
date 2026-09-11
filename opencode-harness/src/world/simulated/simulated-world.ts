@@ -64,6 +64,14 @@ export interface SimulatedWorldOptions {
   // the second variant a run tries, because the seats were observed weighing
   // whether to speak, finding no reason either way, and staying silent.
   diplomacyCoaching?: boolean;
+  // Whether the closing instruction names posture as the way a relationship is
+  // recorded in the game rather than only talked about. Reached for in almost
+  // no run, which makes it the clearest gap between talking and consequence.
+  postureCoaching?: boolean;
+  // Whether the closing instruction says what a council is for. No run has
+  // formed one since the invitation path was fixed, so this tests whether the
+  // feature is unused because its purpose is unstated.
+  councilCoaching?: boolean;
 }
 
 // How a seat regards another, trimmed to what a seat is allowed to know.
@@ -133,6 +141,10 @@ export class SimulatedWorld implements World {
   // Whether the observation coaches a seat on what dialogue is for.
   private readonly diplomacyCoaching: boolean;
 
+  // Whether the closing instruction names posture and councils.
+  private readonly postureCoaching: boolean;
+  private readonly councilCoaching: boolean;
+
   // Build a world over the given state.
   constructor(options: SimulatedWorldOptions) {
     this.state = options.state;
@@ -143,6 +155,8 @@ export class SimulatedWorld implements World {
     this.socialDirectory = options.socialDirectory;
     this.diplomacyBriefing = options.diplomacyBriefing ?? false;
     this.diplomacyCoaching = options.diplomacyCoaching ?? false;
+    this.postureCoaching = options.postureCoaching ?? false;
+    this.councilCoaching = options.councilCoaching ?? false;
   }
 
   // Build a read-only view of a world that another process has already
@@ -319,7 +333,12 @@ export class SimulatedWorld implements World {
     lines.push(this.dealsSection(seat));
     lines.push("");
     lines.push(
-      this.diplomacyCoaching ? coachedInstruction() : plainInstruction()
+      this.diplomacyCoaching
+        ? coachedInstruction({
+            posture: this.postureCoaching,
+            council: this.councilCoaching
+          })
+        : plainInstruction()
     );
     return lines.join("\n");
   }
@@ -723,8 +742,8 @@ function plainInstruction(): string {
 // It states what talking does rather than asking a seat to talk. A seat told to
 // be talkative produces noise, while a seat that knows what a message is for
 // can decide for itself whether this turn needs one.
-function coachedInstruction(): string {
-  return [
+function coachedInstruction(more: { posture: boolean; council: boolean }): string {
+  const lines = [
     "You may inspect anything else you need (inspect). When finished, commit your actions (commit_turn) or pass. Keep the rationale short.",
     "",
     "Before you commit, decide who needs to hear from you this turn.",
@@ -733,5 +752,16 @@ function coachedInstruction(): string {
     "- A seat that has written to you is waiting on you, and a seat that is guessing about you will guess badly.",
     "- A deal is a promise with terms: gold now, gold for ten turns, or a supply of a resource. What you promise, you pay.",
     "- Saying nothing is a decision like any other, and it leaves the other seats to draw their own conclusions."
-  ].join("\n");
+  ];
+  if (more.posture) {
+    lines.push(
+      "- Words are not the only way to be read. A posture action is how the game records how you regard another seat, and it outlasts anything you say, so set one when your reading of them has changed."
+    );
+  }
+  if (more.council) {
+    lines.push(
+      "- A council is a private room for part of the table: seats you invite and which accept can speak there without the others hearing, which is how a smaller group agrees something before it is said in the open."
+    );
+  }
+  return lines.join("\n");
 }

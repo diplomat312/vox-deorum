@@ -55,6 +55,10 @@ export interface SimulationOptions {
   diplomacyBriefing?: boolean;
   // Whether the observation coaches a seat on what dialogue is for.
   diplomacyCoaching?: boolean;
+  // Whether to name posture as the way a relationship is recorded.
+  postureCoaching?: boolean;
+  // Whether to say what a council is for.
+  councilCoaching?: boolean;
   // How long one seat turn may take before the harness gives up on it. Kept
   // below the five minutes a socket layer will otherwise wait, so the harness
   // notices a stall first and can clear the work it started.
@@ -102,6 +106,9 @@ export async function simulate(options: SimulationOptions): Promise<SimulationRe
     diplomacyBriefing: options.diplomacyBriefing ?? false
     ,
     diplomacyCoaching: options.diplomacyCoaching ?? false
+    ,
+    postureCoaching: options.postureCoaching ?? false,
+    councilCoaching: options.councilCoaching ?? false
   });
 
   // One OpenCode server per seat, because each seat needs its own tool server
@@ -333,6 +340,8 @@ async function main(): Promise<void> {
   const scenarioFile = value("scenario", undefined) as string | undefined;
   const briefing = (value("briefing", "off") as string) === "on";
   const coaching = (value("coaching", "off") as string) === "on";
+  const postureCoaching = (value("posture-coaching", "off") as string) === "on";
+  const councilCoaching = (value("council-coaching", "off") as string) === "on";
   const turnTimeoutMs = Number(value("turn-timeout", "150000"));
   const shocks = scenarioFile ? await readScenario(repositoryRoot, scenarioFile) : [];
 
@@ -351,6 +360,9 @@ async function main(): Promise<void> {
     diplomacyCoaching: coaching
     ,
     turnTimeoutMs
+    ,
+    postureCoaching,
+    councilCoaching
   });
   logger.info(
     "Run " +
