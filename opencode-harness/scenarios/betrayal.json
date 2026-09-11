@@ -1,16 +1,16 @@
 [
   {
-    "turn": 4,
+    "turn": 12,
     "kind": "betrayal",
     "seat": "austria",
     "target": "korea",
-    "detail": "Austria broke their word to Korea. Vienna's envoys are no longer welcome in Seoul."
+    "detail": "Austria broke their word to Korea. Vienna's envoys are no longer welcome in Seoul, and the terms Austria agreed to were never honoured."
   },
   {
-    "turn": 7,
+    "turn": 18,
     "kind": "military-surge",
     "seat": "iroquois",
     "magnitude": 2,
-    "detail": "Iroquois war parties have gathered on the Iroquois frontier"
+    "detail": "Iroquois war parties have gathered in numbers on the frontier"
   }
 ]
