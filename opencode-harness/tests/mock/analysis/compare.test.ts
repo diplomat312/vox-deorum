@@ -38,7 +38,19 @@ function report(overrides: Partial<RunReport> = {}): RunReport {
       personalisedRate: 0,
       metaRate: 0,
       proposals: 0,
-      repairs: 0
+      repairs: 0,
+      postures: 0,
+      seatsWithoutPosture: 0,
+      actionRate: 0
+    },
+    effectiveness: {
+      actions: [],
+      byType: {},
+      postures: 0,
+      turnsWithPosture: 0,
+      seatsWithoutPosture: [],
+      actionRate: 0,
+      consequential: 0
     },
     cost: {
       perSeat: {},

@@ -51,6 +51,9 @@ const measureRows: Array<{ label: string; read: (entry: RunMeasures) => number |
   { label: "Messages that leaked the machinery", read: (entry) => entry.metaRate },
   { label: "Proposals", read: (entry) => entry.proposals },
   { label: "Repairs after harm", read: (entry) => entry.repairs },
+  { label: "Posture changes", read: (entry) => entry.postures },
+  { label: "Seats that never set a posture", read: (entry) => entry.seatsWithoutPosture },
+  { label: "Turns that changed something lasting", read: (entry) => entry.actionRate },
   { label: "Turns that did not finish", read: (entry) => entry.unfinished }
 ];
 

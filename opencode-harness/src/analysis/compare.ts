@@ -47,6 +47,12 @@ export interface RunMeasures {
   proposals: number;
   // Messages that repaired harm after a grievance.
   repairs: number;
+  // Posture changes, which are diplomacy expressed as a game action.
+  postures: number;
+  // Seats that never set a posture toward anyone.
+  seatsWithoutPosture: number;
+  // Share of seat turns that changed something lasting.
+  actionRate: number;
   // Social operations the world refused.
   refusals: number;
   // Share of prompt tokens served from the cache.
@@ -96,6 +102,9 @@ export function measuresOf(report: RunReport): RunMeasures {
     metaRate: report.quality.metaRate,
     proposals: report.quality.proposals,
     repairs: report.quality.repairs,
+    postures: report.effectiveness.postures,
+    seatsWithoutPosture: report.effectiveness.seatsWithoutPosture.length,
+    actionRate: report.effectiveness.actionRate,
     refusals: report.diplomacy.refusals,
     cacheHitRatio: report.cost.cacheHitRatio,
     inputPerTurn: report.cost.inputPerTurn,
@@ -142,6 +151,9 @@ const rows: Array<{ label: string; read: (entry: RunMeasures) => number | null }
   { label: "Messages that leaked the machinery", read: (entry) => entry.metaRate },
   { label: "Proposals", read: (entry) => entry.proposals },
   { label: "Repairs after harm", read: (entry) => entry.repairs },
+  { label: "Posture changes", read: (entry) => entry.postures },
+  { label: "Seats that never set a posture", read: (entry) => entry.seatsWithoutPosture },
+  { label: "Turns that changed something lasting", read: (entry) => entry.actionRate },
   { label: "Refused social operations", read: (entry) => entry.refusals },
   { label: "Cache hit ratio", read: (entry) => entry.cacheHitRatio },
   { label: "Uncached input per turn", read: (entry) => entry.inputPerTurn },

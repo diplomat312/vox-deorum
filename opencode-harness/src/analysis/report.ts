@@ -9,6 +9,7 @@ import { writeFile } from "node:fs/promises";
 import path from "node:path";
 import { addressesOf, directPairOf, type SocialEntry } from "../social/social-store.js";
 import { qualityMetrics, type QualityMetrics } from "./quality.js";
+import { effectivenessMetrics, type EffectivenessMetrics } from "./effectiveness.js";
 import { allTurns, readRun, type RunData, type RunToolCall } from "./read-run.js";
 import type { TraceRecord } from "../trace/types.js";
 
@@ -119,6 +120,8 @@ export interface RunReport {
   roundup: Array<{ seat: string; turn: number; thought: string; did: string }>;
   // What the messages actually did, as opposed to how many there were.
   quality: QualityMetrics;
+  // Whether the talking became anything in the world.
+  effectiveness: EffectivenessMetrics;
 }
 
 // Pull the information gaps back out of a turn's applied line.
@@ -340,6 +343,7 @@ export async function buildReport(runDirectory: string): Promise<RunReport> {
     cost: costMetrics(data, seats),
     gaps,
     quality: qualityMetrics(data.social, seats),
+    effectiveness: effectivenessMetrics(turns, seats),
     roundup: turns.map((record) => ({
       seat: record.seat,
       turn: record.turn,
@@ -423,6 +427,21 @@ export function renderReport(report: RunReport, toolCalls: RunToolCall[]): strin
     );
     lines.push("");
   }
+  lines.push("## What the talking changed");
+  lines.push("");
+  const actionKinds = Object.entries(report.effectiveness.byType)
+    .sort((left, right) => right[1] - left[1])
+    .map(([type, count]) => type + " " + count)
+    .join(", ");
+  lines.push("| Measure | Value |");
+  lines.push("| --- | --- |");
+  lines.push("| Posture changes, which are diplomacy as a game action | " + report.effectiveness.postures + " |");
+  lines.push("| Turns on which a seat changed its regard for someone | " + report.effectiveness.turnsWithPosture + " |");
+  lines.push("| Seats that never set a posture | " + (report.effectiveness.seatsWithoutPosture.join(", ") || "none") + " |");
+  lines.push("| Share of seat turns that changed something lasting | " + Math.round(report.effectiveness.actionRate * 100) + "% |");
+  lines.push("");
+  lines.push("Actions committed: " + (actionKinds || "none") + ".");
+  lines.push("");
   lines.push("## What the messages did");
   lines.push("");
   lines.push("| Move | Messages |");
