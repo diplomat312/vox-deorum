@@ -34,6 +34,7 @@ Run artifacts land under the run directory: `trace/` holds one JSONL file per se
 node dist/analysis/report-run.js <run-id>          # writes report.md and report.json
 node dist/analysis/compare-runs.js base variant    # baseline first, then variants
 node dist/analysis/watch-run.js <run-id>           # tails a run while it plays
+node dist/analysis/roundup-run.js <run-id>         # what each seat was thinking across the game
 ```
 
 The report measures how much the seats talked, who stayed silent, how long the quiet stretches ran, whether direct messages were answered in kind, and what it all cost, including the cache hit ratio and the cost per social operation. The comparison puts several runs side by side and lists what changed against the baseline.
@@ -62,4 +63,3 @@ Tests live in `tests/mock` and run entirely in process. They never launch Civili
 The stage order and the requirements behind this package live in [docs/plans/opencode-harness/](../docs/plans/opencode-harness/). What the runs have shown so far is recorded in [FINDINGS.md](FINDINGS.md).
 
 See [AGENTS.md](AGENTS.md) for the component conventions.
-

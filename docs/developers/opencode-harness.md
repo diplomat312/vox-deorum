@@ -38,7 +38,7 @@ node opencode-harness/dist/analysis/compare-variants.js plain coached
 node opencode-harness/dist/analysis/watch-run.js <run-id>
 ```
 
-The report measures how much the seats talked, who stayed silent, how long the quiet stretches ran, whether direct messages were answered in kind, how long a private channel stayed in use, and what it all cost, including the prompt cache hit ratio and the cost per social operation. The comparison places runs side by side and lists what changed against the baseline. Comparing variants puts the summaries of replicated variants together and marks a difference as a result only when the ranges do not overlap. The watcher tails a run while it plays.
+The report measures how much the seats talked, who stayed silent, how long the quiet stretches ran, whether direct messages were answered in kind, how long a private channel stayed in use, and what it all cost, including the prompt cache hit ratio and the cost per social operation. The comparison places runs side by side and lists what changed against the baseline. Comparing variants puts the summaries of replicated variants together and marks a difference as a result only when the ranges do not overlap. The watcher tails a run while it plays. The roundup reconstructs what each seat was thinking across the game, one moment at a time, keeping the sentence each reading came from.
 
 A run writes under `opencode-harness/runs/<run-id>`: `trace/` holds one JSONL file per seat, `social/` holds the diplomacy log and the tool call log, and `state/` holds the world snapshot the seats read.
 
