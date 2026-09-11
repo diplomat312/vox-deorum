@@ -12,7 +12,7 @@ Each stage is independently verifiable and ships on its own. Simulation before l
 | 4 | Simulated benchmark | Done | Several seats play a generated game together with a live diplomacy layer, and the run produces metrics and artifacts. |
 | 5 | Analysis, roundup and tuning | In progress | Reasoning reads back per seat and turn, roundups reconstruct intentions, and variants are compared on the richness, stability and cost frontier. |
 | 6 | Live path | Written, awaiting a game | The same seat runtime drives a real game through Vox MCP and the bridge, with the pacing policy and backend supervision. |
-| 7 | Human seat and interface | Not started | A person plays one seat in the same game, and a usable interface shows the seats, the politics and the traces. |
+| 7 | Human seat and interface | Seat done, interface ahead | A person plays one seat in the same game, and a usable interface shows the seats, the politics and the traces. |
 
 ## Stage 1: Corpus and world seam
 
@@ -62,4 +62,8 @@ Backend supervision, health checks and outage handling move from desirable to re
 
 ## Stage 7: Human seat and interface
 
-One seat in the same game belongs to a person, who sees the same information a model seat sees and acts through the same tools. The interface shows the table, the politics as they happen, and the reasoning behind a decision, which is the same trace store read through a different lens.
+One seat in the same game belongs to a person, who sees the same information a model seat sees and acts through the same tools.
+
+The seat is done. A person's turn is offered as files and answered as files: the briefing in one, the decision with its rationale, actions and messages in another, and a lookup available between the two. The person's rationale is kept as the seat's reasoning, their messages reach the table and their committed actions reach the world, so a game with someone in it is measured exactly like one without. It was proven end to end by a person and a model playing three turns together, with both seats appearing in the same trace and report.
+
+The interface is what remains. The four files are the protocol it will drive, so nothing in the runtime has to change for a window to sit on top of it: the table, the politics as they happen, and the reasoning behind a decision are all in the trace store already.

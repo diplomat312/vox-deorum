@@ -61,6 +61,25 @@ node dist/run/live.js --seats korea:0,austria:1 --turns 10 --run-id live-first
 
 Seats are given as `name:playerIndex` pairs, because a live game is addressed by player index. The run checks the tools it needs before its first turn and names anything missing, and its trace, report and roundup are the same as a simulated run's.
 
+## Playing a seat yourself
+
+Any seat can be played by a person instead of a model. With `--human` naming the seat, the harness offers that seat's turn as files in the seat's own directory and waits for a decision:
+
+```
+node dist/run/simulate.js --seats korea,austria --human korea --from 1 --to 10
+```
+
+Under `runs/<run-id>/seats/<seat>/`:
+
+| File | Who writes it | What it holds |
+| --- | --- | --- |
+| `pending-turn.json` | the harness | the briefing, identical to what a model seat reads |
+| `decision.json` | you | `{kind: 'commit'|'pass', rationale, actions, operations}` |
+| `request.json` | you | `{subject, detail}` for something you want to look up |
+| `answer.json` | the harness | the answer to that lookup |
+
+A person's rationale is kept as the seat's reasoning, their messages reach the table, their committed actions reach the world, and their turn appears in the same trace and report as a model's. A UI can drive the same four files later without the runtime learning anything new.
+
 ## Tests
 
 ```
