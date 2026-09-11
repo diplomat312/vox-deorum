@@ -1,0 +1,50 @@
+{
+  "name": "observer-go-deepseek-v4-flash",
+  "description": "All-AI spectator game: four OpenCode Zen OX Alpha strategist civilizations and four standard Vox Populi AIs, with visible animations and observer chat enabled.",
+  "type": "strategist",
+  "autoPlay": true,
+  "production": "test",
+  "randomizeSeating": true,
+  "llmPlayers": {
+    "0": {
+      "strategist": "simple-strategist",
+      "pacing": {
+        "everyTurns": 5,
+        "interruption": "importantEvents"
+      }
+    },
+    "1": {
+      "strategist": "simple-strategist",
+      "pacing": {
+        "everyTurns": 5,
+        "interruption": "importantEvents"
+      }
+    },
+    "2": {
+      "strategist": "simple-strategist",
+      "pacing": {
+        "everyTurns": 5,
+        "interruption": "importantEvents"
+      }
+    },
+    "3": {
+      "strategist": "simple-strategist",
+      "pacing": {
+        "everyTurns": 5,
+        "interruption": "importantEvents"
+      }
+    },
+    "4": {
+      "strategist": "none-strategist"
+    },
+    "5": {
+      "strategist": "none-strategist"
+    },
+    "6": {
+      "strategist": "none-strategist"
+    },
+    "7": {
+      "strategist": "none-strategist"
+    }
+  }
+}

@@ -1,0 +1,40 @@
+{
+  "name": "opencode-go-deepseek-v4-flash",
+  "type": "strategist",
+  "autoPlay": false,
+  "llmPlayers": {
+    "1": {
+      "strategist": "simple-strategist",
+      "pacing": {
+        "everyTurns": 5,
+        "interruption": "importantEvents"
+      }
+    },
+    "2": {
+      "strategist": "simple-strategist",
+      "pacing": {
+        "everyTurns": 5,
+        "interruption": "importantEvents"
+      }
+    },
+    "3": {
+      "strategist": "simple-strategist",
+      "pacing": {
+        "everyTurns": 5,
+        "interruption": "importantEvents"
+      }
+    },
+    "4": {
+      "strategist": "none-strategist"
+    },
+    "5": {
+      "strategist": "none-strategist"
+    },
+    "6": {
+      "strategist": "none-strategist"
+    },
+    "7": {
+      "strategist": "none-strategist"
+    }
+  }
+}

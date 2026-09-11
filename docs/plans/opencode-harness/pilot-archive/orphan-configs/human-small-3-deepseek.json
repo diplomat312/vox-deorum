@@ -1,0 +1,46 @@
+{
+  "type": "strategist",
+  "autoPlay": false,
+  "llmPlayers": {
+    "0": {
+      "strategist": "none-strategist"
+    },
+    "1": {
+      "pacing": {
+        "everyTurns": 5,
+        "interruption": "worldChat"
+      },
+      "strategist": "simple-strategist"
+    },
+    "2": {
+      "pacing": {
+        "everyTurns": 5,
+        "interruption": "worldChat"
+      },
+      "strategist": "simple-strategist"
+    },
+    "3": {
+      "pacing": {
+        "everyTurns": 5,
+        "interruption": "worldChat"
+      },
+      "strategist": "simple-strategist"
+    },
+    "4": {
+      "strategist": "none-strategist"
+    },
+    "5": {
+      "strategist": "none-strategist"
+    },
+    "6": {
+      "strategist": "none-strategist"
+    },
+    "7": {
+      "strategist": "none-strategist"
+    }
+  },
+  "description": "Small map: human seat 0 + three deepseek-v4-flash AI strategists (seats 1-3). Human controls the game; AIs decide every 5 turns.",
+  "production": "test",
+  "name": "human-small-3-deepseek",
+  "randomizeSeating": false
+}

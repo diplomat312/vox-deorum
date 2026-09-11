@@ -1,0 +1,20 @@
+{
+  "llms": {
+    "small": "ox-alpha-high",
+    "default": "deepseek-v4-flash",
+    "deepseek-v4-flash": {
+      "provider": "openai-compatible",
+      "options": {
+        "reasoningEffort": "high"
+      },
+      "name": "deepseek-v4-flash"
+    },
+    "ox-alpha-high": {
+      "provider": "openai-compatible",
+      "options": {
+        "reasoningEffort": "high"
+      },
+      "name": "ox-alpha-free"
+    }
+  }
+}
