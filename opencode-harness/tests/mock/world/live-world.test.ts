@@ -4,9 +4,13 @@
 // real server answers, which is what lets the live path be written and checked
 // without launching Civilization V.
 
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { LiveWorld, inspectCalls, readCalls, refusedByGame, writeCall } from "../../../src/world/live/live-world.js";
 import type { VoxConnector, VoxToolResult } from "../../../src/world/live/vox-connector.js";
+import { applyOperations } from "../../../src/social/social-store.js";
 
 // A connection that answers from a table and records what it was asked.
 class FakeConnector implements VoxConnector {
@@ -406,5 +410,101 @@ describe("settling a deal in the game's own system", () => {
     expect(outcome.taken).toBe(false);
     expect(outcome.reason).toContain("resource");
     expect(connector.calls).toHaveLength(0);
+  });
+});
+
+describe("hearing the other seats in a live game", () => {
+  // A game has a place for a deal and none for ordinary diplomacy, so talk is
+  // kept in the run's own log. These cover the half that makes the log a
+  // conversation: a seat reading back what the others said to it.
+  let socialDirectory = "";
+
+  beforeEach(async () => {
+    socialDirectory = await mkdtemp(path.join(tmpdir(), "harness-live-social-"));
+  });
+
+  afterEach(async () => {
+    if (socialDirectory) await rm(socialDirectory, { recursive: true, force: true });
+  });
+
+  it("should show what another seat said to this seat", async () => {
+    await applyOperations(
+      socialDirectory,
+      "austria",
+      [{ kind: "world", message: "The table should know: Austria means no war." }],
+      { seats: ["korea", "austria"] }
+    );
+    const world = new LiveWorld({ connector: new FakeConnector(answers), seats: pair, socialDirectory });
+
+    await world.beginTurn("korea", 3);
+
+    // The seat hears it in the same shape the generated world uses, so a seat
+    // that has played a bench game reads a live one the same way.
+    expect(world.observation("korea", 3)).toContain("Messages for you");
+    expect(world.observation("korea", 3)).toContain("[public, turn 3] austria: The table should know");
+  });
+
+  it("should deliver a private message to the seat it was aimed at and no other", async () => {
+    await applyOperations(
+      socialDirectory,
+      "austria",
+      [{ kind: "dm", to: "korea", message: "Offer me a treaty before Siam does." }],
+      { seats: ["korea", "austria", "siam"] }
+    );
+    const world = new LiveWorld({
+      connector: new FakeConnector(answers),
+      seats: [...pair, { seat: "siam", playerID: 2 }],
+      socialDirectory
+    });
+
+    await world.beginTurn("siam", 3);
+
+    // Siam is not the addressee, so it hears nothing of it.
+    expect(world.observation("siam", 3)).toContain("Messages for you (reply with communicate if warranted");
+    expect(world.observation("siam", 3)).toContain("- None.");
+    expect(world.observation("siam", 3)).not.toContain("Offer me a treaty");
+  });
+
+  it("should not show a message twice", async () => {
+    await applyOperations(
+      socialDirectory,
+      "austria",
+      [{ kind: "dm", to: "korea", message: "One time only." }],
+      { seats: ["korea", "austria"] }
+    );
+    const world = new LiveWorld({ connector: new FakeConnector(answers), seats: pair, socialDirectory });
+
+    await world.beginTurn("korea", 3);
+    expect(world.observation("korea", 3)).toContain("One time only.");
+    // The next turn reads forward from where the seat got to, so a seat is never
+    // asked to answer the same message on every turn for the rest of the game.
+    await world.beginTurn("korea", 4);
+    expect(world.observation("korea", 4)).not.toContain("One time only.");
+  });
+
+  it("should show a council invitation with the id needed to accept it", async () => {
+    await applyOperations(
+      socialDirectory,
+      "austria",
+      [{ kind: "group-create", name: "Concert of Vienna" }, { kind: "invite", group: "e-1", to: "korea" }],
+      { seats: ["korea", "austria"] }
+    );
+    const world = new LiveWorld({ connector: new FakeConnector(answers), seats: pair, socialDirectory });
+
+    await world.beginTurn("korea", 5);
+
+    // An invitation a seat cannot name is an invitation it cannot answer.
+    expect(world.observation("korea", 5)).toContain("Groups for you");
+    expect(world.observation("korea", 5)).toContain("Concert of Vienna (id e-1, invited");
+  });
+
+  it("should say the world keeps no log when it has no social directory", async () => {
+    const world = new LiveWorld({ connector: new FakeConnector(answers), seats: pair });
+
+    await world.beginTurn("korea", 1);
+
+    // "Nothing arrived" and "nobody is listening" are different facts, and a
+    // seat should not be told the first when the second is true.
+    expect(world.observation("korea", 1)).toContain("None: this world keeps no log of talk");
   });
 });

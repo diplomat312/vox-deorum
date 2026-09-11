@@ -14,6 +14,12 @@ import type { InspectAnswer, SeatInfo, World } from "../types.js";
 import type { DealOperation, DecisionOutcome } from "../types.js";
 import type { VoxConnector } from "./vox-connector.js";
 import { LiveDeals } from "./live-deals.js";
+import {
+  groupsForSeat,
+  readInbox,
+  type SocialEntry,
+  type VisibleGroup
+} from "../../social/social-store.js";
 import { logger } from "../../utils/logger.js";
 
 // A seat at a real table.
@@ -35,6 +41,13 @@ export interface LiveWorldOptions {
   // Names for the seats, meaning civilization and leader, so an observation can
   // introduce a seat to itself the way the live game's own prose does.
   names?: Record<string, { civ: string; leader: string }>;
+  // Directory holding this run's social log, which is where a seat's talk lands.
+  //
+  // A game has a place for a deal and none for ordinary diplomacy, so a message
+  // is kept in the run's own log. Reading it back is what makes the log a
+  // conversation rather than a one-way record: without this a seat could speak
+  // and never hear an answer.
+  socialDirectory?: string;
 }
 
 // The reason a tool gave for refusing, kept short enough for a record.
@@ -108,6 +121,17 @@ export class LiveWorld implements World {
   // The game's own deal system, which is where a live deal is settled.
   private readonly deals: LiveDeals;
 
+  // Where the run keeps its social log, or empty when this world has none.
+  private readonly socialDirectory: string;
+
+  // What arrived for a seat this turn, read from the social log when the turn
+  // began. Delivery happens at the start of a turn rather than at render time so
+  // that rendering stays a plain read.
+  private readonly inbox = new Map<string, SocialEntry[]>();
+
+  // The groups a seat belongs to or has been invited to.
+  private readonly groups = new Map<string, VisibleGroup[]>();
+
   // The observation built for the turn a seat is about to play.
   private readonly prepared = new Map<string, string>();
 
@@ -121,6 +145,7 @@ export class LiveWorld implements World {
     this.seatList = options.seats;
     this.names = options.names ?? {};
     this.game = options.game ?? "live";
+    this.socialDirectory = options.socialDirectory ?? "";
     const players: Record<string, number> = {};
     for (const seat of this.seatList) players[seat.seat] = seat.playerID;
     this.deals = new LiveDeals(this.connector, players);
@@ -162,6 +187,22 @@ export class LiveWorld implements World {
     const reads: Record<string, unknown> = {};
     for (const [subject, call] of Object.entries(readCalls(playerID))) {
       reads[subject] = await this.read(call.tool, call.args);
+    }
+    // Ordinary diplomacy is kept in the run's log, so it is collected here. A
+    // world with no log says so rather than pretending nothing arrived, because
+    // "nothing arrived" and "nobody is listening" are different facts.
+    if (this.socialDirectory === "") {
+      this.inbox.set(seat, []);
+      this.groups.set(seat, []);
+    } else {
+      try {
+        this.inbox.set(seat, (await readInbox(this.socialDirectory, seat)).messages);
+        this.groups.set(seat, await groupsForSeat(this.socialDirectory, seat));
+      } catch (error) {
+        logger.warn("Reading what arrived for " + seat + " failed: " + String(error));
+        this.inbox.set(seat, []);
+        this.groups.set(seat, []);
+      }
     }
     // The deal thread comes from the game's own transcript rather than from the
     // run's log, so an offer another seat made is read where it was written.
@@ -300,6 +341,10 @@ export class LiveWorld implements World {
     lines.push("* Recent events: " + show(reads.events));
     lines.push("* Politics since your last opportunity: " + show(reads.politics));
     lines.push("");
+    lines.push(this.messagesSection(seat, turn));
+    lines.push("");
+    lines.push(this.groupsSection(seat));
+    lines.push("");
     lines.push("Deal thread, read from the game's own transcript:");
     const threads = Array.isArray(reads.deals) ? (reads.deals as string[]) : [];
     if (threads.length === 0) lines.push("- Nothing on the table.");
@@ -309,6 +354,49 @@ export class LiveWorld implements World {
       "You may inspect anything else you need (inspect). When finished, commit your actions (commit_turn) or pass. Keep the rationale short."
     );
     return lines.join("\n");
+  }
+
+  // The messages a seat is being shown this turn.
+  //
+  // The wording matches the generated world's, so a seat that has played a bench
+  // game reads a live one the same way, and a seat is never asked to answer
+  // something it cannot see.
+  private messagesSection(seat: string, turn: number): string {
+    const messages = this.inbox.get(seat) ?? [];
+    const header =
+      "Messages for you (reply with communicate if warranted, up to 8 social operations per turn in one communicate call):";
+    if (this.socialDirectory === "") return header + "\n- None: this world keeps no log of talk.";
+    if (messages.length === 0) return header + "\n- None.";
+    const lines = messages.map((message) => {
+      const scope = message.kind === "world" ? "public" : "private";
+      const where = message.kind === "group-msg" ? "group " + (message.group ?? "?") : scope;
+      return "- [" + where + ", turn " + turn + "] " + message.from + ": " + (message.text ?? "(no text)");
+    });
+    return header + "\n" + lines.join("\n");
+  }
+
+  // The groups a seat belongs to or has been invited to.
+  private groupsSection(seat: string): string {
+    const groups = this.groups.get(seat) ?? [];
+    const header =
+      "Groups for you (up to 8 social operations per turn; send all of them in one communicate operations array 'group:<id>'):";
+    if (groups.length === 0) return header + "\n- Member of no groups.";
+    const lines = groups.map((group) => {
+      const membership = group.members.includes(seat) ? "member" : "invited";
+      return (
+        "- " +
+        group.name +
+        " (id " +
+        group.id +
+        ", " +
+        membership +
+        ", members: " +
+        (group.members.length === 0 ? "none yet" : group.members.join(", ")) +
+        (group.invites.length === 0 ? "" : ", invited: " + group.invites.join(", ")) +
+        ")"
+      );
+    });
+    return header + "\n" + lines.join("\n");
   }
 }
 

@@ -86,6 +86,12 @@ It is verified against a fake connection, which is what allowed it to be written
 
 Both halves are now closed. A seat's tool server reads its table and the game's address from its environment and builds the same live world the harness uses, and the harness passes the game's address down so a run pointed at another server does not split the table in two. The entry point reports what is wrong with its environment as a value rather than exiting from inside the reader, which is what let that reading be covered without starting a server. The lesson is the same one the policy bug taught: an unexercised path is not a working path, and this one was wrong in the direction that hides itself.
 
+**A live seat could speak and never be answered.** The live turn rendered the game's state, its politics and, after the change above, its deals, and it rendered none of its own diplomacy. A seat's messages went into the run's log and nothing ever read them back, so a live table could not run a conversation at all: every seat talked, and every seat heard silence. The reply was there the whole time, in the half of the social log the generated world reads and the live world never asked for.
+
+A live turn now carries what the others said, in the same sections the generated world uses: the messages a seat has not yet seen, and the councils it belongs to or has been invited to. Delivery runs at the start of a turn and reads forward from a persisted cursor, so the same message is never put in front of a seat twice, and a private message reaches the seat it names and no other.
+
+What this batch shows about the live path is worth stating plainly, because it is not flattering. Every defect found in it was found by reading it rather than by running it, and two of the three were the kind that produces no error at all: a server that exited at startup with its reason on a stream nobody reads, and a turn that rendered four sections of a five-part conversation. A live run has still never met a real game. Until it does, the honest reading is that the live path is written and covered but unproven, and that this is exactly where an unexercised path hides its faults.
+
 The one thing this batch did not settle is whether a person playing against model seats behaves differently from the model seats themselves. One three turn game with a stand-in player is a wiring proof, not evidence about people.
 
 ## Durability: a crisis is what makes a contact a relationship

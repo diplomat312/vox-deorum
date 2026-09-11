@@ -169,7 +169,11 @@ export async function runLive(options: LiveRunOptions): Promise<LiveRunResult> {
     connector,
     seats: options.seats,
     game: options.runId,
-    names: options.names
+    names: options.names,
+    // Talk is kept in the run's log, because a game has a place for a deal and
+    // none for ordinary diplomacy, so the world that renders a turn has to know
+    // where to read it back from.
+    socialDirectory
   });
 
   const servers: OpenCodeServer[] = [];

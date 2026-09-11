@@ -122,7 +122,8 @@ async function main(): Promise<void> {
       connector,
       seats: config.liveSeats,
       game: config.game,
-      names: {}
+      names: {},
+      socialDirectory: config.socialDirectory
     });
   } else if (config.worldStateFile !== "") {
     world = () => SimulatedWorld.fromSnapshot(config.worldStateFile, config.socialDirectory);
