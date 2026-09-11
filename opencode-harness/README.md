@@ -61,7 +61,7 @@ node dist/run/live.js --seats korea:0,austria:1 --turns 10 --run-id live-first
 
 Seats are given as `name:playerIndex` pairs, because a live game is addressed by player index. The run checks the tools it needs before its first turn and names anything missing, and its trace, report and roundup are the same as a simulated run's.
 
-By default a live run holds the game for each seat's turn and releases it afterwards, which is the policy that cannot produce a stale decision. `--pacing none` plays without touching the clock at all. The summary reports how many holds the game took, how many it refused, and whether any turn advanced while it was supposed to be held.
+By default a live run holds the game for each seat's turn and releases it afterwards, which is the policy that cannot produce a stale decision. `--pacing overlap` lets the game run while a seat thinks and holds it only to commit, dropping a decision the world has moved too far past, with `--max-drift` setting how far that is. `--pacing none` never touches the clock. The summary reports how many holds the game took, how many it refused, and how each paced turn ended.
 
 ## Playing a seat yourself
 

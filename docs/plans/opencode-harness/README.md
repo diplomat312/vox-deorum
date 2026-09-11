@@ -66,7 +66,11 @@ The limit of the mock bottom is worth recording, because it looks like it should
 
 The pacing policy is written and its logic is proven offline. Two of its three parts are done: a seat can hold the game for a whole turn and release it afterwards, and a hold is confirmed rather than trusted, because the recorded game showed a pause accepted while the game advanced. The clock reads the turn from the knowledge store and holds the game with the game's own pause and resume actions, so nothing reaches it by a private route.
 
-Two pieces of pacing remain, and both wait on the same thing. The overlap policy, where a seat thinks while the game runs and only the commit is checked, needs a seat's turn split into a decision and a commit so the commit can be revalidated against a state that moved. The runtime currently does both in one step. Until that split exists the overlap policy is deliberately not offered, because offering it would claim a safety the code does not have.
+The split the overlap policy needed now exists. A seat's turn is two phases: deciding, which shows it the situation and serves what it says without touching the world, and committing, which makes the decision take effect and writes it down. Playing a turn is those two run back to back, so every simulated run behaves exactly as it did before, and a test holds the composed call to the same result.
+
+With the split, all three policies are available in a live run. Freeze is the default, because it is the one that cannot produce a stale decision. Overlap lets the game run while a seat thinks and holds it only to commit, which keeps a long game moving, and a decision that lands on a state that moved is revalidated and dropped once the world has drifted further than the policy allows. None never touches the clock.
+
+A decision the check throws away is still written down as a turn the seat played, so a run never develops a gap where a turn should be, and the summary reports how each paced turn ended.
 
 The game's own deal system is not wired either, so an agreement still lives in the harness's log rather than in the game's deal actions. And backend supervision, health checks and outage handling remain to be proven against a live stack, where a game keeps running whether the backend is healthy or not.
 
