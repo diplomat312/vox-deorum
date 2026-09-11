@@ -3,6 +3,7 @@
 
 import { describe, expect, it } from "vitest";
 import { preflight, requiredVoxTools } from "../../../src/run/live.js";
+import { paceFrom } from "../../../src/run/live.js";
 
 describe("checking a game before a live run", () => {
   it("should pass when the game offers every tool the run needs", async () => {
@@ -25,5 +26,15 @@ describe("checking a game before a live run", () => {
     const connector = { listTools: async () => [] };
 
     expect(await preflight(connector)).toEqual(requiredVoxTools);
+  });
+
+  it("should read the pacing policy, and refuse one it does not know", () => {
+    // A run that paces differently from what was asked for is a run whose
+    // results cannot be trusted, so an unknown policy stops the run rather than
+    // quietly falling back to a default.
+    expect(paceFrom("freeze")).toBe("freeze");
+    expect(paceFrom("Overlap")).toBe("overlap");
+    expect(paceFrom(" none ")).toBe("none");
+    expect(() => paceFrom("fast")).toThrowError(/Use freeze, overlap or none/);
   });
 });

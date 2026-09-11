@@ -94,10 +94,13 @@ export class SeatRuntime {
     this.client = client;
   }
 
-  // Play one turn for one seat and record it. A turn that produces no terminal
-  // call is recorded as unfinished rather than being retried silently, because
-  // a seat that never decided is a fact about the run.
-  async playTurn(seat: string, turn: number): Promise<TraceRecord> {
+  // Let a seat think about its turn, without touching the world.
+  //
+  // This is everything that happens before a decision has any effect: the seat
+  // is shown its situation, it answers, and the tool calls it made are served or
+  // read. Talking happens here, because a seat may speak while it thinks. Acting
+  // does not, which is what makes the two phases worth separating.
+  async decideTurn(seat: string, turn: number): Promise<PendingDecision> {
     const startedAt = new Date().toISOString();
     await this.world.beginTurn(seat, turn);
     if (this.onTurnPrepared) await this.onTurnPrepared(seat, turn);
@@ -117,7 +120,6 @@ export class SeatRuntime {
     let gaps: Array<{ subject: string; detail?: string }> = [];
     let error: string | null = null;
     let contextReset = false;
-    let refused: Array<{ type: string; reason: string }> = [];
 
     try {
       result = await this.client.sendObservation(seat, observation, turn);
@@ -133,17 +135,6 @@ export class SeatRuntime {
         gaps = observed.gaps;
         if (observed.outcome) outcome = observed.outcome;
         actions = observed.actions;
-      }
-      // A committed decision lands in the world here, whichever mode served the
-      // calls. A tool server validates and records the actions; the world they
-      // change is the harness's own, so applying them is the harness's job.
-      if (outcome === "committed" && actions.length > 0) {
-        const outcomes = await this.world.applyDecision(seat, actions as unknown as Array<Record<string, unknown>>);
-        // What the world did is kept as well as what the seat asked for, so a
-        // record never reports an action the world refused as though it happened.
-        refused = outcomes
-          .filter((entry) => !entry.taken)
-          .map((entry) => ({ type: entry.type, reason: entry.reason ?? "no reason given" }));
       }
     } catch (failure) {
       outcome = "failed";
@@ -163,28 +154,61 @@ export class SeatRuntime {
       }
     }
 
+    return { seat, turn, playerID, startedAt, observation, result, outcome, actions, gaps, error, contextReset };
+  }
+
+  // Make a decision take effect and write the turn down.
+  //
+  // A committed decision lands in the world here, whichever mode served the
+  // calls. A tool server validates and records the actions; the world they
+  // change is the harness's own, so applying them is the harness's job.
+  //
+  // A turn the seat never decided, or one that failed, is still recorded, because
+  // a seat that failed to decide is a fact about the run rather than an absence
+  // from it.
+  async commitTurn(pending: PendingDecision, options?: { apply?: boolean; applied?: string }): Promise<TraceRecord> {
+    let refused: Array<{ type: string; reason: string }> = [];
+    if (pending.outcome === "committed" && pending.actions.length > 0 && options?.apply !== false) {
+      const outcomes = await this.world.applyDecision(
+        pending.seat,
+        pending.actions as unknown as Array<Record<string, unknown>>
+      );
+      // What the world did is kept as well as what the seat asked for, so a
+      // record never reports an action the world refused as though it happened.
+      refused = outcomes
+        .filter((entry) => !entry.taken)
+        .map((entry) => ({ type: entry.type, reason: entry.reason ?? "no reason given" }));
+    }
     const record: TraceRecord = {
       runId: this.store.runId,
       game: this.world.game,
-      seat,
-      turn,
-      startedAt,
+      seat: pending.seat,
+      turn: pending.turn,
+      startedAt: pending.startedAt,
       completedAt: new Date().toISOString(),
-      observation,
-      reasoning: result?.reasoning ?? null,
-      modelText: result?.modelText ?? null,
-      toolCalls: result?.toolCalls ?? [],
-      usage: result?.usage ?? emptyUsage(),
-      unknownParts: result?.unknownParts ?? [],
-      outcome,
-      applied: appliedSummary(actions, gaps),
+      observation: pending.observation,
+      reasoning: pending.result?.reasoning ?? null,
+      modelText: pending.result?.modelText ?? null,
+      toolCalls: pending.result?.toolCalls ?? [],
+      usage: pending.result?.usage ?? emptyUsage(),
+      unknownParts: pending.result?.unknownParts ?? [],
+      outcome: pending.outcome,
+      applied: options?.applied ?? appliedSummary(pending.actions, pending.gaps),
       refused,
-      error,
-      contextReset,
-      latencyMs: result?.latencyMs ?? 0
+      error: pending.error,
+      contextReset: pending.contextReset,
+      latencyMs: pending.result?.latencyMs ?? 0
     };
     await this.store.record(record);
     return record;
+  }
+
+  // Play one turn for one seat and record it: think, then make it take effect.
+  //
+  // This is the composition a game that needs no special handling around the
+  // two phases uses, and it is what every simulated run does.
+  async playTurn(seat: string, turn: number): Promise<TraceRecord> {
+    return this.commitTurn(await this.decideTurn(seat, turn));
   }
 
   // Serve the tool calls a seat made, in the order it made them. Serving is
@@ -267,4 +291,35 @@ function appliedSummary(actions: CommitAction[], gaps: Array<{ subject: string; 
     );
   }
   return parts.length > 0 ? parts.join("; ") : "nothing applied";
+}
+// A seat's turn, part-way through: everything the seat produced before the world
+// was touched.
+//
+// The two phases exist apart so a game can be handled differently around them.
+// A live game may let its clock run while the seat thinks and hold it only to
+// commit, which is only expressible if thinking and committing are separable.
+// A turn that never needed the distinction is the two phases run back to back.
+export interface PendingDecision {
+  // The seat that thought it.
+  seat: string;
+  // The turn it reasoned about, which is the state its observation described.
+  turn: number;
+  // The player index, or null when the world did not know it.
+  playerID: number | null;
+  // When the seat was first shown its situation.
+  startedAt: string;
+  // The observation the seat was handed, kept exactly as it was sent.
+  observation: string;
+  // What the seat answered, or null when the call failed before an answer came.
+  result: SeatTurnResult | null;
+  // How the turn ended from the seat's side.
+  outcome: TraceOutcome;
+  // The game actions the seat asked for.
+  actions: CommitAction[];
+  // Information the seat asked for and did not get.
+  gaps: Array<{ subject: string; detail?: string }>;
+  // The error that ended the turn, when it failed.
+  error: string | null;
+  // True when the seat's session was replaced while deciding.
+  contextReset: boolean;
 }

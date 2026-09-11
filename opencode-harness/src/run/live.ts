@@ -11,11 +11,13 @@
 
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { SeatRuntime } from "../seat/runtime.js";
+import { SeatRuntime, type PendingDecision } from "../seat/runtime.js";
+import { SeatPacer } from "../seat/pacing.js";
 import { OpenCodeServer } from "../session/opencode-server.js";
 import { SessionClient } from "../session/session-client.js";
 import type { SeatModel } from "../session/types.js";
 import { TraceStore } from "../trace/store.js";
+import type { TraceRecord } from "../trace/types.js";
 import { logger } from "../utils/logger.js";
 import { LiveWorld, type LiveSeat } from "../world/live/live-world.js";
 import { HttpVoxConnector } from "../world/live/vox-connector.js";
@@ -66,15 +68,21 @@ export interface LiveRunOptions {
   turnTimeoutMs?: number;
   // The MCP endpoint, when it is not the repository default.
   mcpEndpoint?: string;
-  // How a seat's thinking relates to the game clock. The freeze policy is the
-  // default for a live game, because it is the one that cannot produce a stale
-  // decision: the game is held for the whole turn and released after it.
+  // How a seat's thinking relates to the game clock.
   //
-  // The overlap policy is deliberately not offered yet. It needs a seat's turn
-  // split into a decision and a commit so the commit can be revalidated against
-  // a state that moved, and until that split exists, offering it would be
-  // claiming a safety the code does not have.
-  pacing?: "freeze" | "none";
+  // The freeze policy is the default, because it is the one that cannot produce
+  // a stale decision: the game is held for the whole turn and released after it.
+  //
+  // The overlap policy lets the game run while a seat thinks and holds it only
+  // to commit, which keeps a long game moving at the cost of decisions that may
+  // land on a state that moved. Those are checked, and dropped when the world
+  // has drifted further than a decision can survive.
+  pacing?: "freeze" | "overlap" | "none";
+  // How far the game may move past the state a seat read before its decision is
+  // dropped rather than committed, in turns. One means a decision survives the
+  // game advancing by a turn while the seat thought, which is the point of the
+  // overlap policy, and nothing more.
+  maxDriftTurns?: number;
 }
 
 // What a finished live run reports.
@@ -89,13 +97,14 @@ export interface LiveRunResult {
   unavailable: string[];
   // How the game was held, so a run says what it paced rather than leaving it
   // to be inferred from timing.
-  pacing: "freeze" | "none";
+  pacing: "freeze" | "overlap" | "none";
   // Holds the game took, and holds it did not.
   holdsTaken: number;
   holdsMissed: number;
-  // Turns that advanced while the game was held for a seat, which is the pause
-  // that lied. Any entry here means a seat may have decided on a state that moved.
-  turnsThatMovedWhileHeld: Array<{ seat: string; turn: number; from: number; to: number }>;
+  // How each paced turn ended: committed as the seat reached it, revalidated
+  // against a state that had moved, or dropped before it was sent. A dropped
+  // decision is counted here rather than inferred from timing.
+  verdicts: Record<string, number>;
 }
 
 // Check the tools a live run depends on, and say what is missing.
@@ -247,47 +256,69 @@ export async function runLive(options: LiveRunOptions): Promise<LiveRunResult> {
     // How the run held the game, so its summary can say what was paced.
     let holdsTaken = 0;
     let holdsMissed = 0;
-    const turnsThatMovedWhileHeld: Array<{ seat: string; turn: number; from: number; to: number }> = [];
+    const verdicts: Record<string, number> = {};
     const pacing = options.pacing ?? "freeze";
+    const maxDriftTurns = options.maxDriftTurns ?? 1;
+    // The clock is the game's, and the pacer is the one tested offline: it
+    // confirms a hold rather than trusting it, releases whatever happens, keeps
+    // the hold inside a budget, and checks a decision that landed on a state
+    // that moved.
     const clock = new McpGameClock(connector, options.seats[0]?.playerID ?? 0);
+    const pacer = new SeatPacer({ clock, policy: pacing });
     for (let turn = 1; turn <= options.turns; turn += 1) {
       for (const seat of playing) {
         const seatDirectory = path.join(options.runDirectory, "seats", seat.seat);
         await writeTurnState(seatDirectory, { turn, seat: seat.seat });
-        // Under the freeze policy the game is held for the whole turn, and the
-        // hold is confirmed rather than trusted: a pause the game accepted while
-        // it carried on is not a held game, and a seat acting on a state that
-        // moved is the thing this exists to prevent.
-        const held = pacing === "freeze" ? await clock.pause().then(() => clock.isFrozen()) : false;
-        if (pacing === "freeze") held ? (holdsTaken += 1) : (holdsMissed += 1);
-        const turnBefore = pacing === "freeze" ? await clock.turn().catch(() => turn) : turn;
-        const record = await (runtimes.get(seat.seat) as SeatRuntime).playTurn(seat.seat, turn).finally(async () => {
-          if (pacing === "freeze") await clock.resume().catch(() => false);
-        });
-        if (pacing === "freeze") {
-          const turnAfter = await clock.turn().catch(() => turnBefore);
-          if (turnAfter !== turnBefore) {
-            turnsThatMovedWhileHeld.push({ seat: seat.seat, turn, from: turnBefore, to: turnAfter });
-            logger.warn(
-              "The game advanced from turn " +
-                turnBefore +
-                " to " +
-                turnAfter +
-                " while it was held for seat " +
-                seat.seat
-            );
+        const runtime = runtimes.get(seat.seat) as SeatRuntime;
+        let recorded: TraceRecord | null = null;
+        const paced = await pacer.playTurn<PendingDecision>({
+          seat: seat.seat,
+          turn,
+          decide: (reasonedTurn) => runtime.decideTurn(seat.seat, reasonedTurn),
+          // A decision stands when the world has not moved far past the state the
+          // seat read. Beyond that its read is worthless and it is dropped rather
+          // than acted on, because a seat must never act on a situation it never saw.
+          stillValid: async () => {
+            const now = await clock.turn().catch(() => turn);
+            return now - turn <= maxDriftTurns;
+          },
+          commit: async (pending) => {
+            recorded = await runtime.commitTurn(pending);
+          },
+          // A dropped decision was still a turn the seat played. It is written
+          // down without being sent, so the run shows the turn and says plainly
+          // that nothing came of it.
+          onDropped: async (pending, _commitTurn, verdict) => {
+            recorded = await runtime.commitTurn(pending, {
+              apply: false,
+              applied: "decision dropped before it was sent: " + verdict
+            });
           }
-        }
+        });
+        if (paced.outcome.frozenForCognition || paced.outcome.frozenForCommit) holdsTaken += 1;
+        // A freeze that never took is worth counting, because it means a seat
+        // acted on a state the game was free to change while it thought.
+        if (pacing === "freeze" && !paced.outcome.frozenForCognition) holdsMissed += 1;
+        verdicts[paced.outcome.verdict] = (verdicts[paced.outcome.verdict] ?? 0) + 1;
         turnsPlayed += 1;
-        if (record.outcome === "failed" || record.outcome === "unfinished") failures += 1;
-        logger.info("turn " + turn + " " + seat.seat + " " + record.outcome + " | " + (record.applied ?? ""));
+        const written = recorded as TraceRecord | null;
+        if (!written) {
+          // The pacer always hands a decision to one of its two callbacks, so a
+          // turn with no record means the recording path itself failed, which is
+          // worth saying loudly rather than losing quietly.
+          failures += 1;
+          logger.warn("turn " + turn + " " + seat.seat + " produced no record at all");
+        } else {
+          if (written.outcome === "failed" || written.outcome === "unfinished") failures += 1;
+          logger.info("turn " + turn + " " + seat.seat + " " + written.outcome + " | " + (written.applied ?? ""));
+        }
       }
     }
     const summary = await store.summary();
     await writeFile(
       path.join(options.runDirectory, "summary.json"),
       JSON.stringify(
-        { ...summary, failures, unavailable, pacing, holdsTaken, holdsMissed, turnsThatMovedWhileHeld },
+        { ...summary, failures, unavailable, pacing, holdsTaken, holdsMissed, verdicts },
         null,
         2
       ),
@@ -301,7 +332,7 @@ export async function runLive(options: LiveRunOptions): Promise<LiveRunResult> {
       pacing,
       holdsTaken,
       holdsMissed,
-      turnsThatMovedWhileHeld
+      verdicts
     };
   } finally {
     for (const server of servers) {
@@ -348,7 +379,9 @@ async function main(): Promise<void> {
     turnTimeoutMs: Number(value("turn-timeout", "150000")),
     mcpEndpoint: value("mcp", undefined) as string | undefined
     ,
-    pacing: (value("pacing", "freeze") as string) === "none" ? "none" : "freeze"
+    pacing: paceFrom(value("pacing", "freeze") as string)
+    ,
+    maxDriftTurns: Number(value("max-drift", "1"))
   });
   logger.info(
     "Live run " +
@@ -366,9 +399,7 @@ async function main(): Promise<void> {
       " hold(s) taken and " +
       result.holdsMissed +
       " missed" +
-      (result.turnsThatMovedWhileHeld.length > 0
-        ? ", " + result.turnsThatMovedWhileHeld.length + " turn(s) advanced while held"
-        : "")
+      (result.verdicts.dropped ? ", " + result.verdicts.dropped + " decision(s) dropped" : "")
   );
   process.exit(0);
 }
@@ -378,4 +409,13 @@ if (process.argv[1] && process.argv[1].endsWith("live.js")) {
     logger.error("The live run could not continue: " + (error instanceof Error ? error.message : String(error)));
     process.exit(1);
   });
+}
+
+// Read the pacing policy from what a person typed, refusing anything unknown
+// rather than silently falling back, because a run that paces differently from
+// what was asked for is a run whose results cannot be trusted.
+export function paceFrom(value: string): "freeze" | "overlap" | "none" {
+  const wanted = value.trim().toLowerCase();
+  if (wanted === "overlap" || wanted === "none" || wanted === "freeze") return wanted;
+  throw new Error("Unknown pacing policy '" + value + "'. Use freeze, overlap or none.");
 }

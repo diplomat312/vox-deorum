@@ -202,6 +202,10 @@ export interface PacedTurnOptions<T> {
   stillValid: (decision: T, turn: number) => Promise<boolean>;
   // What to do with a decision that stands.
   commit: (decision: T, turn: number) => Promise<void>;
+  // What to do with a decision the check threw away. A dropped decision was
+  // still a turn the seat played, so a caller that keeps a record needs a chance
+  // to write it down rather than let the turn vanish from the run.
+  onDropped?: (decision: T, turn: number, verdict: CommitVerdict) => Promise<void>;
   // How long the game may be held in this turn, overriding the pacer default.
   freezeBudgetMs?: number;
 }
@@ -269,6 +273,9 @@ export class SeatPacer {
       if (verdict === "commit" || verdict === "revalidated") {
         await options.commit(decision, commitTurn);
       } else {
+        // The turn happened even though nothing came of it, so the caller is
+        // told rather than left with a gap where a turn should be.
+        if (options.onDropped) await options.onDropped(decision, commitTurn, verdict);
         decision = null;
       }
     } finally {
