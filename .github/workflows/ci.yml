@@ -120,5 +120,8 @@ jobs:
       - name: Typecheck Vox Agents
         run: npm --prefix vox-agents run type-check
 
+      - name: Typecheck the OpenCode harness
+        run: npm --prefix opencode-harness run type-check
+
       - name: Typecheck web UI
         run: npm --prefix vox-agents/ui run type-check
