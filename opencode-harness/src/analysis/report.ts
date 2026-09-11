@@ -10,6 +10,7 @@ import path from "node:path";
 import { addressesOf, directPairOf, type SocialEntry } from "../social/social-store.js";
 import { qualityMetrics, type QualityMetrics } from "./quality.js";
 import { effectivenessMetrics, type EffectivenessMetrics } from "./effectiveness.js";
+import { readWorldSummary, type WorldSummary } from "./world-summary.js";
 import { allTurns, readRun, type RunData, type RunToolCall } from "./read-run.js";
 import type { TraceRecord } from "../trace/types.js";
 
@@ -122,6 +123,8 @@ export interface RunReport {
   quality: QualityMetrics;
   // Whether the talking became anything in the world.
   effectiveness: EffectivenessMetrics;
+  // What the world recorded by the end, when the run left a snapshot.
+  world: WorldSummary | null;
 }
 
 // Pull the information gaps back out of a turn's applied line.
@@ -344,6 +347,7 @@ export async function buildReport(runDirectory: string): Promise<RunReport> {
     gaps,
     quality: qualityMetrics(data.social, seats),
     effectiveness: effectivenessMetrics(turns, seats),
+    world: await readWorldSummary(runDirectory),
     roundup: turns.map((record) => ({
       seat: record.seat,
       turn: record.turn,
@@ -428,6 +432,34 @@ export function renderReport(report: RunReport, toolCalls: RunToolCall[]): strin
     lines.push("");
   }
   lines.push("## What the talking changed");
+  if (report.world) {
+    lines.push("## What the world recorded");
+    lines.push("");
+    lines.push("| Measure | Value |");
+    lines.push("| --- | --- |");
+    lines.push("| Deals agreed and carried out | " + report.world.settledDeals + " |");
+    lines.push("| Promises still being paid | " + report.world.tributeInForce.length + " |");
+    lines.push("| Promises broken | " + report.world.brokenPromises + " |");
+    lines.push("| Wars declared | " + report.world.wars.length + " |");
+    lines.push("");
+    if (report.world.coldest) {
+      const cold = report.world.coldest;
+      lines.push(
+        "Coldest regard at turn " +
+          report.world.turn +
+          ": " +
+          cold.from +
+          " holds a private regard of " +
+          cold.privateValue +
+          " toward " +
+          cold.to +
+          (cold.atWar ? ", and they are at war." : ".")
+      );
+    } else {
+      lines.push("No seat held a negative private regard toward another by the end.");
+    }
+    lines.push("");
+  }
   lines.push("");
   const actionKinds = Object.entries(report.effectiveness.byType)
     .sort((left, right) => right[1] - left[1])
