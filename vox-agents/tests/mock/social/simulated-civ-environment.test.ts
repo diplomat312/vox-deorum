@@ -146,14 +146,14 @@ describe("a generated world under a session", () => {
     const names = definitions.map((definition) => definition.name);
 
     // One action per turn, chosen from the high-level knobs the game already has.
-    expect(names).toContain("civ_mass_troops");
-    expect(names).toContain("civ_declare_war");
-    expect(names).toContain("civ_attack");
-    expect(names).toContain("civ_make_peace");
-    expect(names).toContain("civ_set_research");
-    expect(names).toContain("civ_set_posture");
+    expect(names).toContain("environment_mass_troops");
+    expect(names).toContain("environment_declare_war");
+    expect(names).toContain("environment_attack");
+    expect(names).toContain("environment_make_peace");
+    expect(names).toContain("environment_set_research");
+    expect(names).toContain("environment_set_posture");
     // A read costs nothing, so it is marked as support rather than as an action.
-    expect(definitions.find((definition) => definition.name === "civ_inspect")?.phase).toBe("support");
+    expect(definitions.find((definition) => definition.name === "environment_inspect")?.phase).toBe("support");
     await environment.close();
   });
 
@@ -174,7 +174,7 @@ describe("a generated world under a session", () => {
       /does not border/
     );
     // An action the world has never heard of is refused the same way.
-    await expect(environment.execute(korea, 1, "civ_teleport", {}, "op-2")).rejects.toThrowError(/no action called/);
+    await expect(environment.execute(korea, 1, "environment_teleport", {}, "op-2")).rejects.toThrowError(/no action called/);
     await environment.close();
   });
 

@@ -146,7 +146,7 @@ export class SimulatedCivEnvironment implements SocialEnvironmentPort {
     this.told.set(seat, this.world.eventCount);
     lines.push("");
     lines.push(
-      "You may read more with civ_inspect. Then choose exactly one action, taking a step in the game, speaking to the table, or saying nothing."
+      "You may read more with environment_inspect. Then choose exactly one action, taking a step in the game, speaking to the table, or saying nothing."
     );
     return lines.join("\n");
   }
@@ -158,14 +158,14 @@ export class SimulatedCivEnvironment implements SocialEnvironmentPort {
     const ids = this.world.neighbours(actor.id).join(", ");
     return [
       {
-        name: "civ_inspect",
+        name: "environment_inspect",
         actionName: "inspect",
         description: "Read more about your position, your army, your neighbours, or how the table regards you.",
         inputSchema: z.object({ subject: z.enum(inspectSubjects) }),
         phase: "support"
       },
       {
-        name: "civ_mass_troops",
+        name: "environment_mass_troops",
         actionName: "mass_troops",
         description:
           "Move part of your army to a border, or bring it home. Your neighbours on that border can see it happen and cannot see why. Facing: " +
@@ -176,37 +176,37 @@ export class SimulatedCivEnvironment implements SocialEnvironmentPort {
         inputSchema: z.object({ facing: z.string().nullable(), committed: z.number().min(0).max(1) })
       },
       {
-        name: "civ_declare_war",
+        name: "environment_declare_war",
         actionName: "declare_war",
         description: "Declare war on a neighbour you border. The whole table hears it, and your standing with everyone falls.",
         inputSchema: z.object({ target: z.string() })
       },
       {
-        name: "civ_attack",
+        name: "environment_attack",
         actionName: "attack",
         description: "Attack a neighbour you are at war with, using whatever part of your army is facing them. A beaten defence can lose a city.",
         inputSchema: z.object({ target: z.string() })
       },
       {
-        name: "civ_make_peace",
+        name: "environment_make_peace",
         actionName: "make_peace",
         description: "End a war with a seat you are at war with.",
         inputSchema: z.object({ target: z.string() })
       },
       {
-        name: "civ_set_research",
+        name: "environment_set_research",
         actionName: "set_research",
         description: "Point your scholars at one technology.",
         inputSchema: z.object({ technology: z.string() })
       },
       {
-        name: "civ_set_policy",
+        name: "environment_set_policy",
         actionName: "set_policy",
         description: "Adopt a social policy, when one is ready.",
         inputSchema: z.object({ policy: z.string() })
       },
       {
-        name: "civ_set_posture",
+        name: "environment_set_posture",
         actionName: "set_posture",
         description:
           "Record how you regard another seat, publicly and privately. This outlasts anything you say, and the other seat can see where you stand on them.",

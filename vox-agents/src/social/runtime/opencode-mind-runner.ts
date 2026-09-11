@@ -60,6 +60,8 @@ export interface OpenCodeMindRunnerOptions {
 
 // The agent name a social actor's turns run under, which its configuration defines.
 const socialAgent = "social-seat";
+// How many ports to step through before giving up on a seat.
+const portAttempts = 5;
 
 // The type of the pieces this runner borrows from the harness.
 interface HarnessModules {
@@ -126,6 +128,8 @@ export class OpenCodeMindRunner implements SocialModelExecutor {
   private readonly logger = createLogger("opencode-mind-runner");
   private readonly sessions = new Map<string, ActorSession>();
   private readonly servers = new Map<string, OpenCodeServer>();
+  // How many ports this runner has taken, so two seats never try the same one.
+  private portCursor = 0;
 
   public constructor(private readonly options: OpenCodeMindRunnerOptions) {}
 
@@ -281,11 +285,33 @@ export class OpenCodeMindRunner implements SocialModelExecutor {
     const held = this.servers.get(actorId);
     if (held) return held;
     const harness = await loadHarness();
-    const server = new harness.OpenCodeServer(seatDirectory);
-    const index = this.servers.size;
-    await server.start({ port: (this.options.port ?? 7300) + index });
-    this.servers.set(actorId, server);
-    return server;
+    // The port is taken from a counter that moves before anything is awaited.
+    // Deciding a port from how many servers exist does not work here: four seats
+    // woken at the same moment would all read the same count, all choose the same
+    // port, and three of them would die with the server already gone.
+    let lastError: unknown;
+    for (let attempt = 0; attempt < portAttempts; attempt += 1) {
+      const port = this.takePort();
+      const server = new harness.OpenCodeServer(seatDirectory);
+      try {
+        await server.start({ port });
+        this.servers.set(actorId, server);
+        return server;
+      } catch (error) {
+        lastError = error;
+        // A port already held by a leftover process is worth stepping over rather
+        // than failing the seat, which is what the retry is for.
+        this.logger.warn("Could not start a server for " + actorId + " on port " + port + "; trying the next port");
+      }
+    }
+    throw lastError instanceof Error ? lastError : new Error("No port was free for " + actorId);
+  }
+
+  // The next port to try, taken without awaiting so two callers cannot take the same one.
+  private takePort(): number {
+    const port = (this.options.port ?? 7300) + this.portCursor;
+    this.portCursor += 1;
+    return port;
   }
 
   // The recorded calls for this wake, read back as the runner's own record of
