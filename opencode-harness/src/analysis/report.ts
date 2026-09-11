@@ -97,6 +97,14 @@ export interface CostMetrics {
   // started again. A run with resets is still comparable, but the cache figures
   // after a reset are not a continuation of the ones before it.
   contextResets: number;
+  // Turns a session answered without reaching a model at all, and which the
+  // harness tried to repair. A run with these was affected by an outage rather
+  // than by anything its seats decided, so its diplomacy numbers cannot be read
+  // as an account of what the seats chose to do.
+  silentSessions: number;
+  // Turns that ended with no answer and no tokens at all, repair or not. These
+  // are the turns that were once recorded as seats choosing silence.
+  unanswered: number;
 }
 
 // The two measures together, plus the raw material for a roundup.
@@ -298,6 +306,8 @@ export function costMetrics(data: RunData, seats: string[]): CostMetrics {
   let slowest = 0;
   let unfinished = 0;
   let contextResets = 0;
+  let silentSessions = 0;
+  let unanswered = 0;
   for (const seat of seats) {
     const records = data.trace.get(seat) ?? [];
     const seatInput = records.reduce((sum, record) => sum + record.usage.input, 0);
@@ -319,6 +329,8 @@ export function costMetrics(data: RunData, seats: string[]): CostMetrics {
     slowest = Math.max(slowest, ...records.map((record) => record.latencyMs));
     unfinished += records.filter((record) => record.outcome === "failed" || record.outcome === "unfinished").length;
     contextResets += records.filter((record) => record.contextReset === true).length;
+    silentSessions += records.filter((record) => (record.silentRepairs ?? 0) > 0).length;
+    unanswered += records.filter((record) => record.usage.total === 0 && record.outcome !== "passed").length;
   }
   const socialOperations = data.social.length;
   const promptTokens = input + cacheRead + cacheWrite;
@@ -331,7 +343,9 @@ export function costMetrics(data: RunData, seats: string[]): CostMetrics {
     costPerSocialOperation: socialOperations === 0 ? null : cost / socialOperations,
     slowestTurnMs: slowest,
     unfinished,
-    contextResets
+    contextResets,
+    silentSessions,
+    unanswered
   };
 }
 
@@ -574,6 +588,21 @@ export function renderReport(report: RunReport, toolCalls: RunToolCall[]): strin
         ? " A seat's session was replaced " + cost.contextResets + " time(s), so its context started again from there."
         : "")
   );
+  if (cost.silentSessions > 0 || cost.unanswered > 0) {
+    // An outage and a quiet table look identical in every other number here, so
+    // the run says which it was rather than leaving its diplomacy to be read as
+    // a choice the seats made. A turn that ended with no answer and no tokens is
+    // the evidence that survives even when the run predates the repair.
+    lines.push("");
+    lines.push(
+      "**" +
+        (cost.silentSessions > 0
+          ? "A session answered without reaching a model on " + cost.silentSessions + " turn(s), which the harness tried to repair. "
+          : "") +
+        cost.unanswered +
+        " turn(s) ended with no answer and no tokens at all.** Numbers in this report are affected by an outage at the model provider rather than only by what the seats decided."
+    );
+  }
   lines.push("");
   lines.push(
     cost.costPerSocialOperation === null

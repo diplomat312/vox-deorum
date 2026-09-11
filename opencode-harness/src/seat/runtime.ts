@@ -18,6 +18,32 @@ import { logger } from "../utils/logger.js";
 // One retry recovers it, and a second would only spend the turn twice over.
 const emptyAnswerRetries = 1;
 
+// How long to wait before asking a silent session again, in milliseconds.
+//
+// A session that answers with nothing and no tokens has not reached a model, and
+// the two ways that happens need different answers: a dropped request is worth
+// repeating at once, and a provider that has stopped serving needs a pause. This
+// is short enough to be worth paying and long enough for a hiccup to pass.
+const silentSessionPauseMs = 2000;
+
+// How many times a run will try to bring a silent session back.
+//
+// One run of the bench lost twenty-eight turns of a thirty-five turn game this
+// way, and every one of them was recorded as a seat that chose to say nothing.
+// Trying once is cheap; trying all game would spend the run on a provider that
+// is plainly not answering.
+const silentSessionRepairs = 1;
+
+// Whether an answer shows the session never reached a model at all.
+//
+// This is the difference between a seat that thought and said nothing and a
+// session that answered before any work happened. The token count is what tells
+// them apart, and it is the only signal that does: both carry no text, no
+// thinking and no calls, and the lost one comes back in tens of milliseconds.
+export function neverReachedModel(result: SeatTurnResult): boolean {
+  return isEmptyAnswer(result) && result.usage.total === 0;
+}
+
 // Whether a seat's answer carried nothing at all.
 //
 // This is narrower than "the seat did not decide", which is a real answer: a
@@ -35,6 +61,12 @@ function isEmptyAnswer(result: SeatTurnResult): boolean {
 // What to say to a seat that answered nothing. The observation is not sent
 // again: it is already the last thing in the session, and repeating it would
 // spend the whole prompt a second time for one line of answer.
+// Wait for a short while, which a provider that has stopped answering needs and
+// a dropped request does not.
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 function reminderFor(turn: number): string {
   return (
     "Your turn " +
@@ -154,6 +186,9 @@ export class SeatRuntime {
     let error: string | null = null;
     let contextReset = false;
     let emptyRetries = 0;
+    // How many times this turn had to be recovered from a session that answered
+    // without reaching a model.
+    let silentRepairs = 0;
 
     try {
       result = await this.client.sendObservation(seat, observation, turn);
@@ -164,6 +199,28 @@ export class SeatRuntime {
         emptyRetries += 1;
         logger.warn("Seat " + seat + " answered turn " + turn + " with nothing, so the turn was asked again");
         const asked = await this.client.sendObservation(seat, reminderFor(turn), turn);
+        result = { ...asked, latencyMs: asked.latencyMs + result.latencyMs };
+      }
+      // A session that answered with nothing and no tokens never reached a model,
+      // which is a session to repair rather than a seat to record. Without this
+      // an outage is written down as the seats choosing silence for the rest of
+      // the game, which is the most misleading shape a record can take.
+      for (let attempt = 0; attempt < silentSessionRepairs && neverReachedModel(result); attempt += 1) {
+        silentRepairs += 1;
+        logger.warn(
+          "Seat " + seat + " answered turn " + turn + " without reaching a model, so the session was repaired and the turn asked again"
+        );
+        await delay(silentSessionPauseMs);
+        if (this.onTurnFailed) {
+          try {
+            if ((await this.onTurnFailed(seat, "the session answered without reaching a model")) === "reset") {
+              contextReset = true;
+            }
+          } catch (repairFailure) {
+            logger.warn("Repairing seat " + seat + " after a silent session failed: " + String(repairFailure));
+          }
+        }
+        const asked = await this.client.sendObservation(seat, observation, turn);
         result = { ...asked, latencyMs: asked.latencyMs + result.latencyMs };
       }
       if (this.toolServing === "serve") {
@@ -209,7 +266,8 @@ export class SeatRuntime {
       gaps,
       error,
       contextReset,
-      emptyRetries
+      emptyRetries,
+      silentRepairs
     };
   }
 
@@ -250,6 +308,7 @@ export class SeatRuntime {
       unknownParts: pending.result?.unknownParts ?? [],
       outcome: pending.outcome,
       emptyRetries: pending.emptyRetries,
+      silentRepairs: pending.silentRepairs,
       applied: options?.applied ?? appliedSummary(pending.actions, pending.gaps),
       refused,
       error: pending.error,
@@ -382,4 +441,8 @@ export interface PendingDecision {
   // How many times a turn that came back empty was asked for again. A run that
   // lost a request says so rather than looking like a seat that chose silence.
   emptyRetries: number;
+  // How many times this turn was recovered from a session that answered without
+  // reaching a model. A run with these in it was affected by an outage rather
+  // than by anything its seats decided.
+  silentRepairs: number;
 }

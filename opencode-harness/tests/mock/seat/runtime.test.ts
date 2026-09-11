@@ -244,6 +244,94 @@ describe("a seat playing a turn", () => {
     expect(record.emptyRetries).toBe(0);
   });
 
+  it("should repair a session that answered without reaching a model", async () => {
+    // One run of the bench lost twenty-eight turns of a thirty-five turn game to
+    // a session that answered in sixty milliseconds with nothing and no tokens,
+    // and every one of them was recorded as a seat choosing to say nothing.
+    const store = new TraceStore(directory, "run-1");
+    const asked: string[] = [];
+    const repaired: string[] = [];
+    const silent: SeatTurnResult = {
+      session: "ses_korea",
+      model: "opencode-go/deepseek-v4.1-flash",
+      reasoning: null,
+      modelText: null,
+      toolCalls: [],
+      usage: { input: 0, output: 0, reasoning: 0, cacheRead: 0, cacheWrite: 0, total: 0, cost: 0 },
+      latencyMs: 62,
+      unknownParts: []
+    };
+    const runtime = new SeatRuntime({
+      client: {
+        async sendObservation(seat: string, observation: string): Promise<SeatTurnResult> {
+          asked.push(observation);
+          // The ask and its immediate repeat are the outage, and the ask after
+          // the repair is the provider back, which is what a repair is for.
+          if (asked.length <= 2) return silent;
+          return {
+            ...silent,
+            reasoning: "Nothing to change.",
+            toolCalls: [call("pass", {})],
+            usage,
+            latencyMs: 3000
+          };
+        }
+      },
+      world: new RecordedWorld([recordedTurn()]),
+      socialDirectory,
+      store,
+      onTurnFailed: async (seat: string) => {
+        repaired.push(seat);
+        return "aborted" as const;
+      }
+    });
+
+    const record = await runtime.playTurn("korea", 7);
+
+    // The session was repaired rather than the game being written off, and the
+    // turn then played for real.
+    expect(repaired).toEqual(["korea"]);
+    expect(record.outcome).toBe("passed");
+    expect(record.silentRepairs).toBe(1);
+    // The observation is sent again after a repair, because a repaired session
+    // may have lost the history the first ask was built on.
+    expect(asked[asked.length - 1]).toContain("TURN 7");
+  });
+
+  it("should stop repairing when the provider stays silent", async () => {
+    const store = new TraceStore(directory, "run-1");
+    let asks = 0;
+    const runtime = new SeatRuntime({
+      client: {
+        async sendObservation(seat: string): Promise<SeatTurnResult> {
+          asks += 1;
+          return {
+            session: seat,
+            model: "opencode-go/deepseek-v4.1-flash",
+            reasoning: null,
+            modelText: null,
+            toolCalls: [],
+            usage: { input: 0, output: 0, reasoning: 0, cacheRead: 0, cacheWrite: 0, total: 0, cost: 0 },
+            latencyMs: 60,
+            unknownParts: []
+          };
+        }
+      },
+      world: new RecordedWorld([recordedTurn()]),
+      socialDirectory,
+      store,
+      onTurnFailed: async () => "aborted" as const
+    });
+
+    const record = await runtime.playTurn("korea", 7);
+
+    // A provider that is plainly not answering must not cost the run every
+    // remaining turn, so the repairs are bounded and the turn is recorded.
+    expect(record.outcome).toBe("unfinished");
+    expect(record.silentRepairs).toBe(1);
+    expect(asks).toBeLessThanOrEqual(4);
+  });
+
   it("should note the information a seat asked for and did not get", async () => {
     const store = new TraceStore(directory, "run-1");
     const runtime = new SeatRuntime({

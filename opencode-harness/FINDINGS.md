@@ -8,6 +8,8 @@ Every run plays the same four seats (Korea, Austria, Siam, Iroquois) on a genera
 
 An intervention works when it names what a mechanic is for, and fails when it does not. Two experiments this batch test that directly, and they came out opposite ways.
 
+**A nameless mechanic fails by a third route, which a longer game exposed.** Naming posture worked and naming a council and a grand strategy did not, and the tempting reading is that posture is simply the mechanic a seat has a reason to use. The thirty-five turn runs add the other half: even the intervention that worked fades to nothing. Coaching produced four times the plain arm's talking over thirty-five turns and every operation landed in the first three. An instruction can start a conversation; it cannot keep one going, and nothing tried so far has.
+
 **Naming the grand strategy does not work either.** The same test was run a third time on a third mechanic. Six runs that close by saying what dialogue is for, three of which also say that a grand strategy is how a seat declares its intent to the table: social operations come out at 12.7 and 13.3, turns with any operation at 3.3 and 3.3, and postures at 0 and 1 in one run of three. **Nothing moved.** So the rule is narrower still than "name the mechanic": naming posture worked, and naming a council and naming a strategy did not. What separates them is not whether a mechanic was named but whether the seat that was told had a reason to reach for it that turn.
 
 Two measures in that arm did shift in the same direction in all three runs, and neither is a result. Substantive messages went from 0.17 to 0.42, and proposals from 1.7 to 3. With three seeds and ranges that touch, all this says is that the effect, if it exists, is smaller than the spread between two runs of the same variant.
@@ -48,6 +50,63 @@ The other working council, in a control run that was told nothing about councils
 **A claim I made here and then disproved.** Having seen councils in the runs where the table was busiest, I wrote that council formation follows a busy table. The test refuted it: adding a crisis to the council instruction produced one council in three runs, against one in three without the crisis. Two data points that agreed with each other were a coincidence, and the honest reading is that council formation is not under the control of anything I have tried. It happens about a third of the time, and what decides it is not the instruction, not the crisis, and not the volume of talk.
 
 ## Talking rarely becomes an action
+
+## A longer game does not make diplomacy last
+
+Every run on this page was ten to fifteen turns, which is long enough to see an
+opening and far too short to see whether anything survives it. Two arms were
+therefore played at thirty-five turns, three seeds each, coaching against none,
+the same four seats. Eight hundred and forty seat turns in total.
+
+The first thing it shows is that the opening is the whole game.
+
+**Every social operation in the coached arm happened by turn three.** Both seeds
+that spoke at all put their operations on turns one, two and three, and then
+said nothing for the remaining thirty-two turns. The plain arm spoke on turns
+three and four in one run and turns fifteen and sixteen in another, and never
+spoke in the third. Across six runs and eight hundred and forty seat turns there
+is not one message in the second half of any game.
+
+| Measure | plain | coached |
+| --- | --- | --- |
+| Social operations | 2.67 (0 to 4) | 8 (4 to 16) |
+| Turns with any social operation | 1.33 (0 to 2) | 2.33 (2 to 3) |
+| Longest silence, in turns | 28.33 (19 to 35) | 32.67 (32 to 33) |
+| Pairs still in contact at the end | 0 in 6 of 6 runs | 0 in 6 of 6 runs |
+| Postures set | 0 | 0 |
+
+**Nothing durable survives the longer game, in either arm.** Not one pair of
+seats was still in contact at the end of any of the six games, and not one seat
+set a posture in any of them. The fifteen turn finding that a crisis buys durable
+contact still stands as measured, and this does not contradict it: what this adds
+is that without a crisis, and left to run, even a coached table's opening burst
+decays to nothing with twenty turns still to play.
+
+**Coaching's effect is front-loaded rather than sustained.** Per turn, the
+coached arm produced 0.84 operations per turn at fifteen turns and 0.23 at
+thirty-five, a fall of nearly three quarters, while the plain arm produced 0.18
+both times. The instruction changes what the seats do at the start; it does not
+change what they do afterwards. A bench that measures a run by its totals will
+read a longer game as a weaker effect, which is really the same effect stretched
+over more silence.
+
+**One run was lost to an outage, and used to be indistinguishable from a quiet
+table.** Coaching seed twelve lost thirty-five of its hundred and forty turns to
+a session that answered in about sixty milliseconds with no text, no thinking and
+no tokens, starting at turn twenty-eight and never recovering. Every one of those
+turns was recorded as a seat choosing to say nothing. All four seats broke at the
+same moment, which is what a provider stopping looks like rather than anything
+about a seat. The turn now repairs the session and asks again, and a run's report
+says how many turns ended with no answer at all. Seed twelve's four operations
+are a floor rather than a measurement, and it is counted here anyway because
+throwing away a run for being inconvenient is how a benchmark lies.
+
+What to take from it: the next intervention should be one that recurs, because a
+line in the opening observation cannot reach turn twenty. The obvious candidates,
+both untested, are a line that returns when a seat has been silent for several
+turns, and giving the seats something worth saying later, since with no
+hostile action available and a posture invisible to its target, the middle of a
+game is currently a place where nothing can happen.
 
 Across twelve replicated runs the seats set no postures at all, and across nineteen hundred seat turns they committed two strategy actions. Talking happens; the actions that give a position a cost mostly do not.
 
@@ -228,6 +287,8 @@ An earlier version of this page claimed a crisis turns conversation into substan
 
 Nine matrices and over thirty runs have now completed with no session replaced and no OpenCode server lost. A seat has never been dropped because a server died: the harness's own log across six hours of running holds no server that exited early and none that failed to become ready.
 
+Eleven matrices and over forty runs now, and the stability claim needs one correction, which is mine. An outage during the long runs took a whole game's worth of turns, and the record called it seats choosing silence. No server was lost and no session was replaced, so the sentence above was true and still misleading. What failed was what the harness could see rather than what it survived. A session that answers with no tokens is now repaired and asked again, and a run's report says how many turns ended with no answer at all.
+
 A run now records the commit that played it, and the report prints it. That is what makes "the seats talked more in this variant" different from "the seats talked more after the observation changed", and only the second is worth acting on. A run whose build is unknown says so instead of inviting the comparison.
 
 The turns that did not finish came in two shapes. One was a model call that ran long, which recovered by clearing the stalled work without losing the session. The other was worse to read and better to fix: a request that came back with no text, no thinking, no tool calls and zero tokens after twenty-five seconds, which the record could not tell apart from a seat that chose silence. Silence with no tokens is not a decision, so an empty answer is now asked again once, with a line saying what is missing rather than the whole observation again, and the record carries how many times a turn had to be asked again. That is what a dropped request looks like from the outside, and it is the only failure shape this bench has produced that was mistaken for a model's choice.
@@ -242,6 +303,7 @@ CI on the fork now passes. It had been failing at the install step on every push
 4. **Cost per unit of change.** Talking is nearly free, so the interesting budget question is how much talking is needed per posture, per deal and per ratified article.
 5. **Whether confinement changes what a seat does.** A confined seat no longer has a browser to reach for, and the first confined run committed a posture that the run before it did not. One run is not a result, but it is the first time a change to the harness has plausibly changed a seat's diplomacy by removing something rather than adding it.
 6. **Whether a visible posture changes behaviour.** A posture was invisible to its target until now. The next test is whether a seat that can see a neighbour's regard answers it: a posture back, a message, or a warning, rather than nothing.
+7. **Whether an intervention can recur.** Every instruction tried so far is read once, at the start, and its effect is gone by turn four of a thirty-five turn game. The smallest change that could reach the middle of a game is a line that returns only when a seat has been silent for several turns.
 
 ## Caveats
 

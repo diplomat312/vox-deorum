@@ -55,6 +55,10 @@ export interface TraceRecord {
   // How many times a turn that came back empty was asked for again, which is
   // how a dropped request is told apart from a seat that chose to say nothing.
   emptyRetries?: number;
+  // How many times this turn was recovered from a session that answered without
+  // reaching a model, which is how a provider outage is told apart from a seat
+  // that decided nothing.
+  silentRepairs?: number;
   // True when the seat's session was replaced before this turn, so its history
   // and its prompt cache start again here. A run that survived a backend death
   // says so rather than hiding it inside a token count.
