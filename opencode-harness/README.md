@@ -4,7 +4,7 @@ The harness that lets OpenCode model sessions pilot a Civilization V seat. One p
 
 ## Playing a simulated game
 
-Nothing here launches Civilization V. A run generates its own game from a seed, so two runs that differ only in how a seat is informed can be played against the same world and compared.
+Nothing here launches Civilization V. A run generates its own game from a seed, so two runs that differ only in how a seat is informed can be played against the same world and compared. Two worlds satisfy the same interface: a generated game, which is what a run plays by default, and a live game reached through Vox Deorum's MCP server.
 
 Build first, then play:
 
@@ -50,6 +50,16 @@ node opencode-harness/scripts/harvest-corpus.mjs
 ```
 
 The harvester reads the source recording through `git show`, so the working tree is left alone and the output is deterministic. From inside the package, `npm run harvest` does the same thing.
+
+## Playing a real game
+
+The same runtime drives a live game through Vox Deorum's MCP server, which must be running with a game in progress. Nothing here launches Civilization V.
+
+```
+node dist/run/live.js --seats korea:0,austria:1 --turns 10 --run-id live-first
+```
+
+Seats are given as `name:playerIndex` pairs, because a live game is addressed by player index. The run checks the tools it needs before its first turn and names anything missing, and its trace, report and roundup are the same as a simulated run's.
 
 ## Tests
 
