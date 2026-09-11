@@ -23,6 +23,9 @@ nul
 # Harness run artifacts: transcripts, traces and per-seat session state.
 /opencode-harness/runs/
 
+# Harness matrix artifacts: the same, for a variant played across several seeds.
+/opencode-harness/matrix/
+
 # DLL cache directory
 scripts/.dll-cache
 /*.bat
