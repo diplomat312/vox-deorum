@@ -113,5 +113,36 @@ export interface World {
     seat: string,
     actions: Array<Record<string, unknown>>
   ): DecisionOutcome[] | Promise<DecisionOutcome[]>;
+  // Settle one deal operation in whichever place the world keeps deals.
+  //
+  // A generated world has no game behind it, so its deals are settled in the
+  // run's own social log and this stays absent. A live world hands them to the
+  // game's deal system, which is the only place a deal is real: the terms are
+  // checked against live legality and enactment moves the goods in one action,
+  // so a second, weaker record of the same trade would be a private log beside
+  // the game's own truth.
+  applyDeal?(seat: string, operation: DealOperation): DecisionOutcome | Promise<DecisionOutcome>;
 }
 
+// One social operation that concerns a deal: an offer, or an answer to one.
+//
+// This is the narrow shape a world needs in order to settle a deal its own way,
+// so it is named here rather than in whichever module happens to write one.
+export interface DealOperation {
+  // What the seat is doing: offering, accepting or refusing.
+  kind: "deal-propose" | "deal-accept" | "deal-reject";
+  // The seat an offer is aimed at.
+  to?: string;
+  // Gold offered outright.
+  gold?: number;
+  // Gold offered each turn, with how long the payments run.
+  goldPerTurn?: number;
+  // A resource offered by name.
+  resource?: string;
+  // The proposal being answered, which is the id the offer returned.
+  deal?: string;
+  // What the seat said about the offer.
+  message?: string;
+  // How many turns a per-turn term runs for.
+  duration?: number;
+}

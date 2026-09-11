@@ -11,8 +11,9 @@
 // and a real one, which is the point of having a seam at all.
 
 import type { InspectAnswer, SeatInfo, World } from "../types.js";
-import type { DecisionOutcome } from "../types.js";
+import type { DealOperation, DecisionOutcome } from "../types.js";
 import type { VoxConnector } from "./vox-connector.js";
+import { LiveDeals } from "./live-deals.js";
 import { logger } from "../../utils/logger.js";
 
 // A seat at a real table.
@@ -55,7 +56,6 @@ export function refusalReason(text: string): string {
 }
 
 // Whether a tool's answer was the game refusing what it was asked to do.
-// Whether a tool's answer was the game refusing what it was asked to do.
 //
 // A refusal reaches the harness in two shapes, and only one of them looks like
 // a failure. Some tools mark the call as an error, and others answer
@@ -74,7 +74,6 @@ export function refusedByGame(result: { text: string; isError: boolean }): boole
   return false;
 }
 
-// Read a field out of a tool's text, which Vox returns as JSON.
 // Read a field out of a tool's text, which Vox returns as JSON.
 function parse(text: string): unknown {
   try {
@@ -106,6 +105,9 @@ export class LiveWorld implements World {
   // The names to introduce each seat by.
   private readonly names: Record<string, { civ: string; leader: string }>;
 
+  // The game's own deal system, which is where a live deal is settled.
+  private readonly deals: LiveDeals;
+
   // The observation built for the turn a seat is about to play.
   private readonly prepared = new Map<string, string>();
 
@@ -119,6 +121,9 @@ export class LiveWorld implements World {
     this.seatList = options.seats;
     this.names = options.names ?? {};
     this.game = options.game ?? "live";
+    const players: Record<string, number> = {};
+    for (const seat of this.seatList) players[seat.seat] = seat.playerID;
+    this.deals = new LiveDeals(this.connector, players);
   }
 
   // The seats this run controls.
@@ -158,6 +163,12 @@ export class LiveWorld implements World {
     for (const [subject, call] of Object.entries(readCalls(playerID))) {
       reads[subject] = await this.read(call.tool, call.args);
     }
+    // The deal thread comes from the game's own transcript rather than from the
+    // run's log, so an offer another seat made is read where it was written.
+    reads.deals = await this.deals.thread(seat).catch((error) => {
+      logger.warn("Reading the deal thread for " + seat + " failed: " + String(error));
+      return ["could not be read"];
+    });
     this.reads.set(seat, reads);
     this.prepared.set(seat, this.render(seat, turn, reads));
   }
@@ -189,6 +200,17 @@ export class LiveWorld implements World {
     const answers: string[] = [];
     for (const call of calls) answers.push(await this.readOnce(subject, call.tool, call.args, seat));
     return { text: answers.join("\n") };
+  }
+
+  // Settle one deal in the game's own deal system.
+  //
+  // A deal is the one social operation a world may have a better place for than
+  // its own log, so it is offered to the world rather than assumed to belong to
+  // the harness. Terms a seat cannot express honestly are refused here, which
+  // gives the seat a reason it can read instead of a malformed deal the game
+  // would reject without saying why.
+  async applyDeal(seat: string, operation: DealOperation): Promise<DecisionOutcome> {
+    return this.deals.apply(seat, operation);
   }
 
   // Carry out a committed decision as game actions.
@@ -277,6 +299,11 @@ export class LiveWorld implements World {
     lines.push("* Relationships: " + show(reads.diplomacy));
     lines.push("* Recent events: " + show(reads.events));
     lines.push("* Politics since your last opportunity: " + show(reads.politics));
+    lines.push("");
+    lines.push("Deal thread, read from the game's own transcript:");
+    const threads = Array.isArray(reads.deals) ? (reads.deals as string[]) : [];
+    if (threads.length === 0) lines.push("- Nothing on the table.");
+    for (const line of threads) lines.push("- " + line);
     lines.push("");
     lines.push(
       "You may inspect anything else you need (inspect). When finished, commit your actions (commit_turn) or pass. Keep the rationale short."

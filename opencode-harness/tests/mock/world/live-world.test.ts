@@ -81,8 +81,13 @@ describe("reading a real game", () => {
     expect(connector.names()).toContain("get-players");
     expect(connector.names()).toContain("get-options");
     expect(connector.names()).toContain("get-diplomatic-events");
-    // Every read is addressed by the seat's player index.
+    // The deal thread is read from the game's transcript, and a pair read names
+    // both endpoints, so it is the one call that carries no single player index.
+    expect(observation).toContain("Deal thread, read from the game's own transcript");
+    expect(observation).toContain("- Nothing on the table.");
+    // Every other read is addressed by the seat's player index.
     for (const call of connector.calls) {
+      if (call.name === "read-transcript") continue;
       expect(call.args.PlayerID).toBe(0);
     }
   });
@@ -269,5 +274,137 @@ describe("sending a decision to the game", () => {
     expect(inspectCalls(7, "deals", "2")[0].args).toEqual({ PlayerAID: 7, PlayerBID: 2 });
     expect(inspectCalls(7, "deals")).toEqual([]);
     expect(inspectCalls(7, "nonsense")).toEqual([]);
+  });
+});
+
+// A proposal written between korea and austria, as the game stores it.
+function proposalRow(id: number, speakerID: number, turn: number): string {
+  return JSON.stringify({
+    ID: id,
+    Player1ID: 0,
+    Player2ID: 1,
+    Player1Role: "",
+    Player2Role: "",
+    SpeakerID: speakerID,
+    MessageType: "deal-proposal",
+    Content: "",
+    Payload: {
+      Deal: {
+        version: 1,
+        items: [{ fromPlayerID: speakerID, toPlayerID: speakerID === 1 ? 0 : 1, itemType: "GOLD", amount: 50 }],
+        promises: []
+      }
+    },
+    Turn: turn,
+    CreatedAt: 1
+  });
+}
+
+// An answer row, which is how the game records that a proposal was closed.
+function answerRow(id: number, proposalID: number, messageType: string): string {
+  return JSON.stringify({
+    ID: id,
+    Player1ID: 0,
+    Player2ID: 1,
+    Player1Role: "",
+    Player2Role: "",
+    SpeakerID: 1,
+    MessageType: messageType,
+    Content: "",
+    Payload: { ProposalMessageID: proposalID },
+    Turn: 12,
+    CreatedAt: 2
+  });
+}
+
+// The two seats a deal test needs, with korea as the seat being read.
+const pair = [
+  { seat: "korea", playerID: 0 },
+  { seat: "austria", playerID: 1 }
+];
+
+describe("settling a deal in the game's own system", () => {
+  it("should show an offer another seat made, read from the game's transcript", async () => {
+    const connector = new FakeConnector({
+      ...answers,
+      "read-transcript": JSON.stringify({ messages: [JSON.parse(proposalRow(41, 1, 12))] })
+    });
+    const world = new LiveWorld({ connector, seats: pair });
+
+    await world.beginTurn("korea", 12);
+
+    // The offer is read where the game wrote it, and it names the id the seat
+    // has to quote back, so a seat never has to guess what it is answering.
+    expect(world.observation("korea", 12)).toContain("[turn 12] austria offers offer 41: austria pays 50 gold to korea");
+    expect(world.observation("korea", 12)).toContain("answer with deal-accept or deal-reject naming 41");
+  });
+
+  it("should stop showing an offer once the game says it was answered", async () => {
+    const connector = new FakeConnector({
+      ...answers,
+      "read-transcript": JSON.stringify({
+        messages: [JSON.parse(proposalRow(41, 1, 12)), JSON.parse(answerRow(42, 41, "deal-enacted"))]
+      })
+    });
+    const world = new LiveWorld({ connector, seats: pair });
+
+    await world.beginTurn("korea", 13);
+
+    // A settled offer is not something the seat still has to answer.
+    expect(world.observation("korea", 13)).toContain("- Nothing on the table.");
+  });
+
+  it("should say what became of an offer this seat made", async () => {
+    const connector = new FakeConnector({
+      ...answers,
+      "read-transcript": JSON.stringify({
+        messages: [JSON.parse(proposalRow(51, 0, 12)), JSON.parse(answerRow(52, 51, "deal-accept"))]
+      })
+    });
+    const world = new LiveWorld({ connector, seats: pair });
+
+    await world.beginTurn("korea", 13);
+
+    expect(world.observation("korea", 13)).toContain("Your offer 51 to austria was deal-accept");
+  });
+
+  it("should send an offer to the game's deal system and report the proposal id", async () => {
+    const connector = new FakeConnector({ ...answers, "append-message": '{"ID":77,"MessageType":"deal-proposal"}' });
+    const world = new LiveWorld({ connector, seats: pair });
+
+    const outcome = await world.applyDeal("korea", { kind: "deal-propose", to: "austria", gold: 50, message: "peace" });
+
+    // The id the game returns is what the other seat answers, so a seat is told
+    // it rather than left to find it.
+    expect(outcome).toEqual({ type: "deal-propose", taken: true, reason: "recorded as proposal 77" });
+    expect(connector.calls[0].name).toBe("append-message");
+    expect(connector.calls[0].args).toMatchObject({
+      PlayerAID: 0,
+      PlayerBID: 1,
+      MessageType: "deal-proposal"
+    });
+  });
+
+  it("should enact an accepted offer as one game action", async () => {
+    const connector = new FakeConnector({ ...answers, "enact-agent-deal": '{"Success":true,"Enacted":true}' });
+    const world = new LiveWorld({ connector, seats: pair });
+
+    const outcome = await world.applyDeal("korea", { kind: "deal-accept", deal: "77" });
+
+    expect(outcome).toEqual({ type: "deal-accept", taken: true });
+    expect(connector.calls[0].args).toMatchObject({ ProposalMessageID: 77, AccepterID: 0 });
+  });
+
+  it("should refuse a term it cannot express without asking the game", async () => {
+    const connector = new FakeConnector(answers);
+    const world = new LiveWorld({ connector, seats: pair });
+
+    const outcome = await world.applyDeal("korea", { kind: "deal-propose", to: "austria", resource: "Iron" });
+
+    // A refusal a seat can read beats a malformed deal the game would reject
+    // without saying why, so the game is never asked.
+    expect(outcome.taken).toBe(false);
+    expect(outcome.reason).toContain("resource");
+    expect(connector.calls).toHaveLength(0);
   });
 });

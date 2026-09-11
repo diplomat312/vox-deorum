@@ -19,7 +19,7 @@ npm --prefix opencode-harness run build
 node opencode-harness/dist/run/simulate.js --seats korea,austria,siam,iroquois --from 1 --to 25 --seed 11 --run-id first
 ```
 
-Useful options include `--coaching on` to close each observation by stating what dialogue is for, `--briefing on` to add a standing summary of contact with each other seat, `--scenario` to inject circumstances from a JSON file, and `--turn-timeout` to bound how long a seat turn may take. Two further toggles name a mechanic a seat may not know how to reach for: `--posture-coaching on` says that a posture action is how a relationship is recorded, and `--council-coaching on` says what a council is for.
+Useful options include `--coaching on` to close each observation by stating what dialogue is for, `--briefing on` to add a standing summary of contact with each other seat, `--scenario` to inject circumstances from a JSON file, and `--turn-timeout` to bound how long a seat turn may take. Three further toggles name a mechanic a seat may not know how to reach for: `--posture-coaching on` says that a posture action is how a relationship is recorded, `--council-coaching on` says what a council is for, and `--strategy-coaching on` says that a grand strategy is something a seat can declare.
 
 One run of a variant is an anecdote. To play a variant several times and get a spread:
 
@@ -49,3 +49,5 @@ A run writes under `opencode-harness/runs/<run-id>`: `trace/` holds one JSONL fi
 ## Relationship to Vox Agents
 
 The unified civilization mind in `vox-agents` is the previous approach to a model-driven seat and is now legacy. The harness treats OpenCode as the session layer, and Vox stays authoritative for game integration, action validation and replay. In a live game a seat's reads and writes go through the same MCP tools and bridge every other caller uses; the simulated bench replaces only the state source.
+
+A deal is the one social operation a live game has a better place for than the run's own log, so it goes to the game's deal system: the terms are written to the pair's transcript, the other seat answers the proposal by its message id, and acceptance enacts the trade in one game action. The bench has no such system, so it settles deals in its own social log instead. Either way the seat answers an offer by the id it was given.

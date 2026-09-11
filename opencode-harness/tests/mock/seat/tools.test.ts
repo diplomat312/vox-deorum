@@ -8,7 +8,7 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { dispatchSeatTool, seatToolDefinitions, type SeatContext } from "../../../src/seat/tools.js";
 import { RecordedWorld } from "../../../src/world/recorded-world.js";
-import type { WorldTurn } from "../../../src/world/types.js";
+import type { DealOperation, World, WorldTurn } from "../../../src/world/types.js";
 
 // A recorded turn for the seat, optionally carrying calls the seat made.
 function recordedTurn(overrides: Partial<WorldTurn> = {}): WorldTurn {
@@ -24,6 +24,18 @@ function recordedTurn(overrides: Partial<WorldTurn> = {}): WorldTurn {
     decision: "commit",
     ...overrides
   };
+}
+
+// A world that keeps its own deal system, the way a live game does. Everything
+// else is answered by a recorded world, so the only difference under test is
+// where a deal goes.
+function dealingWorld(dealt: DealOperation[]): World {
+  return Object.assign(new RecordedWorld([recordedTurn()]), {
+    applyDeal: async (seat: string, operation: DealOperation) => {
+      dealt.push(operation);
+      return { type: operation.kind, taken: true, reason: "recorded as proposal 9" };
+    }
+  });
 }
 
 describe("the seat tool surface", () => {
@@ -149,6 +161,42 @@ describe("the seat tool surface", () => {
     const result = await dispatchSeatTool(context, "communicate", { operations: [] });
 
     expect(result.text).toContain("at least one operation");
+  });
+
+  it("should send a deal to the world's own deal system and keep the rest in the log", async () => {
+    const dealt: DealOperation[] = [];
+    context.world = dealingWorld(dealt);
+
+    const result = await dispatchSeatTool(context, "communicate", {
+      operations: [
+        { kind: "world", message: "We will not be bought." },
+        { kind: "deal-propose", to: "austria", gold: 50, message: "peace" }
+      ]
+    });
+
+    // The offer goes to the world, which is the only place a live deal is real,
+    // and the message still lands in the run's own log.
+    expect(dealt).toHaveLength(1);
+    expect(dealt[0].kind).toBe("deal-propose");
+    const body = JSON.parse(result.text) as { operations: Array<{ kind: string }>; deals: unknown };
+    expect(body.operations.map((entry) => entry.kind)).toEqual(["world"]);
+    expect(body.deals).toEqual([{ type: "deal-propose", taken: true, reason: "recorded as proposal 9" }]);
+    // Both operations were carried out, so both count as delivered.
+    expect(result.delivered).toBe(2);
+  });
+
+  it("should keep a deal in the run's own log when the world has no deal system", async () => {
+    context.world = new RecordedWorld([recordedTurn(), recordedTurn({ seat: "austria", playerID: 1 })]);
+
+    const result = await dispatchSeatTool(context, "communicate", {
+      operations: [{ kind: "deal-propose", to: "austria", gold: 5 }]
+    });
+
+    // A generated world has no game behind it, so its deals are settled in the
+    // log and nothing is reported as dealt elsewhere.
+    const body = JSON.parse(result.text) as { operations: Array<{ kind: string }>; deals?: unknown };
+    expect(body.operations.map((entry) => entry.kind)).toEqual(["deal-propose"]);
+    expect(body.deals).toBeUndefined();
   });
 
   it("should refuse a direct message to a seat that cannot be seen", async () => {

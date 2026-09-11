@@ -6,7 +6,7 @@
 // two may be called as often as the seat likes.
 
 import { applyOperations, type Operation } from "../social/social-store.js";
-import type { World } from "../world/types.js";
+import type { DecisionOutcome, DealOperation, World } from "../world/types.js";
 
 // What a seat may ask to see. Each subject answers one question about the world.
 export const inspectSubjects = [
@@ -112,6 +112,14 @@ async function inspect(context: SeatContext, input: Record<string, unknown>): Pr
 }
 
 // Apply a batch of social operations, which is the only way a seat talks.
+// Whether an operation is about a deal, which is the one kind a world may have
+// its own place to settle.
+function isDealOperation(operation: Operation): operation is Operation & DealOperation {
+  return (
+    operation.kind === "deal-propose" || operation.kind === "deal-accept" || operation.kind === "deal-reject"
+  );
+}
+
 // Rewrite the seat a message is aimed at into the seat name the run uses.
 // Anything already correct, or that matches nothing, is left exactly as it was
 // so the social store can refuse it with its own message.
@@ -131,14 +139,28 @@ async function communicate(context: SeatContext, input: Record<string, unknown>)
   // uses. Resolving both here means a correctly aimed message is never refused
   // over what the sender called its recipient.
   const resolved = (operations as Operation[]).map((operation) => resolveRecipients(context, operation));
+  // A world with a deal system of its own settles deals there. A live game has
+  // real terms, live legality checks and a transactional enactment, so a deal
+  // written into the run's own log beside it would be a second, weaker truth
+  // about the same trade. A world without one keeps every operation in the log.
+  const settleDeal = context.world.applyDeal?.bind(context.world);
+  const deals = settleDeal ? resolved.filter(isDealOperation) : [];
+  const social = deals.length > 0 ? resolved.filter((operation) => !isDealOperation(operation)) : resolved;
   try {
-    const applied = await applyOperations(context.socialDirectory, context.seat, resolved, {
-      seats: context.world.seats().map((entry) => entry.seat)
-    });
+    const applied =
+      social.length > 0
+        ? await applyOperations(context.socialDirectory, context.seat, social, {
+            seats: context.world.seats().map((entry) => entry.seat)
+          })
+        : [];
+    const settled: DecisionOutcome[] = [];
+    if (settleDeal) for (const operation of deals) settled.push(await settleDeal(context.seat, operation));
+    const body: Record<string, unknown> = { delivered: applied.length, operations: applied };
+    if (settled.length > 0) body.deals = settled;
     return {
-      text: JSON.stringify({ delivered: applied.length, operations: applied }, null, 1),
+      text: JSON.stringify(body, null, 1),
       terminal: false,
-      delivered: applied.length
+      delivered: applied.length + settled.filter((outcome) => outcome.taken).length
     };
   } catch (error) {
     return refuse("communicate was refused: " + (error instanceof Error ? error.message : String(error)));
