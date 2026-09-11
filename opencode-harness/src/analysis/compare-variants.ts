@@ -24,7 +24,9 @@ async function main(): Promise<void> {
   const args = process.argv.slice(2);
   const baseAt = args.indexOf("--dir");
   const base = path.resolve(baseAt === -1 ? path.join("opencode-harness", "matrix") : args[baseAt + 1]);
-  const named = args.filter((arg, index) => !arg.startsWith("--") && index !== baseAt + 1);
+  // The value of --dir is not a variant name. When --dir is absent, nothing is
+  // skipped at all, which is what keeps the first named variant.
+  const named = args.filter((arg, index) => !arg.startsWith("--") && (baseAt === -1 || index !== baseAt + 1));
   if (named.length === 0) {
     logger.warn("Name at least one matrix directory to compare");
     process.exit(0);

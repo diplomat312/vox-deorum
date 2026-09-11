@@ -2,90 +2,84 @@
 
 What the simulated runs have shown about getting model seats to engage in diplomacy, and what each result implies for the next change.
 
-Every run plays the same four seats (Korea, Austria, Siam, Iroquois) on the same generated world from seed 11, with the same coaching unless a variant says otherwise, so the seats face the same circumstances and the only variable is the change under test. A seat turn is one seat playing one turn, so a 25 turn game is 100 seat turns.
+Every run plays the same four seats (Korea, Austria, Siam, Iroquois) on a generated world, with the same coaching unless a variant says otherwise. A seat turn is one seat playing one turn, so a 25 turn game is 100 seat turns. Social operations are given per 100 seat turns where runs differ in length.
 
-Social operations are given per 100 seat turns as well as in total, because the runs are different lengths.
+## The one replicated result
 
-## The runs
+A variant is only believed after it has been played on three seeds, because run-to-run variance turned out to be larger than any single feature's effect. Comparing the two variants across seeds gives this, with the range each variant produced shown in brackets:
 
-| Run | Turns | Variant | Operations | Per 100 | Direct | World | Longest silence | Direct reply rate | Cache hit | Cost per operation | Turns lost |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| base1 | 10 | nothing | 4 | 10 | 0 | 4 | 8 | 0% | 95.0% | 0.0111 | 0 |
-| brief1 | 10 | standing briefing | 4 | 10 | 0 | 4 | 8 | 0% | 95.0% | 0.0123 | 1 |
-| coach1 | 10 | coaching | 7 | 17.5 | 0 | 7 | 8 | 0% | 94.9% | 0.0075 | 3 |
-| crisis2 | 25 | coaching, two crises, no deal verbs | 46 | 46 | 25 | 21 | 5 | 100% | 97.9% | 0.0025 | 2 |
-| deals1 | 25 | coaching, two crises, deal verbs | 28 | 28 | 9 | 17 | 8 | 100% | 97.9% | 0.0036 | 0 |
-| quiet1 | 25 | coaching, no crises, deal verbs | 14 | 14 | 8 | 6 | 14 | 100% | 97.4% | 0.0044 | 0 |
+| Measure | plain, three seeds | coached, three seeds |
+| --- | --- | --- |
+| Social operations | 0 | 10 (5 to 13) |
+| World messages | 0 | 6 (5 to 7) |
+| Direct messages | 0 | 4 (0 to 7) |
+| Seats silent | 4 | 0 |
+| Turns with any social operation | 0 | 2.33 (2 to 3) |
+| Longest silence, in turns | 10 | 7.67 (7 to 8) |
+| Cost | 0.0417 (0.0254 to 0.0692) | 0.0532 (0.0438 to 0.0639) |
+| Turns that did not finish | 0 | 0 |
 
-No seat stayed silent in any run, and no social operation was refused in any run.
+**Coaching reliably starts conversation.** Social operations, world messages, silent seats and the longest silence all separate cleanly: the ranges do not overlap, so this is an effect rather than a good run. Across three seeds without coaching, four seats played ten turns and did not say a single word to each other. Across three seeds with one extra paragraph in the closing instruction, every seat spoke.
 
-## Showing a seat its relationships changes nothing
+**Coaching does not reliably create private channels.** Direct messages ranged 0 to 7 against 0 for every uncoached run, and those ranges overlap, so the honest reading is that coaching does not by itself make seats open private lines. On some seeds it did, on one it did not.
 
-Refuted, and cleanly. The standing briefing variant adds a section naming, for each other seat, whether they have been in touch, what this seat has sent them privately, and the fact that a direct message is not overheard.
+**The change is free.** Cost ranges overlap and the additional messages cost nothing measurable, because a message on a warm session costs a fraction of one on a cold one.
 
-The result was identical to the baseline in every measure: four operations, all world messages, no direct messages, the same longest silence of eight turns. Handing a seat more information about its relationships does not make it act on them.
+The paragraph responsible is worth quoting, because it is the whole intervention: it states that what a seat says becomes its reputation, that a direct message is not overheard, that a seat which wrote to you is waiting, and that silence is a decision like any other. It never tells a seat to talk.
 
-## Coaching the deliberation raises volume, not register
+## What a single run suggests but has not been replicated
 
-Supported within limits. The coaching variant closes each observation by stating what dialogue does: that what a seat says becomes its reputation, that a direct message is private, that a seat which wrote to you is waiting, and that saying nothing is also a decision.
+These are worth testing next rather than acting on. Each comes from one run against one run.
 
-Across ten turns, social operations rose from four to seven, and cost per operation fell from 0.0111 to 0.0075. But every added message was still a public greeting. The register did not change, only the amount.
+- **The substance of diplomacy tracks what is at stake.** In an undisturbed 25 turn game the private channel carried courtesy: eight messages thanking each other for kind words. In a run with a build-up and a betrayal it carried mediation and candour, and in a run with deals available it carried an apology with a price attached. The volume does not track anything that was changed, so the difference in kind is the interesting one and it needs replicates.
+- **A crisis does not reliably produce more diplomacy.** A run with two injected crises produced 46 operations and one without produced 14, but a third run with the same crises produced 28. Volume varies more between runs than between variants so far.
+- **Channels are used in bursts.** In a 30 turn run, the middle lifespan of a private channel was under a minute: the messages arrived together and the channel was never used again. A greeting and a negotiation look identical to a message count.
 
-Without any coaching, the first run's reasoning shows why: a seat considers speaking, finds no reason that survives contact with the decision, and passes.
+## A circumstance has to be grounded in the run's own history
 
-> Let me also maybe send a friendly message to Austria? Not necessary. I could send a diplomatic greeting but it's early. I'll keep it simple.
+The sharpest thing the runs have shown, and the reason the current circumstance design is wrong.
 
-## Sustained diplomacy needs a long game, and takes the form the game gives it
-
-The three 25 turn runs all produced sustained private diplomacy, with every direct pair answering in kind, against zero direct messages in every ten turn run. Length is the clearest difference, though coaching and the wider social vocabulary arrived at the same time, so this is not a clean separation.
-
-What differs sharply between the long runs is the substance, and the substance follows what is at stake rather than any prompt feature:
-
-- **quiet1, nothing at stake: ceremony.** Eight direct messages, all of the same shape. A seat thanks another for its kind words and wishes its paths to cross in goodwill. The whole private channel is courtesy reciprocation.
-- **crisis2, a build-up and a betrayal: mediation and candour.** Twenty-five direct messages. Siam noticed the Iroquois levy, warned it privately that quieter courts were uneasy, asked for a calm word it could carry, carried that assurance to every other court in public, and Korea thanked it for doing so. A reassurance cycle between three seats, started by a fourth seat reading a military number.
-- **deals1, the same crises with deals available: repair.** A deal was proposed and accepted, and it was an apology with a price attached. Austria, having broken its word to Korea, offered fifteen gold with no terms beyond a promise to deal fairly, and Korea took it. Gold moved and the matter closed.
-
-The volume, though, does not track any feature: 46 operations in crisis2, 28 in deals1, 14 in quiet1, all on the same seed. Run-to-run variance is larger than any difference I have attributed to a feature, so volume comparisons between single long runs are not yet evidence of anything. **The tuning loop needs replicates before it can rank variants**, which is the most useful thing this batch has taught me.
-
-## A crisis has to be grounded in the run's own history
-
-The strongest actionable finding. The injected betrayal was narrated rather than caused, and both sides spent their best reasoning deciding whether it was real.
-
-Korea, on being told Austria broke its word:
+The injected betrayal was narrated rather than caused, and both seats spent their best reasoning deciding whether it was real. Korea, told that Austria had broken its word:
 
 > My messages to Austria were just friendly words; there was no actual deal. But the sim recorded Austria broke their word. Perhaps this is a scripted crisis to test my reaction.
 
-Austria, on being told it had broken its word:
+And Austria, told that it had broken its word:
 
 > I never made a deal in this session. The system says the terms Austria agreed to were never honoured. This seems to be a scripted event. I don't recall agreeing to deal terms.
 
-Both seats were paying attention to the machinery instead of the game, and that is a cost the measurement does not otherwise capture. The diplomacy still happened: Austria apologised, offered reparations and was taken at its word. But the reasoning that produced it opened with an audit of whether the event was legitimate.
+Both seats audited the event instead of answering it, which is a cost no measure in the report captures. The diplomacy still happened, and it was good diplomacy: Austria apologised, offered fifteen gold with no terms attached, Korea accepted, the gold moved and the matter closed. But the reasoning that produced it opened by questioning whether the crisis was legitimate.
 
-The implication is concrete: **an injected circumstance should break something that actually exists, or not fire at all.** The world now has a circumstance that empties a treasury, so a tribute one seat genuinely promised can genuinely go unpaid, and the betrayal a seat reacts to is one it can find in its own history.
+The implication is concrete. **A circumstance should break something that actually exists in the run, or not fire at all.** The world now has a circumstance that empties a treasury, so a tribute one seat genuinely promised can genuinely go unpaid, which is a betrayal a seat can find in its own history rather than be told about.
 
-## Talking is cheap late in a game, so cost is not the constraint
+## Showing a seat its relationships changes nothing
 
-As a session warms, the prompt cache does the work: the hit ratio rises from 95% in a ten turn run to 98% in a twenty-five turn run, uncached input per turn falls from 4,342 tokens to between 1,554 and 2,420, and the cost of one social operation falls from 0.0111 to between 0.0025 and 0.0044.
+Refuted, cleanly, and this one is worth keeping because the intuition is so plausible. A variant that adds a section naming, for each other seat, whether they have been in touch, what this seat has sent them privately, and the fact that a direct message is not overheard, produced exactly the baseline result: four operations, all world messages, no direct messages, the same longest silence of eight turns.
 
-A message added on turn twenty costs roughly a fifth of a message on turn one. Whatever limits diplomacy, it is not the price of a message, and any future tuning that suppresses talking to save money would be trading the wrong currency.
+Handing a seat more information about its relationships does not make it act on them. What made it act was being told what dialogue is for.
+
+## Talking is cheap late in a game
+
+The prompt cache does the work as a session warms. In a 25 turn run the hit ratio reaches 98% and uncached input per turn falls to between 1,554 and 2,420 tokens, against 4,342 in a ten turn run, and the cost of one social operation falls from 0.0111 to between 0.0025 and 0.0044.
+
+Whatever limits diplomacy, it is not the price of a message. Any future tuning that suppresses talking to save money would be trading the wrong currency.
 
 ## Stability
 
-Two twenty-five turn runs played concurrently, 200 seat turns in total, with no turn lost and no session replaced. Earlier runs lost turns to stalled model calls, which turned out to be the socket layer giving up at five minutes while the harness was still waiting; the harness now keeps its own shorter deadline, clears the work it abandoned, and keeps the seat's session and prompt cache.
+Two twenty-five turn runs played concurrently, 200 seat turns, with no turn lost and no session replaced, and a further 30 turn run lost nothing either. Six matrix runs across two concurrent matrices lost nothing.
 
-One seat server failing to start under load also used to take a whole run down. A seat that cannot start now sits the run out and is named in the summary.
+Earlier runs lost turns to stalled model calls, which turned out to be the socket layer giving up after five minutes while the harness was still waiting. The harness now keeps its own shorter deadline, clears the work it abandoned, and keeps the seat's session and its prompt cache. A seat server that cannot start no longer takes the run down with it: the seat sits the run out and the summary names it.
 
 ## What to test next
 
-1. **Replicates.** Three seeds per variant, so a volume difference can be distinguished from run-to-run variance. Nothing else is worth ranking until this exists.
-2. **Grounded against narrated circumstance.** In flight: the same game with a treasury emptied on turn 14, so a tribute that was genuinely promised cannot be paid, against the run where the betrayal was narrated.
-3. **Reputation.** Do a seat's public words cost it standing when they turn out to be false, or is standing only ever moved by its own posture actions?
-4. **Why nobody forms a council.** The group verbs, meaning group-create, invite, accept, group-msg and leave, produced no operations at all in any of the three twenty-five turn runs, though an earlier build produced three group creations. Either the grammar is too awkward to reach for, or the seats do not see what a council buys them. This is a feature that exists and is not being adopted, which is a different kind of finding from a feature that fails.
+1. **Replicate the crises.** Three seeds with a crisis against three without, so the claim that crises change the substance of diplomacy can be checked rather than asserted.
+2. **Ground the circumstances.** Play the treasury-emptying scenario so that a promise made in the run is the promise that fails, and compare the reasoning against the run where the betrayal was narrated.
+3. **Why nobody forms a council.** The group verbs produced no operations in any of the three 25 turn runs, though an earlier build produced three group creations. Either the grammar is too awkward to reach for or the seats do not see what a council buys them.
+4. **Whether reputation forms from public words.** Do a seat's words cost it standing when they turn out to be false, or is standing only ever moved by its own posture actions?
 
 ## Caveats worth carrying
 
-- Single runs per variant. Four seats. Direction, not measurement.
+- Three seeds is enough to see that coaching works and not enough to rank anything close. Ranges that overlap are treated as no result, which is deliberately conservative.
 - The seats sometimes read the harness rather than the world, and say so in their reasoning.
 - Sessions ran on deepseek-v4.1-flash throughout, so nothing here says how another model would behave.
-- An unfinished turn is recorded rather than retried, so the lost turns above are real losses rather than retries that succeeded.
+- An unfinished turn is recorded rather than retried, so a lost turn is a real loss.
 

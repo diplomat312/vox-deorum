@@ -81,9 +81,10 @@ export function summariseVariant(variant: string, runs: RunMeasures[]): VariantS
 function asText(value: number | null): string {
   if (value === null) return "n/a";
   if (Number.isInteger(value)) return String(value);
-  // Four places is enough to compare measures, and trailing zeros are noise in
-  // a table a person reads.
-  return value.toFixed(4).replace(/0+$/, "").replace(/\.$/, "");
+  // A mean of whole things is worth two places, while a ratio or a cost needs
+  // more. Trailing zeros are noise in a table a person reads either way.
+  const places = Math.abs(value) >= 1 ? 2 : 4;
+  return value.toFixed(places).replace(/0+$/, "").replace(/\.$/, "");
 }
 
 // Render one variant's spread.

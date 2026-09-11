@@ -14,7 +14,9 @@ async function main(): Promise<void> {
   const args = process.argv.slice(2);
   const runsDirectoryAt = args.indexOf("--runs-dir");
   const runsDirectory = path.resolve(runsDirectoryAt === -1 ? path.join("opencode-harness", "runs") : args[runsDirectoryAt + 1]);
-  const named = args.filter((arg, index) => !arg.startsWith("--") && index !== runsDirectoryAt + 1);
+  // The value of --runs-dir is not a run name. When the flag is absent, nothing
+  // is skipped, which is what keeps the first named run as the baseline.
+  const named = args.filter((arg, index) => !arg.startsWith("--") && (runsDirectoryAt === -1 || index !== runsDirectoryAt + 1));
   const targets =
     named.length > 0
       ? named.map((name) => (path.isAbsolute(name) ? name : path.join(runsDirectory, name)))
