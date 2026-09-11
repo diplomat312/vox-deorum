@@ -1,0 +1,10 @@
+{"level":"debug","message":"Opened session ses_korea for seat korea","timestamp":"2026-09-10 22:29:26.187"}
+{"level":"debug","message":"Seat korea answered in 5ms with 1 tool call(s)","timestamp":"2026-09-10 22:29:26.193"}
+{"level":"debug","message":"Seat korea answered in 1ms with 1 tool call(s)","timestamp":"2026-09-10 22:29:26.194"}
+{"level":"debug","message":"Opened session ses_korea for seat siam","timestamp":"2026-09-10 22:29:26.196"}
+{"level":"debug","message":"Opened session ses_korea for seat korea","timestamp":"2026-09-10 22:29:26.198"}
+{"level":"debug","message":"Opened session ses_korea for seat korea","timestamp":"2026-09-10 22:30:55.900"}
+{"level":"debug","message":"Seat korea answered in 6ms with 1 tool call(s)","timestamp":"2026-09-10 22:30:55.908"}
+{"level":"debug","message":"Seat korea answered in 4ms with 1 tool call(s)","timestamp":"2026-09-10 22:30:55.912"}
+{"level":"debug","message":"Opened session ses_korea for seat siam","timestamp":"2026-09-10 22:30:55.917"}
+{"level":"debug","message":"Opened session ses_korea for seat korea","timestamp":"2026-09-10 22:30:55.921"}
