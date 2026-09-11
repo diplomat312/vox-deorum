@@ -7,7 +7,12 @@ import { spawn, type ChildProcess } from "node:child_process";
 import { logger } from "../utils/logger.js";
 
 // How long to wait for a freshly started server to answer, in milliseconds.
-const readyTimeoutMs = 60000;
+//
+// This is generous because a server starting while several others are also
+// starting, on a machine under load, can take well over a minute. Waiting
+// longer costs nothing when the server comes up quickly, and it turns a slow
+// machine into a slow start rather than a failed run.
+const readyTimeoutMs = 180000;
 
 // How long to wait between readiness probes, in milliseconds.
 const readyPollMs = 500;

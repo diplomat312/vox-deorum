@@ -73,6 +73,8 @@ export interface SimulationResult {
   gaps: Record<string, number>;
   // How many social operations the seats sent.
   socialOperations: number;
+  // Seats whose session could not be started, so they never took a turn.
+  unavailable: string[];
   // Circumstances the scenario injected, one line each.
   injected: string[];
 }
@@ -112,35 +114,50 @@ export async function simulate(options: SimulationOptions): Promise<SimulationRe
   // directory it runs in. A seat whose server dies is rebuilt from these, so
   // one lost backend costs that seat its context rather than the whole game.
   const seatServers = new Map<string, { server: OpenCodeServer; port: number; directory: string }>();
+  // Seats whose session could not be started. A run continues without them
+  // rather than losing the whole game to one seat, and the summary says so.
+  const unavailable: string[] = [];
   try {
     for (let index = 0; index < options.seats.length; index += 1) {
       const seat = options.seats[index];
-      const seatDirectory = path.join(options.runDirectory, "seats", seat);
-      const playerID = world.seats().find((entry) => entry.seat === seat)?.playerID ?? null;
-      await writeSeatConfig({
-        seat,
-        playerID,
-        model: options.modelOverrides?.[seat] ?? options.model,
-        seatDirectory,
-        corpusDirectory: "",
-        worldStateFile,
-        socialDirectory,
-        serverEntry: options.serverEntry
-      });
-      const server = new OpenCodeServer(seatDirectory);
-      await server.start({ port: options.portBase + index });
-      servers.push(server);
-      seatServers.set(seat, { server, port: options.portBase + index, directory: seatDirectory });
-      const client = new SessionClient(server.address(), options.modelOverrides?.[seat] ?? options.model, {}, {
-        turnTimeoutMs: options.turnTimeoutMs
-      });
-      await client.openSeat(seat, "seat " + seat);
-      clients.set(seat, client);
-      logger.info("Seat " + seat + " is ready on port " + (options.portBase + index));
+      try {
+        const seatDirectory = path.join(options.runDirectory, "seats", seat);
+        const playerID = world.seats().find((entry) => entry.seat === seat)?.playerID ?? null;
+        await writeSeatConfig({
+          seat,
+          playerID,
+          model: options.modelOverrides?.[seat] ?? options.model,
+          seatDirectory,
+          corpusDirectory: "",
+          worldStateFile,
+          socialDirectory,
+          serverEntry: options.serverEntry
+        });
+        const server = new OpenCodeServer(seatDirectory);
+        await server.start({ port: options.portBase + index });
+        servers.push(server);
+        seatServers.set(seat, { server, port: options.portBase + index, directory: seatDirectory });
+        const client = new SessionClient(server.address(), options.modelOverrides?.[seat] ?? options.model, {}, {
+          turnTimeoutMs: options.turnTimeoutMs
+        });
+        await client.openSeat(seat, "seat " + seat);
+        clients.set(seat, client);
+        logger.info("Seat " + seat + " is ready on port " + (options.portBase + index));
+      } catch (failure) {
+        // One seat that cannot start is a seat lost, not a run lost. The other
+        // seats play on and the summary names the one that never joined.
+        const detail = failure instanceof Error ? failure.message : String(failure);
+        unavailable.push(seat);
+        logger.error("Seat " + seat + " could not start and will sit this run out: " + detail);
+      }
+    }
+    const playing = options.seats.filter((seat) => !unavailable.includes(seat));
+    if (playing.length === 0) {
+      throw new Error("No seat could be started, so there is no run to play");
     }
 
     const runtimes = new Map<string, SeatRuntime>();
-    for (const seat of options.seats) {
+    for (const seat of playing) {
       runtimes.set(
         seat,
         new SeatRuntime({
@@ -212,7 +229,7 @@ export async function simulate(options: SimulationOptions): Promise<SimulationRe
     let failures = 0;
     const gaps: Record<string, number> = {};
     for (let turn = options.fromTurn; turn <= options.toTurn; turn += 1) {
-      for (const seat of options.seats) {
+      for (const seat of playing) {
         const seatDirectory = path.join(options.runDirectory, "seats", seat);
         await writeTurnState(seatDirectory, { turn, seat });
         const runtime = runtimes.get(seat) as SeatRuntime;
@@ -254,10 +271,10 @@ export async function simulate(options: SimulationOptions): Promise<SimulationRe
     await world.writeSnapshot(worldStateFile);
     await writeFile(
       path.join(options.runDirectory, "summary.json"),
-      JSON.stringify({ ...summary, failures, gaps, socialOperations, injected }, null, 2),
+      JSON.stringify({ ...summary, failures, gaps, socialOperations, injected, unavailable }, null, 2),
       "utf8"
     );
-    return { runId: options.runId, turnsPlayed, failures, gaps, socialOperations, injected };
+    return { runId: options.runId, turnsPlayed, failures, gaps, socialOperations, injected, unavailable };
   } finally {
     for (const server of servers) {
       await server.stop().catch((error) => logger.warn("Could not stop a seat server: " + String(error)));
@@ -345,7 +362,8 @@ async function main(): Promise<void> {
       " unfinished or failed, " +
       result.socialOperations +
       " social operation(s), gaps " +
-      JSON.stringify(result.gaps)
+      JSON.stringify(result.gaps) +
+      (result.unavailable.length > 0 ? ", seats that never started: " + result.unavailable.join(", ") : "")
   );
   process.exit(0);
 }
@@ -362,5 +380,10 @@ async function readScenario(repositoryRoot: string, file: string): Promise<Scena
 // Only run when invoked as a program, so importing this file in a test does not
 // start a game.
 if (process.argv[1] && process.argv[1].endsWith("simulate.js")) {
-  await main();
+  // A run that cannot proceed says why in one line and exits non-zero, rather
+  // than leaving a stack trace that reads like a crash inside the harness.
+  await main().catch((error: unknown) => {
+    logger.error("The run could not continue: " + (error instanceof Error ? error.message : String(error)));
+    process.exit(1);
+  });
 }
