@@ -142,6 +142,22 @@ describe("the generated environment", () => {
     expect(state.events.some((event) => event.kind === "bankruptcy")).toBe(true);
   });
 
+  it("should cost a seat standing when it fails to pay what it promised", () => {
+    const state = createSimState({ seats, seed: 5, game: "sim" });
+    state.seats.austria.gold = 0;
+    state.seats.korea.gold = 50;
+    state.transfers.push({ deal: "e-1", from: "austria", to: "korea", goldPerTurn: 10, remaining: 5 });
+
+    advanceTurn(state, defaultSimConfig);
+
+    // Only Korea knows it was not paid, so its private regard falls and its
+    // public regard does not. This is how a reputation forms from conduct
+    // rather than only from what a seat says about itself.
+    expect(state.seats.korea.relationships.austria.privateValue).toBeLessThan(0);
+    expect(state.seats.korea.relationships.austria.publicValue).toBe(0);
+    expect(state.events.some((event) => event.detail.includes("was not paid"))).toBe(true);
+  });
+
   it("should end a tribute the payer can no longer meet", () => {
     const state = createSimState({ seats, seed: 5, game: "sim" });
     state.seats.austria.gold = 0;

@@ -229,12 +229,29 @@ function payTribute(state: SimState, player: SimSeat): void {
     receiver.gold = Math.round((receiver.gold + paid) * 10) / 10;
     transfer.remaining -= 1;
     if (transfer.remaining <= 0 || paid < transfer.goldPerTurn) {
+      const missed = paid < transfer.goldPerTurn;
       pushEvent(
         state,
         payer.seat,
         "deal",
-        "Tribute from " + payer.civ + " to " + receiver.civ + " has ended after " + (transfer.remaining <= 0 ? "its agreed term" : "a missed payment")
+        "Tribute from " + payer.civ + " to " + receiver.civ + " has ended after " + (missed ? "a missed payment" : "its agreed term")
       );
+      // A promise that was not kept costs standing with the seat that was owed.
+      //
+      // Only that seat knows, so its private regard drops and its public
+      // regard does not: the table has not been told. This is what lets a
+      // reputation form from conduct rather than only from what a seat says
+      // about itself.
+      if (missed) {
+        const regard = receiver.relationships[payer.seat];
+        if (regard) regard.privateValue = Math.max(-8, regard.privateValue - 3);
+        pushEvent(
+          state,
+          receiver.seat,
+          "deal",
+          receiver.civ + " was not paid what " + payer.civ + " promised"
+        );
+      }
       finished.push(transfer);
     }
   }
