@@ -28,7 +28,7 @@ interface RawPart {
 
 // One message as the server returns it.
 interface RawMessage {
-  info?: { tokens?: unknown; cost?: unknown; modelID?: unknown; providerID?: unknown };
+  info?: { tokens?: unknown; cost?: unknown; modelID?: unknown; providerID?: unknown; role?: unknown };
   parts?: unknown;
 }
 
@@ -37,7 +37,7 @@ function number(value: unknown): number {
   return typeof value === "number" && Number.isFinite(value) ? value : 0;
 }
 
-// Read the token and spend numbers out of a response.
+// Read the token and spend numbers out of one message.
 function readUsage(raw: RawMessage["info"]): SessionUsage {
   const tokens = (raw?.tokens ?? {}) as Record<string, unknown>;
   const cache = (tokens.cache ?? {}) as Record<string, unknown>;
@@ -58,6 +58,28 @@ function readUsage(raw: RawMessage["info"]): SessionUsage {
   };
 }
 
+// Add one message's usage onto a running total.
+//
+// A turn is several API calls when the model uses tools, and each call reports
+// its own tokens and cost. The turn's cost is their sum, so the numbers a run
+// reports match what the provider will bill.
+function addUsage(total: SessionUsage, part: SessionUsage): SessionUsage {
+  return {
+    input: total.input + part.input,
+    output: total.output + part.output,
+    reasoning: total.reasoning + part.reasoning,
+    cacheRead: total.cacheRead + part.cacheRead,
+    cacheWrite: total.cacheWrite + part.cacheWrite,
+    total: total.total + part.total,
+    cost: total.cost === null && part.cost === null ? null : (total.cost ?? 0) + (part.cost ?? 0)
+  };
+}
+
+// The usage of a turn that produced nothing at all.
+function zeroUsage(): SessionUsage {
+  return { input: 0, output: 0, reasoning: 0, cacheRead: 0, cacheWrite: 0, total: 0, cost: null };
+}
+
 // Read one tool call out of a response part. The server wraps the payload in a
 // state object, so the arguments and the result are read from there first and
 // from the part itself second.
@@ -74,23 +96,38 @@ function readToolCall(part: RawPart): SessionToolCall {
   };
 }
 
-// Turn a response into the shape the trace store keeps.
-export function readTurnResult(session: string, model: string, raw: RawMessage, latencyMs: number): SeatTurnResult {
-  const parts = Array.isArray(raw.parts) ? (raw.parts as RawPart[]) : [];
+// Turn a whole turn's messages into the shape the trace store keeps.
+//
+// It takes every assistant message the turn produced, not just the last one,
+// because a turn that uses tools is several messages: the model calls a tool,
+// reads the result, and calls again. The final message usually carries only the
+// closing text, so reading that alone would report a turn in which the model
+// did nothing.
+export function readTurnResult(
+  session: string,
+  model: string,
+  messages: RawMessage[],
+  latencyMs: number
+): SeatTurnResult {
   const reasoning: string[] = [];
   const text: string[] = [];
   const toolCalls: SessionToolCall[] = [];
   const unknownParts: string[] = [];
-  for (const part of parts) {
-    const type = typeof part.type === "string" ? part.type : "unknown";
-    if (type === "reasoning") {
-      if (typeof part.text === "string") reasoning.push(part.text);
-    } else if (type === "text") {
-      if (typeof part.text === "string") text.push(part.text);
-    } else if (type === "tool") {
-      toolCalls.push(readToolCall(part));
-    } else if (type !== "step-start" && type !== "step-finish" && type !== "snapshot") {
-      unknownParts.push(type);
+  let usage = zeroUsage();
+  for (const message of messages) {
+    usage = addUsage(usage, readUsage(message.info));
+    const parts = Array.isArray(message.parts) ? (message.parts as RawPart[]) : [];
+    for (const part of parts) {
+      const type = typeof part.type === "string" ? part.type : "unknown";
+      if (type === "reasoning") {
+        if (typeof part.text === "string") reasoning.push(part.text);
+      } else if (type === "text") {
+        if (typeof part.text === "string") text.push(part.text);
+      } else if (type === "tool") {
+        toolCalls.push(readToolCall(part));
+      } else if (type !== "step-start" && type !== "step-finish" && type !== "snapshot") {
+        unknownParts.push(type);
+      }
     }
   }
   return {
@@ -99,7 +136,7 @@ export function readTurnResult(session: string, model: string, raw: RawMessage, 
     reasoning: reasoning.length > 0 ? reasoning.join("\n\n") : null,
     modelText: text.length > 0 ? text.join("\n\n") : null,
     toolCalls,
-    usage: readUsage(raw.info),
+    usage,
     latencyMs,
     unknownParts
   };
@@ -163,14 +200,20 @@ export class SessionClient {
       throw new Error("Seat '" + seat + "' has no session; open one before sending an observation");
     }
     const model = this.modelOf(seat);
+    // Count the messages first, so everything the turn adds can be collected
+    // afterwards. A turn that uses tools is several messages, and the reply to
+    // the request carries only the closing one.
+    const before = (await this.request<RawMessage[]>("GET", "/session/" + session + "/message")).length;
     const started = Date.now();
-    const raw = await this.request<RawMessage>("POST", "/session/" + session + "/message", {
+    await this.request<RawMessage>("POST", "/session/" + session + "/message", {
       providerID: model.providerID,
       modelID: model.modelID,
       parts: [{ type: "text", text: observation }]
     });
     const latencyMs = Date.now() - started;
-    const result = readTurnResult(session, model.providerID + "/" + model.modelID, raw, latencyMs);
+    const all = await this.request<RawMessage[]>("GET", "/session/" + session + "/message");
+    const produced = all.slice(before).filter((message) => message.info?.role === "assistant");
+    const result = readTurnResult(session, model.providerID + "/" + model.modelID, produced, latencyMs);
     logger.debug(
       "Seat " + seat + " answered in " + latencyMs + "ms with " + result.toolCalls.length + " tool call(s)"
     );

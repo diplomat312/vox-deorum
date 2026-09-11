@@ -112,13 +112,29 @@ async function inspect(context: SeatContext, input: Record<string, unknown>): Pr
 }
 
 // Apply a batch of social operations, which is the only way a seat talks.
+// Rewrite the seat a message is aimed at into the seat name the run uses.
+// Anything already correct, or that matches nothing, is left exactly as it was
+// so the social store can refuse it with its own message.
+function resolveRecipients(context: SeatContext, operation: Operation): Operation {
+  if (typeof operation.to !== "string") return operation;
+  const aliases = context.world.aliases();
+  const resolved = aliases[operation.to.trim().toLowerCase()];
+  return resolved && resolved !== operation.to ? { ...operation, to: resolved } : operation;
+}
+
 async function communicate(context: SeatContext, input: Record<string, unknown>): Promise<SeatToolResult> {
   const operations = input.operations;
   if (!Array.isArray(operations) || operations.length === 0) {
     return refuse("communicate needs at least one operation");
   }
+  // A model writes the civilization it can see, not the seat name the harness
+  // uses. Resolving both here means a correctly aimed message is never refused
+  // over what the sender called its recipient.
+  const resolved = (operations as Operation[]).map((operation) => resolveRecipients(context, operation));
   try {
-    const applied = await applyOperations(context.socialDirectory, context.seat, operations as Operation[]);
+    const applied = await applyOperations(context.socialDirectory, context.seat, resolved, {
+      seats: context.world.seats().map((entry) => entry.seat)
+    });
     return {
       text: JSON.stringify({ delivered: applied.length, operations: applied }, null, 1),
       terminal: false,

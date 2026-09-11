@@ -11,6 +11,7 @@
     "A countdown can read negative (1 entry does), which is the engine rounding an almost finished item.",
     "Rival research reads \"undefined\" in 11 observed turns, which drops the research fields on those rival entries.",
     "City counts fall as well as rise (3 drops), so citiesAdded is a net change and not a count of foundings.",
+    "Population per turn comes out as 0 for austria, iroquois, siam, and that is the median of a lumpy series: population moves in single steps on a few turns and stands still on the rest, so a simulator should read the published population spread rather than the median alone.",
     "Seat records do not share a start turn (first turns 0, 1), because turn 0 is the opening state for most seats while the Korea record opens at turn 1.",
     "Research and policy counts are the engine's own projections, so they drift as science and culture change and are not fixed durations."
   ],

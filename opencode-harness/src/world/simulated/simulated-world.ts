@@ -114,6 +114,19 @@ export class SimulatedWorld implements World {
     applyCommit(this.state, seat, actions as unknown as SimCommitAction[]);
   }
 
+  // Every name a seat answers to: its seat name, its civilization and its
+  // leader, all lowercased, so a model may write "Austria" or "Maria Theresa".
+  aliases(): Record<string, string> {
+    const names: Record<string, string> = {};
+    for (const seat of this.state.order) {
+      const player = this.state.seats[seat];
+      names[seat.toLowerCase()] = seat;
+      names[player.civ.toLowerCase()] = seat;
+      names[player.leader.toLowerCase()] = seat;
+    }
+    return names;
+  }
+
   // Write the world out so a tool server in another process can read it.
   async writeSnapshot(file: string): Promise<void> {
     await mkdir(path.dirname(file), { recursive: true });

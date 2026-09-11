@@ -20,6 +20,9 @@ nul
 # Harness run logs (its logger writes logs/ beside whatever directory it runs from).
 /opencode-harness/logs/
 
+# Harness run artifacts: transcripts, traces and per-seat session state.
+/opencode-harness/runs/
+
 # DLL cache directory
 scripts/.dll-cache
 /*.bat

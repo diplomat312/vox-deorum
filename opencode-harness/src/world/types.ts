@@ -90,4 +90,8 @@ export interface World {
   // here, because its world already happened. A generated world must apply
   // them, or a seat's choices would never change what the others see.
   applyDecision(seat: string, actions: Array<Record<string, unknown>>): void;
+  // Names a seat may be addressed by besides its seat name, mapped to the seat
+  // they mean. A model naturally writes "Austria", so refusing that because the
+  // seat is called "austria" wastes a turn and teaches it nothing.
+  aliases(): Record<string, string>;
 }

@@ -32,7 +32,7 @@ const fullResponse = {
 
 describe("reading a model response", () => {
   it("should keep reasoning, text and tool calls apart", () => {
-    const result = readTurnResult("ses_1", "opencode-go/deepseek-v4.1-flash", fullResponse, 42);
+    const result = readTurnResult("ses_1", "opencode-go/deepseek-v4.1-flash", [fullResponse], 42);
 
     expect(result.reasoning).toBe("Train A arrives at 18:07.\n\nTrain B arrives at 17:57.");
     expect(result.modelText).toBe("B arrives first by 10 minutes.");
@@ -50,7 +50,7 @@ describe("reading a model response", () => {
   });
 
   it("should read the token, cache and cost fields", () => {
-    const result = readTurnResult("ses_1", "model", fullResponse, 1);
+    const result = readTurnResult("ses_1", "model", [fullResponse], 1);
 
     expect(result.usage).toEqual({
       input: 189,
@@ -64,19 +64,40 @@ describe("reading a model response", () => {
   });
 
   it("should keep a part type it does not know instead of dropping it", () => {
-    const result = readTurnResult("ses_1", "model", fullResponse, 1);
+    const result = readTurnResult("ses_1", "model", [fullResponse], 1);
 
     expect(result.unknownParts).toEqual(["something-new"]);
   });
 
   it("should survive a response with no reasoning and no parts", () => {
-    const result = readTurnResult("ses_1", "model", {}, 5);
+    const result = readTurnResult("ses_1", "model", [{}], 5);
 
     expect(result.reasoning).toBeNull();
     expect(result.modelText).toBeNull();
     expect(result.toolCalls).toEqual([]);
     expect(result.usage.total).toBe(0);
     expect(result.usage.cost).toBeNull();
+  });
+
+  it("should gather a whole turn from every message it produced", () => {
+    // A turn that used tools arrives as several assistant messages. Reading the
+    // last one alone would report a turn in which the model only spoke.
+    const firstStep = {
+      info: { role: "assistant", tokens: { input: 1000, output: 30, cache: { read: 500, write: 0 } }, cost: 0.01 },
+      parts: [{ type: "tool", tool: "vox-civ_inspect", state: { status: "completed", input: { subject: "self" }, output: "{}" } }]
+    };
+    const lastStep = {
+      info: { role: "assistant", tokens: { input: 1200, output: 20, cache: { read: 1100, write: 0 } }, cost: 0.02 },
+      parts: [{ type: "text", text: "Committing Pottery." }]
+    };
+
+    const result = readTurnResult("ses_1", "model", [firstStep, lastStep], 900);
+
+    expect(result.toolCalls).toHaveLength(1);
+    expect(result.modelText).toBe("Committing Pottery.");
+    expect(result.usage.input).toBe(2200);
+    expect(result.usage.cacheRead).toBe(1600);
+    expect(result.usage.cost).toBeCloseTo(0.03, 6);
   });
 });
 
@@ -114,13 +135,39 @@ describe("the seat session client", () => {
   let server: RunningServer | null = null;
 
   beforeAll(async () => {
+    // The stub keeps a real message list per session, because the client reads
+    // the session after sending rather than trusting the send's own reply.
+    const messages = new Map<string, unknown[]>();
+    const toolCallStep = {
+      info: { role: "assistant", tokens: { input: 900, output: 20, cache: { read: 800, write: 0 } }, cost: 0.001 },
+      parts: [
+        {
+          type: "tool",
+          tool: "vox-civ_inspect",
+          callID: "call_1",
+          state: { status: "completed", input: { subject: "self" }, output: "{\"gold\":0}" }
+        }
+      ]
+    };
+    // The closing message of a turn carries the model's words, not another
+    // tool call, which is exactly why the client reads every message.
+    const closingStep = {
+      info: { ...fullResponse.info, role: "assistant" },
+      parts: fullResponse.parts.filter((part) => part.type !== "tool")
+    };
     stub = await startStub((request) => {
-      if (request.method === "POST" && request.url === "/session") return { status: 200, body: { id: "ses_korea" } };
+      if (request.method === "POST" && request.url === "/session") {
+        messages.set("ses_korea", [{ info: { role: "user" }, parts: [] }]);
+        return { status: 200, body: { id: "ses_korea" } };
+      }
       if (request.method === "POST" && request.url === "/session/ses_korea/message") {
-        return { status: 200, body: fullResponse };
+        const session = messages.get("ses_korea") ?? [];
+        session.push(toolCallStep, closingStep);
+        messages.set("ses_korea", session);
+        return { status: 200, body: closingStep };
       }
       if (request.method === "GET" && request.url === "/session/ses_korea/message") {
-        return { status: 200, body: [{ info: {} }, { info: {} }] };
+        return { status: 200, body: messages.get("ses_korea") ?? [] };
       }
       if (request.url === "/broken") return { status: 500, body: { error: "nope" } };
       return { status: 404, body: { error: "not found" } };
@@ -150,6 +197,7 @@ describe("the seat session client", () => {
     expect(session).toBe("ses_korea");
     expect(client.sessionOf("korea")).toBe("ses_korea");
     expect(first.reasoning).toContain("Train A arrives");
+    expect(first.toolCalls).toHaveLength(1);
     expect(second.session).toBe("ses_korea");
     expect(stub?.requests.filter((entry) => entry === "POST /session/ses_korea/message")).toHaveLength(2);
   });
@@ -175,8 +223,10 @@ describe("the seat session client", () => {
   it("should list the messages a session holds", async () => {
     const client = new SessionClient(server as RunningServer, { providerID: "opencode-go", modelID: "deepseek-v4.1-flash" });
     await client.openSeat("korea");
+    await client.sendObservation("korea", "TURN 1");
 
-    expect(await client.listMessages("korea")).toHaveLength(2);
+    // One opening user message plus the two assistant messages the turn added.
+    expect(await client.listMessages("korea")).toHaveLength(3);
   });
 
   it("should report a refused request instead of returning nothing", async () => {
