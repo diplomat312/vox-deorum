@@ -85,6 +85,32 @@ export async function preflight(connector: { listTools(): Promise<string[]> }): 
   return requiredVoxTools.filter((tool) => !available.includes(tool));
 }
 
+// Check that the game itself is ready, not only that its tools exist.
+//
+// The tools answer long before a game is loaded, and a knowledge read against
+// an unloaded game fails with the server's own message rather than returning
+// state. Starting a run in that condition wastes a session producing empty
+// briefings and committing actions into nothing, so it is checked here instead.
+//
+// The probe is the first seat's player read, which is the one read every turn
+// depends on and the only one whose refusal is unambiguous.
+export async function checkGameReady(
+  connector: { call(name: string, args?: Record<string, unknown>): Promise<{ text: string; isError: boolean }> },
+  firstSeatPlayerID: number | null
+): Promise<string | null> {
+  if (firstSeatPlayerID === null) return null;
+  const result = await connector.call("get-players", { PlayerID: firstSeatPlayerID }).catch((error) => ({
+    text: "the call failed: " + (error instanceof Error ? error.message : String(error)),
+    isError: true
+  }));
+  if (!result.isError) return null;
+  return (
+    "The game is not ready to be played. Reading the first seat answered: " +
+    result.text.slice(0, 300) +
+    ". A live run needs a game already loaded, because every turn begins with that read."
+  );
+}
+
 // Play the seats against the running game.
 export async function runLive(options: LiveRunOptions): Promise<LiveRunResult> {
   if (options.seats.length === 0) throw new Error("A live run needs at least one seat");
@@ -98,6 +124,9 @@ export async function runLive(options: LiveRunOptions): Promise<LiveRunResult> {
   if (missing.length > 0) {
     throw new Error("The game is missing tools this run needs: " + missing.join(", "));
   }
+  const notReady = await checkGameReady(connector, options.seats[0]?.playerID ?? null);
+  if (notReady) throw new Error(notReady);
+  logger.info("The game answered a read, so it is loaded and ready to play");
   const world = new LiveWorld({
     connector,
     seats: options.seats,

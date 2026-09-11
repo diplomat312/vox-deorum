@@ -56,6 +56,14 @@ The live world is written. A turn's reads are fetched up front and the observati
 
 A run checks the tools it depends on before its first turn, because a missing tool discovered on turn forty wastes a game rather than a minute. The path is verified offline against a fake connection, which is what let it be written without launching Civilization V.
 
+### What can and cannot be verified without a game
+
+The connector was verified against the real MCP server running on the repository's mock bottom: the real bridge with an in-memory mock DLL underneath, which needs no Civilization V at all. That proved the transport, the tool names and the call path, because the real server listed its 43 tools and answered calls over streamable HTTP.
+
+It also found a defect that a hand-written fake had hidden. The knowledge tools answer long before a game is loaded, refusing with "KnowledgeStore not initialized. Call loadKnowledge() first", so a run checking only that its tools exist would have started and then recorded an empty briefing on every turn. A run now reads the first seat before its first turn and refuses to start unless that read answers.
+
+The limit of the mock bottom is worth recording, because it looks like it should go further than it does. The mock DLL implements four Lua functions, and the knowledge tools need others such as the player and city getters, so those reads cannot return real state. More fundamentally the knowledge store is fed by game events, and the mock's automatic events are placeholders rather than the event vocabulary the store consumes. **Feeding the store would mean writing a producer of game events, which is simulating the game at the event level**, one layer below the generated world that already exists on purpose. So the live path's remaining verification is a real game, and that is a deliberate boundary rather than an oversight.
+
 Three things are deliberately not built, because none of them can be tested without a real game. The pacing policy, meaning where a seat thinks relative to the game clock and how a commit is revalidated against a state that moved, is unsettled. The game's own deal system is not wired, so an agreement still lives in the harness's log rather than in the game's deal actions. And backend supervision, health checks and outage handling remain to be proven against a live stack, where a game keeps running whether the backend is healthy or not.
 
 Backend supervision, health checks and outage handling move from desirable to required, because a live game keeps running whether the backend is healthy or not.
