@@ -24,6 +24,8 @@ Start with **[Architecture](developers/architecture.md)**: the components, how d
 
 Each component has its own folder under [developers/](developers/): the [civ5-dll](developers/civ5-dll/), the [civ5-mod](developers/civ5-mod/), the [bridge-service](developers/bridge-service/), the [mcp-server](developers/mcp-server/), and the [vox-agents](developers/vox-agents/).
 
+Separate from those five is the [OpenCode harness](developers/opencode-harness.md): a bench that runs model sessions as seats against a generated game so the diplomacy layer can be played, watched and tuned without Civilization V running.
+
 ## Release history
 
 Changelogs for each release live in [versions/](versions/).
