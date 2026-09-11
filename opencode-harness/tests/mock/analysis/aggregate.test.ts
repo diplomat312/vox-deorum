@@ -99,6 +99,47 @@ describe("summarising a variant", () => {
     expect(markdown).toContain("shrug: Social operations higher (ranges overlap, not a result)");
   });
 
+  it("should count how many runs produced a sparse measure at all", () => {
+    // Postures are the shape a sparse measure has: mostly nothing, with the
+    // occasional run where a seat decides to record its regard.
+    const summary = summariseVariant("trial", [
+      measures({ runId: "t-1", postures: 0 }),
+      measures({ runId: "t-2", postures: 5 }),
+      measures({ runId: "t-3", postures: 3 })
+    ]);
+
+    const postures = summary.measures.find((entry) => entry.label === "Posture changes");
+
+    expect(postures?.runsWithAny).toBe(2);
+    expect(postures?.samples).toBe(3);
+  });
+
+  it("should call a sparse measure a difference by how often it happened, not by its range", () => {
+    // Something that never happens against something that happens in most runs
+    // is a real difference, even though one run of the second produced none and
+    // the ranges therefore touch at zero.
+    const never = summariseVariant("never", [
+      measures({ runId: "n-1", postures: 0 }),
+      measures({ runId: "n-2", postures: 0 }),
+      measures({ runId: "n-3", postures: 0 })
+    ]);
+    const sometimes = summariseVariant("sometimes", [
+      measures({ runId: "s-1", postures: 0 }),
+      measures({ runId: "s-2", postures: 5 }),
+      measures({ runId: "s-3", postures: 3 })
+    ]);
+    const once = summariseVariant("once", [
+      measures({ runId: "o-1", postures: 0 }),
+      measures({ runId: "o-2", postures: 0 }),
+      measures({ runId: "o-3", postures: 4 })
+    ]);
+
+    const markdown = renderAggregate([never, sometimes, once]);
+
+    expect(markdown).toContain("sometimes: Posture changes higher (in 2 of 3 runs against never)");
+    expect(markdown).toContain("once: Posture changes higher (in 1 of 3 runs against 0 of 3, not a result)");
+  });
+
   it("should describe a single variant without pretending to compare it", () => {
     const markdown = renderAggregate([summariseVariant("solo", [measures(), measures({ runId: "solo-s12" })])]);
 

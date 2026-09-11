@@ -18,6 +18,11 @@ export interface MeasureSpread {
   max: number | null;
   // How many runs reported a value at all.
   samples: number;
+  // How many runs reported a value above zero. Sparse measures, such as
+  // postures, councils and repairs, are mostly zero with the occasional event,
+  // so a mean hides the difference between "never happens" and "happens in most
+  // runs". This count is what separates them.
+  runsWithAny: number;
 }
 
 // One variant, played several times.
@@ -63,14 +68,15 @@ const measureRows: Array<{ label: string; read: (entry: RunMeasures) => number |
 
 // The mean and the range of one set of numbers.
 function spreadOf(label: string, values: number[]): MeasureSpread {
-  if (values.length === 0) return { label, mean: null, min: null, max: null, samples: 0 };
+  if (values.length === 0) return { label, mean: null, min: null, max: null, samples: 0, runsWithAny: 0 };
   const total = values.reduce((sum, value) => sum + value, 0);
   return {
     label,
     mean: total / values.length,
     min: Math.min(...values),
     max: Math.max(...values),
-    samples: values.length
+    samples: values.length,
+    runsWithAny: values.filter((value) => value > 0).length
   };
 }
 
@@ -103,7 +109,11 @@ function asText(value: number | null): string {
 function spreadText(measure: MeasureSpread): string {
   if (measure.samples === 0 || measure.mean === null) return "n/a";
   if (measure.min === measure.max) return asText(measure.mean);
-  return asText(measure.mean) + " (" + asText(measure.min) + " to " + asText(measure.max) + ")";
+  // A sparse measure is also reported as how often it happened at all, because
+  // the mean of a mostly-zero count says little. The extra reading appears only
+  // when some run had nothing, which is exactly when it matters.
+  const any = measure.runsWithAny < measure.samples ? ", in " + measure.runsWithAny + " of " + measure.samples + " runs" : "";
+  return asText(measure.mean) + " (" + asText(measure.min) + " to " + asText(measure.max) + ")" + any;
 }
 
 // Render several variants side by side, each with its spread.
@@ -150,12 +160,34 @@ export function renderAggregate(summaries: VariantSummary[]): string {
         if (after.mean === before.mean) continue;
         // A difference only counts when the two ranges do not overlap, which
         // keeps a spread from being read as an effect.
+        //
+        // A sparse measure gets a different test, because a range is the wrong
+        // shape for it: something that happens in most runs against something
+        // that never happens is a real difference even when one run of the
+        // first produced none and the ranges therefore touch at zero. For those
+        // the comparison is how often the thing happened at all.
+        const sparse = before.runsWithAny < before.samples || after.runsWithAny < after.samples;
+        const frequencySeparated =
+          after.runsWithAny > before.runsWithAny &&
+          before.runsWithAny === 0 &&
+          after.runsWithAny >= Math.ceil(after.samples / 2);
         const separated =
-          (before.max !== null && after.min !== null && after.min > before.max) ||
-          (before.min !== null && after.max !== null && after.max < before.min);
+          sparse
+            ? frequencySeparated
+            : (before.max !== null && after.min !== null && after.min > before.max) ||
+              (before.min !== null && after.max !== null && after.max < before.min);
         const direction = after.mean > before.mean ? "higher" : "lower";
         findings.push(
-          row.label + " " + direction + (separated ? " (ranges do not overlap)" : " (ranges overlap, not a result)")
+          row.label +
+            " " +
+            direction +
+            (sparse
+              ? separated
+                ? " (in " + after.runsWithAny + " of " + after.samples + " runs against never)"
+                : " (in " + after.runsWithAny + " of " + after.samples + " runs against " + before.runsWithAny + " of " + before.samples + ", not a result)"
+              : separated
+                ? " (ranges do not overlap)"
+                : " (ranges overlap, not a result)")
         );
       }
       lines.push("- " + summary.variant + ": " + (findings.length === 0 ? "nothing differs" : findings.join("; ")) + ".");
