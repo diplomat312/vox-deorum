@@ -52,6 +52,9 @@ export interface TraceRecord {
   refused: Array<{ type: string; reason: string }>;
   // The error that ended the turn, when it failed.
   error: string | null;
+  // How many times a turn that came back empty was asked for again, which is
+  // how a dropped request is told apart from a seat that chose to say nothing.
+  emptyRetries?: number;
   // True when the seat's session was replaced before this turn, so its history
   // and its prompt cache start again here. A run that survived a backend death
   // says so rather than hiding it inside a token count.

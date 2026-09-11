@@ -169,6 +169,81 @@ describe("a seat playing a turn", () => {
     expect((await runtime.playTurn("korea", 7)).outcome).toBe("unfinished");
   });
 
+  it("should ask turn again when it comes back with nothing at all", async () => {
+    const store = new TraceStore(directory, "run-1");
+    const asked: string[] = [];
+    const runtime = new SeatRuntime({
+      client: {
+        async sendObservation(seat: string, observation: string): Promise<SeatTurnResult> {
+          asked.push(observation);
+          // The first answer is the shape a dropped request leaves: no text, no
+          // thinking, no calls, and zero tokens after twenty-five seconds.
+          if (asked.length === 1) {
+            return {
+              session: seat,
+              model: "opencode-go/deepseek-v4.1-flash",
+              reasoning: null,
+              modelText: null,
+              toolCalls: [],
+              usage: { input: 0, output: 0, reasoning: 0, cacheRead: 0, cacheWrite: 0, total: 0, cost: 0 },
+              latencyMs: 25000,
+              unknownParts: []
+            } as SeatTurnResult;
+          }
+          return {
+            session: seat,
+            model: "opencode-go/deepseek-v4.1-flash",
+            reasoning: "Nothing worth changing this turn.",
+            modelText: "Holding steady.",
+            toolCalls: [call("pass", {})],
+            usage,
+            latencyMs: 3000,
+            unknownParts: []
+          } as SeatTurnResult;
+        }
+      },
+      world: new RecordedWorld([recordedTurn()]),
+      socialDirectory,
+      store
+    });
+
+    const record = await runtime.playTurn("korea", 7);
+
+    // The lost request is asked again, and the answer that arrives is the turn.
+    expect(asked).toHaveLength(2);
+    expect(record.outcome).toBe("passed");
+    expect(record.emptyRetries).toBe(1);
+    // The time recorded is what the seat spent across both asks, and the retry
+    // carries a line of instruction rather than the whole observation again.
+    expect(record.latencyMs).toBe(28000);
+    expect(asked[1]).toContain("produced no answer");
+    expect(asked[1].length).toBeLessThan(300);
+  });
+
+  it("should not ask again when the seat answered without deciding", async () => {
+    const store = new TraceStore(directory, "run-1");
+    let asks = 0;
+    const answer = driverReturning({ toolCalls: [call("inspect", { subject: "self" })] });
+    const runtime = new SeatRuntime({
+      client: {
+        async sendObservation(seat: string, observation: string): Promise<SeatTurnResult> {
+          asks += 1;
+          return answer.sendObservation(seat, observation, 7);
+        }
+      },
+      world: new RecordedWorld([recordedTurn()]),
+      socialDirectory,
+      store
+    });
+
+    const record = await runtime.playTurn("korea", 7);
+
+    // Inspecting and stopping is a real answer, so the seat is not asked twice.
+    expect(asks).toBe(1);
+    expect(record.outcome).toBe("unfinished");
+    expect(record.emptyRetries).toBe(0);
+  });
+
   it("should note the information a seat asked for and did not get", async () => {
     const store = new TraceStore(directory, "run-1");
     const runtime = new SeatRuntime({

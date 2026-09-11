@@ -9,6 +9,39 @@ import type { TraceStore } from "../trace/store.js";
 import type { TraceOutcome, TraceRecord } from "../trace/types.js";
 import type { World } from "../world/types.js";
 import { dispatchSeatTool, type CommitAction, type SeatContext } from "./tools.js";
+import { logger } from "../utils/logger.js";
+
+// How many times a turn that came back empty is asked for again.
+//
+// A provider occasionally answers with nothing at all: no text, no thinking, no
+// tool calls and zero tokens, which is a dropped request rather than a decision.
+// One retry recovers it, and a second would only spend the turn twice over.
+const emptyAnswerRetries = 1;
+
+// Whether a seat's answer carried nothing at all.
+//
+// This is narrower than "the seat did not decide", which is a real answer: a
+// seat that inspected and stopped, or that said something, has answered. Only a
+// response with no text, no thinking and no calls is a lost request, and that is
+// the shape that took a whole turn of this bench's runs at zero cost.
+function isEmptyAnswer(result: SeatTurnResult): boolean {
+  return (
+    result.toolCalls.length === 0 &&
+    (result.modelText ?? "").trim().length === 0 &&
+    (result.reasoning ?? "").trim().length === 0
+  );
+}
+
+// What to say to a seat that answered nothing. The observation is not sent
+// again: it is already the last thing in the session, and repeating it would
+// spend the whole prompt a second time for one line of answer.
+function reminderFor(turn: number): string {
+  return (
+    "Your turn " +
+    turn +
+    " produced no answer. Play it now: inspect anything you still need, then commit your actions with commit_turn or pass."
+  );
+}
 
 // The part of a session client the runtime needs, so a test can stand in for
 // the real one without starting a server.
@@ -120,9 +153,19 @@ export class SeatRuntime {
     let gaps: Array<{ subject: string; detail?: string }> = [];
     let error: string | null = null;
     let contextReset = false;
+    let emptyRetries = 0;
 
     try {
       result = await this.client.sendObservation(seat, observation, turn);
+      // A lost request is asked again rather than written off as a turn the seat
+      // chose not to decide, because the two look identical from the record and
+      // only one of them is the seat's doing.
+      for (let attempt = 0; attempt < emptyAnswerRetries && isEmptyAnswer(result); attempt += 1) {
+        emptyRetries += 1;
+        logger.warn("Seat " + seat + " answered turn " + turn + " with nothing, so the turn was asked again");
+        const asked = await this.client.sendObservation(seat, reminderFor(turn), turn);
+        result = { ...asked, latencyMs: asked.latencyMs + result.latencyMs };
+      }
       if (this.toolServing === "serve") {
         const servedCalls = await this.serveCalls(context, result);
         gaps = servedCalls.gaps;
@@ -154,7 +197,20 @@ export class SeatRuntime {
       }
     }
 
-    return { seat, turn, playerID, startedAt, observation, result, outcome, actions, gaps, error, contextReset };
+    return {
+      seat,
+      turn,
+      playerID,
+      startedAt,
+      observation,
+      result,
+      outcome,
+      actions,
+      gaps,
+      error,
+      contextReset,
+      emptyRetries
+    };
   }
 
   // Make a decision take effect and write the turn down.
@@ -193,6 +249,7 @@ export class SeatRuntime {
       usage: pending.result?.usage ?? emptyUsage(),
       unknownParts: pending.result?.unknownParts ?? [],
       outcome: pending.outcome,
+      emptyRetries: pending.emptyRetries,
       applied: options?.applied ?? appliedSummary(pending.actions, pending.gaps),
       refused,
       error: pending.error,
@@ -322,4 +379,7 @@ export interface PendingDecision {
   error: string | null;
   // True when the seat's session was replaced while deciding.
   contextReset: boolean;
+  // How many times a turn that came back empty was asked for again. A run that
+  // lost a request says so rather than looking like a seat that chose silence.
+  emptyRetries: number;
 }
