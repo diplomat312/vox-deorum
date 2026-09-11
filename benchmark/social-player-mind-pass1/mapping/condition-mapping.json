@@ -1,0 +1,4 @@
+{
+  "Condition A": "openrouter/minimax/minimax-m2.7:free",
+  "Condition B": "openrouter/minimax/minimax-m3:free"
+}

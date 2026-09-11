@@ -1,0 +1,8 @@
+{
+  "command": "npm --prefix vox-agents run test:social-live -- --scenario=tiny --model=openrouter/minimax/minimax-m3:free --actors=2 --pacing=quiet --timeout-ms=45000",
+  "requestedModelRef": "openrouter/minimax/minimax-m3:free",
+  "status": "BENCHMARK TIMEOUT",
+  "error": "Benchmark autonomous work did not settle within 45000ms.",
+  "transcriptExported": false,
+  "note": "The session was stopped by the benchmark cleanup path. No model messages or request counts are asserted because the result export did not complete."
+}

@@ -1,0 +1,418 @@
+Night log: live duel pilot, evening 2026-09-02 into morning 2026-09-03, local time.
+
+Game live-duel: Portugal seat 0, Maria I, Codex-played vs Siam seat 1, Ramkhamhaeng, harness on Muse Spark 1.3, one persistent session.
+Peace id 12 enacted T178, postures warm both sides. Game reached T207 while Siam idle since T180.
+
+Cache findings:
+- Steady state near 99 percent read-hit. Normal turns 1k to 2.6k fresh vs 226k reused.
+- Model-visible changes cost one 100k miss each (T145, T156). Dashboard text and inspect results are suffix-safe.
+- T177 and T180 cost 120k fresh after ~7-8min idle (session timestamps: 7.0 and
+- 7.8min gaps; gaps of 3.4min or less hold 0.99): provider TTL expiry somewhere
+- in the ~4-7min range. wall_gap_sec is wired into telemetry but never
+- populated — it was added after T180 and no turn has banked since; it starts
+- working on the next bank.
+
+Landed tonight:
+- Social channels v1: channels.mjs registry, group inbox in observe, group send in communicate, one batched prefix re-cache, 17 asserts pass, Duel Hall c53f2974 verified live end to end.
+- Observation retry: get-players 3x10s then fail closed, so no polluted session.
+- Policy traversal inspect policies path:X mirroring techPath. Single-result DB shape verified live. Prefix stable throughout.
+- RUNBOOK.md with seat config, turn and watcher ops, prefix rules, lock quirks.
+
+Incident: get-players game lock wedged from about 00:05 while cheap calls answer in ms. Services left untouched. Two lingering probe processes killed. watch-207.mjs retries turn 207 up to 40 times, 4min apart (extended from 12 for full overnight coverage), stops on first banked commit.
+Diagnosis 00:35 via dashboard status API (read-only): session running, turn 207, not paused, autoPlay on, stock minds off (both seats external). Turn not advancing since 00:05 while Civ V responds and accrues CPU: stuck mid-turn-207 computation or a deadlocked backend worker. Only a service restart clears it: morning call, not done unattended.
+
+Open: turn-207 cognition with cache numbers, Unified-Mind phase-4 comparison, Portugal seat refresh, policy-walk end to end by the model.
+
+Overnight shift (~01:00-02:00, game still wedged at T207, services untouched):
+- Session audit via opencode export (read-only, local): 110 msgs, tools ONLY
+- vox-civ_inspect/commit_turn/communicate, zero plugin/MCP/skill leakage into
+- context. Totals 717k uncached vs 6.04M cache-read (~89% cumulative; steady
+- state turns ~99%). No compaction markers. Harness proven lean in practice.
+- Vox interface upgrades, all suffix-only except one batched prefix change:
+- zone lines now carry posture + zone value and sort stably; rival line adds
+- era; tech/policy/city/politics lists sort deterministically (prefix churn
+- down); techPath steps include unlocks; inspect(military) takes
+- zone:<city|zone> and stats; inspect(diplomacy) takes a civ name and the
+- default view adds a city-state table (status + quest count).
+- Social: communicate now routes dm:<seat> (pair thread) and
+- group:create:<title> (registry + tagged first message) alongside
+- world/private/group:<id>. 22 offline asserts pass (17 channels + 5 routing;
+- validation paths never touch the live game). One deliberate prefix
+- re-baseline (civ.md + inspect/communicate descriptions) while the cache is
+- already cold from the wedged idle, so the next live turn pays one cold
+- start instead of two.
+- Watcher still retrying T207 every 4min, failing closed (~40s each, no
+- session pollution). Morning call stands: restart bridge/MCP services, then
+- T207 cognition banks and we get fresh cache numbers plus the policy-walk
+- end to end by the model. Portugal seat refresh (lastSeenTurn 167) and the
+- Unified-Mind phase-4 comparison both need the live lock back.
+
+Cache ledger, 21 banked Siam turns through T180 (telemetry-live.jsonl):
+steady state ~0.99 read-hit; model-visible prefix changes (T145 deal-social,
+T154, T156 deal-v1) each cost one ~100k+ miss; idle TTL expiry (T177/T180
+after 7.0/7.8min idle) costs the same ~120k fresh (T156 sat 49min idle but is
+confounded with the deal-v1 prefix change). Cumulative 594967 uncached
+vs 4286512 cache-read = 0.878.
+
+turn | uncached | cache_read | hit
+116 | 2779 | 252115 | 0.989
+119 | 3692 | 260947 | 0.986
+121 | 1361 | 179426 | 0.992
+123 | 1186 | 182050 | 0.994
+125 | 1331 | 184418 | 0.993
+127 | 1462 | 187106 | 0.992
+129 | 1224 | 189858 | 0.994
+130 | 1301 | 192226 | 0.993
+132 | 1279 | 194658 | 0.993
+134 | 1357 | 197218 | 0.993
+135 | 1462 | 199778 | 0.993
+137 | 1267 | 202722 | 0.994
+139 | 1593 | 205218 | 0.992
+140 | 1348 | 208290 | 0.994
+145 | 107185 | 213331 | 0.666
+148 | 2297 | 324947 | 0.993
+154 | 110455 | 220243 | 0.666
+156 | 112329 | 112098 | 0.499
+165 | 2607 | 226466 | 0.989
+177 | 117570 | 234003 | 0.666
+180 | 119882 | 119394 | 0.499
+
+Follow-up checks: Siam session re-exported at 110 msgs with identical tool
+counts (61 inspect / 30 commit / 3 communicate) — failed T207 watcher
+attempts cause zero session pollution. Routing tests extended to 26 asserts
+with a createGroup -> tag -> inbox round-trip incl. invite isolation.
+Re-checked after 12 total failed T207 attempts (9 + 3 on the restarted
+watcher): still exactly 110 msgs. Fail-closed holds across the restart.
+Sample transcript deliverable: live/SAMPLE-TRANSCRIPT.md (T165 steady-state,
+T177 white-peace acceptance, T180 post-peace — verbatim, one session).
+Watcher budget extended 40 -> 100 attempts (~8h, full overnight) and the
+watcher restarted on the new budget during a sleep window (old PID 17716 out,
+attempt counter fresh, no turn in flight). Game services untouched.
+Driver audit: run-live-turn clears the commit file before appending to the
+session, so a silent turn can never re-apply a stale commit; telemetry shows
+all 21 banked turns committed first-try (zero nudges, zero commit_ok=false).
+Phase-4 scaffold (comparison vs Unified Mind, same model). Pilot side,
+21 Siam turns, pre-filled from telemetry-live.jsonl: 21 model requests,
+594967 uncached input, 4286512 cache-read input, 12691 output,
+6415 reasoning, mean turn latency 24.3s wall (observe + model + applies),
+94 tool calls (61 inspect / 30 commit_turn / 3 communicate), 1 harmless
+apply rejection (T180 duplicate policy, caught by validation), session 110
+msgs, steady observation 1.7-5k chars. Unified-Mind side is blank: no
+equivalent numbers exist in-tree, so after the lock clears, run the same
+count of cognition opportunities through the current Unified Mind path on
+Muse Spark 1.3 and capture per-request uncached / cache-read / output /
+latency / tool calls the same way before comparing.
+
+Shift ~01:25-01:35 (game still wedged at T207, services untouched):
+- Watcher attempts 5-6 failed closed (~40s each, exit=1 commit=false).
+- Siam session re-exported: still exactly 110 msgs, 61 inspect / 30 commit /
+- 3 communicate. Fail-closed holds across ~17 failed T207 attempts.
+- Prefix guard green (fingerprint unchanged); channels suite 26/26 green
+- off-window before the change, 30/30 after (21 channels + 9 routing).
+- Operational lesson: spawning node children (check-prefix, test-channels
+- routing) can fail with spawn UNKNOWN while a watcher attempt is in
+- flight; bare-node and execPath spawns succeed seconds later. Rule going
+- forward: run offline spawns in the ~3min quiet gaps. Noted in RUNBOOK.
+- Social lifecycle: added channels.mjs archiveGroup (active members only;
+- archived groups leave inbox/visible sets and reject later sends with
+- 'unknown group'; world-broadcast history is preserved) plus 5 offline
+- asserts. No model-visible change: prefix untouched, result-content only.
+-
+Shift ~01:50-01:55 (game still wedged at T207, services untouched):
+- Watcher attempt 10 failed closed; session re-exported at 110 msgs.
+- Dashboard: stable group-membership line in observe.mjs (visibleGroups,
+- active-only). Quiet channels no longer drop out of the mind between
+- crises; line is stable across turns while membership is unchanged, so
+- steady-state cost is ~0 fresh tokens. Suffix-only: prefix guard green,
+- node --check clean on observe.mjs and run-live-turn.mjs.
+- run-live-turn.mjs: corrected the stale wall_gap_sec comment (15-25min ->
+- ~7-8min idle TTL per session timestamps). wall_gap_sec wiring verified by
+- read: populates on the next banked turn. Live render of the membership
+- line verifies on T207 after the restart.
+-
+Shift ~01:53-01:56 (game still wedged at T207, services untouched):
+- Watcher attempt 11 failed closed; suite 33/33 green off-window
+- (24 channels + 9 routing), prefix guard green.
+- Social robustness: group titles are now sanitized at creation (brackets
+- and newlines collapsed) so a title like "War [Council]" can no longer
+- silently break tag/parse matching and lose the group's messages.
+- Store invariant, registry-only change: no model-visible prefix impact.
+- 3 new offline asserts (sanitize, tag/parse round-trip, inbox delivery).
+-
+Shift ~01:54-02:00 (game still wedged at T207, services untouched):
+- Watcher attempt 11 failed closed; no STOP file; game procs alive.
+- New deliverable live/CACHE-COMPARISON.md: cache experiment as a
+- first-class doc. Method, full 21-turn pilot table regenerated from
+- telemetry-live.jsonl (matches: 594967 uncached / 4286512 read / 0.878
+- cumulative), steady/cold split (16 x ~0.992 with ~1.7k fresh/turn vs
+- 5 x ~113k fresh/turn), session-export cross-check, TTL finding, blank
+- Unified-Mind side with the exact fill procedure, and next-rows checklist
+- (T207 cold start, policy-walk, Portugal refresh). Numbers verified
+- against source, not copied from prose.
+-
+Shift ~01:56-02:01 (game still wedged at T207, services untouched):
+- Watcher attempt 12 failed closed. Prefix stable, suite 33/33, --check
+- clean on the edited server.
+- Vox interface: inspect(diplomacy) now enriches BOTH views with opinion
+- prose from get-opinions (spec read in mcp-server source: per-major
+- OurOpinionOfThem / TheirOpinionOfUs / MyEvaluations). Default view gets
+- short per-civ lines; the single-civ zoom gets only that civ's line.
+- Suffix-only (result content), try/catch-optional, no schema or identity
+- change. Live verification queued for post-restart (backend wedged; no
+- live probes run tonight). Next walker candidate from the catalog:
+- get-civilization traits on the diplomacy zoom; skipped for now to keep
+- this change to one new live call per view.
+-
+Shift ~02:01-02:05 (game still wedged at T207, services untouched):
+- Watcher attempt 12 failed closed; session re-exported at 110 msgs.
+- Doc-consistency pass: RUNBOOK had a duplicated spawn-contention bullet
+- from overlapping edits (stale 26/26 + 30/30 lines); merged to one live
+- line (33/33). NIGHT-LOG history entries left intact.
+- Traits-walker spec confirmed from source: get-civilization is a static
+- local-DB read (civ/leader/trait, same DatabaseQueryTool shape as
+- get-technology), so the diplomacy zoom can append rival traits/UU/UB
+- with zero game-lock risk and stable-per-game cache behavior. Ships after
+- the opinion-lines enrichment validates live. No live probes run tonight.
+-
+Shift ~02:03-02:06 (game still wedged at T207, services untouched):
+- Watcher attempt 13 failed closed; game procs + watcher alive, no STOP.
+- New live/README.md: pilot overview, doc index, operating rules, queued
+- live verifications. Fresh off-window evidence: suite 33/33, prefix
+- stable (fingerprint unchanged).
+-
+Shift ~02:04-02:07 (game still wedged at T207, services untouched):
+- Watcher attempt 13 failed closed; session re-exported at 110 msgs with
+- communicate calls still at 3 (no stray sends).
+- Pre-live review of the two queued changes (290bff29 opinions, 608a385d
+- membership): opinion labels verified against get-opinions source
+- (OurOpinionOfThem = requester's view of target; string/unmet entries
+- skipped; caps hold); membership line is active-only, stable while
+- membership is unchanged, and degrades to a stable fallback inside the
+- existing groups-optional catch. No bugs found; both stay queued for
+- post-restart live verification.
+-
+Shift ~02:07-02:10, pre-restart baseline snapshot (for before/after):
+- Civ V alive: PID 25100 (started 9:01pm), CPU accruing. Game is healthy;
+- the wedge is in the backend, so morning restart is services only.
+- Node 41744 CPU 542 / 1884 CPU 348, both hot since 8:57pm, still
+- accruing: consistent with a worker spinning on the stuck game lock.
+- Watcher attempt 13 failed closed; Siam session 110 msgs; Portugal seat
+- file lastSeenTurn 167 (refresh queued post-restart). No STOP file.
+-
+Shift ~02:06-02:09 (game still wedged at T207, services untouched):
+- Invite-decline path had zero coverage; added 3 offline asserts
+- (declined status, hidden from visible groups, declined seat cannot
+- send). Suite 36/36 green (27 channels + 9 routing). Registry-only
+- test change: no model-visible impact.
+-
+Shift ~02:08-02:11, watcher budget extended 100 -> 160 attempts:
+- Old watcher (PID 20152, 14 attempts all fail-closed) stopped in a wait
+- window with no turn in flight (only a conhost child); new watcher
+- (PID 18092, verified by command line `node.exe watch-207.mjs` — the
+- sibling PID 19452 seen at launch was a transient launcher) started on
+- the 160 budget (~12.5h, covers past midday).
+- First new attempt failed closed in the normal ~40s shape; session
+- re-exported at 110 msgs. Fail-closed holds across the watcher restart.
+- Game services untouched throughout (watcher is file-polling only).
+-
+Shift ~02:10-02:12 (game still wedged at T207, services untouched):
+- Seat-parity audit: run-live-turn.mjs (Siam) and observe-seat.mjs
+- (Portugal/Codex) both build observations through observe.mjs
+- buildObservation with their own seat IDs, so dashboard shape, channel
+- inbox, and the new membership line are identical for both seats by
+- construction. No divergence found; no changes needed.
+-
+Shift ~02:13-02:16 (game still wedged at T207, services untouched):
+- Envoy source read (live-envoy.ts, envoy.ts): Unified Mind envoys persist
+- thread context AND use cache breakpoints (max 4, ephemeral), with briefer
+- sub-agent calls per run. Comparison doc sharpened honestly: the pilot's
+- edge is architectural (ONE prefix for all cognition vs N
+- breakpoint-managed prefixes + cross-agent re-grounding), not effort.
+- Refined hypothesis recorded (fewer prefixes, no re-grounding,
+- strategist-is-diplomat continuity).
+-
+Shift ~02:14-02:17 (game still wedged at T207, services untouched):
+- Watcher attempt 2 (new budget) failed closed. Stale-commit re-audit at
+- source level for the morning bank: run-live-turn unlinks the commit
+- file BEFORE appending to the session; readCommit returns null on
+- missing/unparseable; applies run only on freshly written content; a
+- wedged observe exits before any session contact, so failed turns
+- cannot re-apply the on-disk T180 commit by construction (matches the
+- repeated empirical 110). No changes needed.
+-
+Shift ~02:12-02:15 (game still wedged at T207, services untouched):
+- Phase-4 structural framing added to CACHE-COMPARISON.md: pilot side is
+- 1 session / 1 prefix / ~4.5 requests per turn all sharing it, vs
+- Unified Mind fan-out across strategist + envoy agents
+- (diplomat/negotiator/resolve-negotiator/spokesperson) with per-wake
+- reconstructed prompts. Comparison runs must count distinct prefixes
+- and summed input per turn, not just hit ratios. Agent-file claims are
+- from source layout, flagged for confirmation by instrumented runs.
+-
+Shift ~02:15-02:19 (game still wedged at T207, services untouched):
+- Fork survey (read-only API reads, no code taken): transport convergence
+- confirmed (fork group-chat rides the same world-broadcast lines), the
+- fork's own cache plan states the rebuild-every-run problem our ONE
+- prefix design sidesteps, and pacing notes favor staying turn-coupled
+- for the duel (world-beat + WORLD-promotion deferred to 3+ civs).
+- Recorded as Fork evidence in CACHE-COMPARISON.md.
+-
+Shift ~02:16-02:20 (game still wedged at T207, services untouched):
+- Recovery step 3 was order-only ("bridge then MCP"); pinned the exact
+- restart commands in RUNBOOK from live process evidence: port->PID map
+- (:4000=41744 MCP `node --inspect=0 dist/index.js`; :5000=41824 bridge
+- `node dist/index.js`; :5555=1884 dashboard, do-not-touch), package-dir
+- cwds, dist builds verified present, ports from config files. Morning
+- restart is now copy-paste.
+-
+Shift ~02:20-02:23 (game still wedged at T207, services untouched):
+- Recovery fallback added as RUNBOOK step 6: if the wedge survives the
+- restart, dashboard-turn-advancing vs frozen distinguishes a stuck
+- snapshot path (keep watcher, diagnose bridge/DLL) from a stuck game
+- (save + relaunch from save — the only case that touches Civ). Session
+- re-exported at 110.
+-
+Shift ~02:21-02:24 (game still wedged at T207, services untouched):
+- Doc-staleness sweep: only hits are chronological history, correctly
+- left in place; living docs current. Fresh verification: suite 36/36,
+- prefix stable, session re-exported at 110.
+-
+Shift ~02:23-02:25 (game still wedged at T207, services untouched):
+- Watcher attempt 4 failed closed. Syntax sweep: all 10 pilot JS files
+- (9 live + driver/session-manager) pass node --check. No code changes
+- since the 36/36 green; bank path parsed and ready.
+-
+Shift ~02:24-02:26 (game still wedged at T207, services untouched):
+- Watcher attempt 4 failed closed; watcher (18092, sleeping) and Civ
+- (25100, CPU accruing) both healthy. Session re-exported at 110.
+-
+Shift ~02:24-02:26 (game still wedged at T207, services untouched):
+- Attempt 4 failed closed. Full triple fresh: suite 36/36, prefix
+- stable, session 110.
+-
+Shift ~02:30-02:55 (game still wedged at T207, services untouched):
+- Overnight track 1 (lean harness): server-enforced one-send-per-turn
+- backpressure. Guard lives in channels.mjs (guardFile/guardTurn/lastSend/
+- checkSend/markSent, file live/runs-siam/send-guard.json keyed by
+- CIV_PILOT_TURN); vox-live-server.mjs checks before routing and marks on
+- all 5 send paths (dm/group:create/group/world/private); run-live-turn.mjs
+- sets CIV_PILOT_TURN + CIV_PILOT_SEND_FILE and re-marks post-run so nudge
+- follow-ups cannot double-send. Telemetry gains per-turn `communicates`.
+- Inert without TURN, so offline routing asserts unaffected.
+-
+Shift ~02:55-03:10 (game still wedged at T207, services untouched):
+- Overnight track 2 (cache-preserving interface): inspect(diplomacy,
+- "<civ>") now appends a static traits block (leader, preferred victory,
+- up to 4 uniques) via get-civilization local-DB read, try/catch-optional
+- like opinions, zero game-lock risk. Tech `path:` steps gain forward
+- edges (`leadsTo`, capped 8) so one inspect traverses both directions.
+- Both are suffix-only result content: no identity/schema/description
+- change, prefix guard stays green by construction (verified after).
+-
+Shift ~03:10-03:20 (game still wedged at T207, services untouched):
+- Overnight track 3 (telemetry/social): exportUsageDelta detects
+- compaction (message array shorter than prevCount aggregates the rewritten
+- history and flags compaction:true instead of silently undercounting to
+- zero; none observed through 110 msgs) and run-live-turn.mjs records it
+- instead of hardcoded false. Suite extended with 8 offline guard asserts.
+- Fresh verification in a watcher quiet gap: node --check all 10 pilot JS
+- files green, check-prefix stable (civ.md 859e8053/opencode.json
+- d0653cd0/tools 66780718), suite 44/44 (27 channel + 9 routing + 8
+- guard). Queued for post-restart live verify: traits block, leadsTo
+- walk, guard second-send rejection, compaction/communicates rows.
+-
+Shift ~03:20-03:40 (game still wedged at T207, services untouched):
+- Overnight track 3 continued (robust social): model-facing group
+- lifecycle via communicate channels, no new tool schemas.
+- group:invite:<id>:<seat> invites then posts the note;
+- group:leave:<id> farewells then leaves; group:archive:<id> closes then
+- archives (post-first/mutate-after = fail closed). Specific-before-generic
+- prefix ordering (invite/leave/archive ahead of group:). All consume the
+- one-send budget and mark the guard. Offline routing asserts cover every
+- reject before any live call (unknown group, bad seat, missing id);
+- success paths queued for live verify. Batched description update
+- (communicate schema + civ.md one-liner) with ONE deliberate prefix
+- re-baseline while cold (civ.md 41baad69/tools 47c9fb62, opencode.json
+- unchanged). Suite 49/49 (27 channel + 14 routing + 8 guard).
+-
+Shift ~03:40-04:00 (game still wedged at T207, services untouched):
+- Track 1 (both seats tracked): observe-seat.mjs gains --state <file>,
+- writing a small seat record (seat/civ/turn/since/observedAt/obs_chars,
+- file-only) so Portugal tracks via civ-state-portugal.json the way
+- run-live-turn.mjs tracks Siam. Module-load verified offline (usage
+- path); first live write queued post-restart with the Portugal refresh.
+- Track 2 deferred deliberately: transcript shows zero inspect(victory)
+- calls in 21 turns and no grounded shape exists, so no condenser was
+- built on guessed fields (will condense from the first observed shape).
+- Phase-4 planning: CACHE-COMPARISON.md gains a concrete Unified-Mind
+- instrumentation plan grounded in source (agent fan-out paths, central
+- hook in utils/models, prefix_hash per request for distinct-prefix
+- counts, 21-opportunity rerun procedure with honest moved-state caveat).
+- Fresh verification: node --check green, prefix stable on the new
+- baseline (41baad69/d0653cd0/47c9fb62), suite 49/49 re-confirmed.
+-
+- Shift ~03:10-03:20 UTC (game still wedged at T207, services untouched):
+- - Overnight track 2 (suffix-only ordering stabilization, prefix-safe by
+- - construction: no identity/schema/description change): inspect research
+- - availableTechnologies and policies availablePolicies now sorted (match
+- - observe.mjs sorted techNames/policyNames); diplomacy cityStates sorted
+- - by civ; opinion lines sorted alphabetically. Stable order across turns
+- - so quiet turns cost ~0 fresh tokens on repeat inspects.
+- - Driver file-only fix: send-guard re-mark records the communicate
+- - channel from tool input when present (was tool name); guard check
+- - compares turn only, so enforcement unchanged.
+- - Session re-exported at 110, prefix stable, suite 49/49 re-verified in
+- - the watcher quiet gap. Live verify queued post-restart: sorted lists
+- - render on the next banked turn; victory/self condensers still deferred
+- - (no grounded shape, will condense from first observed shape).
+-
+- Shift ~03:20-03:30 UTC (game still wedged at T207, services untouched):
+- - Overnight track 1 (reliability): exportUsageDelta gains a 120s
+- - spawnSync timeout into the existing null path. Every other live-turn
+- - child call already had a ceiling (opencode run 300s/180s, MCP apply
+- - 90s, observe reads 10s x3); the session export was the only
+- - unbounded wait and could pin a turn until the watcher kills it at
+- - 10min. Behavior on success unchanged; on timeout the telemetry row
+- - records nulls and the state horizon is preserved, same as today.
+- - Verified: node --check green, prefix stable
+- - (41baad69/d0653cd0/47c9fb62), suite 49/49, session still 110.
+-
+- Shift ~03:30-03:40 UTC (game still wedged at T207, services untouched):
+- - Phase-4 grounding (read-only source survey, no shared-code changes):
+- - verified modelDependencies (diplomat, live-envoy, briefed/staffed
+- - strategists, strategist-session, vox-agent) and
+- - buildGameContextMessages (analyst, live-envoy, negotiator,
+- - strategy-parameters) via recursive grep; confirmed 8 strategist + 4
+- - envoy agent files, utils/models hook files, OTel telemetry files.
+- - Earlier non-recursive greps had returned empty and would have falsely
+- - suggested the plan's names were wrong; re-ran correctly and recorded
+- - the inventory in CACHE-COMPARISON.md. No code touched.
+- - Also verified send-guard.json absent (no post-guard sends pending) and
+- - civ-state-siam.json steady (messageCount 110, lastSeenTurn 180).
+- - Follow-up re-verify in the next quiet gap (covers the docs-only
+- - commit too): prefix stable (41baad69/d0653cd0/47c9fb62), suite 49/49,
+- - session re-exported at 110. Offline tracks now exhausted; every open
+- - item (T207 bank, sorted-list render, Portugal refresh, group lifecycle
+- - live paths, phase-4 runs) needs the user-attended service restart.
+
+- Shift ~08:05 local (relaunch after force-kill of wedged Civ PID 25100):
+- - Root cause of ALL relaunch failures found: OLED Care Screensaver.scr was
+- - ACTIVE (PID 11336) holding fullscreen. Civ (any exe, any automation incl.
+- - vanilla) inits Lua then quits silently before Database.log; Steam
+- - -applaunch 8930 also no-ops; sky input (activate/click/launch_app) fails
+- - with GetCursorPos Access Denied while screensaver desktop is active.
+- - Screenshots/Graphics.Capture keep working. Fix: taskkill /F the .scr
+- - (user-authorized "do whatever"); input recovered immediately (activate OK).
+- - Relaunch via authentic flow: generated vox-agents/scripts/LoadGame.temp.lua
+- - from LoadGame.template.lua (same 4 required mods + AI Observer disabled,
+- - LF endings via node fs) then launch-civ5.cmd LoadGame.temp.lua. Loads the
+- - most-recent modded save automatically = AutoSave_Post_0207 AD-1470.
+- - Civ window is DX9 (CivilizationV.exe; title says DX9) — same exe the
+- - launcher script always uses, so consistent with prior sessions.
+- - Dawn-of-man (Sweden intro) needed one Return keypress to dismiss (clicks
+- - on Continue did not take); map live at Turn 207 / 1470 AD, "Processing
+- - turn for Siam", observer mode. Bridge dll_connected:true; MCP
+- - KnowledgeStore re-initialized, GameSwitched turn 207 broadcast.
+- - Watcher: STOPped during relaunch (attempt 72 fail-closed mid-load, then
+- - clean exit), STOP removed, watcher restarted (~08:03, fresh 160 budget)
+- - to bank T207. Do NOT run manual turns in parallel.

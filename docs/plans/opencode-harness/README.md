@@ -1,85 +1,183 @@
-# OpenCode Harness: Build Order
+# The OpenCode harness
 
-This folder holds the feature that makes OpenCode the harness that pilots a Civilization V seat. The requirements live in [specs.md](specs.md); this page fixes the stages, their order, and what is true at the end of each one. What the runs have actually shown is recorded in [FINDINGS.md](../../../opencode-harness/FINDINGS.md).
+One paragraph of goal, and everything else in this folder serves it: **agents running in a
+pared-down OpenCode harness play Civilization V through the Vox Deorum MCP server, and talk
+to each other through a social environment a person can watch.**
 
-Each stage is independently verifiable and ships on its own. Simulation before live play, and measurement before optimization.
+That is the MVP. Once it holds, the work moves to making those agents better diplomatic
+actors, meaning more creative, more persistent and more interesting over a whole game, and
+after that to improving what Vox Deorum itself tells them, such as a usable technology tree
+and policy picture.
 
-| # | Stage | State | What is true at the end |
-| --- | --- | --- | --- |
-| 1 | Corpus and world seam | Done | A recorded game can be replayed, a generated game can be played, and a seat cannot tell which it is reading. |
-| 2 | Session client | Done | The harness holds one persistent OpenCode session per seat, sends it an observation, and captures reasoning, calls, usage and cost. |
-| 3 | Seat runtime and trace store | Done | A seat plays a turn end to end with its four tools, and every step lands in the trace store. |
-| 4 | Simulated benchmark | Done | Several seats play a generated game together with a live diplomacy layer, and the run produces metrics and artifacts. |
-| 5 | Analysis, roundup and tuning | In progress | Reasoning reads back per seat and turn, roundups reconstruct intentions, and variants are compared on the richness, stability and cost frontier. |
-| 6 | Live path | Written, pacing partly done | The same seat runtime drives a real game through Vox MCP and the bridge, with the pacing policy and backend supervision. |
-| 7 | Human seat and interface | Seat done, interface ahead | A person plays one seat in the same game, and a usable interface shows the seats, the politics and the traces. |
+## The two halves, and which way they connect
 
-## Stage 1: Corpus and world seam
+The project already has both halves. What it did not have was a decision about which one
+contains the other, and three separate attempts each built a bit of both.
 
-A recorded four seat game was harvested into one JSONL fixture per seat, one record per turn, holding the exact observation the seat was sent and the calls that followed it. The harvester reads the recording straight from the git object store, so the working tree is left alone and the output is reproducible.
+| Half | Where it lives | What it is |
+| --- | --- | --- |
+| The social environment | `vox-agents/src/social/` and `vox-agents/ui` | Actors, channels, DMs, groups, invitations, cascades, turn order, a human seat, an event stream, and a browser UI that shows the whole table |
+| The cognition layer | `opencode-harness/` | One persistent OpenCode session per seat, confined to a tiny tool surface, with reasoning, tool calls, tokens and cost recorded per turn |
 
-The world seam is deliberately small: give me the seats, tell me whether a seat has a turn, give me the observation, answer an inspect, and carry out a decision. A recorded game and a generated game both satisfy it, which is what let the state source change without the seat runtime changing.
+**The social environment owns the game. OpenCode owns the thinking.** The environment
+already runs the channel and group model, decides whose turn it is to speak, applies every
+social effect through one durable store, and serves the UI. It has a documented seam for
+the thing that thinks:
 
-## Stage 2: Session client
+```
+interface SocialModelExecutor {
+  decide(actor, context, actorNames, abortSignal): Promise<SocialDecision>
+}
+```
 
-The client talks to the OpenCode server rather than the run command, for the reasons in the specification. It creates one session per seat and keeps it, sends an observation as a message, and reads the turn back from every message the turn produced. Reasoning, visible text and tool calls are separated and each is preserved, and the usage attached to each message is summed across the turn.
+An OpenCode session drives one actor by implementing that interface. The environment, the
+store, the scheduler, the event stream and the UI stay exactly as they are. This is not a
+proposal, it is the third implementation of a port that already has two.
 
-Each seat runs in its own working directory under its own configuration, denied every tool except the four civ tools, so an autonomous seat cannot reach the shell or the repository.
+## Why this and not a fourth path
 
-## Stage 3: Seat runtime and trace store
+Three attempts at this problem exist in the tree, and the honest accounting is that two of
+them rebuilt the third.
 
-A seat's turn is one function: prepare the world, publish the snapshot a tool server in another process will read, render the observation, send it, serve or observe the tool calls that come back, apply the decision to the world, and record everything.
+| Attempt | What it was | Verdict |
+| --- | --- | --- |
+| The `vox-agents` social sandbox | Actors, channels, cascades, a human seat, and a UI. Still in the tree and still the best social model here | **Keep. This is the environment.** |
+| The pilot on `vox-deorum-opencode` | Four OpenCode sessions playing a real game for 213 turns, with a measured case for persistent sessions. Archived in [pilot-archive](pilot-archive/README.md) | **Keep the findings, reuse the two fixes it found, retire the code.** |
+| This package, `opencode-harness/` | A good seat runtime, a good simulation, and a second social log that the UI cannot read | **Keep the session, identity and telemetry. Retire the parallel plumbing.** |
 
-The four tools are inspect, communicate, commit_turn and pass. Reading goes to the world. Talking and trading go to the diplomacy log and have consequences inside the run. Committing and passing end the turn. A seat that never decides is recorded as unfinished rather than retried, because a seat that failed to decide is a fact about the run.
+The pilot answered the question it was built for, that a persistent session holds a prompt
+cache an order of magnitude better than rebuilt prompts, and then kept going as a
+collection of single-purpose scripts. This package answered a different question well, how
+to test a seat without launching the game, and then built a second social system beside the
+one that already had a user interface. Neither was wrong about its own question. They were
+wrong about each other.
 
-A gap is recorded when a seat asks for information the world does not hold. What seats keep asking for and not getting is the sharpest signal about what the observation should carry.
+## What is kept, and what is retired
 
-## Stage 4: Simulated benchmark
+Kept, because it is either load-bearing or uniquely useful:
 
-A run holds several seats in one session set, all playing one generated world with a shared diplomacy layer, so messages arrive, groups form and deals are proposed and answered. Seats cannot see each other's private reasoning, only what they say and do.
+- **The seat session**: one persistent OpenCode server and session per actor, reading a whole
+  turn back from every message it produced, with reasoning, tool calls, tokens, cache and
+  cost captured per turn.
+- **The seat identity**: a frozen system prompt written once per run, which the pilot
+  measured as the thing that keeps the cache warm.
+- **The confinement**: a named agent whose tool list is exactly the game interface, denied
+  permissions, inherited MCP servers switched off, and a working directory outside any
+  repository so no `AGENTS.md` is collected. Measured by asking a seat to reach for things
+  it should not have, not by reading the configuration.
+- **The simulation**: a generated world calibrated from a recorded game, with injectable
+  circumstances, which is how a question gets asked without launching Civilization V.
+- **The analysis**: the roundup, the private-mind-against-public-word reading, the single-turn
+  inspector, and the replicated comparison that only calls a difference a result when the
+  ranges separate.
 
-The world is calibrated against the recorded game rather than guessed, and circumstances can be injected on chosen turns so a run can study a reaction rather than only an undisturbed game.
+Retired, because the environment already does it or the pilot did it better:
 
-## Stage 5: Analysis, roundup and tuning
+- The package's own social log, channels and groups. The environment has a durable store,
+  visibility rules and a UI.
+- The package's turn loop and pacing. The environment owns turn order through intentions and
+  cascades, and a delegation is not improved by having two schedulers.
+- The pilot's turn router, channel registry and seat drivers. Superseded by the environment.
+- The Python scripts, loose JSON dumps and scratch folders that accumulated in the working
+  tree during the earlier work.
 
-The report measures how much the seats talked, who stayed silent, how long the quiet stretches ran, whether direct messages were answered in kind, and what it all cost, including the cache hit ratio and the cost per social operation. The comparison puts several runs side by side and lists what changed against the baseline. The watcher tails a run while it plays.
+Taken from the pilot, because it was already right:
 
-The tuning loop is the reason a simulation exists: define a variant, which is a change to what is presented, how it is worded or how a prompt is framed, run it against the same seed, and compare it on the richness, stability and cost frontier.
+- The **world-channel transport** (`broadcast-message`, `get-global-messages`) and
+  **get-game-status**, which reads the turn without taking the snapshot lock that hangs
+  mid-turn computation. These are now MCP tools.
+- The **0-based player slot fix** in the game launcher. The engine reads slots from zero and
+  Lua literals count from one, which is a real bug the pilot found in a real game.
 
-Two variants have been run and compared so far, and a third is in flight. The results are in FINDINGS.md. What remains is breadth: more variants, longer runs, and a settled answer to which lever moves diplomacy rather than which lever moves message counts.
+## Stages
 
-## Stage 6: Live path
+Each stage is verifiable on its own and leaves the tree working.
 
-The seat runtime does not change. What changes is the world implementation, which reads live state through Vox MCP and writes the seats' decisions back as the game's own actions.
+| # | Stage | What is true at the end |
+| --- | --- | --- |
+| 1 | One path | The social environment is the only social system in the tree, and the plan says so |
+| 2 | OpenCode as the mind of an actor | An OpenCode session drives one sandbox actor through `SocialModelExecutor`, and its messages appear in the existing social UI |
+| 3 | Real seats | The same actors play a live Civilization V game through the MCP tools, with one session per seat for the whole game |
+| 4 | A person at the table | A person takes one seat and is shown the same information, in the same UI, as a model seat |
+| 5 | Better diplomatic actors | Measured hypotheses about making the agents more creative, persistent and interesting |
+| 6 | A better game underneath | What Vox Deorum tells an agent improves, beginning with the technology and policy picture |
 
-The live world is written. A turn's reads are fetched up front and the observation is rendered from what was fetched, which keeps the synchronous part of the world seam intact and means a seat asking about its cities does not make the server read them twice. A read that fails says so rather than losing the turn, and a committed action goes to the tool that owns it, so legality stays with the game. An action with no live equivalent is reported rather than dropped.
+Stage 1 is what the rest of this folder is about. Stages 2 to 4 are the MVP. Stages 5 and 6
+are what the MVP is for, and they are where an experiment belongs.
 
-A run checks the tools it depends on before its first turn, because a missing tool discovered on turn forty wastes a game rather than a minute. The path is verified offline against a fake connection, which is what let it be written without launching Civilization V.
+## Stage 1 in detail
 
-### What can and cannot be verified without a game
+The plan must name every attempt, so that the next person does not rebuild one. This page
+is that naming, and the rule that follows from it:
 
-The connector was verified against the real MCP server running on the repository's mock bottom: the real bridge with an in-memory mock DLL underneath, which needs no Civilization V at all. That proved the transport, the tool names and the call path, because the real server listed its 43 tools and answered calls over streamable HTTP.
+- `vox-agents/src/social/` is the social environment. Nothing else grows a second one.
+- `opencode-harness/` is the cognition layer. It does not own turn order, channels or
+  visibility.
+- A capability that is missing goes into whichever of the two owns that concern, never into
+  a third place.
 
-It also found a defect that a hand-written fake had hidden. The knowledge tools answer long before a game is loaded, refusing with "KnowledgeStore not initialized. Call loadKnowledge() first", so a run checking only that its tools exist would have started and then recorded an empty briefing on every turn. A run now reads the first seat before its first turn and refuses to start unless that read answers.
+## Stage 2 in detail
 
-The limit of the mock bottom is worth recording, because it looks like it should go further than it does. The mock DLL implements four Lua functions, and the knowledge tools need others such as the player and city getters, so those reads cannot return real state. More fundamentally the knowledge store is fed by game events, and the mock's automatic events are placeholders rather than the event vocabulary the store consumes. **Feeding the store would mean writing a producer of game events, which is simulating the game at the event level**, one layer below the generated world that already exists on purpose. So the live path's remaining verification is a real game, and that is a deliberate boundary rather than an oversight.
+An `OpenCodeMindRunner implements SocialModelExecutor`, one OpenCode session per model
+actor, plus a small MCP server that exposes the environment's own social verbs to that
+session. The runner is a request and response engine inside `decide()` and drives nothing.
 
-The pacing policy is written and its logic is proven offline. Two of its three parts are done: a seat can hold the game for a whole turn and release it afterwards, and a hold is confirmed rather than trusted, because the recorded game showed a pause accepted while the game advanced. The clock reads the turn from the knowledge store and holds the game with the game's own pause and resume actions, so nothing reaches it by a private route.
+Three contracts have to be reconciled, and each is a decision rather than a detail:
 
-The split the overlap policy needed now exists. A seat's turn is two phases: deciding, which shows it the situation and serves what it says without touching the world, and committing, which makes the decision take effect and writes it down. Playing a turn is those two run back to back, so every simulated run behaves exactly as it did before, and a test holds the composed call to the same result.
+- **One outward call per turn.** The environment requires exactly one decision tool call and
+  no prose. An OpenCode agent naturally inspects before acting, so the runner lets it read
+  and stops at the first outward verb. The pilot's unified cognition already does this, so
+  the logic is copied rather than invented.
+- **Who owns the clock.** The environment schedules turns through durable intentions and
+  cascades, with per actor and per channel lanes and a wall clock budget. OpenCode turns can
+  take tens of seconds. The budgets and timeouts need to be aligned deliberately, and the
+  measurement to beat is the pilot's: 77 commits, 0 lost.
+- **What a turn is called.** In the environment a turn is a reaction to something, not a
+  game turn. The identity and the observation have to be written for reactions rather than
+  for "turn 47".
 
-With the split, all three policies are available in a live run. Freeze is the default, because it is the one that cannot produce a stale decision. Overlap lets the game run while a seat thinks and holds it only to commit, which keeps a long game moving, and a decision that lands on a state that moved is revalidated and dropped once the world has drifted further than the policy allows. None never touches the clock.
+## Stage 3 in detail
 
-A decision the check throws away is still written down as a turn the seat played, so a run never develops a gap where a turn should be, and the summary reports how each paced turn ended.
+Game facts reach an actor through the environment's existing Civ attachment, which already
+routes every read and write through the shared MCP client. The session must not be given a
+second path to game state, which is a rule this repository already holds itself to.
 
-The game's own deal system is not wired either, so an agreement still lives in the harness's log rather than in the game's deal actions. And backend supervision, health checks and outage handling remain to be proven against a live stack, where a game keeps running whether the backend is healthy or not.
+The pacing question is the pilot's, not a new one: a seat thinks for a while and the game
+keeps moving, so a decision is checked against the state it lands on. The pilot measured
+that a seat's turn interleaves with sub-second native turns and solved it with a turn
+router that pauses, dispatches and resumes. That design is in
+[pilot-archive](pilot-archive/live/RUNBOOK.md) and is the starting point rather than
+something to rediscover.
 
-Backend supervision, health checks and outage handling move from desirable to required, because a live game keeps running whether the backend is healthy or not.
+## Stage 5 and beyond
 
-## Stage 7: Human seat and interface
+What follows the MVP is measurement, and the harness for measuring already exists. The
+simulation asks "what would this seat do under this circumstance" without a game, and the
+analysis reads back what a seat was shown, what it thought and what it did.
 
-One seat in the same game belongs to a person, who sees the same information a model seat sees and acts through the same tools.
+Two findings are worth carrying forward as the first hypotheses, because they were measured
+and they disagree with the comfortable story:
 
-The seat is done. A person's turn is offered as files and answered as files: the briefing in one, the decision with its rationale, actions and messages in another, and a lookup available between the two. The person's rationale is kept as the seat's reasoning, their messages reach the table and their committed actions reach the world, so a game with someone in it is measured exactly like one without. It was proven end to end by a person and a model playing three turns together, with both seats appearing in the same trace and report.
+- **Naming a mechanic a seat has a reason to use works; naming one it does not, does not.**
+  Naming a posture produced postures, reliably. Naming a council and naming a grand strategy
+  moved nothing.
+- **Coaching a seat to talk front-loads the talking and does not sustain it.** In thirty-five
+  turn games every social operation in the coached arm landed by turn three, and not one
+  pair was still in contact at the end. The pilot saw the mirror image: 213 turns of live
+  play where the diplomacy was driven by events with stakes in them, a siege, a captured
+  city, a war.
 
-The interface is what remains. The four files are the protocol it will drive, so nothing in the runtime has to change for a window to sit on top of it: the table, the politics as they happen, and the reasoning behind a decision are all in the trace store already.
+Taken together those say the lever is not the wording. It is giving a seat something worth
+saying at the moment it decides, which is a statement about the environment, the game state
+it can see, and the situations the game produces. That is why stage 6 exists.
+
+## Branch policy
+
+One line, because an unmerged branch is how this work went missing once already:
+
+- Work happens on `codex/opencode-harness` and is pushed. A commit that is only local is a
+  commit nobody can find.
+- A branch that is merged, or that is an ancestor of the working branch, gets deleted.
+- A branch that is not merged is either finished into the working branch or retired with its
+  findings archived. It is never left standing in the middle.
+

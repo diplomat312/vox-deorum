@@ -1,0 +1,18 @@
+{
+  "command": "npm --prefix vox-agents run test:social-live -- --preflight=true --model=opencode/mimo-v2.5-free --actors=1 --pacing=quiet --timeout-ms=45000",
+  "requestedModelRef": "opencode/mimo-v2.5-free",
+  "resolvedProvider": "opencode",
+  "resolvedNativeModelId": "mimo-v2.5-free",
+  "transportFamily": "chat-completions",
+  "logicalDecisions": 1,
+  "providerAttempts": 3,
+  "providerRetries": 2,
+  "semanticRetries": 0,
+  "providerFailureClass": "other",
+  "providerLatencyMs": [4718],
+  "queueWaitMs": [7],
+  "selectedAction": null,
+  "validAction": false,
+  "tokens": { "input": 0, "output": 0, "total": 0 },
+  "result": "PREFLIGHT FAILED"
+}

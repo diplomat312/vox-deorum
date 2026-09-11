@@ -1,0 +1,12 @@
+{
+  "command": "npm --prefix vox-agents run test:social-live -- --scenario=tiny --model=openrouter/minimax/minimax-m2.7:free --actors=2 --pacing=quiet --timeout-ms=45000",
+  "requestedModelRef": "openrouter/minimax/minimax-m2.7:free",
+  "condition": "Condition A",
+  "status": "EXPORT COMPLETED WITH CASCADE TIMEOUT",
+  "cascade": { "id": "msg:1", "state": "exhausted", "modelRuns": 2, "committedModelMessages": 1, "maxModelRuns": 2, "maxCommittedModelMessages": 2, "durationMs": 49031 },
+  "metrics": { "logicalDecisions": 3, "providerAttempts": 3, "providerRetries": 0, "semanticRetries": 1, "providerFailureClass": null, "providerLatencySummaryMs": { "median": 25138, "p95": 25138 }, "queueWaitSummaryMs": { "median": 23882, "p95": 25155 }, "passCount": 0, "committedModelMessages": 1, "worldSpeech": 0, "dmSpeech": 1, "groupSpeech": 0, "actions": { "send_dm": 1 }, "privateChannels": 1, "errors": 1, "tokens": { "input": 0, "output": 0, "total": 0 } },
+  "transcripts": [
+    { "kind": "world", "title": "WORLD", "messages": [{ "speaker": "Human", "text": "Aurelia has recently become noticeably more powerful than Borin. Nothing irreversible has happened yet, but Borin is beginning to worry about the future balance of power. You may speak publicly, contact someone privately, or stay silent if that best serves your interests." }] },
+    { "kind": "dm", "title": "DM with Borin", "messages": [{ "speaker": "Aurelia", "text": "I understand you may have concerns about recent changes. I value our relationship and want you to know I have no interest in destabilizing things between us. Let's talk directly if anything is worrying you." }] }
+  ]
+}

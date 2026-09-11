@@ -1,0 +1,18 @@
+{
+  "command": "npm --prefix vox-agents run test:social-live -- --preflight=true --model=opencode/muse-spark-1.2-contributor-free --actors=1 --pacing=quiet --timeout-ms=45000",
+  "requestedModelRef": "opencode/muse-spark-1.2-contributor-free",
+  "resolvedProvider": "opencode",
+  "resolvedNativeModelId": "muse-spark-1.2-contributor-free",
+  "transportFamily": "responses",
+  "logicalDecisions": 1,
+  "providerAttempts": 3,
+  "providerRetries": 2,
+  "semanticRetries": 0,
+  "providerFailureClass": "other",
+  "providerLatencyMs": [3212],
+  "queueWaitMs": [5],
+  "selectedAction": null,
+  "validAction": false,
+  "tokens": { "input": 0, "output": 0, "total": 0 },
+  "result": "PREFLIGHT FAILED"
+}

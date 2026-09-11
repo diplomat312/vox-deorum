@@ -1,0 +1,18 @@
+{
+  "command": "npm --prefix vox-agents run test:social-live -- --preflight=true --model=openrouter/minimax/minimax-m3:free --actors=1 --pacing=quiet --timeout-ms=45000",
+  "requestedModelRef": "openrouter/minimax/minimax-m3:free",
+  "resolvedProvider": "openrouter",
+  "resolvedNativeModelId": "minimax/minimax-m3:free",
+  "transportFamily": "chat-completions",
+  "logicalDecisions": 1,
+  "providerAttempts": 1,
+  "providerRetries": 0,
+  "semanticRetries": 0,
+  "providerFailureClass": null,
+  "providerLatencyMs": [4688],
+  "queueWaitMs": [5],
+  "selectedAction": "reply",
+  "validAction": true,
+  "tokens": { "input": 0, "output": 0, "total": 0 },
+  "result": "PREFLIGHT PASSED"
+}
