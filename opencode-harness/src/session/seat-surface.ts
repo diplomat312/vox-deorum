@@ -10,6 +10,16 @@
 // The name a seat's own game tools are served under.
 export const seatToolServer = "vox-civ";
 
+// The name of the agent a seat's turns are played under.
+//
+// A session inherits the machine's own OpenCode plugins, and a project
+// configuration can disable an inherited server but not an inherited plugin, so
+// a seat on the default agent is offered a browser and every built-in tool. An
+// agent carries its own tool list, and naming one on each turn is what closes
+// the rest: measured on this machine, the default agent offered twenty tools and
+// a named seat agent offered exactly the four the game answers.
+export const seatAgent = "seat";
+
 // Why a seat cannot play, or null when it can.
 //
 // Only the absence of the game tools is fatal. Other servers being present is a
@@ -38,4 +48,18 @@ export function inheritedServers(statuses: Record<string, string>): string[] {
   return Object.entries(statuses)
     .filter(([name, status]) => name !== seatToolServer && status !== "disabled")
     .map(([name]) => name);
+}
+
+// Why a seat cannot be confined, or null when it can.
+//
+// The seat's turns name an agent, and a name the server does not have would run
+// every turn under the default agent instead, which is the state the agent
+// exists to leave. Asking is cheap and the failure is silent otherwise.
+export function agentProblem(names: string[]): string | null {
+  if (names.includes(seatAgent)) return null;
+  return (
+    "the seat's session does not offer an agent named '" +
+    seatAgent +
+    "', so its turns would run under the default agent with everything the machine has installed behind them"
+  );
 }

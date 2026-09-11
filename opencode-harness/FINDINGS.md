@@ -106,7 +106,19 @@ Every defect above was found by reading code. The fix was to stop reading and pl
 
 **A seat with no tools was invisible, and now is not.** The first live run produced four turns that were all recorded as a seat choosing to say nothing. The seats' own thinking explained it: the tool server's path was wrong, so the session had no game tools at all, and the model was left reasoning in prose about a game it could not touch. Nothing in the run said so. Every run now asks each seat's session what servers it holds before playing, refuses a seat whose own tools are missing, and reports any other server a seat can reach. Pointing a run at a path that does not exist now stops it with "the seat's game tool server is failed rather than connected, so it would play with no tools".
 
-**A seat was offered far more than the game.** Asking the session what it had was itself the discovery. The machine's own OpenCode configuration is read alongside the one the harness writes, so a seat was also being offered a Google Workspace connection, three plugins including a browser, and nineteen built-in tools. The written configuration now switches the inherited MCP servers off by name, and the run log confirms they are gone. The browser tools and the built-in tools are still visible: a project configuration can disable an inherited server but not an inherited plugin, and the seat's own agent definition is the route to that, which is written up under what to test next.
+**A seat was offered far more than the game.** Asking the session what it had was itself the discovery. The machine's own OpenCode configuration is read alongside the one the harness writes, so a seat was also being offered a Google Workspace connection, three plugins including a browser, and nineteen built-in tools.
+
+## Confinement, and how it was measured
+
+Two mechanisms were needed and neither alone was enough, which is only knowable by trying both.
+
+**A permission deny removes a tool the harness can name.** With every capability the harness knows denied, a seat told to run a shell command, read a file outside its directory and fetch a web page did none of them. It wrote the three calls out as text, which is what a model does when it believes it should reach for something it does not have. The same session, asked to call its own inspection tool, made a real call that completed and returned the game's state. So the denies confine the seat to its own tools without breaking them.
+
+**A permission deny cannot touch a plugin.** With the permissions in place and the default agent, the browser tools were still offered: eight of them, from a plugin the machine has installed and the seat has no business using. A project configuration can disable an inherited server but not an inherited plugin.
+
+**An agent is what closes the rest.** A seat's turn may name an agent, and an agent carries its own tool list. Named, with everything switched off and the game's tools switched back on, the session offered exactly four tools: the seat's own inspect, communicate, commit_turn and pass. The four were then used in a live run against the stand-in game, four turns with nothing unfinished, in a log with no server a seat could reach that it should not.
+
+Two things about that are worth keeping. The first is that the measurement had to be behavioural: the server's own tool endpoint answers with the built-in catalog and ignores the agent, so reading it would have said the confinement did nothing. The second is the order of the two mechanisms. Better permissions alone looked like confinement and were not, because the thing that leaked was the thing the permissions could not see.
 
 The one thing this batch did not settle is whether a person playing against model seats behaves differently from the model seats themselves. One three turn game with a stand-in player is a wiring proof, not evidence about people.
 
@@ -166,11 +178,11 @@ CI on the fork now passes. It had been failing at the install step on every push
 
 ## What to test next
 
-1. **Confinement, finished.** A project configuration disables an inherited MCP server but not an inherited plugin, so a seat can still see a browser and nineteen built-in tools. The message a session accepts names an agent, and an agent definition carries a tool list, so a named seat agent is the route: define one that offers only the game tools, have every seat message name it, and read the session back to prove the surface shrank.
-2. **What makes a table busy enough to form a council.** The instruction failed and intensity correlates, so the next question is what drives intensity: a crisis does, it seems, and so does a longer game.
-3. **Whether a recorded posture changes behaviour.** Naming postures produces them; nobody has yet measured whether a seat that records wariness acts on it differently a few turns later.
-4. **A grounded betrayal.** Play the treasury-emptying scenario so a promise made inside the run is the promise that fails, then read whether the wronged seat's reply differs from the run where the betrayal was narrated.
-5. **Cost per unit of change.** Talking is nearly free, so the interesting budget question is how much talking is needed per posture, per deal and per ratified article.
+1. **What makes a table busy enough to form a council.** The instruction failed and intensity correlates, so the next question is what drives intensity: a crisis does, it seems, and so does a longer game.
+2. **Whether a recorded posture changes behaviour.** Naming postures produces them; nobody has yet measured whether a seat that records wariness acts on it differently a few turns later.
+3. **A grounded betrayal.** Play the treasury-emptying scenario so a promise made inside the run is the promise that fails, then read whether the wronged seat's reply differs from the run where the betrayal was narrated.
+4. **Cost per unit of change.** Talking is nearly free, so the interesting budget question is how much talking is needed per posture, per deal and per ratified article.
+5. **Whether confinement changes what a seat does.** A confined seat no longer has a browser to reach for, and the first confined run committed a posture that the run before it did not. One run is not a result, but it is the first time a change to the harness has plausibly changed a seat's diplomacy by removing something rather than adding it.
 
 ## Caveats
 

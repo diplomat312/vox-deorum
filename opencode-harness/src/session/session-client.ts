@@ -7,6 +7,7 @@
 import { authHeaders, type RunningServer } from "./opencode-server.js";
 import type { SeatModel, SeatTurnResult, SessionToolCall, SessionUsage } from "./types.js";
 import { logger } from "../utils/logger.js";
+import { seatAgent } from "./seat-surface.js";
 
 // How long one observation may take before the call is abandoned, in
 // milliseconds. A seat thinking for a long time is normal, but never forever.
@@ -226,6 +227,11 @@ export class SessionClient {
     await this.request<RawMessage>("POST", "/session/" + session + "/message", {
       providerID: model.providerID,
       modelID: model.modelID,
+      // Naming the seat's own agent is what confines a turn to the game. An
+      // agent carries a tool list, and it covers the tools a configuration
+      // cannot: a seat left on the default agent is offered whatever the machine
+      // has installed, including a browser.
+      agent: seatAgent,
       parts: [{ type: "text", text: observation }]
     });
     const latencyMs = Date.now() - started;
@@ -263,6 +269,19 @@ export class SessionClient {
       statuses[name] = typeof entry?.status === "string" ? entry.status : "unknown";
     }
     return statuses;
+  }
+
+  // The agents this session's server offers, by name.
+  //
+  // A seat's turns name one of these, so a name that is not here would leave
+  // every turn running under whatever agent the server defaults to, with the
+  // machine's own plugins and tools behind it.
+  async agents(): Promise<string[]> {
+    const listed = await this.request<unknown>("GET", "/agent");
+    const entries = Array.isArray(listed) ? listed : [];
+    return entries
+      .map((entry) => (entry !== null && typeof entry === "object" ? (entry as { name?: unknown }).name : undefined))
+      .filter((name): name is string => typeof name === "string");
   }
 
   // One authenticated call against the server, with a timeout so a lost

@@ -2,7 +2,7 @@
 // reached for a tool is told apart from a seat that had nothing to reach for.
 
 import { describe, expect, it } from "vitest";
-import { inheritedServers, seatToolServer, surfaceProblem } from "../../../src/session/seat-surface.js";
+import { agentProblem, inheritedServers, seatAgent, seatToolServer, surfaceProblem } from "../../../src/session/seat-surface.js";
 
 describe("a seat's tool surface", () => {
   it("should pass when the seat has its own tools", () => {
@@ -39,5 +39,17 @@ describe("a seat's tool surface", () => {
 
   it("should look for the one name the seat's tools are served under", () => {
     expect(seatToolServer).toBe("vox-civ");
+  });
+
+  it("should pass when the seat's turns have an agent to run under", () => {
+    expect(agentProblem(["build", seatAgent])).toBeNull();
+  });
+
+  it("should refuse a session that would run the seat under the default agent", () => {
+    // Without the agent, every turn runs with the machine's own plugins behind
+    // it, and nothing about the run would look wrong.
+    const problem = agentProblem(["build", "plan", "general"]);
+
+    expect(problem).toContain("default agent");
   });
 });

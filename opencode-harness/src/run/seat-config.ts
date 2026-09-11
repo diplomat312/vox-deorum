@@ -8,6 +8,7 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { SeatModel } from "../session/types.js";
+import { seatAgent, seatToolServer } from "../session/seat-surface.js";
 
 // Everything needed to configure one seat.
 export interface SeatConfigOptions {
@@ -68,6 +69,21 @@ export function seatConfig(options: SeatConfigOptions): Record<string, unknown> 
     $schema: "https://opencode.ai/config.json",
     model: options.model.providerID + "/" + options.model.modelID,
     permission,
+    // The agent a seat's turns are played under.
+    //
+    // The permissions above cover the tools the harness knows by name, and an
+    // agent covers the ones it cannot: a session also inherits the machine's own
+    // plugins, so a seat on the default agent is offered a browser. Everything
+    // is switched off here and the seat's own tools are switched back on.
+    agent: {
+      [seatAgent]: {
+        description: "A Civilization seat, which may only reach the game.",
+        tools: {
+          "*": false,
+          [seatToolServer + "_*"]: true
+        }
+      }
+    },
     mcp: {
       "vox-civ": {
         type: "local",

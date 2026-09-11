@@ -22,7 +22,7 @@ import { SimulatedWorld } from "../world/simulated/simulated-world.js";
 import type { ScenarioShock } from "../world/simulated/scenario.js";
 import type { SimConfig } from "../world/simulated/types.js";
 import { writeSeatConfig } from "./seat-config.js";
-import { inheritedServers, surfaceProblem } from "../session/seat-surface.js";
+import { agentProblem, inheritedServers, surfaceProblem } from "../session/seat-surface.js";
 import { writeTurnState } from "./turn-state.js";
 
 // Everything a simulated run needs.
@@ -173,6 +173,8 @@ export async function simulate(options: SimulationOptions): Promise<SimulationRe
         }
         const problem = surfaceProblem(surface);
         if (problem) throw new Error(problem);
+        const confined = agentProblem(await client.agents().catch(() => []));
+        if (confined) throw new Error(confined);
         const inherited = inheritedServers(surface);
         if (inherited.length > 0) {
           logger.warn("Seat " + seat + " can also reach servers it has no business using: " + inherited.join(", "));

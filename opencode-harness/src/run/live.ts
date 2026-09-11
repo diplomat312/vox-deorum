@@ -13,7 +13,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { SeatRuntime, type PendingDecision } from "../seat/runtime.js";
 import { SeatPacer } from "../seat/pacing.js";
-import { inheritedServers, surfaceProblem } from "../session/seat-surface.js";
+import { agentProblem, inheritedServers, surfaceProblem } from "../session/seat-surface.js";
 import { OpenCodeServer } from "../session/opencode-server.js";
 import { SessionClient } from "../session/session-client.js";
 import type { SeatModel } from "../session/types.js";
@@ -214,6 +214,8 @@ export async function runLive(options: LiveRunOptions): Promise<LiveRunResult> {
         }
         const problem = surfaceProblem(surface);
         if (problem) throw new Error(problem);
+        const confined = agentProblem(await client.agents().catch(() => []));
+        if (confined) throw new Error(confined);
         const inherited = inheritedServers(surface);
         if (inherited.length > 0) {
           logger.warn("Seat " + seat + " can also reach servers it has no business using: " + inherited.join(", "));

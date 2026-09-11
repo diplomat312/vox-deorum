@@ -49,6 +49,8 @@ A seat's session inherits the machine's own OpenCode configuration as well as th
 
 The check is one read of the session's server list, so it costs nothing and catches the failure that hides itself.
 
+Confinement needs two mechanisms, because they cover different things. Denied permissions remove every tool the harness can name, which is verified by asking a seat to run a shell command, read a file outside its directory and fetch a page: it does none of them. Denied permissions cannot touch a plugin, so a session on the default agent is still offered a browser. The written configuration therefore defines one agent, named on every turn, which switches every tool off and switches the seat's own back on. A confined seat is offered exactly four tools.
+
 ## Reading a run
 
 ```
