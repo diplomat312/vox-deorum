@@ -37,12 +37,24 @@ export interface SeatRuntimeOptions {
   toolServing?: "serve" | "observe";
   // Called once the world is ready for a turn and before the seat is asked.
   onTurnPrepared?: (seat: string, turn: number) => Promise<void>;
+  // Called when a turn fails, to give the harness a chance to put the seat back
+  // on its feet. Returning true means the seat now has a fresh session, so the
+  // turn is recorded as a context reset rather than only as a failure.
+  onTurnFailed?: (seat: string, error: string) => Promise<SeatRepair>;
 }
+
+// What a harness did about a failed turn.
+//
+// "none" leaves the seat alone, which is right when the failure was a passing
+// one and the session is healthy. "aborted" cleared the work the seat had
+// stalled on, so the seat keeps its history and its cache. "reset" replaced the
+// session outright, which loses both and is the last resort.
+export type SeatRepair = "none" | "aborted" | "reset";
 
 // Plays turns for the seats of one run.
 export class SeatRuntime {
   // The session that answers for each seat.
-  private readonly client: SessionDriver;
+  private client: SessionDriver;
 
   // The state source the seats read.
   private readonly world: World;
@@ -60,6 +72,9 @@ export class SeatRuntime {
   // a harness can publish the state a tool server in another process will read.
   private readonly onTurnPrepared?: (seat: string, turn: number) => Promise<void>;
 
+  // Called when a turn fails, so the harness can repair the seat.
+  private readonly onTurnFailed?: (seat: string, error: string) => Promise<SeatRepair>;
+
   // Build a runtime for one run.
   constructor(options: SeatRuntimeOptions) {
     this.client = options.client;
@@ -68,6 +83,13 @@ export class SeatRuntime {
     this.store = options.store;
     this.toolServing = options.toolServing ?? "serve";
     this.onTurnPrepared = options.onTurnPrepared;
+    this.onTurnFailed = options.onTurnFailed;
+  }
+
+  // Replace the session a seat talks through. Only recovery uses this, because
+  // a seat is meant to keep one session for a whole game.
+  setClient(client: SessionDriver): void {
+    this.client = client;
   }
 
   // Play one turn for one seat and record it. A turn that produces no terminal
@@ -92,6 +114,7 @@ export class SeatRuntime {
     let actions: CommitAction[] = [];
     let gaps: Array<{ subject: string; detail?: string }> = [];
     let error: string | null = null;
+    let contextReset = false;
 
     try {
       result = await this.client.sendObservation(seat, observation);
@@ -117,6 +140,19 @@ export class SeatRuntime {
     } catch (failure) {
       outcome = "failed";
       error = failure instanceof Error ? failure.message : String(failure);
+      // Give the harness a chance to repair the seat, so one lost backend does
+      // not cost the rest of the game. A repaired seat restarts its context,
+      // which the record states plainly.
+      if (this.onTurnFailed) {
+        try {
+          // Only a replaced session restarts the seat's context. Clearing
+          // stalled work leaves the history and the cache intact.
+          contextReset = (await this.onTurnFailed(seat, error)) === "reset";
+        } catch (repairFailure) {
+          const detail = repairFailure instanceof Error ? repairFailure.message : String(repairFailure);
+          error = error + "; repair failed: " + detail;
+        }
+      }
     }
 
     const record: TraceRecord = {
@@ -135,6 +171,7 @@ export class SeatRuntime {
       outcome,
       applied: appliedSummary(actions, gaps),
       error,
+      contextReset,
       latencyMs: result?.latencyMs ?? 0
     };
     await this.store.record(record);

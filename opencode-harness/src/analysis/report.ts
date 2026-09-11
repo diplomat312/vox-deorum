@@ -80,6 +80,10 @@ export interface CostMetrics {
   slowestTurnMs: number;
   // Turns a seat failed to finish, across the run.
   unfinished: number;
+  // Turns at which a seat's session was replaced, so its history and cache
+  // started again. A run with resets is still comparable, but the cache figures
+  // after a reset are not a continuation of the ones before it.
+  contextResets: number;
 }
 
 // The two measures together, plus the raw material for a roundup.
@@ -244,6 +248,7 @@ export function costMetrics(data: RunData, seats: string[]): CostMetrics {
   let cost = 0;
   let slowest = 0;
   let unfinished = 0;
+  let contextResets = 0;
   for (const seat of seats) {
     const records = data.trace.get(seat) ?? [];
     const seatInput = records.reduce((sum, record) => sum + record.usage.input, 0);
@@ -264,6 +269,7 @@ export function costMetrics(data: RunData, seats: string[]): CostMetrics {
     cost += records.reduce((sum, record) => sum + (record.usage.cost ?? 0), 0);
     slowest = Math.max(slowest, ...records.map((record) => record.latencyMs));
     unfinished += records.filter((record) => record.outcome === "failed" || record.outcome === "unfinished").length;
+    contextResets += records.filter((record) => record.contextReset === true).length;
   }
   const socialOperations = data.social.length;
   const promptTokens = input + cacheRead + cacheWrite;
@@ -275,7 +281,8 @@ export function costMetrics(data: RunData, seats: string[]): CostMetrics {
     costPerTurn: turns.length === 0 ? 0 : cost / turns.length,
     costPerSocialOperation: socialOperations === 0 ? null : cost / socialOperations,
     slowestTurnMs: slowest,
-    unfinished
+    unfinished,
+    contextResets
   };
 }
 
@@ -419,7 +426,10 @@ export function renderReport(report: RunReport, toolCalls: RunToolCall[]): strin
       cost.slowestTurnMs +
       " ms. Turns that did not finish " +
       cost.unfinished +
-      "."
+      "." +
+      (cost.contextResets > 0
+        ? " A seat's session was replaced " + cost.contextResets + " time(s), so its context started again from there."
+        : "")
   );
   lines.push("");
   lines.push(

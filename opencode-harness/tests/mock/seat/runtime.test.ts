@@ -188,6 +188,65 @@ describe("a seat playing a turn", () => {
     expect(record.usage.total).toBe(0);
   });
 
+  it("should record a reset when the harness repairs a seat mid-run", async () => {
+    const store = new TraceStore(directory, "run-1");
+    const runtime = new SeatRuntime({
+      client: {
+        async sendObservation(): Promise<SeatTurnResult> {
+          throw new Error("fetch failed");
+        }
+      },
+      world: new RecordedWorld([recordedTurn()]),
+      socialDirectory,
+      store,
+      onTurnFailed: async () => "reset" as const
+    });
+
+    const record = await runtime.playTurn("korea", 7);
+
+    expect(record.outcome).toBe("failed");
+    expect(record.contextReset).toBe(true);
+  });
+
+  it("should keep the session when a failure was not the server going away", async () => {
+    const store = new TraceStore(directory, "run-1");
+    const runtime = new SeatRuntime({
+      client: {
+        async sendObservation(): Promise<SeatTurnResult> {
+          throw new Error("fetch failed");
+        }
+      },
+      world: new RecordedWorld([recordedTurn()]),
+      socialDirectory,
+      store,
+      onTurnFailed: async () => "none" as const
+    });
+
+    expect((await runtime.playTurn("korea", 7)).contextReset).toBe(false);
+  });
+
+  it("should keep the seat's context when its stalled work is cleared", async () => {
+    const store = new TraceStore(directory, "run-1");
+    const runtime = new SeatRuntime({
+      client: {
+        async sendObservation(): Promise<SeatTurnResult> {
+          throw new Error("the turn exceeded 150000ms and was abandoned");
+        }
+      },
+      world: new RecordedWorld([recordedTurn()]),
+      socialDirectory,
+      store,
+      onTurnFailed: async () => "aborted" as const
+    });
+
+    const record = await runtime.playTurn("korea", 7);
+
+    expect(record.outcome).toBe("failed");
+    // Clearing stalled work is not a reset: the session, its history and its
+    // cache all survive, so the run's later cache figures keep their meaning.
+    expect(record.contextReset).toBe(false);
+  });
+
   it("should refuse to play a turn the world does not hold", async () => {
     const store = new TraceStore(directory, "run-1");
     const runtime = new SeatRuntime({

@@ -225,4 +225,24 @@ describe("the generated environment", () => {
     expect(observation).toContain("Siam: has not been in touch; you have sent them 1 private message(s)");
     expect(observation).toContain("Iroquois: has not been in touch");
   });
+
+  it("should close with the plain instruction unless coaching is on", async () => {
+    const state = createSimState({ seats, seed: 5, game: "sim" });
+    const plain = new SimulatedWorld({ state, socialDirectory: directory });
+    const coached = new SimulatedWorld({
+      state: createSimState({ seats, seed: 5, game: "sim" }),
+      socialDirectory: directory,
+      diplomacyCoaching: true
+    });
+    await plain.beginTurn("korea", 1);
+    await coached.beginTurn("korea", 1);
+
+    expect(plain.observation("korea", 1)).not.toContain("decide who needs to hear from you");
+    const observation = coached.observation("korea", 1);
+    // The coached closing states what talking does rather than asking the seat
+    // to be talkative, so the seat keeps the decision.
+    expect(observation).toContain("decide who needs to hear from you this turn");
+    expect(observation).toContain("A direct message reaches one seat and no one else");
+    expect(observation).toContain("Saying nothing is a decision like any other");
+  });
 });

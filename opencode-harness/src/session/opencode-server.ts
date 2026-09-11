@@ -62,6 +62,21 @@ export class OpenCodeServer {
     return this.running;
   }
 
+  // Whether the server process is still alive. A run checks this when a turn
+  // fails, because a seat whose server has exited cannot be asked again and
+  // must not be recorded as merely slow.
+  isAlive(): boolean {
+    return this.child !== null && this.child.exitCode === null && this.running !== null;
+  }
+
+  // The port the server is listening on, so a replacement can take the same
+  // one rather than leaving a gap in the run's ports.
+  port(): number | null {
+    if (!this.running) return null;
+    const parsed = Number(new URL(this.running.url).port);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+
   // Start the server and wait until it answers. The caller may pass credentials
   // so a run can use its own pair, and a port so several runs can coexist.
   async start(options: { port: number; credentials?: ServerCredentials }): Promise<RunningServer> {

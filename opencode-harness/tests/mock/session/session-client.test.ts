@@ -170,6 +170,9 @@ describe("the seat session client", () => {
         return { status: 200, body: messages.get("ses_korea") ?? [] };
       }
       if (request.url === "/broken") return { status: 500, body: { error: "nope" } };
+      if (request.method === "POST" && request.url === "/session/ses_korea/abort") {
+        return { status: 200, body: { aborted: true } };
+      }
       return { status: 404, body: { error: "not found" } };
     });
     server = {
@@ -227,6 +230,21 @@ describe("the seat session client", () => {
 
     // One opening user message plus the two assistant messages the turn added.
     expect(await client.listMessages("korea")).toHaveLength(3);
+  });
+
+  it("should clear the stalled work in a seat's session", async () => {
+    const client = new SessionClient(server as RunningServer, { providerID: "opencode-go", modelID: "deepseek-v4.1-flash" });
+    await client.openSeat("korea");
+
+    await client.abort("korea");
+
+    expect(stub?.requests).toContain("POST /session/ses_korea/abort");
+  });
+
+  it("should refuse to abort a seat that has no session", async () => {
+    const client = new SessionClient(server as RunningServer, { providerID: "opencode-go", modelID: "deepseek-v4.1-flash" });
+
+    await expect(client.abort("nowhere")).rejects.toThrowError(/no session to abort/);
   });
 
   it("should report a refused request instead of returning nothing", async () => {

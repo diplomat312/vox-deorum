@@ -45,6 +45,10 @@ export interface SimulatedWorldOptions {
   // rather than a permanent feature, because the point of having a simulated
   // environment is to measure what showing a seat more actually changes.
   diplomacyBriefing?: boolean;
+  // Whether the closing instruction tells a seat what talking is for. This is
+  // the second variant a run tries, because the seats were observed weighing
+  // whether to speak, finding no reason either way, and staying silent.
+  diplomacyCoaching?: boolean;
 }
 
 // How a seat regards another, trimmed to what a seat is allowed to know.
@@ -107,6 +111,9 @@ export class SimulatedWorld implements World {
   // Whether the observation carries the diplomacy standing section.
   private readonly diplomacyBriefing: boolean;
 
+  // Whether the observation coaches a seat on what dialogue is for.
+  private readonly diplomacyCoaching: boolean;
+
   // Build a world over the given state.
   constructor(options: SimulatedWorldOptions) {
     this.state = options.state;
@@ -116,6 +123,7 @@ export class SimulatedWorld implements World {
     this.diplomacy = socialDiplomacyView(options.socialDirectory);
     this.socialDirectory = options.socialDirectory;
     this.diplomacyBriefing = options.diplomacyBriefing ?? false;
+    this.diplomacyCoaching = options.diplomacyCoaching ?? false;
   }
 
   // Build a read-only view of a world that another process has already
@@ -249,7 +257,7 @@ export class SimulatedWorld implements World {
     lines.push("- No deals on the table.");
     lines.push("");
     lines.push(
-      "You may inspect anything else you need (inspect). When finished, commit your actions (commit_turn) or pass. Keep the rationale short."
+      this.diplomacyCoaching ? coachedInstruction() : plainInstruction()
     );
     return lines.join("\n");
   }
@@ -586,4 +594,26 @@ export class SimulatedWorld implements World {
     }
     return JSON.stringify(rows, null, 1);
   }
+}
+
+// The closing instruction a seat reads in the plain variant.
+function plainInstruction(): string {
+  return "You may inspect anything else you need (inspect). When finished, commit your actions (commit_turn) or pass. Keep the rationale short.";
+}
+
+// The closing instruction a seat reads when dialogue is coached.
+//
+// It states what talking does rather than asking a seat to talk. A seat told to
+// be talkative produces noise, while a seat that knows what a message is for
+// can decide for itself whether this turn needs one.
+function coachedInstruction(): string {
+  return [
+    "You may inspect anything else you need (inspect). When finished, commit your actions (commit_turn) or pass. Keep the rationale short.",
+    "",
+    "Before you commit, decide who needs to hear from you this turn.",
+    "- Other seats act on what they know of you. What you say in the open becomes your reputation, and they weigh it.",
+    "- A direct message reaches one seat and no one else, so it is the only way to say something you do not want overheard.",
+    "- A seat that has written to you is waiting on you, and a seat that is guessing about you will guess badly.",
+    "- Saying nothing is a decision like any other, and it leaves the other seats to draw their own conclusions."
+  ].join("\n");
 }

@@ -53,6 +53,12 @@ export interface SimulationOptions {
   // first thing a run varies, because a seat that cannot see the state of its
   // contact with anyone has no reason to change it.
   diplomacyBriefing?: boolean;
+  // Whether the observation coaches a seat on what dialogue is for.
+  diplomacyCoaching?: boolean;
+  // How long one seat turn may take before the harness gives up on it. Kept
+  // below the five minutes a socket layer will otherwise wait, so the harness
+  // notices a stall first and can clear the work it started.
+  turnTimeoutMs?: number;
 }
 
 // What a finished run reports.
@@ -92,6 +98,8 @@ export async function simulate(options: SimulationOptions): Promise<SimulationRe
     config: options.config,
     shocks: options.shocks ?? [],
     diplomacyBriefing: options.diplomacyBriefing ?? false
+    ,
+    diplomacyCoaching: options.diplomacyCoaching ?? false
   });
 
   // One OpenCode server per seat, because each seat needs its own tool server
@@ -100,6 +108,10 @@ export async function simulate(options: SimulationOptions): Promise<SimulationRe
   const servers: OpenCodeServer[] = [];
   const clients = new Map<string, SessionClient>();
   const injected: string[] = [];
+  // Per seat: the server it talks through, the port it holds and the working
+  // directory it runs in. A seat whose server dies is rebuilt from these, so
+  // one lost backend costs that seat its context rather than the whole game.
+  const seatServers = new Map<string, { server: OpenCodeServer; port: number; directory: string }>();
   try {
     for (let index = 0; index < options.seats.length; index += 1) {
       const seat = options.seats[index];
@@ -118,7 +130,10 @@ export async function simulate(options: SimulationOptions): Promise<SimulationRe
       const server = new OpenCodeServer(seatDirectory);
       await server.start({ port: options.portBase + index });
       servers.push(server);
-      const client = new SessionClient(server.address(), options.modelOverrides?.[seat] ?? options.model);
+      seatServers.set(seat, { server, port: options.portBase + index, directory: seatDirectory });
+      const client = new SessionClient(server.address(), options.modelOverrides?.[seat] ?? options.model, {}, {
+        turnTimeoutMs: options.turnTimeoutMs
+      });
       await client.openSeat(seat, "seat " + seat);
       clients.set(seat, client);
       logger.info("Seat " + seat + " is ready on port " + (options.portBase + index));
@@ -139,6 +154,55 @@ export async function simulate(options: SimulationOptions): Promise<SimulationRe
           // seat's reads and the harness's world in step.
           onTurnPrepared: async () => {
             await world.writeSnapshot(worldStateFile);
+          },
+          // A seat can fail two ways, and they need different answers.
+          //
+          // A stalled model call leaves the session busy, and because the
+          // server runs one thing at a time per session, every later request
+          // queues behind it and times out too. Clearing the stalled work is
+          // enough, and it keeps the seat's history and prompt cache. Only when
+          // the server process itself is gone is the session replaced, which
+          // loses both and is recorded as a reset.
+          onTurnFailed: async (failedSeat: string, error: string) => {
+            const held = seatServers.get(failedSeat);
+            if (!held) return "none" as const;
+            if (held.server.isAlive()) {
+              try {
+                await clients.get(failedSeat)?.abort(failedSeat);
+                return "aborted" as const;
+              } catch (abortFailure) {
+                logger.warn(
+                  "Could not clear the stalled work in seat " +
+                    failedSeat +
+                    "'s session (" +
+                    (abortFailure instanceof Error ? abortFailure.message : String(abortFailure)) +
+                    "). Replacing the session."
+                );
+              }
+            }
+            logger.warn(
+              "The session server for seat " +
+                failedSeat +
+                " is gone or unusable (" +
+                error +
+                "). Restarting it with a fresh session."
+            );
+            await held.server.stop().catch(() => undefined);
+            const replacement = new OpenCodeServer(held.directory);
+            await replacement.start({ port: held.port });
+            seatServers.set(failedSeat, { ...held, server: replacement });
+            servers.push(replacement);
+            const client = new SessionClient(
+              replacement.address(),
+              options.modelOverrides?.[failedSeat] ?? options.model,
+              {},
+              { turnTimeoutMs: options.turnTimeoutMs }
+            );
+            await client.openSeat(failedSeat, "seat " + failedSeat + " (restarted)");
+            clients.set(failedSeat, client);
+            runtimes.get(failedSeat)?.setClient(client);
+            logger.warn("Seat " + failedSeat + " is running again on port " + held.port + " with a new session.");
+            return "reset" as const;
           }
         })
       );
@@ -251,6 +315,8 @@ async function main(): Promise<void> {
   );
   const scenarioFile = value("scenario", undefined) as string | undefined;
   const briefing = (value("briefing", "off") as string) === "on";
+  const coaching = (value("coaching", "off") as string) === "on";
+  const turnTimeoutMs = Number(value("turn-timeout", "150000"));
   const shocks = scenarioFile ? await readScenario(repositoryRoot, scenarioFile) : [];
 
   const result = await simulate({
@@ -264,7 +330,10 @@ async function main(): Promise<void> {
     serverEntry,
     portBase,
     shocks,
-    diplomacyBriefing: briefing
+    diplomacyBriefing: briefing,
+    diplomacyCoaching: coaching
+    ,
+    turnTimeoutMs
   });
   logger.info(
     "Run " +

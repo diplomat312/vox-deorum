@@ -48,6 +48,10 @@ export interface TraceRecord {
   applied: string | null;
   // The error that ended the turn, when it failed.
   error: string | null;
+  // True when the seat's session was replaced before this turn, so its history
+  // and its prompt cache start again here. A run that survived a backend death
+  // says so rather than hiding it inside a token count.
+  contextReset?: boolean;
   // How long the seat spent thinking, in milliseconds.
   latencyMs: number;
 }

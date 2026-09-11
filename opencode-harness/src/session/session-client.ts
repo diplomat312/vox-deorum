@@ -10,7 +10,14 @@ import { logger } from "../utils/logger.js";
 
 // How long one observation may take before the call is abandoned, in
 // milliseconds. A seat thinking for a long time is normal, but never forever.
-const responseTimeoutMs = 600000;
+//
+// This is deliberately shorter than the five hundred milliseconds times six
+// hundred that undici allows a response to take before it gives up on its own.
+// When undici gives up first, the harness cannot tell a slow model from a lost
+// connection, and the request it abandoned keeps occupying the session. A
+// shorter deadline of our own means the harness notices first and can clear the
+// work it started.
+const defaultTurnTimeoutMs = 150000;
 
 // A part of a model response, as the server sends it. Only the fields the
 // harness reads are named; the rest is kept as raw text.
@@ -155,14 +162,25 @@ export class SessionClient {
 
   // Build a client for a running server. The default model is used for any seat
   // the caller does not override.
-  constructor(server: RunningServer, defaultModel: SeatModel, overrides: Record<string, SeatModel> = {}) {
+  // A deadline may be given for one turn, which a run shortens when it wants to
+  // fail a seat quickly rather than wait out a stalled model call.
+  constructor(
+    server: RunningServer,
+    defaultModel: SeatModel,
+    overrides: Record<string, SeatModel> = {},
+    options: { turnTimeoutMs?: number } = {}
+  ) {
     this.server = server;
     this.models = new Map(Object.entries(overrides));
     this.defaultModel = defaultModel;
+    this.turnTimeoutMs = options.turnTimeoutMs ?? defaultTurnTimeoutMs;
   }
 
   // The model used by seats without an override.
   private readonly defaultModel: SeatModel;
+
+  // How long one turn may take before the harness gives up on it.
+  private readonly turnTimeoutMs: number;
 
   // The session already held for a seat, if there is one.
   sessionOf(seat: string): string | null {
@@ -233,9 +251,10 @@ export class SessionClient {
 
   // One authenticated call against the server, with a timeout so a lost
   // server cannot hang a run forever.
-  private async request<T>(method: string, route: string, body?: unknown): Promise<T> {
+  private async request<T>(method: string, route: string, body?: unknown, timeoutMs?: number): Promise<T> {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), responseTimeoutMs);
+    const budget = timeoutMs ?? this.turnTimeoutMs;
+    const timer = setTimeout(() => controller.abort(), budget);
     try {
       const response = await fetch(this.server.url + route, {
         method,
@@ -248,8 +267,31 @@ export class SessionClient {
         throw new Error(method + " " + route + " failed with HTTP " + response.status + ": " + detail.slice(0, 300));
       }
       return (await response.json()) as T;
+    } catch (error) {
+      // Turn an expired deadline into a message that says so. Otherwise it
+      // reaches a run as an unexplained transport failure, which is the shape
+      // that a stalled model call and a dead socket share.
+      if (error instanceof Error && error.name === "AbortError") {
+        throw new Error("the turn exceeded " + budget + "ms and was abandoned");
+      }
+      throw error;
     } finally {
       clearTimeout(timer);
     }
+  }
+
+  // Clear whatever work a seat's session is still running.
+  //
+  // A stalled model call keeps occupying its session, and because the server
+  // runs one thing at a time per session, every later request queues behind it
+  // and times out too. Aborting is what breaks that cycle, and it keeps the
+  // session and its prompt cache rather than throwing the seat's history away.
+  async abort(seat: string): Promise<void> {
+    const session = this.sessions.get(seat);
+    if (!session) {
+      throw new Error("Seat '" + seat + "' has no session to abort");
+    }
+    await this.request<unknown>("POST", "/session/" + session + "/abort", {}, 30000);
+    logger.warn("Abandoned the stalled work in seat " + seat + "'s session " + session);
   }
 }
