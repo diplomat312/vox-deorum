@@ -5,7 +5,7 @@
 // without launching Civilization V.
 
 import { describe, expect, it } from "vitest";
-import { LiveWorld, inspectCalls, readCalls, writeCall } from "../../../src/world/live/live-world.js";
+import { LiveWorld, inspectCalls, readCalls, refusedByGame, writeCall } from "../../../src/world/live/live-world.js";
 import type { VoxConnector, VoxToolResult } from "../../../src/world/live/vox-connector.js";
 
 // A connection that answers from a table and records what it was asked.
@@ -143,6 +143,38 @@ describe("answering an inspect", () => {
 
     expect(answer.gap).toBe(true);
     expect(answer.text).toContain("no reading in a live game");
+  });
+});
+
+describe("telling a refusal from a success", () => {
+  it("should read an error-marked call as a refusal", () => {
+    expect(refusedByGame({ text: "the tool failed", isError: true })).toBe(true);
+  });
+
+  it("should read a successful call with a false Success flag as a refusal", () => {
+    // This is the shape the real server returns when the game will not take an
+    // action. It is a successful call carrying a refusal, so reading only the
+    // error flag would log a rejected action as applied.
+    const refusal = {
+      text: JSON.stringify({
+        Success: false,
+        Error: { Code: "FUNCTION_NOT_FOUND", Message: "Function 'default-func-set-research' is not available" }
+      }),
+      isError: false
+    };
+
+    expect(refusedByGame(refusal)).toBe(true);
+  });
+
+  it("should read a successful call with a true Success flag as taken", () => {
+    expect(refusedByGame({ text: JSON.stringify({ Success: true, Previous: "Pottery" }), isError: false })).toBe(false);
+  });
+
+  it("should treat a body that says nothing about success as taken", () => {
+    // A plain boolean, a bare string or malformed text carries no refusal.
+    expect(refusedByGame({ text: "true", isError: false })).toBe(false);
+    expect(refusedByGame({ text: "not json at all", isError: false })).toBe(false);
+    expect(refusedByGame({ text: "{}", isError: false })).toBe(false);
   });
 });
 

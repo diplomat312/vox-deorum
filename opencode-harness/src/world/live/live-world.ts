@@ -35,6 +35,26 @@ export interface LiveWorldOptions {
   names?: Record<string, { civ: string; leader: string }>;
 }
 
+// Whether a tool's answer was the game refusing what it was asked to do.
+//
+// A refusal reaches the harness in two shapes, and only one of them looks like
+// a failure. Some tools mark the call as an error, and others answer
+// successfully with a payload whose Success flag is false, which is how the game
+// reports an action it will not take. Reading only the error flag would log a
+// refused action as applied, so a run would claim to have set a technology the
+// game rejected.
+export function refusedByGame(result: { text: string; isError: boolean }): boolean {
+  if (result.isError) return true;
+  try {
+    const parsed = JSON.parse(result.text) as { Success?: unknown };
+    if (parsed !== null && typeof parsed === "object" && parsed.Success === false) return true;
+  } catch {
+    // A body that is not JSON cannot carry a refusal flag.
+  }
+  return false;
+}
+
+// Read a field out of a tool's text, which Vox returns as JSON.
 // Read a field out of a tool's text, which Vox returns as JSON.
 function parse(text: string): unknown {
   try {
@@ -166,8 +186,11 @@ export class LiveWorld implements World {
         continue;
       }
       const result = await this.connector.call(call.tool, call.args);
-      if (result.isError) {
-        logger.warn("The game refused " + call.tool + " for seat " + seat + ": " + result.text.slice(0, 200));
+      // A refusal can arrive as an error or as a successful call whose payload
+      // says the game did not take the action, so both are treated as a refusal
+      // rather than reporting an action the game rejected as applied.
+      if (refusedByGame(result)) {
+        logger.warn("The game did not take " + call.tool + " for seat " + seat + ": " + result.text.slice(0, 200));
       } else {
         logger.info("Applied " + call.tool + " for seat " + seat);
       }
