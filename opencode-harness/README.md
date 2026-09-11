@@ -61,6 +61,8 @@ node dist/run/live.js --seats korea:0,austria:1 --turns 10 --run-id live-first
 
 Seats are given as `name:playerIndex` pairs, because a live game is addressed by player index. The run checks the tools it needs before its first turn and names anything missing, and its trace, report and roundup are the same as a simulated run's.
 
+By default a live run holds the game for each seat's turn and releases it afterwards, which is the policy that cannot produce a stale decision. `--pacing none` plays without touching the clock at all. The summary reports how many holds the game took, how many it refused, and whether any turn advanced while it was supposed to be held.
+
 ## Playing a seat yourself
 
 Any seat can be played by a person instead of a model. With `--human` naming the seat, the harness offers that seat's turn as files in the seat's own directory and waits for a decision:

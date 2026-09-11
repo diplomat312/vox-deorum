@@ -19,6 +19,7 @@ import { TraceStore } from "../trace/store.js";
 import { logger } from "../utils/logger.js";
 import { LiveWorld, type LiveSeat } from "../world/live/live-world.js";
 import { HttpVoxConnector } from "../world/live/vox-connector.js";
+import { McpGameClock } from "../world/live/mcp-game-clock.js";
 import { writeSeatConfig } from "./seat-config.js";
 import { writeTurnState } from "./turn-state.js";
 
@@ -65,6 +66,15 @@ export interface LiveRunOptions {
   turnTimeoutMs?: number;
   // The MCP endpoint, when it is not the repository default.
   mcpEndpoint?: string;
+  // How a seat's thinking relates to the game clock. The freeze policy is the
+  // default for a live game, because it is the one that cannot produce a stale
+  // decision: the game is held for the whole turn and released after it.
+  //
+  // The overlap policy is deliberately not offered yet. It needs a seat's turn
+  // split into a decision and a commit so the commit can be revalidated against
+  // a state that moved, and until that split exists, offering it would be
+  // claiming a safety the code does not have.
+  pacing?: "freeze" | "none";
 }
 
 // What a finished live run reports.
@@ -77,6 +87,15 @@ export interface LiveRunResult {
   failures: number;
   // Seats that could not be started.
   unavailable: string[];
+  // How the game was held, so a run says what it paced rather than leaving it
+  // to be inferred from timing.
+  pacing: "freeze" | "none";
+  // Holds the game took, and holds it did not.
+  holdsTaken: number;
+  holdsMissed: number;
+  // Turns that advanced while the game was held for a seat, which is the pause
+  // that lied. Any entry here means a seat may have decided on a state that moved.
+  turnsThatMovedWhileHeld: Array<{ seat: string; turn: number; from: number; to: number }>;
 }
 
 // Check the tools a live run depends on, and say what is missing.
@@ -119,7 +138,17 @@ export async function runLive(options: LiveRunOptions): Promise<LiveRunResult> {
   await mkdir(socialDirectory, { recursive: true });
   const store = new TraceStore(traceDirectory, options.runId);
   const connector = new HttpVoxConnector(options.mcpEndpoint);
-  await connector.connect();
+  await connector.connect().catch((failure) => {
+    // A run that cannot reach the server has nothing to say about the game, so
+    // the message names the address rather than repeating the transport error.
+    throw new Error(
+      "Could not reach the Vox MCP server at " +
+        (options.mcpEndpoint ?? "the repository default") +
+        " (" +
+        (failure instanceof Error ? failure.message : String(failure)) +
+        "). A live run needs the server running with a game loaded."
+    );
+  });
   const missing = await preflight(connector);
   if (missing.length > 0) {
     throw new Error("The game is missing tools this run needs: " + missing.join(", "));
@@ -215,11 +244,40 @@ export async function runLive(options: LiveRunOptions): Promise<LiveRunResult> {
 
     let turnsPlayed = 0;
     let failures = 0;
+    // How the run held the game, so its summary can say what was paced.
+    let holdsTaken = 0;
+    let holdsMissed = 0;
+    const turnsThatMovedWhileHeld: Array<{ seat: string; turn: number; from: number; to: number }> = [];
+    const pacing = options.pacing ?? "freeze";
+    const clock = new McpGameClock(connector, options.seats[0]?.playerID ?? 0);
     for (let turn = 1; turn <= options.turns; turn += 1) {
       for (const seat of playing) {
         const seatDirectory = path.join(options.runDirectory, "seats", seat.seat);
         await writeTurnState(seatDirectory, { turn, seat: seat.seat });
-        const record = await (runtimes.get(seat.seat) as SeatRuntime).playTurn(seat.seat, turn);
+        // Under the freeze policy the game is held for the whole turn, and the
+        // hold is confirmed rather than trusted: a pause the game accepted while
+        // it carried on is not a held game, and a seat acting on a state that
+        // moved is the thing this exists to prevent.
+        const held = pacing === "freeze" ? await clock.pause().then(() => clock.isFrozen()) : false;
+        if (pacing === "freeze") held ? (holdsTaken += 1) : (holdsMissed += 1);
+        const turnBefore = pacing === "freeze" ? await clock.turn().catch(() => turn) : turn;
+        const record = await (runtimes.get(seat.seat) as SeatRuntime).playTurn(seat.seat, turn).finally(async () => {
+          if (pacing === "freeze") await clock.resume().catch(() => false);
+        });
+        if (pacing === "freeze") {
+          const turnAfter = await clock.turn().catch(() => turnBefore);
+          if (turnAfter !== turnBefore) {
+            turnsThatMovedWhileHeld.push({ seat: seat.seat, turn, from: turnBefore, to: turnAfter });
+            logger.warn(
+              "The game advanced from turn " +
+                turnBefore +
+                " to " +
+                turnAfter +
+                " while it was held for seat " +
+                seat.seat
+            );
+          }
+        }
         turnsPlayed += 1;
         if (record.outcome === "failed" || record.outcome === "unfinished") failures += 1;
         logger.info("turn " + turn + " " + seat.seat + " " + record.outcome + " | " + (record.applied ?? ""));
@@ -228,10 +286,23 @@ export async function runLive(options: LiveRunOptions): Promise<LiveRunResult> {
     const summary = await store.summary();
     await writeFile(
       path.join(options.runDirectory, "summary.json"),
-      JSON.stringify({ ...summary, failures, unavailable }, null, 2),
+      JSON.stringify(
+        { ...summary, failures, unavailable, pacing, holdsTaken, holdsMissed, turnsThatMovedWhileHeld },
+        null,
+        2
+      ),
       "utf8"
     );
-    return { runId: options.runId, turnsPlayed, failures, unavailable };
+    return {
+      runId: options.runId,
+      turnsPlayed,
+      failures,
+      unavailable,
+      pacing,
+      holdsTaken,
+      holdsMissed,
+      turnsThatMovedWhileHeld
+    };
   } finally {
     for (const server of servers) {
       await server.stop().catch((error) => logger.warn("Could not stop a seat server: " + String(error)));
@@ -276,6 +347,8 @@ async function main(): Promise<void> {
     turns: Number(value("turns", "10")),
     turnTimeoutMs: Number(value("turn-timeout", "150000")),
     mcpEndpoint: value("mcp", undefined) as string | undefined
+    ,
+    pacing: (value("pacing", "freeze") as string) === "none" ? "none" : "freeze"
   });
   logger.info(
     "Live run " +
@@ -285,7 +358,17 @@ async function main(): Promise<void> {
       " turn(s), " +
       result.failures +
       " unfinished or failed" +
-      (result.unavailable.length > 0 ? ", seats that never started: " + result.unavailable.join(", ") : "")
+      (result.unavailable.length > 0 ? ", seats that never started: " + result.unavailable.join(", ") : "") +
+      ", pacing " +
+      result.pacing +
+      " with " +
+      result.holdsTaken +
+      " hold(s) taken and " +
+      result.holdsMissed +
+      " missed" +
+      (result.turnsThatMovedWhileHeld.length > 0
+        ? ", " + result.turnsThatMovedWhileHeld.length + " turn(s) advanced while held"
+        : "")
   );
   process.exit(0);
 }
