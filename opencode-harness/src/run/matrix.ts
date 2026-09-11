@@ -24,6 +24,10 @@ export interface MatrixOptions extends Omit<SimulationOptions, "runId" | "runDir
   portBase: number;
   // How many ports to leave between runs, so concurrent leftovers cannot clash.
   portStride?: number;
+  // When set, do not play anything. Summarise the runs already on disk, which
+  // is how a summary is rebuilt after a measure is added without replaying the
+  // games that produced it.
+  reuse?: boolean;
 }
 
 // Play every seed and summarise what happened.
@@ -34,6 +38,11 @@ export async function runMatrix(options: MatrixOptions): Promise<string> {
     const seed = options.seeds[index];
     const runId = options.variant + "-s" + seed;
     const runDirectory = path.join(options.matrixDirectory, runId);
+    if (options.reuse) {
+      runs.push(measuresOf(await buildReport(runDirectory)));
+      logger.info("Summarised " + runId + " from disk");
+      continue;
+    }
     logger.info("Playing " + runId + " (seed " + seed + ", run " + (index + 1) + " of " + options.seeds.length + ")");
     await simulate({
       runDirectory,
@@ -103,7 +112,8 @@ async function main(): Promise<void> {
     shocks,
     diplomacyCoaching: (value("coaching", "off") as string) === "on",
     diplomacyBriefing: (value("briefing", "off") as string) === "on",
-    turnTimeoutMs: Number(value("turn-timeout", "150000"))
+    turnTimeoutMs: Number(value("turn-timeout", "150000")),
+    reuse: args.includes("--reuse")
   });
   process.exit(0);
 }
