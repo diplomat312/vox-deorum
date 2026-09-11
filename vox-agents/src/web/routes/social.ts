@@ -3,10 +3,17 @@ import path from 'node:path';
 import { SocialRuntime, type SocialRuntimeConfig } from '../../social/runtime/social-runtime.js';
 import type { SocialActorDefinition, SocialPacingProfile } from '../../social/types.js';
 import { SocialEventProjector } from '../../social/events/social-event-projector.js';
+import { attachSimulatedCiv, type AttachedSimulatedCiv } from '../../social/environments/simulated/attach-simulated-civ.js';
+import type { SimulatedCivEnvironmentOptions } from '../../social/environments/simulated/simulated-civ-environment.js';
 
 const router = Router();
 export const socialRuntime = new SocialRuntime();
 const socialDataDirectory = path.join(process.cwd(), 'social-data');
+
+// The generated world a session is playing, when it asked for one. Held here so a
+// stop can end it, because a timer that outlives its session would keep moving a
+// game nobody is watching.
+let simulatedCiv: AttachedSimulatedCiv | null = null;
 
 /** Return a request body as a record when it is a JSON object. */
 function bodyRecord(body: unknown): Record<string, unknown> | undefined { return body !== null && typeof body === 'object' && !Array.isArray(body) ? body as Record<string, unknown> : undefined; }
@@ -22,7 +29,26 @@ function actorDefinitions(value: unknown): SocialActorDefinition[] | undefined {
 /** Start a standalone social session without Civilization V. */
 router.post('/session', async (req: Request, res: Response) => { try { const body = bodyRecord(req.body); const actors = actorDefinitions(body?.actors); if (!actors) { res.status(400).json({ error: 'actors must contain 2 to 8 valid actor definitions' }); return; } const runtimeConfig: SocialRuntimeConfig = { actors, dataDirectory: path.join(process.cwd(), 'social-data'), pacingProfile: pacingProfile(body?.pacingProfile), ...(typeof body?.sessionId === 'string' ? { sessionId: body.sessionId } : {}), ...(typeof body?.humanActorId === 'string' ? { humanActorId: body.humanActorId } : {}), ...(typeof body?.title === 'string' ? { title: body.title } : {}) }; await socialRuntime.start(runtimeConfig); res.status(201).json({ sessionId: socialRuntime.getSessionId(), humanActorId: socialRuntime.getHumanActorId(), pacingProfile: socialRuntime.getPacingProfile(), actors: await socialRuntime.listActors() }); } catch (error) { res.status(400).json({ error: errorMessage(error) }); } });
 /** Stop the standalone social session. */
-router.post('/session/stop', async (_req: Request, res: Response) => { try { await socialRuntime.stop(); res.json({ success: true }); } catch (error) { res.status(400).json({ error: errorMessage(error) }); } });
+/** Start a generated world under the running session, so the table has a game. */
+router.post('/simulated-game', async (req: Request, res: Response) => {
+  if (!socialRuntime.isRunning()) { res.status(404).json({ error: 'No social session is active' }); return; }
+  if (simulatedCiv) { res.status(409).json({ error: 'This session already has a world' }); return; }
+  try {
+    const body = bodyRecord(req.body);
+    const actors = await socialRuntime.listActors();
+    const seats = actors.filter((actor) => actor.control === 'model').map((actor) => actor.id);
+    const humanSeat = actors.find((actor) => actor.control === 'human')?.id;
+    const request = {
+      ...(typeof body?.seed === 'number' ? { seed: body.seed } : {}),
+      ...(typeof body?.tickMs === 'number' ? { tickMs: body.tickMs } : {}),
+      ...(Array.isArray(body?.script) ? { script: body.script as SimulatedCivEnvironmentOptions['script'] } : {}),
+    };
+    simulatedCiv = await attachSimulatedCiv(socialRuntime, [...seats, ...(humanSeat ? [humanSeat] : [])], humanSeat, request);
+    res.status(201).json({ seed: simulatedCiv.seed, seats: [...seats, ...(humanSeat ? [humanSeat] : [])] });
+  } catch (error) { res.status(400).json({ error: errorMessage(error) }); }
+});
+
+router.post('/session/stop', async (_req: Request, res: Response) => { try { await socialRuntime.stop(); const world = simulatedCiv; simulatedCiv = null; if (world) await world.environment.close().catch(() => undefined); res.json({ success: true }); } catch (error) { res.status(400).json({ error: errorMessage(error) }); } });
 /** List persisted social sessions available after a server restart. */
 router.get('/sessions', async (_req: Request, res: Response) => { try { res.json({ sessions: await socialRuntime.listStoredSessions(socialDataDirectory) }); } catch (error) { res.status(500).json({ error: errorMessage(error) }); } });
 /** Update a saved sandbox title or archive state. */

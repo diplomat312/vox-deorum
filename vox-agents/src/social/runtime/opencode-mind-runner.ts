@@ -15,6 +15,7 @@
 // uses and the reason a refusal is a durable outcome rather than a lost turn.
 
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { z } from "zod";
 import path from "node:path";
 import { homedir } from "node:os";
 import type { ModelMessage } from "ai";
@@ -33,8 +34,9 @@ import type { SocialActor, SocialDecision } from "../types.js";
 import type { SocialContextBundle } from "../context/social-context-builder.js";
 import type { SocialDecisionRun, SocialModelExecutor } from "./social-model-executor.js";
 import { decodeSocialDecision } from "./social-decision-tools.js";
-import { openCodeSocialToolNames } from "./opencode-social-tools.js";
+import { openCodeSocialTools } from "./opencode-social-tools.js";
 import type { SocialSeatCall, SocialSeatTurn } from "./opencode-social-seat.js";
+import type { SeatToolSpec } from "./opencode-social-seat.js";
 import { createLogger } from "../../utils/logger.js";
 
 /** Everything the runner needs to start. */
@@ -135,12 +137,17 @@ export class OpenCodeMindRunner implements SocialModelExecutor {
   /** Generate one decision and return the usage the same way the sandbox path does. */
   public async decideWithTelemetry(actor: SocialActor, context: SocialContextBundle, _actorNames: string[], abortSignal?: AbortSignal): Promise<SocialDecisionRun> {
     const startedAt = Date.now();
-    const session = await this.sessionFor(actor);
+    const session = await this.sessionFor(actor, context);
     const legal = Object.keys(context.decisionTools ?? {});
     if (legal.length === 0) throw new Error("no decision tool is legal for " + actor.id + " this turn");
     const turnFile = this.turnFileFor(actor.id);
     const callsFile = this.callsFileFor(actor.id);
     const turn: SocialSeatTurn = { actorId: actor.id, displayName: actor.displayName, legal, ...(context.intentionId ? { intentionId: context.intentionId } : {}) };
+    // A support read is free, so it is legal without being the turn's action.
+    const outwardNames = (context.decisionToolDefinitions ?? [])
+      .filter((definition) => definition.phase !== "support")
+      .map((definition) => definition.name)
+      .concat(openCodeSocialTools.map((tool) => tool.name).filter((name) => legal.includes(name)));
     await mkdir(path.dirname(turnFile), { recursive: true });
     await writeFile(turnFile, JSON.stringify(turn, null, 2), "utf8");
     await rm(callsFile, { force: true });
@@ -149,7 +156,10 @@ export class OpenCodeMindRunner implements SocialModelExecutor {
     session.sentMessages = context.messages.length;
     if (abortSignal?.aborted) throw new Error("the wake was abandoned before a decision arrived");
     const calls = await this.readCalls(actor.id, callsFile);
-    const outward = calls.filter((call) => openCodeSocialToolNames.includes(call.toolName));
+    // A support read is not a decision, so only an outward verb counts as the
+    // turn's one action. The environment's own verbs are outward too, which is
+    // how a seat acts in the game rather than only speaking.
+    const outward = calls.filter((call) => outwardNames.includes(call.toolName));
     if (outward.length === 0) {
       // A wake that reached for nothing is a pass: the environment treats silence
       // as a decision, and the model was offered that verb.
@@ -171,6 +181,34 @@ export class OpenCodeMindRunner implements SocialModelExecutor {
 
   // The observation for this wake: the situation the environment built, plus only
   // the conversation this session has not already been given.
+  // The verbs a session is offered: the environment's own, plus the social set.
+  //
+  // A definition carries a Zod schema, because that is what the environment
+  // speaks; a tool server speaks JSON Schema, so it is converted here rather than
+  // asking every environment to describe its verbs twice.
+  private toolSpecs(context: SocialContextBundle): SeatToolSpec[] {
+    const specs: SeatToolSpec[] = openCodeSocialTools.map((tool) => ({
+      name: tool.name,
+      description: tool.description,
+      inputSchema: tool.inputSchema
+    }));
+    for (const definition of context.decisionToolDefinitions ?? []) {
+      if (specs.some((spec) => spec.name === definition.name)) continue;
+      let inputSchema: Record<string, unknown>;
+      try {
+        const converted = z.toJSONSchema(definition.inputSchema) as Record<string, unknown>;
+        delete converted.$schema;
+        inputSchema = converted;
+      } catch {
+        // A schema this conversion cannot express is offered with no arguments
+        // rather than dropped, so a session still knows the verb exists.
+        inputSchema = { type: "object", properties: {} };
+      }
+      specs.push({ name: definition.name, description: definition.description, inputSchema });
+    }
+    return specs;
+  }
+
   private observation(actor: SocialActor, context: SocialContextBundle, alreadySent: number): string {
     const lines: string[] = [];
     if (context.environment) lines.push("The situation as you know it:", context.environment, "");
@@ -182,10 +220,17 @@ export class OpenCodeMindRunner implements SocialModelExecutor {
   }
 
   // The session for one actor, opened on first use and kept for the run.
-  private async sessionFor(actor: SocialActor): Promise<ActorSession> {
+  private async sessionFor(actor: SocialActor, context: SocialContextBundle): Promise<ActorSession> {
     const held = this.sessions.get(actor.id);
     if (held) return held;
     const harness = await loadHarness();
+    // The session's tool list is fixed when its server starts, so it is the union
+    // of what this environment can ever offer: the social verbs plus whatever the
+    // environment defines. Which of them is legal right now is the turn file's
+    // business, and an illegal one is refused with a reason rather than obeyed.
+    const toolsFile = this.toolsFileFor(actor.id);
+    await mkdir(path.dirname(toolsFile), { recursive: true });
+    await writeFile(toolsFile, JSON.stringify(this.toolSpecs(context), null, 2), "utf8");
     // A session reads the configuration of the directory its server was started
     // in, so one server for the whole table would read one actor's configuration
     // and serve it to everyone. Each actor therefore gets its own server in its
@@ -208,9 +253,12 @@ export class OpenCodeMindRunner implements SocialModelExecutor {
         SOCIAL_ACTOR: actor.id,
         SOCIAL_TURN_FILE: this.turnFileFor(actor.id),
         SOCIAL_CALLS_FILE: this.callsFileFor(actor.id),
+        SOCIAL_TOOLS_FILE: toolsFile,
         SOCIAL_GAME: this.options.runId,
       },
-      agentTools: Object.fromEntries(openCodeSocialToolNames.map((name) => ["vox-social_" + name, true])),
+      // Every verb the server offers is switched on, because the turn file is
+      // what decides which of them is legal right now.
+      agentTools: Object.fromEntries(this.toolSpecs(context).map((spec) => ["vox-social_" + spec.name, true])),
       // The agent the configuration defines has to carry the same name the turns
       // send, or the session finds no agent and answers with an error instead of
       // a decision.
@@ -256,6 +304,7 @@ export class OpenCodeMindRunner implements SocialModelExecutor {
   }
 
   private turnFileFor(actorId: string): string { return path.join(this.seatRoot(), actorId, "turn.json"); }
+  private toolsFileFor(actorId: string): string { return path.join(this.seatRoot(), actorId, "tools.json"); }
   private callsFileFor(actorId: string): string { return path.join(this.seatRoot(), actorId, "calls.jsonl"); }
   private socialDirectoryFor(actorId: string): string { return path.join(this.seatRoot(), actorId); }
   // The state a run keeps for its seats, beside the workspaces rather than inside

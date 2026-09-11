@@ -13,11 +13,58 @@
 // generate a proposal, then let the environment decide what it means.
 
 import { appendFile, mkdir, readFile } from "node:fs/promises";
+import { readFileSync } from "node:fs";
 import path from "node:path";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import { openCodeSocialTools } from "./opencode-social-tools.js";
+
+// One verb as a session sees it, which is what the runner writes for the actor.
+export interface SeatToolSpec {
+  // The tool name the session calls.
+  name: string;
+  // What the verb is for.
+  description: string;
+  // The arguments, as JSON Schema.
+  inputSchema: Record<string, unknown>;
+}
+
+// Read the verb list the runner wrote, falling back to the social verbs alone.
+//
+// The list is fixed while a server runs, because that is how a tool server works,
+// and the runner writes it once when the server starts. A caller that supplies
+// none gets the environment's own social verbs, which is what this server served
+// before it knew about a game.
+export function readToolSpecs(file: string): SeatToolSpec[] {
+  const fallback: SeatToolSpec[] = openCodeSocialTools.map((tool) => ({
+    name: tool.name,
+    description: tool.description,
+    inputSchema: tool.inputSchema
+  }));
+  if (file.trim() === "") return fallback;
+  try {
+    const parsed: unknown = JSON.parse(readFileSync(file, "utf8"));
+    if (!Array.isArray(parsed)) return fallback;
+    const specs: SeatToolSpec[] = [];
+    for (const raw of parsed) {
+      if (raw === null || typeof raw !== "object") continue;
+      const held = raw as { name?: unknown; description?: unknown; inputSchema?: unknown };
+      if (typeof held.name !== "string" || held.name === "") continue;
+      specs.push({
+        name: held.name,
+        description: typeof held.description === "string" ? held.description : held.name,
+        inputSchema:
+          held.inputSchema !== null && typeof held.inputSchema === "object"
+            ? (held.inputSchema as Record<string, unknown>)
+            : { type: "object", properties: {} }
+      });
+    }
+    return specs.length > 0 ? specs : fallback;
+  } catch {
+    return fallback;
+  }
+}
 
 /** What the runner writes before each wake, so the server knows what is legal. */
 export interface SocialSeatTurn {
@@ -43,7 +90,7 @@ export interface SocialSeatCall {
 
 // Read the environment the runner sets. A missing variable is a fatal start,
 // because a tool server with no actor would answer for nobody.
-function readEnvironment(): { actorId: string; turnFile: string; callsFile: string; game?: string } {
+function readEnvironment(): { actorId: string; turnFile: string; callsFile: string; toolsFile: string; game?: string } {
   const actorId = (process.env.SOCIAL_ACTOR ?? "").trim();
   const turnFile = (process.env.SOCIAL_TURN_FILE ?? "").trim();
   const callsFile = (process.env.SOCIAL_CALLS_FILE ?? "").trim();
@@ -53,8 +100,9 @@ function readEnvironment(): { actorId: string; turnFile: string; callsFile: stri
     );
     process.exit(1);
   }
+  const toolsFile = (process.env.SOCIAL_TOOLS_FILE ?? "").trim();
   const game = (process.env.SOCIAL_GAME ?? "").trim();
-  return { actorId, turnFile, callsFile, ...(game === "" ? {} : { game }) };
+  return { actorId, turnFile, callsFile, toolsFile, ...(game === "" ? {} : { game }) };
 }
 
 // Read the turn file, or null when the runner has not written one yet.
@@ -76,7 +124,7 @@ async function readTurn(file: string): Promise<SocialSeatTurn | null> {
 }
 
 /** Build the tool server for one actor, ready to connect to a transport. */
-export function createSocialSeatServer(actorId: string, turnFile: string, callsFile: string): McpServer {
+export function createSocialSeatServer(actorId: string, turnFile: string, callsFile: string, tools: SeatToolSpec[]): McpServer {
   const server = new McpServer({ name: "vox-social", version: "1.0.0", title: actorId + " social seat" });
   // One call at a time, so two calls in a turn cannot interleave their writes.
   let tail: Promise<unknown> = Promise.resolve();
@@ -88,7 +136,7 @@ export function createSocialSeatServer(actorId: string, turnFile: string, callsF
     );
     return run;
   };
-  for (const tool of openCodeSocialTools) {
+  for (const tool of tools) {
     server.registerTool(
       tool.name,
       { description: tool.description, inputSchema: z.fromJSONSchema(tool.inputSchema) as z.ZodType<Record<string, unknown>> },
@@ -136,7 +184,7 @@ function confirmed(toolName: string, turn: SocialSeatTurn): string {
 // protocol, so the one fatal line this file may print goes to stderr.
 async function main(): Promise<void> {
   const config = readEnvironment();
-  const server = createSocialSeatServer(config.actorId, config.turnFile, config.callsFile);
+  const server = createSocialSeatServer(config.actorId, config.turnFile, config.callsFile, readToolSpecs(config.toolsFile));
   await server.connect(new StdioServerTransport());
 }
 
@@ -144,4 +192,3 @@ main().catch((error: unknown) => {
   process.stderr.write("vox-social seat server cannot start: " + (error instanceof Error ? error.message : String(error)) + "\n");
   process.exit(1);
 });
-

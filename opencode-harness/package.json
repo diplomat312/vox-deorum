@@ -7,6 +7,7 @@
   "exports": {
     "./session/*": "./dist/session/*",
     "./run/*": "./dist/run/*",
+    "./world/*": "./dist/world/*",
     "./utils/*": "./dist/utils/*"
   },
   "scripts": {
