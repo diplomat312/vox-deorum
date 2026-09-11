@@ -66,8 +66,8 @@ jobs:
       - name: Run deterministic tests
         run: npm run test:all
 
-  typecheck:
-    name: Vox Agents typecheck
+  lint:
+    name: Lint all workspaces
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -84,8 +84,41 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Lint all workspaces
+        run: npm run lint:all
+
+  typecheck:
+    name: Typecheck all workspaces
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install UI dependencies
+        run: npm ci --prefix vox-agents/ui
+
       - name: Build MCP server dependencies
         run: npm --prefix mcp-server run build
 
+      - name: Typecheck bridge service
+        run: npm --prefix bridge-service run type-check
+
+      - name: Typecheck MCP server
+        run: npm --prefix mcp-server run type-check
+
       - name: Typecheck Vox Agents
         run: npm --prefix vox-agents run type-check
+
+      - name: Typecheck web UI
+        run: npm --prefix vox-agents/ui run type-check

@@ -413,8 +413,7 @@ export class VoxPlayer {
     const pause = previous.catch(() => undefined).then(async () => {
       await this.context.callTool("pause-game", { PlayerID: this.playerID }, this.parameters);
     });
-    let tracked: Promise<void>;
-    tracked = pause.finally(() => {
+    const tracked = pause.finally(() => {
       if (this.pendingPause === tracked) this.pendingPause = undefined;
     });
     this.pendingPause = tracked;

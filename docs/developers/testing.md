@@ -6,11 +6,20 @@ The guiding idea is that a test should exercise a component **the way the real s
 
 The DLL and the mod, being C++ and in-game Lua, are verified by building and by running the game rather than by a unit harness. This page covers the Node.js side. For how to build and run the stack the tests sometimes drive, see [setup.md](setup.md).
 
-## Nothing is enforced for you
+## What CI checks
 
-The repository has three GitHub Actions workflows: `.github/workflows/release.yml`, `generate-docs.yml`, and `update-prebuilt-binaries.yml`. **None of them run tests**, and there is no workflow that reacts to a pull request. Nothing blocks a merge if the suites fail.
+`.github/workflows/ci.yml` runs on every pull request and on pushes to `main` and `codex/**`. It runs four jobs in parallel, none of which touch the game:
 
-That makes the pre-submit routine below a matter of discipline rather than automation. Run it by hand before you push.
+| Job | Command | Covers |
+|---|---|---|
+| Build all workspaces | `npm run build:all` | TypeScript compilation for the three services, plus the web UI through the vox-agents build |
+| Deterministic tests | `npm run test:all` | The mock tier of all four suites |
+| Lint all workspaces | `npm run lint:all` | ESLint over each service's `src`; errors fail the job, warnings do not |
+| Typecheck all workspaces | `type-check` per package | Types without a full build, for the three services and the UI |
+
+The mock tiers are what make those jobs meaningful: they run without a game, a DLL, or a model provider. The live game and OBS tiers, and the C++ and Lua components, are not part of that workflow.
+
+The pre-submit routine below mirrors those jobs, so a green local run means a green CI run.
 
 ## Running the tests
 
@@ -58,20 +67,19 @@ Because the game and OBS suites are environment-heavy and slow, the convention i
 
 ### Vox agents UI: a suite of its own
 
-`vox-agents/ui` is a separate Vue project with its own `vitest.config.ts`, running in a jsdom environment with shared setup in `tests/setup.ts`. It has roughly 26 test files, all under `tests/mock/**`, organized to mirror the app: API clients, stores, composables, views, and components for chat, deals, logging, sessions, and telemetry.
+`vox-agents/ui` is a separate Vue project with its own `vitest.config.ts`, running in a jsdom environment with shared setup in `tests/setup.ts`. It has roughly 38 test files, all under `tests/mock/**`, organized to mirror the app: API clients, stores, composables, views, and components for chat, deals, logging, sessions, and telemetry.
 
 Its scripts are `npm test`, `npm run test:watch`, and `npm run test:coverage`, run from `vox-agents/ui`. Remember that root `test:all` already includes it. See [vox-agents/ui.md](vox-agents/ui.md).
 
 ## Before you submit
 
-Nothing checks this for you, so run it yourself:
+CI runs the first four of these on a pull request; running them locally first keeps the round trip short.
 
 1. `npm run build:all` from the repo root. This also builds `vox-agents/ui`, since the vox-agents build recurses into it.
 2. `npm run test:all` from the repo root, covering all four suites.
 3. `npm run lint:all` from the repo root. Each of `bridge-service`, `mcp-server`, and `vox-agents` defines its own `lint` script over `src`. The UI has no lint script; use its `type-check` instead.
-4. **For C++ changes only:** build the DLL under both MSVC and clang and confirm no new warnings. That mirrors the submodule's own CI in `civ5-dll/.github/workflows/build_vp.yml`, which compiles the gamecore both ways. `civ5-dll/.github/workflows/cppcheck.yml` adds a static-analysis pass, triggered manually. If a DLL CI run fails, those two files are where to look.
-
-Each workspace also has a `type-check` script if you want the TypeScript check without a full build.
+4. `npm run type-check` in `bridge-service`, `mcp-server`, `vox-agents`, and `vox-agents/ui`.
+5. **For C++ changes only:** build the DLL under both MSVC and clang and confirm no new warnings. That mirrors the submodule's own CI in `civ5-dll/.github/workflows/build_vp.yml`, which compiles the gamecore both ways. `civ5-dll/.github/workflows/cppcheck.yml` adds a static-analysis pass, triggered manually. If a DLL CI run fails, those two files are where to look.
 
 ## Conventions for writing tests
 
