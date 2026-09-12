@@ -1,7 +1,5 @@
 {
   "seed": 32,
-  "reached": 12,
-  "requested": 12,
   "measures": {
     "messages": 10,
     "worldMessages": 4,
@@ -13,7 +11,7 @@
       "messages": 4
     },
     "questions": 4,
-    "intentProbes": 4,
+    "intentProbes": 6,
     "proposals": 5,
     "commitments": 7,
     "accusations": 0,

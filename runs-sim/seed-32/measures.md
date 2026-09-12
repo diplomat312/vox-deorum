@@ -1,4 +1,4 @@
-# Generated world, seed 32, 12 turns
+# Seed 32, re-measured
 
 | Measure | Value |
 | --- | --- |
@@ -9,7 +9,7 @@
 | Seats that never spoke | 1 |
 | Busiest seat | korea (4) |
 | Questions asked | 4 |
-| Questions about intent | 4 |
+| Questions about intent | 6 |
 | Proposals | 5 |
 | Commitments | 7 |
 | Accusations | 0 |
@@ -26,5 +26,3 @@
 | Action: Research set to Mining | 1 |
 | Action: Research set to Archery | 1 |
 | Action: Korea has 100% of its army facing Austri | 1 |
-
-Turns reached: 12 of 12

@@ -62,6 +62,35 @@ misread. Every miss is now a test, using the sentences verbatim.
 
 ## What to measure next
 
+## Two seeds, two shapes
+
+Same script, same four seats, same model, twelve turns each.
+
+| Measure | Seed 31 | Seed 32 |
+| --- | --- | --- |
+| Messages | 9 | 10 |
+| Public | 2 | 4 |
+| Private | 7 | 6 |
+| Private channels | 3 | 4 |
+| Questions about intent | 5 | 6 |
+| Proposals | 4 | 5 |
+| Commitments | 5 | 7 |
+| Accusations | 2 | 0 |
+| Warnings | 2 | 4 |
+| A group opened | no | **yes, twice** |
+
+The volume is nearly identical and the shape is not. Seed 31 kept almost everything private
+and produced two flat accusations. Seed 32 went public, produced no accusations and four
+warnings instead, and **opened a group**, which seed 31 never did. In seed 32 a seat also
+argued from the sequence of events rather than from the act: Korea told the table that
+Austria had moved an army "one day after Korea publicly renounced first strikes and offered a
+mutual non-aggression pact", which is a seat using time as evidence.
+
+Two runs is not a distribution, and this is the point of the benchmark rather than a result
+from it. What it does show is that the differences worth measuring are not in how much the
+seats talk, which barely moves, but in the shape: private against public, warning against
+accusation, and whether anyone reaches for an institution.
+
 - Whether **private channels dominate** the way seed 31 suggests, and whether that is a
   property of the models or of the environment. Seven of nine messages were private, and the
   stakes were public.
@@ -69,4 +98,3 @@ misread. Every miss is now a test, using the sentences verbatim.
   each. Do more incidents produce more, or does the table settle into a norm?
 - Whether **any of it changes who wins**. Nothing measured so far connects a conversation to
   a score, and that connection is the actual claim the environment was built to test.
-
