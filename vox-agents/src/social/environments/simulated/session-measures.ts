@@ -41,11 +41,12 @@ const moveRules: Array<{ move: string; pattern: RegExp }> = [
   {
     move: "accusation",
     pattern:
-      /\b(you broke|broke your word|broken word|betray|you lied|you have lied|bad faith|treacher|you have massed|gathered its host|for the second time|i hold you|solely to blame|judge accordingly)\b/i
+      /\b(you broke|broke your word|broken word|betray|you lied|you have lied|bad faith|treacher|you have massed|gathered its host|for the second time|i hold you|solely to blame|judge accordingly|a turn after i|i have kept (?:that promise|my word)|you chose|who moved first)\b/i
   },
   {
     move: "demand",
-    pattern: /\b(i ask you|i demand|withdraw|recall|stand down|send your host home|you must|do not|or else|i expect)\b/i
+    pattern:
+      /\b(i ask you|i demand|withdraw|recall (?:your|those)|stand down|send your host home|pull (?:it|them) back|bring your army home|you must|do not|or else|i expect|the answer is no|tell me plainly|let us agree|let this be a settled thing)\b/i
   },
   {
     move: "intel",
@@ -53,14 +54,22 @@ const moveRules: Array<{ move: string; pattern: RegExp }> = [
   },
   {
     move: "warning",
-    pattern: /\b(i will defend|we will defend|i will hold|does not leave its gates open|will not be the first|i will answer|judge)\b/i
+    pattern:
+      /\b(i will defend|we will defend|i will hold|does not leave its gates open|will not be the first|i will answer|judge|will be met|will not be walked on|will cost you|my \d+(?:\.\d+)? stands ready|will know who moved first|will know who)\b/i
   }
 ];
 
 // The wording that makes a question a question about intent rather than a
 // courtesy.
 const intentPattern =
-  /\b(purpose|intent|intention|aim|mean to|meaning|designs|desire|seek|after|plan|grievance|why|for what|to what end|what end|toward|towards|against)\b/i;
+  /\b(purpose|intent|intention|aim|mean to|meaning|designs|desire|seek|after|plan|grievance|why|for what|to what end|what end|toward|towards|against|afoot)\b/i;
+
+// The phrasings a seat uses to ask about intent without a question mark.
+//
+// The models asked roughly as often in the imperative as in the interrogative:
+// "Tell me plainly what is afoot" is a question about intent, and a reader that
+// only counts question marks reports a table that never asked anything.
+const intentImperative = /\b(tell me (?:plainly )?(?:your|what|why|if)|name (?:them|it|your)|say so plainly|state your|i would rather understand)\b/i;
 
 // Read one message.
 export function readMessage(message: SocialMessage, worldChannelId: string): ReadMessage {
@@ -72,7 +81,7 @@ export function readMessage(message: SocialMessage, worldChannelId: string): Rea
     scope: message.channelId === worldChannelId ? "world" : "private",
     moves,
     asks,
-    probesIntent: asks && intentPattern.test(body)
+    probesIntent: (asks || intentImperative.test(body)) && intentPattern.test(body)
   };
 }
 

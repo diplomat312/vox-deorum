@@ -69,6 +69,35 @@ async function main(): Promise<void> {
   const script = await readScript(value("script", ""));
   const tickMs = Number(value("tick-ms", "3000"));
   await mkdir(dataDirectory, { recursive: true });
+
+  // A run can be re-measured from its own store without being replayed. This is
+  // what makes a fix to a reading verifiable: the transcript a reader got wrong is
+  // still on disk, so the corrected reading can be applied to the same game rather
+  // than to a different one.
+  if (process.argv.includes("--reuse")) {
+    const store = new SocialStore(path.join(dataDirectory, "seed-" + seed + ".sqlite"));
+    const sessionId = "seed-" + seed;
+    const channels = await store.listChannels(sessionId, value("human-seat", "morocco"), true);
+    const messages = await everyMessage(store, sessionId, channels.map((channel) => channel.id));
+    const diagnostics = await store.listDecisionDiagnostics(sessionId, 10_000);
+    const worldChannel = channels.find((channel) => channel.kind === "world");
+    const measures = measureSession(
+      messages,
+      worldChannel?.id ?? "world",
+      benchSeats,
+      diagnostics.map((entry) => ({
+        actorId: entry.actorId,
+        selectedKind: entry.selectedKind,
+        applicationOutcome: entry.applicationOutcome,
+        error: entry.error
+      }))
+    );
+    await store.close();
+    await writeFile(path.join(outDirectory, "measures.md"), renderMeasures(measures, "Seed " + seed + ", re-measured"), "utf8");
+    await writeFile(path.join(outDirectory, "measures.json"), JSON.stringify({ seed, measures }, null, 2), "utf8");
+    console.log(JSON.stringify({ seed, reused: true, messages: measures.messages, intentProbes: measures.intentProbes, accusations: measures.accusations, warnings: measures.warnings }));
+    process.exit(0);
+  }
   // A seed is replayed rather than resumed, so the output directory starts empty.
   // This is the run's own directory, named by the caller, and re-running a seed
   // should replace what that seed produced.

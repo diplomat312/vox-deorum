@@ -1,0 +1,22 @@
+{
+  "seed": 22,
+  "reached": 3,
+  "requested": 3,
+  "measures": {
+    "messages": 0,
+    "worldMessages": 0,
+    "privateMessages": 0,
+    "privateChannels": 0,
+    "seatsSilent": 4,
+    "busiestSeat": null,
+    "questions": 0,
+    "intentProbes": 0,
+    "proposals": 0,
+    "commitments": 0,
+    "accusations": 0,
+    "warnings": 0,
+    "actions": {},
+    "refusals": 4,
+    "turnsObserved": 4
+  }
+}

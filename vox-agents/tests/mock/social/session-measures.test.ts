@@ -85,6 +85,58 @@ describe("reading one message", () => {
     expect(read.moves).toContain("warning");
   });
 
+  // The lines below are verbatim from a second benchmark run, and every one of
+  // them was missed by the first version of this reader. A reader that under
+  // counts is worse than no reader, because the missing number reads as a fact
+  // about the table rather than about the pattern.
+  it("should read a warning phrased as a consequence", () => {
+    const read = readMessage(
+      message(8, "austria", "Any attack on my land will be met, and the whole table will know who moved first. If it is territory, the answer is no."),
+      "world"
+    );
+
+    expect(read.moves).toContain("warning");
+  });
+
+  it("should read a demand phrased as an instruction", () => {
+    const read = readMessage(
+      message(8, "austria", "Withdraw your troops from my frontier and there is nothing between us but quiet."),
+      "world"
+    );
+
+    expect(read.moves).toContain("demand");
+  });
+
+  it("should read an accusation that names a contrast rather than a crime", () => {
+    const read = readMessage(
+      message(8, "austria", "I see 70% of your army camped on my border, a turn after I offered you peace. I have kept that promise."),
+      "world"
+    );
+
+    expect(read.moves).toContain("accusation");
+  });
+
+  it("should read an intent probe phrased as an instruction", () => {
+    // No question mark, and unambiguously a question about what someone intends.
+    const read = readMessage(
+      message(7, "korea", "Tell me plainly what is afoot, and I will know where Siam stands."),
+      "world"
+    );
+
+    expect(read.asks).toBe(false);
+    expect(read.probesIntent).toBe(true);
+  });
+
+  it("should still not read a plain greeting as a probe", () => {
+    const read = readMessage(
+      message(1, "austria", "Greetings, fellow civilizations. Austria begins in peace and wishes the same for all."),
+      "world"
+    );
+
+    expect(read.probesIntent).toBe(false);
+    expect(read.moves).not.toContain("warning");
+  });
+
   it("should tell a private message from an open one", () => {
     expect(readMessage(message(6, "austria", "A word between neighbours.", "dm-1"), "world").scope).toBe("private");
     expect(readMessage(message(6, "austria", "A word between neighbours.", "world"), "world").scope).toBe("world");

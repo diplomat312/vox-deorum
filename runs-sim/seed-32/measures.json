@@ -1,0 +1,37 @@
+{
+  "seed": 32,
+  "reached": 12,
+  "requested": 12,
+  "measures": {
+    "messages": 10,
+    "worldMessages": 4,
+    "privateMessages": 6,
+    "privateChannels": 4,
+    "seatsSilent": 1,
+    "busiestSeat": {
+      "seat": "korea",
+      "messages": 4
+    },
+    "questions": 4,
+    "intentProbes": 4,
+    "proposals": 5,
+    "commitments": 7,
+    "accusations": 0,
+    "warnings": 4,
+    "actions": {
+      "Siam has 100% of its army facing Iroquoi": 1,
+      "Iroquois has its army at home": 1,
+      "start_group": 2,
+      "send_message": 4,
+      "Research set to Mining": 1,
+      "send_dm": 8,
+      "pass": 2,
+      "Research set to Animal Husbandry": 2,
+      "Research set to Archery": 1,
+      "Korea has 100% of its army facing Austri": 1,
+      "Research set to Pottery": 3
+    },
+    "refusals": 1,
+    "turnsObserved": 27
+  }
+}

@@ -1,0 +1,33 @@
+{
+  "seed": 31,
+  "measures": {
+    "messages": 9,
+    "worldMessages": 2,
+    "privateMessages": 7,
+    "privateChannels": 3,
+    "seatsSilent": 1,
+    "busiestSeat": {
+      "seat": "austria",
+      "messages": 4
+    },
+    "questions": 1,
+    "intentProbes": 5,
+    "proposals": 4,
+    "commitments": 5,
+    "accusations": 2,
+    "warnings": 2,
+    "actions": {
+      "pass": 9,
+      "unknown": 1,
+      "Siam has its army at home": 1,
+      "send_message": 2,
+      "send_dm": 10,
+      "Research set to Mining": 1,
+      "Austria has recorded how it regards Kore": 1,
+      "Research set to Pottery": 4,
+      "Austria has its army at home": 1
+    },
+    "refusals": 1,
+    "turnsObserved": 31
+  }
+}

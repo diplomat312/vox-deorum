@@ -1,0 +1,37 @@
+[dotenv@17.2.3] injecting env (0) from .env -- tip: ⚙️  load multiple .env files with { path: ['.env.local', '.env'] }
+[2m2026-09-11 17:37:42.236[0m ℹ️  [36m[Config][0m [34mNo config.json found, using default configuration[0m
+[2m2026-09-11 17:37:42.239[0m ⚠️  [36m[Config][0m [33mversion.json not found[0m
+[2m2026-09-11 17:37:42.241[0m ℹ️  [36m[Config][0m [34mConfiguration loaded:[0m
+  [90m{
+      "agent": {
+        "name": "vox-agents"
+      },
+      "version": "unknown",
+      "mcpServer": {
+        "transport": {
+          "type": "http",
+          "endpoint": "http://127.0.0.1:4000/mcp"
+        }
+      },
+      "logging": {
+        "level": "info"
+      }
+    }[0m
+[dotenv@17.2.3] injecting env (0) from .env -- tip: ⚙️  enable debug logging with { debug: true }
+[2m2026-09-11 17:37:43.100[0m ℹ️  [36m[simulated-civ][0m [34mA generated world is running: korea, austria, siam, iroquois, morocco, a turn every 3000ms[0m
+2026-09-11 17:37:43.161 INFO Starting the OpenCode server on http://127.0.0.1:7300 in C:\Users\bikka\.vox-deorum\harness-seats\seed-32\siam
+2026-09-11 17:37:43.216 INFO Starting the OpenCode server on http://127.0.0.1:7301 in C:\Users\bikka\.vox-deorum\harness-seats\seed-32\korea
+2026-09-11 17:37:43.266 INFO Starting the OpenCode server on http://127.0.0.1:7302 in C:\Users\bikka\.vox-deorum\harness-seats\seed-32\austria
+2026-09-11 17:37:43.287 INFO Starting the OpenCode server on http://127.0.0.1:7303 in C:\Users\bikka\.vox-deorum\harness-seats\seed-32\iroquois
+2026-09-11 17:37:48.628 INFO The OpenCode server is answering on http://127.0.0.1:7300
+2026-09-11 17:37:48.634 INFO The OpenCode server is answering on http://127.0.0.1:7303
+2026-09-11 17:37:48.637 INFO The OpenCode server is answering on http://127.0.0.1:7301
+2026-09-11 17:37:48.640 INFO The OpenCode server is answering on http://127.0.0.1:7302
+[2m2026-09-11 17:37:48.662[0m ℹ️  [36m[opencode-mind-runner][0m [34mOpened a social session for siam[0m
+[2m2026-09-11 17:37:48.665[0m ℹ️  [36m[opencode-mind-runner][0m [34mOpened a social session for korea[0m
+[2m2026-09-11 17:37:48.668[0m ℹ️  [36m[opencode-mind-runner][0m [34mOpened a social session for austria[0m
+[2m2026-09-11 17:37:48.675[0m ℹ️  [36m[opencode-mind-runner][0m [34mOpened a social session for iroquois[0m
+[2m2026-09-11 17:38:05.235[0m ℹ️  [36m[simulated-civ][0m [34mInjected at turn 3: mass_troops for austria[0m
+[2m2026-09-11 17:38:52.915[0m ℹ️  [36m[simulated-civ][0m [34mInjected at turn 7: mass_troops for siam[0m
+[2m2026-09-11 17:39:41.918[0m ℹ️  [36m[simulated-civ][0m [34mInjected at turn 11: mass_troops for iroquois[0m
+{"seed":32,"reached":12,"messages":10,"private":4,"intentProbes":4,"out":"C:\\Users\\bikka\\OneDrive\\Documents\\ChatGPT\\Vox Deorum\\runs-sim\\seed-32"}
